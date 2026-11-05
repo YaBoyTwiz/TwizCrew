@@ -11,3 +11,4 @@ Core\Log.lua
 Core\Events.lua
 Core\Modules.lua
 Core\DB.lua
+Comm\Codec.lua

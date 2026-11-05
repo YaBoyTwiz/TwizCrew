@@ -18,4 +18,5 @@ Comm\Comm.lua
 Crew\Roster.lua
 Crew\SelfState.lua
 Crew\Crew.lua
+Core\Version.lua
 Tags\Tags.lua

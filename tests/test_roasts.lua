@@ -82,6 +82,56 @@ return {
       end
     end,
 
+    lines_read_well_with_defaults_and_names = function(ns, A, W)
+      start(ns, W)
+      local R = ns.Roasts
+      for _, kind in ipairs(ns.StatsDefs.ROAST_KINDS) do
+        for i = 1, #R.LINES[kind] do
+          for _, x in ipairs({ "", "Hogger", "The Deadmines" }) do
+            local text = R.text(kind, i, "Twiz", 3, x)
+            A.no(text:find("^%l"), kind .. " " .. i .. " starts with a small letter: " .. text)
+            A.no(text:find("[.!?] %l"), kind .. " " .. i .. " has a sentence starting small: " .. text)
+            A.no(text:find("The Hogger", 1, true), kind .. " " .. i .. ": " .. text)
+            A.no(text:find("The The", 1, true), kind .. " " .. i .. ": " .. text)
+          end
+        end
+      end
+    end,
+
+    received_extra_text_and_numbers_are_tamed = function(ns, A, W)
+      start(ns, W)
+      local long = string.rep("ø", 50)
+      receive(ns, W, "A", "ROAST", { k = "weak", v = "3", x = "Kob\1old" .. long, n = "1" })
+      A.eq(#shown(ns), 1)
+      local cut = "Kobold" .. string.rep("ø", 34)
+      A.eq(shown(ns)[1], "A died to a level 3 " .. cut .. ". Embarrassing.", "40 letters, no control bytes")
+      receive(ns, W, "B", "ROAST", { k = "wipe", x = "Dead\9mines\31", n = "1" })
+      A.eq(shown(ns)[2], "WIPE! Everybody down in Deadmines.")
+      -- a number too big to be real: ignored for the kinds that show it, harmless for the others
+      receive(ns, W, "C", "ROAST", { k = "steps", v = "1e10", n = "1" })
+      receive(ns, W, "D", "ROAST", { k = "jumps", v = "1000000001", n = "1" })
+      A.eq(#shown(ns), 2)
+      receive(ns, W, "E", "ROAST", { k = "jumps", v = "1000000000", n = "1" })
+      A.eq(#shown(ns), 3, "1e9 itself is still a number")
+      receive(ns, W, "F", "ROAST", { k = "fall", v = "1e300", n = "1" })
+      A.eq(#shown(ns), 4)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    sent_extra_text_is_cut_and_cleaned = function(ns, A, W)
+      start(ns, W)
+      ns.Roasts.send("weak", 3, "Kob\2old" .. string.rep("x", 60))
+      ns.Roasts.send("steps", 2e9) -- (dropped by the sender limit anyway, and unusable)
+      W:advance(1)
+      local sent = roastsSent(ns, W)
+      A.eq(#sent, 1)
+      A.eq(sent[1].x, "Kobold" .. string.rep("x", 34))
+      W:advance(ns.Config.ROAST_GAP + 1)
+      ns.Roasts.send("steps", 2e9)
+      W:advance(1)
+      A.eq(#roastsSent(ns, W), 1, "a number too big is not sent")
+    end,
+
     own_roast_is_sent_and_shown = function(ns, A, W)
       start(ns, W)
       ns.Roasts.send("fall")

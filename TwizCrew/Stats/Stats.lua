@@ -133,11 +133,13 @@ function Stats.send()
 end
 
 -- STATSREQ (when the Hall of Shame opens or the awards show starts): at most once per STATSREQ_GAP s.
+-- My own changed numbers go right after it, so friends' boards match mine without waiting for the regular send.
 function Stats.request()
   local now = ns.now()
   if lastRequest and now - lastRequest < ns.Config.STATSREQ_GAP then return false end
   lastRequest = now
   ns.Comm.send("STATSREQ", {})
+  if enabled and Store.dirty() then Stats.send() end
   return true
 end
 
@@ -157,7 +159,7 @@ local function onRequest()
   if lastReply and ns.now() - lastReply < ns.Config.STATSREQ_GAP then return end
   replyPending = true
   local c = ns.Config
-  local delay = c.HELLO_JITTER_MIN + math.random() * (c.HELLO_JITTER_MAX - c.HELLO_JITTER_MIN)
+  local delay = c.STATSREQ_JITTER_MIN + math.random() * (c.STATSREQ_JITTER_MAX - c.STATSREQ_JITTER_MIN)
   C_Timer.After(delay, function()
     ns.Log.safe(SHARE, function()
       replyPending = false

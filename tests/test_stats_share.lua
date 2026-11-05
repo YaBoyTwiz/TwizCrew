@@ -108,6 +108,49 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    statsreq_reply_within_2s = function(ns, A, W)
+      start(ns, W)
+      A.eq(ns.Config.STATSREQ_JITTER_MIN, 0.2)
+      A.eq(ns.Config.STATSREQ_JITTER_MAX, 2)
+      for i = 1, 12 do
+        W:advance(61) -- past the reply gap
+        local mark = #W.sent
+        receive(W, i % 2 == 0 and "Frostie" or "Ginkan", "STATSREQ", {}, ns)
+        W:advance(0.15)
+        A.eq(#statsSince(ns, W, mark), 0, "not at once (" .. i .. ")")
+        W:advance(1.85)
+        A.eq(#statsSince(ns, W, mark), 1, "replied within 2 s (" .. i .. ")")
+      end
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    request_sends_my_changed_numbers = function(ns, A, W)
+      start(ns, W)
+      local mark = #W.sent
+      ns.Stats.count("jp", 3)
+      A.eq(ns.Stats.request(), true)
+      W:advance(1)
+      A.eq(countType(ns, W, mark, "STATSREQ"), 1)
+      local sent = statsSince(ns, W, mark)
+      A.eq(#sent, 1, "my own numbers go out with the request")
+      A.eq(sent[1].s_jp, "3")
+      A.no(ns.StatsStore.dirty(), "marked as sent")
+      -- nothing new: only the request
+      W:advance(61)
+      mark = #W.sent
+      A.eq(ns.Stats.request(), true)
+      W:advance(1)
+      A.eq(countType(ns, W, mark, "STATSREQ"), 1)
+      A.eq(#statsSince(ns, W, mark), 0, "nothing changed: no STATS")
+      -- module off: the request sends no numbers either
+      ns.Modules.setEnabled("stats", false)
+      W:advance(61)
+      mark = #W.sent
+      ns.Stats.request()
+      W:advance(1)
+      A.eq(#statsSince(ns, W, mark), 0)
+    end,
+
     request_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local mark = #W.sent

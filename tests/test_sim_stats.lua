@@ -99,7 +99,7 @@ return {
       A.eq(twShown[1], frShown[1], "the same line on both screens")
       A.contains(twShown[1], want)
       A.contains(twShown[1], "Kobold Miner")
-      A.contains(twShown[1], "3")
+      A.contains(twShown[1], "level 3")
       A.eq(c.frNs.StatsStore.get("session", "dw"), 1)
       A.eq(c.frNs.StatsStore.get("session", "ld"), 3)
       -- Twiz opens the Hall of Shame: Frostie's numbers arrive, Died to a Weakling goes to Frostie
@@ -184,10 +184,9 @@ return {
       fr:fire("UNIT_SPELLCAST_SUCCEEDED", "player", "x", 8690)
       fr:fire("CHAT_MSG_SYSTEM", "Twiz has defeated Frostie in a duel")
       H.advance(2)
-      -- both open the Hall of Shame (each asks the crew; the other answers). Asking does not send your own numbers:
-      -- if only Twiz opened it, Frostie would see Twiz's numbers from the last regular send (up to 5 minutes old).
+      -- only Twiz opens the Hall of Shame: the request carries Twiz's own changed numbers, and Frostie answers it,
+      -- so both boards agree without waiting for the regular send
       c.twNs.Panel.setTab("shame")
-      c.frNs.Panel.setTab("shame")
       H.advance(6)
       local tA, fA = awardsOf(c.twNs), awardsOf(c.frNs)
       A.eq(tA, fA, "the same winners and numbers on both screens")
@@ -250,7 +249,8 @@ return {
       H.advance(6)
       A.ok(entryOf(c.twNs, "session", "Frostie"), "Frostie is on Twiz's board")
       A.eq(awardsOf(c.twNs).corpse.winners, { "Frostie" })
-      A.ok(c.frNs.Modules.setEnabled("stats", false) ~= false)
+      c.frNs.Modules.setEnabled("stats", false)
+      A.eq(c.frNs.Modules.isEnabled("stats"), false, "Frostie's stats module is off")
       H.advance(3)
       A.eq(entryOf(c.twNs, "session", "Frostie"), nil, "session: hidden")
       A.eq(entryOf(c.twNs, "all", "Frostie"), nil, "all time: hidden")

@@ -12,7 +12,8 @@ local Roasts = {}
 ns.Roasts = Roasts
 
 local WIPE_WAIT = 2   -- a wipe roast waits a random 0..WIPE_WAIT s, so one copy is usually first
-local X_MAX = 60      -- letters of extra text (mob or place name) sent at most
+local X_MAX = 40      -- letters of extra text (mob or place name) sent and shown at most
+local V_MAX = 1e9     -- a number above this is not a real count
 local SHOWN_MAX = 20  -- texts kept for forTest.shown()
 
 -- Placeholders: {name} the person (the sender), {v} a number, {x} a mob or place name. The first line of each kind
@@ -21,7 +22,7 @@ Roasts.LINES = {
   weak = {
     "{name} died to a level {v} {x}. Embarrassing.",
     "A level {v} {x} just took down {name}. Someone write this down.",
-    "{name} vs a level {v} {x}. The {x} won.",
+    "{name} vs a level {v} {x}. {name} lost.",
     "{name} lost a fight to a level {v} {x}. Maybe try a lower level next time.",
   },
   fall = {
@@ -49,7 +50,7 @@ Roasts.LINES = {
   wipe = {
     "WIPE! Everybody down in {x}.",
     "Total wipe in {x}. Time for the long run back.",
-    "{x} wins this round. Everybody is dead.",
+    "Everybody is dead. Score one for {x}.",
     "WIPE in {x}! Who pulled that?",
   },
   steps = {
@@ -82,7 +83,15 @@ local shown = {}      -- texts shown, oldest first (test hook)
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 
 local function usableNumber(v)
-  return type(v) == "number" and v == v and v ~= math.huge and v >= 0
+  return type(v) == "number" and v == v and v >= 0 and v <= V_MAX
+end
+
+-- Extra text (mob or place name), sent or received: no control characters, at most X_MAX letters. nil when empty.
+local function cleanX(x)
+  if type(x) ~= "string" then return nil end
+  x = ns.Util.truncateUTF8((x:gsub("[%z\1-\31]", "")), X_MAX)
+  if x == "" then return nil end
+  return x
 end
 
 local function wipeRecent(now)
@@ -122,8 +131,7 @@ local function handle(sender, f, own)
   end
   if not ns.Modules.isEnabled(FEATURE) or not setting(kind) then return end
   if kind ~= "wipe" and not showLimit:allow(sender, now) then return end
-  local x = type(f.x) == "string" and f.x or nil
-  local text = Roasts.text(kind, f.n, sender, v, x)
+  local text = Roasts.text(kind, f.n, sender, v, cleanX(f.x))
   shown[#shown + 1] = text
   if #shown > SHOWN_MAX then table.remove(shown, 1) end
   if ns.Popups and ns.Popups.showRoast then ns.Popups.showRoast(text, ns.Config.ROAST_SECONDS) end
@@ -152,7 +160,7 @@ function Roasts.send(kind, v, x)
   v = tonumber(v)
   if not usableNumber(v) then v = nil end
   if NEEDS_V[kind] and not v then return end
-  if type(x) ~= "string" or x == "" then x = nil else x = ns.Util.truncateUTF8(x, X_MAX) end
+  x = cleanX(x)
   if kind == "wipe" then
     if wipeRecent(ns.now()) then return end
     local function later()

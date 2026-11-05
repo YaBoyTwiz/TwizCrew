@@ -127,9 +127,95 @@ local function newerVersion(H, A, c)
   return pwNs
 end
 
+-- Twiz runs a newer copy than Frostie. opts.restartSince: Twiz's RESTART_SINCE.
+local function oldAndNew(H, opts)
+  opts = opts or {}
+  local tw, twNs = H.client("Twiz", { version = "0.2.0", restartSince = opts.restartSince or "0.1.0" })
+  local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
+  H.link(tw, fr)
+  login(tw)
+  login(fr)
+  H.advance(12)
+  return { tw = tw, twNs = twNs, fr = fr, frNs = frNs }
+end
+
+local function printedLine(W, text)
+  for _, line in ipairs(W.printed) do if line == text then return true end end
+  return false
+end
+
+-- Frostie "reloads": a fresh copy of the game with Frostie's saved data, at `version`.
+local function reload(H, c, version)
+  for i, L in ipairs(H.linked) do if L == c.fr then table.remove(H.linked, i) end end
+  local fr2, fr2Ns = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire", version = version })
+  fr2.env.TwizCrewDB = c.frNs.db
+  H.link(fr2)
+  login(fr2)
+  H.advance(8)
+  return fr2, fr2Ns
+end
+
 return {
   files = {},
   tests = {
+    update_request_goes_from_new_to_old_only = function(_, A, _, H)
+      local c = oldAndNew(H)
+      c.frNs.Updates.tellCrew()   -- the old copy asks: the new one ignores it
+      H.advance(3)
+      A.eq(c.twNs.Updates.promptForTest(), nil, "a newer copy ignores the request")
+      c.twNs.Updates.tellCrew()   -- the new copy asks: the old one shows the window
+      H.advance(3)
+      A.eq(c.frNs.Updates.promptForTest(), { title = "Twiz says v0.2.0 is out",
+        note = "If nothing changed, open WowUp and click Update first", reload = true })
+      A.ok(printedLine(c.tw, "TwizCrew: told your crew that v0.2.0 is out. 1 friend online is on an older version."))
+      A.ok(printedLine(c.fr, "TwizCrew: told your crew that v0.1.0 is out. Nobody online is known to be on an older version."))
+      local reloads = 0
+      c.fr.env.ReloadUI = function() reloads = reloads + 1 end
+      local b = c.frNs.Updates.reloadButtonForTest()
+      b._scripts.OnClick(b, "LeftButton")
+      A.eq(reloads, 1)
+      A.eq(c.frNs.db.update.told, "0.2.0")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
+    versions_list_on_both = function(_, A, _, H)
+      local c = oldAndNew(H)
+      local OK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t"
+      local OLD = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:14:14|t"
+      A.eq(c.twNs.Version.lines(), { OK .. " Twiz (you)  v0.2.0", OLD .. " Frostie  v0.1.0" })
+      A.eq(c.frNs.Version.lines(), { OLD .. " Frostie (you)  v0.1.0", OK .. " Twiz  v0.2.0" })
+    end,
+
+    restart_needed_when_files_were_added = function(_, A, _, H)
+      local c = oldAndNew(H, { restartSince = "0.2.0" })
+      c.twNs.Updates.tellCrew()
+      H.advance(3)
+      A.eq(c.frNs.Updates.promptForTest(), { title = "Twiz says v0.2.0 is out",
+        note = "Close and restart the game to load it", reload = false })
+      local fr2 = reload(H, c, "0.1.0")
+      A.ok(printedLine(fr2, "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then restart the game"))
+    end,
+
+    after_reload_still_old_or_updated = function(_, A, _, H)
+      local c = oldAndNew(H)
+      c.twNs.Updates.tellCrew()
+      H.advance(3)
+      A.ok(c.frNs.Updates.promptForTest())
+      local fr2, fr2Ns = reload(H, c, "0.1.0")   -- WowUp had not downloaded it yet
+      A.ok(printedLine(fr2, "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then /reload"))
+      A.eq(fr2Ns.db.update, {}, "said once")
+      local fr3, fr3Ns = reload(H, { fr = fr2, frNs = fr2Ns }, "0.1.0")
+      A.no(printedLine(fr3, "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then /reload"), "not again")
+      H.advance(31)                             -- past Twiz's button cooldown, Twiz asks again
+      c.twNs.Updates.tellCrew()
+      H.advance(3)
+      A.ok(fr3Ns.Updates.promptForTest(), "asked again after the reload")
+      local fr4, fr4Ns = reload(H, { fr = fr3, frNs = fr3Ns }, "0.2.0")   -- updated this time
+      for _, line in ipairs(fr4.printed) do A.no(line:find("Still on", 1, true), line) end
+      A.eq(c.twNs.Version.lines()[2], "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t Frostie  v0.2.0")
+      noErrors(A, c.twNs, fr4Ns)
+    end,
+
     two_friends_see_each_other = function(_, A, _, H)
       local c = twoFriends(H)
       seeEachOther(H, A, c)

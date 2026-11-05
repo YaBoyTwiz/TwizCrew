@@ -47,6 +47,10 @@ Other players never see any of it. The messages are hidden addon messages, not c
 
 ## Next feature being brainstormed: stats board (2026-11-05)
 
+- **Design approved by the owner ("do it"):** `docs/superpowers/specs/2026-11-05-stats-board-design.md`. Plan
+  and build handed to a background agent. Sessions: one shared crew session, started
+  automatically, restartable with `/tc session new` (Claude's call).
+
 - **Owner picked the stats board** as the next idea to flesh out.
 - **Purpose (owner):** "mostly for laughs, roasting each other on stream". Not serious progress tracking.
 - Owner: "up to you, be creative as needed". **Claude's pitch (not approved yet):** three ways it shows up: live

@@ -187,6 +187,88 @@ local function build(W)
     return settingsAPI[k]
   end })
 
+  -- stats board: detectors (stats Task 5).
+  -- Missing APIs: these fakes live in `fakes` (and per-table fake lists) and reach the addon through an __index on
+  -- env (and on C_QuestLog / C_Spell). A lookup returns nil while W.state.missing[name] is true, read at call time,
+  -- so a test can set e.g. W.state.missing.GetUnitSpeed = true before firing ADDON_LOADED / PLAYER_LOGIN (the files
+  -- are already loaded by then). Table functions use dotted names: "C_QuestLog.AbandonQuest", "C_Spell.GetSpellName".
+  -- A function a test (or hooksecurefunc) stores on env or the table itself is a plain field and is never hidden.
+  -- Other state: st.speed, st.mounted, st.swimming, st.falling, st.pos = { x, y, instance } (nil = no position),
+  -- st.units[unit] = { name, level, hostile, player }, st.repairCost (0 after RepairAllItems), st.spellNames[id].
+  -- W.jumps, W.repairs, W.abandoned count calls of the game's own functions.
+  st.missing, st.units, st.spellNames = {}, {}, {}
+  st.speed, st.mounted, st.swimming, st.falling, st.repairCost = 0, false, false, false, 0
+  W.jumps, W.repairs, W.abandoned = 0, {}, 0
+  local function missing(name) return W.state.missing ~= nil and W.state.missing[name] == true end
+  local function unit(u) return W.state.units and W.state.units[u] end
+  local function hideable(prefix, list)
+    return setmetatable({}, { __index = function(_, k)
+      if missing(prefix .. k) then return nil end
+      return list[k]
+    end })
+  end
+  local fakes = {
+    GetUnitSpeed = function(u)
+      if u == "player" then return st.speed, 7, 7, 4.72 end
+      return 0, 7, 7, 4.72
+    end,
+    IsMounted = function() return st.mounted and true or false end,
+    IsSwimming = function() return st.swimming and true or false end,
+    IsFalling = function() return st.falling and true or false end,
+    UnitPosition = function(u)
+      if u ~= "player" or type(st.pos) ~= "table" then return nil end
+      return st.pos.y, st.pos.x, 0, st.pos.instance
+    end,
+    UnitExists = function(u) return u == "player" or unit(u) ~= nil end,
+    UnitCanAttack = function(_, u)
+      local x = unit(u)
+      return (x and x.hostile) and true or false
+    end,
+    UnitIsPlayer = function(u)
+      local x = unit(u)
+      return u == "player" or ((x and x.player) and true or false)
+    end,
+    hooksecurefunc = function(tbl, name, fn)
+      if type(tbl) == "string" then tbl, name, fn = env, tbl, name end
+      local original = tbl[name]
+      rawset(tbl, name, function(...)
+        local results = { original(...) }
+        fn(...)
+        return unpack(results, 1, table.maxn(results))
+      end)
+    end,
+    JumpOrAscendStart = function() W.jumps = W.jumps + 1 end,
+    RepairAllItems = function(guild)
+      W.repairs[#W.repairs + 1] = guild or false
+      st.repairCost = 0
+    end,
+    GetRepairAllCost = function() return st.repairCost, st.repairCost > 0 end,
+    AbandonQuest = function() W.abandoned = W.abandoned + 1 end,
+    C_QuestLog = hideable("C_QuestLog.", { AbandonQuest = function() W.abandoned = W.abandoned + 1 end }),
+    C_Spell = hideable("C_Spell.", { GetSpellName = function(id) return st.spellNames[id] end }),
+    LOOT_ITEM_SELF = "You receive loot: %s.",
+    LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d.",
+    DUEL_WINNER_KNOCKOUT = "%1$s has defeated %2$s in a duel",
+    DUEL_WINNER_RETREAT = "%2$s has fled from %1$s in a duel",
+  }
+  -- the tables are made once, so a test's rawset on them stays
+  setmetatable(env, { __index = function(_, k)
+    if missing(k) then return nil end
+    return fakes[k]
+  end })
+  -- other units for UnitName / UnitLevel (the player's answers are unchanged)
+  local v1UnitName, v1UnitLevel = env.UnitName, env.UnitLevel
+  env.UnitName = function(u)
+    local x = u ~= "player" and unit(u)
+    if x then return x.name end
+    return v1UnitName(u)
+  end
+  env.UnitLevel = function(u)
+    local x = u ~= "player" and unit(u)
+    if x then return x.level end
+    return v1UnitLevel(u)
+  end
+
   return env
 end
 

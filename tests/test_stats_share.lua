@@ -1,8 +1,9 @@
 -- Stats sharing (stats Task 6): STATS / STATSREQ in and out, the "off" announcement, friends' saved numbers and
 -- StatsStore.entries (what the Hall of Shame and the awards show read). Full TOC boot.
 
-local function boot(W)
+local function boot(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
+  if before then before() end
   W:fire("PLAYER_LOGIN")
   W:fire("PLAYER_ENTERING_WORLD")
 end
@@ -152,6 +153,44 @@ return {
       A.eq(sent[1].a_dt, "3")
       A.eq(sent[1].off, nil)
       A.eq(ns.Log.errors(10), {})
+    end,
+
+    off_at_login_is_announced = function(ns, A, W)
+      ns.Roasts = { send = function() end }
+      boot(W, function() ns.db.modules.stats.enabled = false end)
+      A.no(ns.Modules.isEnabled("stats"))
+      W:advance(21)
+      local sent = statsSince(ns, W, 0)
+      A.eq(#sent, 1, "one off message once the session is decided")
+      A.eq(sent[1].off, "1")
+      A.no(hasNumbers(sent[1]))
+      A.eq(sent[1].sid, ns.Session.current().id, "a fresh character uses the session id, so friends keep it")
+      local mark = #W.sent
+      W:advance(600)
+      A.eq(#statsSince(ns, W, mark), 0, "nothing more while nothing happens")
+      ns.Bus.fire("SESSION_CHANGED", { id = "Frostie-5", start = 5, manual = true }, ns.Session.current(), false)
+      W:advance(1)
+      sent = statsSince(ns, W, mark)
+      A.eq(#sent, 1, "again on a session change")
+      A.eq(sent[1].off, "1")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    statsreq_replies_at_most_once_a_minute = function(ns, A, W)
+      start(ns, W)
+      local mark = #W.sent
+      receive(W, "Frostie", "STATSREQ", {}, ns)
+      W:advance(6)
+      A.eq(#statsSince(ns, W, mark), 1, "first reply")
+      receive(W, "Ginkan", "STATSREQ", {}, ns)
+      W:advance(10)
+      receive(W, "Frostie", "STATSREQ", {}, ns)
+      W:advance(10)
+      A.eq(#statsSince(ns, W, mark), 1, "inside the gap: the last reply already reached everyone")
+      W:advance(41)
+      receive(W, "Ginkan", "STATSREQ", {}, ns)
+      W:advance(6)
+      A.eq(#statsSince(ns, W, mark), 2, "after the gap: a second reply")
     end,
 
     friend_numbers_saved_and_replaced = function(ns, A, W)

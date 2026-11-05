@@ -22,6 +22,7 @@ local lastSent       -- wallclock of the last STATS we sent (nil = never)
 local lastHeard      -- { name, at = wallclock } of the last friend's STATS saved
 local lastRequest    -- session clock of our last STATSREQ
 local replyPending = false -- one shared, jittered reply to every STATSREQ heard while it waits
+local lastReply      -- session clock of our last STATSREQ reply (a broadcast: one per STATSREQ_GAP is enough)
 local sendTicker
 
 -- stat key -> milestone kind and the view it is counted in
@@ -120,7 +121,13 @@ end
 
 -- My numbers, or only { sid, q, off = 1 } while the module is off. Through the queue (rate limit, boss-fight hold).
 function Stats.send()
-  ns.Comm.send("STATS", Logic.toWire(Store.snapshot(not enabled)), WIRE_OPTS)
+  local snap = Store.snapshot(not enabled)
+  if not enabled and snap.sid == "" then
+    -- a character that never counted has no sid of its own; friends drop a STATS without one
+    local cur = ns.Session and ns.Session.current()
+    if cur then snap.sid = cur.id end
+  end
+  ns.Comm.send("STATS", Logic.toWire(snap), WIRE_OPTS)
   if enabled then Store.markSent() end
   lastSent = ns.wallclock()
 end
@@ -147,12 +154,14 @@ end
 
 local function onRequest()
   if replyPending then return end
+  if lastReply and ns.now() - lastReply < ns.Config.STATSREQ_GAP then return end
   replyPending = true
   local c = ns.Config
   local delay = c.HELLO_JITTER_MIN + math.random() * (c.HELLO_JITTER_MAX - c.HELLO_JITTER_MIN)
   C_Timer.After(delay, function()
     ns.Log.safe(SHARE, function()
       replyPending = false
+      lastReply = ns.now()
       Stats.send()
     end)
   end)
@@ -161,6 +170,12 @@ end
 -- Registered once at file load (ns.Comm loads earlier): friends' numbers are kept even while the module is off.
 ns.Comm.on("STATS", function(sender, fields) ns.Log.safe(SHARE, onStats, sender, fields) end)
 ns.Comm.on("STATSREQ", function(sender) ns.Log.safe(SHARE, onRequest, sender) end)
+
+-- While the module is off (also when it was off at login, so onDisable never ran): one off message per session
+-- change, so friends who were offline when it was switched off drop my numbers too. When on, onSession sends.
+ns.Bus.on(SHARE, "SESSION_CHANGED", function()
+  if not enabled then Stats.send() end
+end)
 
 local function sendIfChanged()
   if enabled and Store.dirty() then Stats.send() end

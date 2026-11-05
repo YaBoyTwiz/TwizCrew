@@ -42,6 +42,8 @@ stop there and tell Claude.
    - Drag it somewhere else, then `/reload`. It should come back in the new spot.
    - Right-click its title: a small menu opens. Click something in it, then open it again and click somewhere else
      on the screen, then press Escape: each time the menu should close.
+   - Right-click its title and pick **Set my status**: a small box opens with your status in it. Type something and
+     press Enter: chat says `TwizCrew: status set to "…"`. Open it again and press Escape: nothing changes.
    - Open the settings (`/tc`), turn on **Show myself in the list**: your own row appears with your class icon,
      level, zone and XP bar.
 
@@ -51,7 +53,7 @@ stop there and tell Claude.
 6. **The settings window.**
    - `/tc` opens and closes it. Escape also closes it.
    - Esc menu → **Options → AddOns → TwizCrew**: you should see "TwizCrew has its own settings window." and a button
-     that opens it.
+     that opens it. Click the button: the TwizCrew window appears in front; Escape closes it.
    - Hover over a few **(i)** buttons: a short explanation appears. Click one: it stays until you click it again.
    - If the window is taller than your screen, the mouse wheel scrolls it.
    - Turn a few things off and on (for example the **Crew panel** switch): the panel hides and comes back.
@@ -94,13 +96,17 @@ first 30 seconds after you log in (so logging in doesn't flood you); after that 
      away and a pop-up says "<friend> is back on your layer".
    - If the numbers are the same but you really are on different layers (or the other way round), tell Claude:
      the way TwizCrew guesses layers would need changing.
+   - **Near a zone border.** Stand next to each other close to the border between two zones, and both hover over
+     NPCs on both sides of the border. **OTHER LAYER** should not appear for a friend standing next to you.
+   - Have your friend log out and back in while you stay: no "on a different layer" pop-up should come from that.
 4. **Death pop-up.** When your friend dies, a pop-up says "<friend> died" with the place.
 5. **Offline friend, no chat spam.** In the settings, set **Connection** to **Whispers**, then have your friend log
    off. For the next two or three minutes you should **not** see "No player named … is currently playing" in chat.
    Set **Connection** back to **Automatic** afterwards.
 6. **A boss fight.** Do a dungeon boss together. Nothing should break. Messages pause during the fight and are sent
    right after, so the panel may lag a little during the fight.
-7. **Typed status.** Your friend types `/tc status 50% ^_^`. You should see exactly that on their row, in quotes.
+7. **Typed status.** Your friend types `/tc status 50% ^_^ a|b`. You should see exactly that on their row, in quotes
+   (including the `|`; if it shows as `||` or looks different in any way, tell Claude).
 
 ## What to send back
 

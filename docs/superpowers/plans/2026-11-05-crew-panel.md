@@ -947,3 +947,41 @@ no_errors_anywhere: after all of the above, every client's ns.Log.errors(50) is 
   rows push the panel away from that corner. The default `{ point = "LEFT", x = 40, y = 100 }` is kept as the
   starting place.
 - **Pop-up quiet period starts at the popups module's first enable (Task 12).** The plan said "time of `PLAYER_LOGIN` + `LOGIN_QUIET`", but Boot enables modules inside its own PLAYER_LOGIN handler, so a listener registered in `onEnable` may never fire. `quietUntil` is `ns.now() + LOGIN_QUIET` at the first `onEnable` of the session; the ticker calls `endQuiet` once when it expires. When more than `POPUP_MAX` pop-ups are due at once the oldest visible one is replaced (nothing is queued).
+
+Fixes after the final review:
+
+- **"Too many messages" is not a failure.** When the game answers a send with a throttle result
+  (`AddonMessageThrottle` or `ChannelThrottle`, 3 and 8 if the names are missing) the message stays at the front
+  of the queue, the queue waits about a second and tries again, and this does not count toward giving up on the
+  channel. Other refusals still count. The Task 6 test `fallback_after_bad_send_results` now uses result 7 (a real
+  refusal) instead of 3.
+- **Changing the crew code really applies.** Changing the channel name or the crew code always leaves the channel
+  first and joins again 2 seconds later (a code only applies when the channel is created again). The (i) texts say
+  that the channel name and code must match your crew's, and that to lock someone out you pick a new channel name
+  and tell your crew.
+- **Lost channel is joined again.** Before each use the channel number is looked up again; if it is gone (or the
+  game says we left the channel), TwizCrew joins it again, at most once every 10 seconds, and messages wait
+  meanwhile (like at login).
+- **The crew channel never shows in chat.** Chat filters hide every line (notices, joins, leaves, anything typed)
+  whose channel name is exactly the crew channel's (any case). Taking the channel out of the chat windows tries
+  `ChatFrame_RemoveChannel`, then `ChatFrameUtil.RemoveChannel`, then the window's own `RemoveChannel`; if none
+  exists it is logged and `/tc report` shows a warning line.
+- **Crew code box shows stars**, and `/tc report` ends with "Channel echoes heard: N" (our own channel messages
+  heard back, which shows the channel delivers).
+- **No old layer news.** A friend's layer key, dungeon flag and tags are forgotten when they go offline or log in
+  again, and a waiting layer pop-up drops anyone whose layer changed meanwhile.
+- **"On a different layer" is said once.** It is not shown again for the same friend unless they were seen on your
+  layer (or went offline) in between. This also stops a friend being named twice when their change lands right at
+  the end of the login quiet time. A friend who was announced as "different" and is then seen on your layer gets
+  "back on your layer" even if there was an "unknown" in between.
+- **Sort "Name" is plain A–Z** (any case), offline friends mixed in. The other sort modes are unchanged.
+- **Duplicates by route only.** A message is dropped as a duplicate only when the same text from the same friend
+  came by a different route (channel and party, say) within 2 seconds; the same route twice is a resend and is kept.
+- **Message key order.** Zone, instance and layer key (`zn`, `ins`, `lk`) come first, the other keys follow
+  sorted, so the layer key always arrives in the same piece as the zone. Encoding is still the same every time.
+- **"Set my status" in the panel menu** (a seventh item, before "Open settings"): a small box of our own with the
+  current status, at most 40 letters; Enter saves once, Escape cancels, empty clears.
+- **Smaller fixes:** the secret-value check runs before the GUID is compared with anything; hiding the panel ends a
+  drag; the game is told not to save the panel position itself; sending a full state also tells the rest of the
+  addon what changed; the saved log keeps only text lines; more log lines (own layer key confirmed or reset, every
+  layer change between friends, one debug line per message sent).

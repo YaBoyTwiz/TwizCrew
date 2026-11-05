@@ -145,6 +145,31 @@ return {
       for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
       A.eq(states, 1)
     end,
+    hellos_from_many_friends_get_one_state = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      for _, name in ipairs({ "A1", "B2", "C3", "D4", "E5" }) do
+        receive(ns, W, name, "HELLO", { ver = "0.1.0" })
+        W:advance(0.2)
+      end
+      W:advance(8)
+      local states = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
+      A.eq(states, 1)
+      A.ok(ns.roster:get("E5"))
+    end,
+    pings_from_many_strangers_get_one_hello = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      for _, name in ipairs({ "S1", "S2", "S3" }) do
+        receive(ns, W, name, "PING", {})
+        W:advance(1)
+      end
+      W:advance(2)
+      local hellos = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "HELLO" then hellos = hellos + 1 end end
+      A.eq(hellos, 1)
+    end,
     state_from_friend_fills_roster_and_fires = function(ns, A, W)
       start(ns, W)
       local upd, on = record(ns, "MEMBER_UPDATED"), record(ns, "MEMBER_ONLINE")

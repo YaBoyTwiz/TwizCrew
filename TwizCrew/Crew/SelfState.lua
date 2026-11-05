@@ -31,8 +31,8 @@ end
 
 function Self.gather()
   local _, class = try(UnitClass, "player")
-  local level = tonumber(try(UnitLevel, "player")) or 0
-  local xp, xpMax = tonumber(try(UnitXP, "player")) or 0, tonumber(try(UnitXPMax, "player")) or 0
+  local level = tonumber((try(UnitLevel, "player"))) or 0
+  local xp, xpMax = tonumber((try(UnitXP, "player"))) or 0, tonumber((try(UnitXPMax, "player"))) or 0
   local percent = 0
   if xpMax > 0 then percent = math.floor(xp / xpMax * 100) end
   local inInstance = try(IsInInstance)

@@ -7,8 +7,9 @@ ns.Crew = Crew
 local FEATURE = "comm"
 local STRANGER_HELLO_GAP = 30 -- seconds between HELLOs triggered by pings from the same unknown name
 
-local replyPending = {}  -- name -> true while a jittered STATE reply is waiting
+local replyPending = false -- true while a jittered STATE reply is waiting (one shared reply: a STATE is a broadcast)
 local helloAt = {}       -- name -> time we last said HELLO because of their PING
+local lastStrangerHello  -- time of the last HELLO sent because of any stranger's PING
 local started = false
 
 local function noteVersion(name, ver)
@@ -34,13 +35,13 @@ end
 
 local function onHello(sender, fields)
   onState(sender, { ver = fields.ver })
-  if replyPending[sender] then return end
-  replyPending[sender] = true
+  if replyPending then return end
+  replyPending = true
   local c = ns.Config
   local delay = c.HELLO_JITTER_MIN + math.random() * (c.HELLO_JITTER_MAX - c.HELLO_JITTER_MIN)
   C_Timer.After(delay, function()
     ns.Log.safe(FEATURE, function()
-      replyPending[sender] = nil
+      replyPending = false
       ns.Comm.send("STATE", ns.Self.fullState())
     end)
   end)
@@ -49,8 +50,11 @@ end
 local function onPing(sender)
   if not ns.roster:get(sender) then
     local now = ns.now()
-    if not helloAt[sender] or now - helloAt[sender] >= STRANGER_HELLO_GAP then
+    local nameOk = not helloAt[sender] or now - helloAt[sender] >= STRANGER_HELLO_GAP
+    local globalOk = not lastStrangerHello or now - lastStrangerHello >= STRANGER_HELLO_GAP
+    if nameOk and globalOk then
       helloAt[sender] = now
+      lastStrangerHello = now
       ns.Comm.send("HELLO", { ver = ns.VERSION })
     end
     return

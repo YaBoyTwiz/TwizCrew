@@ -73,6 +73,17 @@ Other players never see any of it. The messages are hidden addon messages, not c
   shared only every few minutes when changed, at logout, and when someone opens the board. Milestone roasts only
   at big round numbers.
 
+## Queued next: "Tell crew to update" button (owner approved 2026-11-05, build after the stats board)
+
+- Addons can't update themselves (no downloads, no file writes). Flow: owner says "release it" → GitHub release →
+  friends' WowUp auto-update (each friend turns it on once) → owner presses **Tell crew to update** in `/tc`
+  settings → online crew get a pop-up "Twiz says vX is out" with a **Reload now** button (`ReloadUI()` on click) and
+  "If nothing changed, open WowUp and click Update first". Updates that add files or change the `.toc` say
+  "restart the game" instead.
+- Settings window lists every crew member's version with ✓ / ✗.
+- Safety (Claude's call): a copy only accepts the request from someone whose version is newer than its own.
+- Needs publishing first (owner's go-ahead + final name) before it does anything useful.
+
 ## Decisions (owner)
 
 - **Goal:** slowly build "the ultimate addon" for the owner and a small group of friends, useful for playing

@@ -15,6 +15,14 @@ return {
       ns.Log.add("warn", "later")
       A.contains(saved[2], "WARN later")
     end,
+    log_attach_drops_lines_that_are_not_text = function(ns, A)
+      local saved = { "[10:00:00] INFO one", 5, {}, "[10:00:01] WARN two" }
+      saved[7] = "after a hole"
+      saved.junk = true
+      ns.Log.attach(saved)
+      A.eq(saved, { "[10:00:00] INFO one", "[10:00:01] WARN two", "after a hole" })
+      A.eq(ns.Log.errors(5), {})
+    end,
     safe_passes_args_and_results = function(ns, A)
       local ok, a, b, c = ns.Log.safe("f", function(x, y, z) return z, y, x end, 1, nil, 3)
       A.ok(ok); A.eq(a, 3); A.eq(b, nil); A.eq(c, 1)

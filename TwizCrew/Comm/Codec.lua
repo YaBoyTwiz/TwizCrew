@@ -37,11 +37,22 @@ local function fitEntry(ek, value, room)
   return prefix .. escape(ns.Util.truncateUTF8(value, lo))
 end
 
+-- Zone, instance and layer key go first, so they always arrive together in the first piece (a friend's layer
+-- is never compared with a zone from another message). The rest follows sorted by key.
+local FIRST = { zn = 1, ins = 2, lk = 3 }
+
 function Codec.encode(msgType, fields)
   local max = ns.Config.MAX_MESSAGE
   local keys = {}
   for k in pairs(fields or {}) do keys[#keys + 1] = k end
-  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  table.sort(keys, function(a, b)
+    local fa, fb = FIRST[a], FIRST[b]
+    if fa or fb then
+      if fa and fb then return fa < fb end
+      return fa ~= nil
+    end
+    return tostring(a) < tostring(b)
+  end)
 
   local out, curType, cur = {}, msgType, nil -- cur: string of entries in the open chunk
   for _, k in ipairs(keys) do

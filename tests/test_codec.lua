@@ -10,6 +10,16 @@ return {
       A.eq(ns.Codec.encode("PING", {})[1], "1^PING^")
       A.eq(ns.Codec.encode("STATE", { b = "2", a = "1" })[1], "1^STATE^a=1~b=2")
     end,
+    layer_fields_lead_the_first_chunk = function(ns, A)
+      A.eq(ns.Codec.encode("STATE", { b = "2", lk = "111", a = "1", zn = "Elwynn", ins = "0" })[1],
+        "1^STATE^zn=Elwynn~ins=0~lk=111~a=1~b=2")
+      local f = { st = string.rep("x", 40), zn = string.rep("Z", 120), sz = string.rep("S", 120), cl = "MAGE",
+        lk = "111", ins = "0", xp = "50", lv = "12", tg = "AFK", ver = "0.1.0" }
+      local out = ns.Codec.encode("STATE", f)
+      A.ok(#out >= 2)
+      local first = ns.Codec.decode(out[1]).fields
+      A.eq(first.zn, f.zn); A.eq(first.ins, "0"); A.eq(first.lk, "111")
+    end,
     long_state_splits_under_limit = function(ns, A)
       local f = { st = string.rep("x", 40), zn = string.rep("Z", 120), sz = string.rep("S", 120), cl = "MAGE" }
       local out = ns.Codec.encode("STATE", f); A.ok(#out >= 2)
@@ -29,7 +39,8 @@ return {
         local m = ns.Codec.decode(s)
         A.ok(m)
       end
-      local zn = ns.Codec.decode(out[#out]).fields.zn
+      local zn
+      for _, s in ipairs(out) do zn = zn or ns.Codec.decode(s).fields.zn end
       A.ok(#zn > 0 and #zn % 2 == 0)
       A.ok(string.find(zn, "^[\195\184]*$") ~= nil)
     end,

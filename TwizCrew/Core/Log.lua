@@ -29,7 +29,15 @@ local function trim()
   end
 end
 
+-- Saved lines from an older or broken file may hold things that are not text: those are dropped.
 function Log.attach(lines)
+  if type(lines) ~= "table" then lines = {} end
+  local kept = {}
+  for i = 1, table.maxn(lines) do
+    if type(lines[i]) == "string" then kept[#kept + 1] = lines[i] end
+  end
+  for k in pairs(lines) do lines[k] = nil end
+  for i, line in ipairs(kept) do lines[i] = line end
   local early = store
   store = lines
   for _, line in ipairs(early) do store[#store + 1] = line end

@@ -199,3 +199,176 @@ function L.newWipeWatch(window)
   end
   return w
 end
+
+-- ---------------------------------------------------------------------------------------------
+-- Formatting
+
+function L.number(n)
+  if not isNumber(n) or n == math.huge or n == -math.huge then return "0" end
+  local s = string.format("%.0f", math.floor(n))
+  local sign, digits = s:match("^(-?)(%d+)$")
+  if not digits then return s end
+  digits = digits:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+  return sign .. digits
+end
+
+function L.duration(sec)
+  sec = isNumber(sec) and math.max(0, math.floor(sec)) or 0
+  local h, m = math.floor(sec / 3600), math.floor(sec % 3600 / 60)
+  if h >= 1 then return m > 0 and (h .. "h " .. m .. "m") or (h .. "h") end
+  if m >= 1 then return m .. "m" end
+  return sec .. "s"
+end
+
+function L.money(copper)
+  copper = isNumber(copper) and math.max(0, math.floor(copper)) or 0
+  local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+  local out = {}
+  if g > 0 then out[#out + 1] = g .. "g" end
+  if s > 0 then out[#out + 1] = s .. "s" end
+  if c > 0 then out[#out + 1] = c .. "c" end
+  if #out == 0 then return "0c" end
+  return table.concat(out, " ")
+end
+
+-- unit -> singular, plural
+local UNIT_WORDS = {
+  death = { "death", "deaths" }, fall = { "fall death", "fall deaths" }, drown = { "drowning", "drownings" },
+  weak = { "death", "deaths" }, again = { "quick death", "quick deaths" }, pull = { "pull", "pulls" },
+  steps = { "step", "steps" }, yards = { "yard swum", "yards swum" }, jumps = { "jump", "jumps" },
+  hearths = { "hearthstone", "hearthstones" }, junk = { "junk item", "junk items" },
+  quests = { "quest abandoned", "quests abandoned" }, duels = { "duel lost", "duels lost" },
+  rezzes = { "rez", "rezzes" },
+}
+
+function L.valueText(award, value, stats)
+  local def = award.def or award
+  local unit = def.unit
+  if not isNumber(value) then return "" end
+  if unit == "afk" then return L.duration(value) .. " AFK" end
+  if unit == "money" then return L.money(value) end
+  if unit == "perhour" then return L.number(value) .. " steps per hour" end
+  if unit == "ratio" then return string.format("rides %.1fx more than walks", value) end
+  local words = UNIT_WORDS[unit]
+  local n = math.floor(value)
+  local text = L.number(value) .. " " .. (words and (n == 1 and words[1] or words[2]) or "")
+  text = text:gsub(" $", "")
+  if unit == "weak" and stats and isNumber(stats.ld) and stats.ld > 0 then
+    text = text .. " (lvl " .. math.floor(stats.ld) .. " mob)"
+  end
+  return text
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Awards
+
+local function awardValue(def, stats)
+  if type(stats) ~= "table" then return nil end
+  local v
+  if def.value then v = def.value(stats) else v = stats[def.key] end
+  if not isNumber(v) or v == math.huge or v == -math.huge then return nil end
+  return v
+end
+
+function L.awards(entries)
+  local out = {}
+  for _, def in ipairs(ns.StatsDefs.AWARDS) do
+    local rows = {}
+    for _, e in ipairs(entries or {}) do
+      local v = awardValue(def, e.stats)
+      if v ~= nil then rows[#rows + 1] = { name = e.name, value = v, stats = e.stats } end
+    end
+    table.sort(rows, function(a, b)
+      if a.value ~= b.value then
+        if def.lowest then return a.value < b.value end
+        return a.value > b.value
+      end
+      return tostring(a.name) < tostring(b.name)
+    end)
+    local item = { def = def, winners = {}, top = {}, empty = true }
+    local best = rows[1]
+    if best and (def.lowest or best.value > 0) then
+      item.empty = false
+      item.value = best.value
+      item.text = L.valueText(def, best.value, best.stats)
+      for _, r in ipairs(rows) do
+        if r.value == best.value then item.winners[#item.winners + 1] = r.name end
+      end
+      table.sort(item.winners)
+      for _, r in ipairs(rows) do
+        if #item.top >= 3 then break end
+        if def.lowest or r.value > 0 then
+          item.top[#item.top + 1] = { name = r.name, value = r.value, text = L.valueText(def, r.value, r.stats) }
+        end
+      end
+    end
+    out[#out + 1] = item
+  end
+  return out
+end
+
+function L.titles(list)
+  local t = {}
+  for _, a in ipairs(list or {}) do
+    if not a.empty then
+      for _, name in ipairs(a.winners) do
+        if t[name] == nil then t[name] = a.def.name end
+      end
+    end
+  end
+  return t
+end
+
+function L.showCards(list)
+  local first, last = {}, {}
+  for _, a in ipairs(list or {}) do
+    if not a.empty then
+      local card = { kind = "award", award = a }
+      if a.def.last then last[#last + 1] = card else first[#first + 1] = card end
+    end
+  end
+  for _, c in ipairs(last) do first[#first + 1] = c end
+  first[#first + 1] = { kind = "end" }
+  return first
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Wire format
+
+function L.toWire(snap)
+  local f = {}
+  if type(snap) ~= "table" then return f end
+  if snap.sid ~= nil then f.sid = tostring(snap.sid) end
+  if snap.q ~= nil then f.q = tostring(snap.q) end
+  if snap.off then
+    f.off = "1"
+    return f
+  end
+  for _, prefix in ipairs({ "s", "a" }) do
+    local src = snap[prefix]
+    if type(src) == "table" then
+      for _, key in ipairs(ns.StatsDefs.KEYS) do
+        local v = src[key]
+        if isNumber(v) and v ~= math.huge then
+          v = math.floor(v)
+          if v > 0 then f[prefix .. "_" .. key] = string.format("%.0f", v) end
+        end
+      end
+    end
+  end
+  return f
+end
+
+function L.fromWire(f)
+  if type(f) ~= "table" or type(f.sid) ~= "string" or f.sid == "" then return nil end
+  local snap = { sid = f.sid, q = type(f.q) == "string" and f.q or nil, s = {}, a = {} }
+  if f.off == "1" then snap.off = true end
+  for _, prefix in ipairs({ "s", "a" }) do
+    for _, key in ipairs(ns.StatsDefs.KEYS) do
+      local raw = f[prefix .. "_" .. key]
+      local v = type(raw) == "string" and tonumber(raw) or nil
+      if v and v == v and v >= 0 and v < math.huge then snap[prefix][key] = math.floor(v) end
+    end
+  end
+  return snap
+end

@@ -170,6 +170,33 @@ return {
       A.eq(#W.sounds, before, "no sounds with the setting off")
     end,
 
+    key_in_combat_lockdown_closes_the_show = function(ns, A, W)
+      local named = {}
+      local create = W.env.CreateFrame
+      W.env.CreateFrame = function(kind, name, ...)
+        local f = create(kind, name, ...)
+        if name then named[name] = f end
+        return f
+      end
+      start(ns, W)
+      ns.Stats.count("dt", 1)
+      ns.AwardsShow.start("session")
+      W:advance(5)
+      local f = named.TwizCrewAwards
+      local propagate, hidden = {}, 0
+      rawset(f, "SetPropagateKeyboardInput", function(_, on) propagate[#propagate + 1] = on end)
+      local hide = f.Hide
+      rawset(f, "Hide", function(self) hidden = hidden + 1; return hide(self) end)
+      -- the keyboard is still ours (PLAYER_REGEN_DISABLED not seen yet) when the lockdown starts
+      W.env.InCombatLockdown = function() return true end
+      f._scripts.OnKeyDown(f, "SPACE")
+      A.no(ns.AwardsShow.isOpen(), "the show closed")
+      A.eq(hidden, 1, "the window was hidden")
+      A.eq(propagate, {}, "keyboard propagation never touched in lockdown")
+      W.env.InCombatLockdown = function() return false end
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     keyboard_and_names_are_safe = function(ns, A, W)
       local named = {}
       local create = W.env.CreateFrame

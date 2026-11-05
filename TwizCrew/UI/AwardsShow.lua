@@ -116,9 +116,14 @@ local function build()
     if dragged then dragged = false; return end
     Show.next()
   end)
-  -- Only Space is kept; every other key (Escape, movement, chat) goes on to the game.
+  -- Only Space is kept; every other key (Escape, movement, chat) goes on to the game. In combat lockdown the
+  -- keyboard setting can't be changed: the show closes (hiding is allowed) so it never holds the keys in a fight.
   script(frame, "OnKeyDown", function(self, key)
-    if not lockdown() and self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(key ~= "SPACE") end
+    if lockdown() then
+      Show.close()
+      return
+    end
+    if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(key ~= "SPACE") end
     if key == "SPACE" then Show.next() end
   end)
   script(frame, "OnHide", function() Show.close() end)

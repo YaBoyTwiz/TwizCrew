@@ -41,11 +41,14 @@ local function tipLines(a, ctx)
   return tip
 end
 
+-- Names shown on a row; more tied winners show as "+N", and every name is in the tooltip's "Tied:" line.
+BoardLogic.SHOWN_WINNERS = 2
+
 local function row(a, ctx)
   local def = a.def
   local r = {
     id = def.id, name = def.name, icon = def.icon or ns.StatsDefs.ICON_FALLBACK, winners = {}, classes = {},
-    empty = a.empty and true or false, tip = tipLines(a, ctx),
+    empty = a.empty and true or false, tip = tipLines(a, ctx), more = 0,
   }
   if r.empty then
     r.text = "nobody yet"
@@ -55,6 +58,10 @@ local function row(a, ctx)
       r.winners[i] = text(name)
       local e = ctx.entries and ctx.entries[name]
       r.classes[i] = type(e) == "table" and type(e.class) == "string" and e.class or false
+    end
+    if #r.winners > BoardLogic.SHOWN_WINNERS then
+      r.more = #r.winners - BoardLogic.SHOWN_WINNERS
+      r.tip[#r.tip + 1] = "Tied: " .. table.concat(r.winners, ", ")
     end
   end
   return r

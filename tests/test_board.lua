@@ -123,6 +123,142 @@ return {
       A.eq(bunny.tip[4], "3. Dax: 4 jumps")
     end,
 
+    board_many_ties_shortened_with_full_tip = function(ns, A)
+      local list = {}
+      for i, name in ipairs({ "Axel", "Bubbles", "Cora", "Da|x" }) do
+        list[i] = { name = name, stats = { jp = 10 }, mine = false, online = true, at = WALL }
+      end
+      local bunny = rowById(model(ns, "all", list), "bunny")
+      A.eq(bunny.winners, { "Axel", "Bubbles", "Cora", "Da||x" }, "every tied name in the model")
+      A.eq(bunny.more, 2, "two more than shown")
+      A.eq(bunny.tip[#bunny.tip], "Tied: Axel, Bubbles, Cora, Da||x")
+      local two = rowById(model(ns, "all", { list[1], list[2] }), "bunny")
+      A.eq(two.more, 0)
+      A.no(two.tip[#two.tip]:find("^Tied"), "two names fit: no Tied line")
+    end,
+
+    board_rows_have_room = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      for _, name in ipairs({ "Axel", "Bubbles", "Cora", "Dax" }) do
+        hello(W, ns, name)
+        receive(W, ns, name, "STATS", { sid = S, q = "1", s_jp = "10", s_mt = "3000", s_st = "1440", s_dw = "1",
+          s_ld = "3", s_pt = "3600" })
+      end
+      ns.Panel.setTab("shame")
+      W:advance(1)
+      local L = ns.Board.layoutForTest()
+      A.ok(L.width <= 320, "board at most 320 px wide")
+      local byName = {}
+      for _, r in ipairs(L.rows) do byName[r.name] = r end
+      local bunny = byName["Bunny Hopper"]
+      A.eq(bunny.number, "10 jumps")
+      A.contains(bunny.winners, "Axel")
+      A.contains(bunny.winners, "Bubbles")
+      A.no(bunny.winners:find("Cora", 1, true), "only two names on the row")
+      A.contains(bunny.winners, " +2")
+      A.eq(bunny.height, 30, "two lines")
+      A.eq(byName["Fish"].height, 18, "nobody yet: one line")
+      A.ok(L.numberWidth >= 160, "room for the longest numbers: " .. L.numberWidth)
+      A.ok(L.winnersWidth >= 280, "winners use the full row: " .. L.winnersWidth)
+      A.eq(byName["Never Walks"].number, "rides 2.5x more than walks")
+      A.eq(byName["Died to a Weakling"].number, "1 death (lvl 3 mob)")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    a_broken_board_never_turns_the_panel_off = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      hello(W, ns, "Frostie")
+      receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_dt = "3", a_dt = "3" })
+      W:advance(1)
+      ns.StatsStore.entries = function() error("entries broke") end
+      for _ = 1, 6 do
+        ns.Bus.fire("STATS_CHANGED")
+        W:advance(0.1)
+      end
+      A.ok(ns.Modules.isEnabled("panel"), "the Crew panel stays on")
+      A.ok(ns.Panel.isShown())
+      A.ok(ns.Panel.rowCountForTest() > 0, "crew rows still drawn")
+      A.eq(modelByName(ns.Panel.models(), "Frostie").title, nil, "no titles")
+      ns.Panel.setTab("shame")
+      for _ = 1, 6 do
+        ns.Panel.refresh()
+        W:advance(0.1)
+      end
+      A.ok(ns.Modules.isEnabled("panel"), "still on after the board failed to draw")
+      A.ok(ns.Panel.isShown())
+      A.eq(ns.Panel.noteForTest(), "Hall of Shame unavailable right now")
+      local boardErrors, panelErrors = 0, 0
+      for _, line in ipairs(ns.Log.errors(50)) do
+        if line:find("ERROR board: ", 1, true) then boardErrors = boardErrors + 1 end
+        if line:find("ERROR panel: ", 1, true) then panelErrors = panelErrors + 1 end
+      end
+      A.ok(boardErrors >= 2, "logged under board")
+      A.eq(panelErrors, 0, "nothing charged to the panel")
+      ns.Panel.setTab("crew")
+      W:advance(0.1)
+      A.eq(ns.Panel.noteForTest(), nil, "the note goes away")
+      A.ok(ns.Panel.rowCountForTest() > 0)
+    end,
+
+    titles_cached_until_stats_change = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      hello(W, ns, "Frostie")
+      hello(W, ns, "Ginkan", "WARRIOR")
+      receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_dt = "3", a_dt = "3" })
+      W:advance(1)
+      A.eq(modelByName(ns.Panel.models(), "Frostie").title, "Professional Corpse")
+      local real, calls = ns.StatsStore.entries, 0
+      ns.StatsStore.entries = function(...) calls = calls + 1; return real(...) end
+      for _ = 1, 5 do
+        ns.Panel.refresh()
+        W:advance(0.1)
+      end
+      A.eq(calls, 0, "redraws without changes reuse the titles")
+      receive(W, ns, "Ginkan", "STATS", { sid = S, q = "1", s_dt = "9", a_dt = "9" }) -- fires STATS_CHANGED
+      W:advance(0.1)
+      A.eq(modelByName(ns.Panel.models(), "Ginkan").title, "Professional Corpse", "updated after STATS_CHANGED")
+      A.eq(modelByName(ns.Panel.models(), "Frostie").title, nil)
+      ns.Modules.set("stats", "titles", "all")
+      W:advance(0.1)
+      A.eq(modelByName(ns.Panel.models(), "Ginkan").title, "Professional Corpse")
+      ns.Modules.set("stats", "titles", "session")
+      ns.Session.newByHand() -- fires SESSION_CHANGED
+      W:advance(0.1)
+      A.eq(modelByName(ns.Panel.models(), "Ginkan").title, nil, "a new session: titles follow")
+      -- my own numbers reset by hand: my title goes too
+      ns.Modules.set("panel", "showSelf", true)
+      ns.Stats.count("jp", 5)
+      W:advance(6)
+      A.eq(modelByName(ns.Panel.models(), "Twiz").title, "Bunny Hopper")
+      W.env.SlashCmdList.TWIZCREW("stats reset yes")
+      W:advance(0.1)
+      A.eq(modelByName(ns.Panel.models(), "Twiz").title, nil, "after /tc stats reset yes")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    scroll_does_nothing_on_the_hall_of_shame = function(ns, A, W)
+      start(ns, W)
+      for i = 1, 12 do hello(W, ns, "Friend" .. string.char(64 + i)) end
+      W:advance(1)
+      ns.Panel.scroll(-1)
+      W:advance(0.1)
+      A.eq(ns.Panel.firstRowForTest(), 2, "the crew tab scrolls")
+      ns.Panel.scroll(1)
+      W:advance(0.1)
+      ns.Panel.setTab("shame")
+      W:advance(0.1)
+      local redraws = ns.Panel.redrawCountForTest()
+      ns.Panel.scroll(-3)
+      W:advance(0.1)
+      A.eq(ns.Panel.redrawCountForTest(), redraws, "no redraw")
+      ns.Panel.setTab("crew")
+      W:advance(0.1)
+      A.eq(ns.Panel.firstRowForTest(), 1, "the crew list did not move while hidden")
+    end,
+
     offline_friend_tip_says_when = function(ns, A)
       local list = {
         { name = "Frostie", stats = { dt = 3 }, mine = false, online = false, at = WALL - 7200 },

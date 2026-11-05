@@ -14,7 +14,8 @@ local C = T.COLOR
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
 local ICON_SIZE = { full = 18, compact = 16, tiny = 14 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
-local TAB_HEIGHT, BOARD_WIDTH = 18, 300
+local TAB_HEIGHT, BOARD_WIDTH = 18, 320
+local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
   BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
@@ -28,6 +29,8 @@ local tab = "crew"     -- "crew" | "shame" (session only)
 local rowFrames = {}   -- pool, created once and reused (at most PANEL_MAX_ROWS)
 local models = {}      -- row models of the last redraw
 local header = ""
+local note             -- the note under the rows (or the board's fallback line) while shown, else nil
+local titleCache       -- { view, sid, titles } until stats, the session or the settings change (nil = compute)
 local offset = 0       -- scroll: rows skipped at the top
 local firstRow, visibleRows = 1, 0
 local enabled, shown, inCombat, pending, moving = false, false, false, false, false
@@ -64,13 +67,32 @@ local function statsOn()
   return ns.Board ~= nil and tabBar ~= nil and ns.Modules.isEnabled("stats")
 end
 
--- titleOf(name) for the row models, computed once per redraw (nil = no titles).
+local function forgetTitles() titleCache = nil end
+
+-- The award titles, computed inside ns.Log.safe("board", ...): a stats-side error means no titles (until the next
+-- change), never an error charged to the panel.
+local function computeTitles(view, sid)
+  local ok, titles = ns.Log.safe("board", function()
+    return ns.StatsLogic.titles(ns.StatsLogic.awards(ns.StatsStore.entries(view, sid)))
+  end)
+  if not ok or type(titles) ~= "table" then titles = {} end
+  return titles
+end
+
+-- titleOf(name) for the row models (nil = no titles). Cached until STATS_CHANGED, SESSION_CHANGED, a stats
+-- setting change, a settings reset or a module switch.
 local function titleOf()
   if not statsOn() then return nil end
   local view = ns.Modules.setting("stats", "titles")
   if view ~= "session" and view ~= "all" then return nil end
   local session = ns.Session and ns.Session.current()
-  local titles = ns.StatsLogic.titles(ns.StatsLogic.awards(ns.StatsStore.entries(view, session and session.id)))
+  local sid = session and session.id
+  local c = titleCache
+  if not c or c.view ~= view or c.sid ~= sid then
+    c = { view = view, sid = sid, titles = computeTitles(view, sid) }
+    titleCache = c
+  end
+  local titles = c.titles
   return function(name) return titles[name] end
 end
 
@@ -286,6 +308,7 @@ local function hide()
     root:Hide()
   end
   shown = false
+  note = nil
   Widgets.closeMenu()
 end
 
@@ -322,15 +345,27 @@ local function redraw()
   if tab == "shame" then
     for _, r in ipairs(rowFrames) do r:Hide() end
     visibleRows = 0
-    noteText:Hide()
-    local h = ns.Board.draw(root, top + GAP, BOARD_WIDTH)
+    local ok, h = ns.Log.safe("board", ns.Board.draw, root, top + GAP, BOARD_WIDTH)
+    if ok and type(h) == "number" then
+      noteText:Hide()
+      note = nil
+    else
+      ns.Log.safe("board", ns.Board.hide)
+      noteText:ClearAllPoints()
+      noteText:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, -(top + GAP))
+      noteText:SetWidth(BOARD_WIDTH)
+      noteText:SetText(BOARD_UNAVAILABLE)
+      noteText:Show()
+      note = BOARD_UNAVAILABLE
+      h = LINE
+    end
     root:SetSize(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD)
     root:Show()
     shown = true
     normalizeAnchor()
     return
   end
-  if ns.Board then ns.Board.hide() end
+  if ns.Board then ns.Log.safe("board", ns.Board.hide) end
 
   local max = ns.Config.PANEL_MAX_ROWS
   local first, last = Logic.window(#models, offset, max)
@@ -354,7 +389,7 @@ local function redraw()
   for i = used + 1, #rowFrames do rowFrames[i]:Hide() end
   visibleRows = used
 
-  local note
+  note = nil
   if #models == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
   elseif #models > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #models .. ")" end
   if note then
@@ -522,9 +557,9 @@ local function build()
     tabBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, -(HEADER_HEIGHT - 2))
     tabBar:SetHeight(TAB_HEIGHT)
     draggable(tabBar)
-    crewTab = ns.Board.textButton(tabBar, "Crew", function() Panel.setTab("crew") end)
+    crewTab = ns.Board.textButton(tabBar, "Crew", function() Panel.setTab("crew") end, FEATURE)
     crewTab:SetPoint("LEFT", tabBar, "LEFT", PAD - 5, 0)
-    shameTab = ns.Board.textButton(tabBar, "Hall of Shame", function() Panel.setTab("shame") end)
+    shameTab = ns.Board.textButton(tabBar, "Hall of Shame", function() Panel.setTab("shame") end, FEATURE)
     shameTab:SetPoint("LEFT", crewTab, "RIGHT", 4, 0)
     tabBar:Hide()
   end
@@ -532,8 +567,9 @@ local function build()
 end
 
 ---------------------------------------------------------------------------------------------------------- public
--- Mouse wheel: delta 1 = up (earlier rows), -1 = down.
+-- Mouse wheel: delta 1 = up (earlier rows), -1 = down. The Hall of Shame does not scroll.
 function Panel.scroll(delta)
+  if Panel.tab() == "shame" then return end
   offset = offset - (tonumber(delta) or 0)
   requestRedraw()
 end
@@ -558,6 +594,7 @@ function Panel.refresh() requestRedraw() end
 function Panel.isShown() return shown end
 function Panel.models() return models end
 function Panel.headerText() return header end
+function Panel.noteForTest() return note end
 function Panel.rowCountForTest() return visibleRows end
 function Panel.firstRowForTest() return firstRow end
 function Panel.redrawCountForTest() return redraws end
@@ -569,6 +606,11 @@ local function onEnable()
   local ok, fighting = false, false
   if type(UnitAffectingCombat) == "function" then ok, fighting = pcall(UnitAffectingCombat, "player") end
   inCombat = ok and fighting and true or false
+  titleCache = nil
+  for _, name in ipairs({ "STATS_CHANGED", "SESSION_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED" }) do
+    ns.Bus.on(FEATURE, name, forgetTitles)
+  end
+  ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) if id == "stats" then forgetTitles() end end)
   for _, name in ipairs(REDRAW_ON) do ns.Bus.on(FEATURE, name, requestRedraw) end
   ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() inCombat = true; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() inCombat = false; requestRedraw() end)

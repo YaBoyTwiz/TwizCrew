@@ -139,6 +139,7 @@ local function stats(rest)
     say("this sets all your own stats (this session and all time) back to 0. Type /tc stats reset yes to do it.")
   elseif what == "reset yes" then
     ns.StatsStore.resetMine()
+    ns.Bus.fire("STATS_CHANGED") -- the board and the titles show the zeros at once
     if ns.Modules.isEnabled("stats") then ns.Stats.send() end -- friends see the zeros (off: they see nothing)
     say("your stats are back to 0.")
   else

@@ -1,30 +1,34 @@
 -- The Hall of Shame tab, drawn inside the Crew panel (ns.Panel hosts it below its header): a "This session" /
--- "All time" switch, the subtitle, one row per award (badge, award name, winners in class colours, their number;
--- greyed "nobody yet" when nobody won it), a tooltip with the (i) text and the top 3, and the Wipe Squad line.
--- Every script runs under the panel's feature id.
+-- "All time" switch, the subtitle, one row per award, a tooltip with the (i) text and the top 3, and the Wipe
+-- Squad line. An award row has two lines: badge, award name and the number on the first; the winners (class
+-- colours, at most two names then "+N") under the name on the second. "nobody yet" rows are one greyed line.
+-- Every script runs under the feature id "board" (not a module): a broken board is only logged and never turns
+-- the Crew panel off. The panel also calls Board.draw inside ns.Log.safe("board", ...).
 local _, ns = ...
 
 local Board = {}
 ns.Board = Board
 
-local FEATURE = "panel"
+local FEATURE = "board"
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 
 local PAD = 8          -- the panel's own padding (left edge of the board)
-local SWITCH_HEIGHT, LINE, ROW_HEIGHT, ICON = 16, 13, 20, 16
-local NAME_WIDTH, NUMBER_WIDTH = 108, 84
+local SWITCH_HEIGHT, LINE, ICON = 16, 13, 16
+local ROW_ONE, ROW_TWO = 18, 30 -- an empty award (one line), an award with winners (two lines)
+local NAME_WIDTH = 130
+local INDENT = ICON + 4         -- the award name and the winners start here
 local EMPTY_ALPHA = 0.45
 
 local view = "session"
 local frame, sessionButton, allButton, subtitle, footer
 local rows = {}         -- pool, one per award at most
-local lastModel
+local lastModel, lastLayout
 
-local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
+local function script(f, name, fn, featureId) Widgets.script(f, name, fn, featureId or FEATURE) end
 
--- A small text button: gold while active, muted otherwise. Also used by the panel for its tabs.
-function Board.textButton(parent, label, onClick)
+-- A small text button: gold while active, muted otherwise. Also used by the panel for its tabs (featureId "panel").
+function Board.textButton(parent, label, onClick, featureId)
   local b = CreateFrame("Button", nil, parent)
   b.label = T.text(b, T.FONT.small, C.muted)
   b.label:SetPoint("CENTER", b, "CENTER", 0, 0)
@@ -35,7 +39,7 @@ function Board.textButton(parent, label, onClick)
   local hl = b:CreateTexture(nil, "HIGHLIGHT")
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
-  script(b, "OnClick", function() onClick() end)
+  script(b, "OnClick", function() onClick() end, featureId)
   function b.SetActive(self, on) T.textColor(self.label, on and C.title or C.muted) end
   return b
 end
@@ -74,13 +78,16 @@ local function hex(r, g, b)
   return string.format("%02x%02x%02x", byte(r), byte(g), byte(b))
 end
 
--- Names are already plain text (safeText), so they can sit inside colour codes.
+-- Names are already plain text (safeText), so they can sit inside colour codes. "A, B +2" for four tied winners.
 local function winnersText(row)
   local parts = {}
   for i, name in ipairs(row.winners) do
+    if i > ns.BoardLogic.SHOWN_WINNERS then break end
     parts[i] = "|cff" .. hex(T.classColor(row.classes[i] or nil)) .. name .. "|r"
   end
-  return table.concat(parts, ", ")
+  local text = table.concat(parts, ", ")
+  if (row.more or 0) > 0 then text = text .. " +" .. row.more end
+  return text
 end
 
 local function showTip(r)
@@ -101,21 +108,20 @@ end
 
 local function createRow()
   local r = CreateFrame("Frame", nil, frame)
-  r:SetHeight(ROW_HEIGHT)
+  r:SetHeight(ROW_TWO)
   r:EnableMouse(true)
   r.icon = r:CreateTexture(nil, "ARTWORK")
   r.icon:SetSize(ICON, ICON)
-  r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
+  r.icon:SetPoint("TOPLEFT", r, "TOPLEFT", 0, -1)
   r.name = T.text(r, T.FONT.small, C.title)
-  r.name:SetPoint("LEFT", r, "LEFT", ICON + 4, 0)
+  r.name:SetPoint("TOPLEFT", r, "TOPLEFT", INDENT, -2)
   r.name:SetWidth(NAME_WIDTH)
   noWrap(r.name, "LEFT")
   r.number = T.text(r, T.FONT.small, C.text)
-  r.number:SetPoint("RIGHT", r, "RIGHT", 0, 0)
-  r.number:SetWidth(NUMBER_WIDTH)
+  r.number:SetPoint("TOPRIGHT", r, "TOPRIGHT", 0, -2)
   noWrap(r.number, "RIGHT")
   r.winners = T.text(r, T.FONT.small, C.text)
-  r.winners:SetPoint("LEFT", r, "LEFT", ICON + 4 + NAME_WIDTH + 4, 0)
+  r.winners:SetPoint("TOPLEFT", r, "TOPLEFT", INDENT, -(2 + LINE + 2))
   noWrap(r.winners, "LEFT")
   script(r, "OnEnter", showTip)
   script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -157,22 +163,30 @@ function Board.draw(parent, top, width)
   local y = SWITCH_HEIGHT + 2
   placeLine(subtitle, m.subtitle, y, width)
   y = y + LINE + 4
-  local winnersWidth = width - (ICON + 4 + NAME_WIDTH + 4) - NUMBER_WIDTH - 4
+  local numberWidth = width - INDENT - NAME_WIDTH - 4
+  local winnersWidth = width - INDENT
+  lastLayout = { width = width, numberWidth = numberWidth, winnersWidth = winnersWidth, rows = {} }
   for i, row in ipairs(m.rows) do
     local r = rows[i]
     if not r then r = createRow(); rows[i] = r end
+    local height = row.empty and ROW_ONE or ROW_TWO
+    local winners = row.empty and "" or winnersText(row)
     r:ClearAllPoints()
     r:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -y)
     r:SetWidth(width)
+    r:SetHeight(height)
     r.icon:SetTexture(row.icon)
     r.name:SetText(row.name)
-    r.winners:SetWidth(winnersWidth)
-    r.winners:SetText(winnersText(row))
+    r.number:SetWidth(numberWidth)
     r.number:SetText(row.text)
+    r.winners:SetWidth(winnersWidth)
+    r.winners:SetText(winners)
+    if row.empty then r.winners:Hide() else r.winners:Show() end
     r.tip = row.tip
     r:SetAlpha(row.empty and EMPTY_ALPHA or 1)
     r:Show()
-    y = y + ROW_HEIGHT
+    lastLayout.rows[i] = { name = row.name, number = row.text, winners = winners, height = height }
+    y = y + height
   end
   for i = #m.rows + 1, #rows do rows[i]:Hide() end
   if m.footer then
@@ -201,3 +215,4 @@ function Board.setView(v)
 end
 
 function Board.modelForTest() return lastModel end
+function Board.layoutForTest() return lastLayout end

@@ -109,6 +109,11 @@ local function build(W)
     W.removedChannels[#W.removedChannels + 1] = { frame = frame, channel = name }
   end
   env.NUM_CHAT_WINDOWS = 10
+  env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
+  W.messageFilters = {}      -- { event, fn } for every ChatFrame_AddMessageEventFilter call
+  env.ChatFrame_AddMessageEventFilter = function(event, fn)
+    W.messageFilters[#W.messageFilters + 1] = { event = event, fn = fn }
+  end
   for i = 1, 10 do env["ChatFrame" .. i] = permissive(W) end
   env.IsInGroup = function() return W.state.inGroup or false end
   env.IsInRaid = function() return W.state.inRaid or false end

@@ -279,6 +279,33 @@ return {
       A.eq(d.name, "Crew connection")
       A.eq(d.defaults.transport, "auto")
     end,
+    late_join_after_timeout_is_still_hidden = function(ns, A, W)
+      boot(ns, W, function(w) w.state.channelJoinFails = true end)
+      W:advance(16)
+      A.ok(ns.Transport.status().failed)
+      A.eq(#W.removedChannels, 0)
+      W.state.channels.TwizCrewHQ = 5
+      W:fire("CHAT_MSG_CHANNEL_NOTICE", "YOU_JOINED", "", "", "TwizCrewHQ")
+      A.eq(#W.removedChannels, 10)
+      local frames = {}
+      for _, r in ipairs(W.removedChannels) do frames[r.frame] = true end
+      for i = 1, 10 do A.ok(frames[W.env["ChatFrame" .. i]], "frame " .. i) end
+    end,
+    hides_not_found_line_for_whispered_names = function(ns, A, W)
+      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
+      db.crew.extra = { "Ginkan" }
+      W:advance(16)
+      ns.Comm.send("PING", {})
+      W:advance(1)
+      A.eq(#W.messageFilters, 1)
+      A.eq(W.messageFilters[1].event, "CHAT_MSG_SYSTEM")
+      local f = W.messageFilters[1].fn
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan' is currently playing."), true)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Stranger' is currently playing."), false)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", nil), false)
+      W:advance(11)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan' is currently playing."), false)
+    end,
     changing_crew_code_rejoins = function(ns, A, W)
       boot(ns, W)
       W:advance(6)

@@ -102,16 +102,41 @@ local function onNotice(text, _, _, channelName, _, _, _, _, baseName)
     end
     markFailed("wrong crew code")
   elseif text == "YOU_JOINED" then
-    if state.joined then hideChannel() else
+    hideChannel() -- always, even when the join came after we gave up waiting
+    if not state.joined then
       local index = lookupIndex()
       if index > 0 then markJoined(index) end
     end
   end
 end
 
+-- Names we whispered recently; the game's "No player named X is currently playing." line for them is hidden.
+local WHISPER_MEMORY = 10 -- seconds
+local whispered = {}      -- name -> time of the last whisper
+
+local function hideNotFoundLine(_, _, message)
+  local ok, hide = pcall(function()
+    if type(message) ~= "string" then return false end
+    local now = ns.now()
+    local pattern = ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."
+    for name, at in pairs(whispered) do
+      if now - at > WHISPER_MEMORY then
+        whispered[name] = nil
+      elseif message == string.format(pattern, name) then
+        return true
+      end
+    end
+    return false
+  end)
+  return ok and hide == true
+end
+
 function Transport.start()
   if state.started then return end
   state.started = true
+  if type(ChatFrame_AddMessageEventFilter) == "function" then
+    ns.Log.safe(FEATURE, ChatFrame_AddMessageEventFilter, "CHAT_MSG_SYSTEM", hideNotFoundLine)
+  end
   ns.Events.on(FEATURE, "CHAT_MSG_CHANNEL_NOTICE", onNotice)
   local gen = state.generation
   C_Timer.After(ns.Config.CHANNEL_JOIN_DELAY, function()
@@ -193,6 +218,7 @@ function Transport.send(text, dest)
   local ok, result = ns.Log.safe(FEATURE, C_ChatInfo.SendAddonMessage, ns.Config.PREFIX, text, dest.chatType, dest.target)
   if not ok then return false end
   state.lastResult = result
+  if dest.chatType == "WHISPER" and dest.target then whispered[dest.target] = ns.now() end
   local good = succeeded(result)
   if dest.chatType == "CHANNEL" then
     if good then

@@ -934,3 +934,6 @@ no_errors_anywhere: after all of the above, every client's ns.Log.errors(50) is 
 - **Pop-up quiet time after login** starts when the pop-ups module is switched on at login, instead of on a
   `PLAYER_LOGIN` listener that is registered too late to hear the event.
 - **Test stub** exposes `_G` (addon code looks up `ChatFrame1..10` through it).
+- **No "player not found" spam when whispering.** In the whisper fallback, whispering a friend who is offline makes the
+  game print "No player named X is currently playing." in chat. TwizCrew now remembers who it whispered in the last 10
+  seconds and hides that one line for those names. Other system messages are untouched.

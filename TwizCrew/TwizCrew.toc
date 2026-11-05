@@ -19,6 +19,7 @@ Crew\Roster.lua
 Crew\SelfState.lua
 Crew\Crew.lua
 Core\Version.lua
+Core\UpdateLogic.lua
 Tags\Tags.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua

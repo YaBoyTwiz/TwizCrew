@@ -1,5 +1,6 @@
 -- Test runner. Run from the repo root via tests/run.sh [pattern].
--- A test file returns { files = {...} | "toc", tests = { name = function(ns, A, W) end } }.
+-- A test file returns { files = {...} | "toc", tests = { name = function(ns, A, W, H) end } }.
+-- H is a fresh multi-client helper per test (see newHarness below).
 local Stub = dofile("tests/wowstub.lua")
 
 local A = {}
@@ -50,6 +51,114 @@ local function tocFiles()
   return list
 end
 
+local function loadFiles(W, ns, files)
+  for _, file in ipairs(files) do
+    local chunk = assert(loadfile("TwizCrew/" .. file))
+    setfenv(chunk, W.env)
+    chunk("TwizCrew", ns)
+  end
+end
+
+-- Each client gets its own math.random: deterministic (seeded from the name) and independent of the others.
+local function clientMath(name)
+  local M = 2147483647
+  local seed = 7
+  for i = 1, #name do seed = (seed * 31 + name:byte(i)) % M end
+  if seed == 0 then seed = 1 end
+  local m = {}
+  for k, v in pairs(math) do m[k] = v end
+  function m.random(a, b)
+    seed = (seed * 16807) % M
+    local r = (seed - 1) / (M - 1)
+    if a == nil then return r end
+    if b == nil then a, b = 1, a end
+    return a + math.floor(r * (b - a + 1))
+  end
+  function m.randomseed(s) seed = math.floor(tonumber(s) or 1) % (M - 1) + 1 end
+  return m
+end
+
+local function channelNameOf(W, index)
+  for name, i in pairs(W.state.channels or {}) do if i == index then return name end end
+end
+
+-- Would this addon message (as recorded in from.sent) reach `to` in the real game?
+local function reaches(from, to, m)
+  local t = m.chatType
+  if t == "CHANNEL" then
+    local name = channelNameOf(from, m.target)
+    return name ~= nil and to.state.channels[name] ~= nil
+  elseif t == "PARTY" or t == "RAID" then
+    return true
+  elseif t == "GUILD" then
+    return (from.state.inGuild and to.state.inGuild) and true or false
+  elseif t == "WHISPER" then
+    local target = tostring(m.target or "")
+    return target == to.state.player or target == to.state.player .. "-" .. to.state.realm
+  end
+  return false
+end
+
+local SIM_STEP = 0.1 -- seconds per simulation step
+
+-- Multi-client helper:
+--   H.client(name, state) -> W, ns   a full TOC load in its own fake game (state: W.state overrides, set first)
+--   H.link(W, ...)                   these clients hear each other's addon messages from now on
+--   H.advance(seconds, onStep)       all clients' clocks move together; messages are delivered every step
+local function newHarness()
+  local H = { clients = {}, linked = {}, elapsed = 0 }
+
+  function H.client(name, state)
+    local W = Stub.new()
+    W.state.player = name
+    for k, v in pairs(state or {}) do W.state[k] = v end
+    W.clock = W.clock + H.elapsed
+    W.env.math = clientMath(name)
+    W.cursor = 0
+    local ns = {}
+    loadFiles(W, ns, tocFiles())
+    H.clients[#H.clients + 1] = W
+    return W, ns
+  end
+
+  function H.link(...)
+    for _, W in ipairs({ ... }) do
+      local known = false
+      for _, L in ipairs(H.linked) do if L == W then known = true end end
+      if not known then H.linked[#H.linked + 1] = W end
+    end
+  end
+
+  -- Every message a linked client sent since the last delivery arrives as CHAT_MSG_ADDON at the others.
+  function H.deliver()
+    for _, from in ipairs(H.linked) do
+      while from.cursor < #from.sent do
+        from.cursor = from.cursor + 1
+        local m = from.sent[from.cursor]
+        local sender = from.state.player .. "-" .. from.state.realm
+        for _, to in ipairs(H.linked) do
+          if to ~= from and reaches(from, to, m) then
+            to:fire("CHAT_MSG_ADDON", m.prefix, m.text, m.chatType, sender)
+          end
+        end
+      end
+    end
+  end
+
+  function H.advance(seconds, onStep)
+    H.deliver()
+    local steps = math.max(1, math.floor(seconds / SIM_STEP + 0.5))
+    for _ = 1, steps do
+      for _, W in ipairs(H.clients) do W:advance(SIM_STEP) end
+      H.elapsed = H.elapsed + SIM_STEP
+      H.deliver()
+      if onStep then onStep() end
+    end
+  end
+
+  return H
+end
+
 local function matches(pattern, id)
   if not pattern then return true end
   for alt in (pattern .. "|"):gmatch("(.-)|") do
@@ -91,12 +200,8 @@ for _, path in ipairs(testFiles) do
       local W = Stub.new()
       local ns = {}
       local ok, err = pcall(function()
-        for _, file in ipairs(files) do
-          local chunk = assert(loadfile("TwizCrew/" .. file))
-          setfenv(chunk, W.env)
-          chunk("TwizCrew", ns)
-        end
-        suite.tests[name](ns, A, W)
+        loadFiles(W, ns, files)
+        suite.tests[name](ns, A, W, newHarness())
       end)
       if not ok then
         failed = failed + 1

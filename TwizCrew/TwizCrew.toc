@@ -31,3 +31,7 @@ UI\Panel.lua
 UI\PopupLogic.lua
 UI\Popups.lua
 UI\Extras.lua
+UI\Settings.lua
+UI\Report.lua
+UI\Commands.lua
+Core\Boot.lua

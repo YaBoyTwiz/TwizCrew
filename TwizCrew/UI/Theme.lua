@@ -9,6 +9,7 @@ Theme.COLOR = {
   row = "15151b", rowBorder = "444444", zone = "b8ad8c", status = "dddddd", xpBack = "222222",
   switchOn = "2a5a2a", knobOn = "ccffcc", switchOff = "3a3a3a", knobOff = "999999", button = "2a2a30",
   buttonBorder = "666666", pillBorder = "000000", white = "ffffff",
+  danger = "5a1010", dangerBorder = "aa3333", line = "3a3322", confirm = "1a0d0d",
 }
 
 Theme.FONT = { normal = "GameFontNormal", small = "GameFontHighlightSmall" }

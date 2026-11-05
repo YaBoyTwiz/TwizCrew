@@ -166,6 +166,21 @@ local function build(W)
   env.PlaySound = function(id) W.sounds[#W.sounds + 1] = id end
   env.SOUNDKIT = { RAID_WARNING = 8959 }
 
+  -- Options → AddOns (Task 13). W.state.noSettingsAPI = true makes both functions disappear (read at call time).
+  W.settingsCategories, W.addOnCategories = {}, {}
+  local settingsAPI = {
+    RegisterCanvasLayoutCategory = function(frame, name)
+      local category = { frame = frame, name = name, ID = name }
+      W.settingsCategories[#W.settingsCategories + 1] = category
+      return category
+    end,
+    RegisterAddOnCategory = function(category) W.addOnCategories[#W.addOnCategories + 1] = category end,
+  }
+  env.Settings = setmetatable({}, { __index = function(_, k)
+    if W.state.noSettingsAPI then return nil end
+    return settingsAPI[k]
+  end })
+
   return env
 end
 

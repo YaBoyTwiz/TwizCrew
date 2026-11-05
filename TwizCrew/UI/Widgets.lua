@@ -1,4 +1,4 @@
--- Shared widgets: (i) button, toggle, slider, choice, text box, small menu, tag pill.
+-- Shared widgets: (i) button, toggle, slider, choice, text box, plain button, small menu, tag pill.
 -- Every widget takes an info text and builds its own (i) button. Every script runs inside ns.Log.safe.
 local _, ns = ...
 
@@ -228,6 +228,24 @@ function Widgets.text(parent, label, info, get, set)
   script(e, "OnEscapePressed", function(self) f.Refresh(); self:ClearFocus() end)
   f.Refresh()
   return f
+end
+
+---------------------------------------------------------------------------------------------------------- button
+-- A plain button with a label. kind "danger" is the red one (reset).
+function Widgets.button(parent, label, onClick, kind, featureId)
+  local b = T.frame("Button", nil, parent)
+  if kind == "danger" then boxed(b, C.danger, C.dangerBorder) else boxed(b) end
+  b.text = T.text(b, T.FONT.small, C.white)
+  b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
+  b.text:SetText(label or "")
+  local w = b.text:GetStringWidth()
+  if type(w) ~= "number" or w <= 0 then w = #(label or "") * 6 end
+  b:SetSize(math.max(60, w + 20), 22)
+  local hl = b:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints(b)
+  T.color(hl, C.white, 0.08)
+  script(b, "OnClick", function() onClick() end, featureId)
+  return b
 end
 
 ---------------------------------------------------------------------------------------------------------- menu

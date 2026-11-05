@@ -15,7 +15,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
 
 - **v1 design approved by the owner** (2026-11-05): `docs/superpowers/specs/2026-11-05-crew-panel-design.md`.
 - **Build plan:** `docs/superpowers/plans/2026-11-05-crew-panel.md`. The build was handed to a background agent at
-  the owner's request ("do this work on a different agent"). Not tested in game, not published.
+  the owner's request ("do this work on a different agent").
+- **v1 is built (2026-11-05):** every test outside the game passes (`tests/run.sh`, including a simulation of two
+  and three copies talking to each other). **Not yet tested in game, not published.** What the owner can try in
+  game, riskiest first: `docs/TESTING.md`.
+- **Testing with friends needs the owner's go-ahead:** friends can only get TwizCrew once it is published (public
+  GitHub repository + WowUp, below), and the final name has to be picked before that (see the note at the top).
 - The owner liked the idea of sharing information and triggering effects on each other's screens.
 - **First feature picked (owner):** show what **layer** each friend is on, and **what each friend with the addon
   is doing**. Details not designed yet.
@@ -118,8 +123,14 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/`
 - **Already installed there:** Questie, QuestieDB, QuestMaster, and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
-- **Suggested way to work** (Claude's call, change if it fights you): keep the addon's source in this folder and put a
-  symbolic link to it in the AddOns folder, so an edit here plus `/reload` in game is the whole test loop.
+- **How TwizCrew gets into the game (set up 2026-11-05):** the AddOns folder has a symbolic link `TwizCrew` →
+  `~/Documents/GitHub/twizcrew/TwizCrew`, so an edit here plus `/reload` in game is the whole test loop. Lutris is a
+  Flatpak; its permissions include `filesystems=home` (checked with
+  `flatpak info --show-permissions net.lutris.Lutris`), so the game can read the link's target and no Flatpak
+  override or copy script is needed.
+- **TwizCrew's log and saved data:**
+  `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/WTF/Account/*/SavedVariables/TwizCrew.lua`
+  (written at `/reload` or logout; Claude reads it there).
 
 ## Making pictures for the addon
 

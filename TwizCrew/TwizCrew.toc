@@ -32,6 +32,8 @@ UI\PopupLogic.lua
 UI\Popups.lua
 Stats\StatsDefs.lua
 Stats\StatsLogic.lua
+Stats\SessionLogic.lua
+Stats\Session.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

@@ -1,5 +1,5 @@
 -- Your own state: gather what we share, diff against what we last sent, flush changes as UPDATE (ns.Self).
--- ns.Tags and ns.LayerSensor are reached only at call time (they load after this file).
+-- ns.Tags, ns.LayerSensor and ns.Session are reached only at call time (they load after this file).
 local _, ns = ...
 
 local Self = {}
@@ -41,6 +41,8 @@ function Self.gather()
   if onTaxi then subzone = "On a flight path" end
   local tags = ns.Tags and ns.Tags.encode(ns.Tags.detectSelf()) or ""
   local layerKey = ns.LayerSensor and ns.LayerSensor.current() or ""
+  local sid, sst = "", ""
+  if ns.Session then sid, sst = ns.Session.wire() end
   return {
     cl = tostring(class or ""),
     lv = tostring(level),
@@ -51,6 +53,8 @@ function Self.gather()
     tg = tags,
     lk = tostring(layerKey or ""),
     ins = inInstance and "1" or "0",
+    sid = tostring(sid or ""),
+    sst = tostring(sst or ""),
     ver = tostring(ns.VERSION),
   }
 end

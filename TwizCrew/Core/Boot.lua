@@ -30,6 +30,7 @@ function Boot.login()
   ns.Log.safe("comm", ns.Crew.start)
   ns.Log.safe("comm", ns.Self.start)
   ns.Log.safe("comm", ns.LayerSensor.start)
+  ns.Log.safe("session", ns.Session.start)
   ns.Log.safe(FEATURE, ns.Modules.startAll)
   print("TwizCrew v" .. ns.VERSION .. " loaded. Type /tc for settings.")
 end

@@ -88,6 +88,36 @@ local function build(W)
 
   -- >>> later tasks add their fakes below this line <<<
 
+  -- chat transport (Task 6)
+  W.state.channels = {}      -- channel name -> index, once joined
+  W.state.groupMembers = {}  -- names counted as "in party"
+  W.state.sendResult = 0
+  W.removedChannels = {}     -- { frame, channel } for every ChatFrame_RemoveChannel call
+  env.Enum = { SendAddonMessageResult = { Success = 0 } }
+  env.C_ChatInfo = {
+    RegisterAddonMessagePrefix = function(prefix) W.state.prefix = prefix; return true end,
+    SendAddonMessage = function(prefix, text, chatType, target)
+      W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target }
+      return W.state.sendResult or 0
+    end,
+  }
+  env.JoinChannelByName = function(name, _password)
+    if not W.state.channelJoinFails then W.state.channels[name] = 5 end
+  end
+  env.GetChannelName = function(name) return W.state.channels[name] or 0 end
+  env.ChatFrame_RemoveChannel = function(frame, name)
+    W.removedChannels[#W.removedChannels + 1] = { frame = frame, channel = name }
+  end
+  env.NUM_CHAT_WINDOWS = 10
+  for i = 1, 10 do env["ChatFrame" .. i] = permissive(W) end
+  env.IsInGroup = function() return W.state.inGroup or false end
+  env.IsInRaid = function() return W.state.inRaid or false end
+  env.IsInGuild = function() return W.state.inGuild or false end
+  env.UnitInParty = function(name)
+    for _, n in ipairs(W.state.groupMembers) do if n == name then return true end end
+    return false
+  end
+
   return env
 end
 

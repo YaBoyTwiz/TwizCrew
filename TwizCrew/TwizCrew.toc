@@ -13,3 +13,5 @@ Core\Modules.lua
 Core\DB.lua
 Comm\Codec.lua
 Comm\Queue.lua
+Comm\Transport.lua
+Comm\Comm.lua

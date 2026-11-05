@@ -194,11 +194,32 @@ return {
       A.eq(#by.corpse.top, 1)
       A.ok(by.bunny.empty)
       A.eq(by.bunny.winners, {})
-      -- lowest: only the people who take part
+      -- lowest: only the people who take part (0 steps = Count steps off or never walked: not taking part)
       local c = L.awards({ { name = "A", stats = { st = 0, pt = 3600 } }, { name = "B", stats = { st = 5000, pt = 3600 } } })
       for _, a in ipairs(c) do
-        if a.def.id == "couch" then A.eq(a.winners, { "A" }); A.ok(not a.empty) end
+        if a.def.id == "couch" then A.eq(a.winners, { "B" }); A.ok(not a.empty) end
       end
+    end,
+    couch_never_crowns_zero_steps = function(ns, A)
+      local L = ns.StatsLogic
+      local function couch(entries)
+        for _, a in ipairs(L.awards(entries)) do if a.def.id == "couch" then return a end end
+      end
+      A.ok(couch({ { name = "A", stats = { pt = 7200 } } }).empty, "no st at all")
+      A.ok(couch({ { name = "A", stats = { st = 0, pt = 7200 } } }).empty, "st = 0")
+      A.ok(couch({ { name = "A", stats = { st = 0, pt = 7200 } }, { name = "B", stats = { pt = 7200 } } }).empty)
+      local c = couch({ { name = "A", stats = { st = 0, pt = 7200 } }, { name = "B", stats = { st = 100, pt = 7200 } } })
+      A.eq(c.winners, { "B" })
+      A.eq(#c.top, 1)
+    end,
+    wire_rejects_huge_and_negative_zero = function(ns, A)
+      local L = ns.StatsLogic
+      local r = L.fromWire({ sid = "T", s_dt = "1e300", s_jp = "1000000000001", a_st = "1000000000000", a_dt = "-0",
+        s_st = "-0.0" })
+      A.eq(r.s, { st = 0 })
+      A.eq(r.a, { st = 1000000000000, dt = 0 })
+      A.eq(tostring(r.a.dt), "0", "-0 folded to 0")
+      A.eq(tostring(r.s.st), "0", "-0.0 folded to 0")
     end,
     titles_first_award_wins = function(ns, A)
       local L = ns.StatsLogic

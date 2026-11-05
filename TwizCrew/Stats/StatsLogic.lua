@@ -124,9 +124,16 @@ local function formatPattern(fmt)
   return table.concat(out), caps
 end
 
+local patternCache = {} -- format string -> { pattern, caps } (the game's few formats never change)
+
 local function matchFormat(text, fmt)
   if type(text) ~= "string" or type(fmt) ~= "string" then return nil end
-  local pat, caps = formatPattern(fmt)
+  local cached = patternCache[fmt]
+  if not cached then
+    cached = { formatPattern(fmt) }
+    patternCache[fmt] = cached
+  end
+  local pat, caps = cached[1], cached[2]
   local found = { text:match(pat) }
   if found[1] == nil then return nil end
   local byArg = {}
@@ -359,6 +366,8 @@ function L.toWire(snap)
   return f
 end
 
+local WIRE_MAX = 1e12 -- a number above this is not a real count (treated as missing)
+
 function L.fromWire(f)
   if type(f) ~= "table" or type(f.sid) ~= "string" or f.sid == "" then return nil end
   local snap = { sid = f.sid, q = type(f.q) == "string" and f.q or nil, s = {}, a = {} }
@@ -367,7 +376,11 @@ function L.fromWire(f)
     for _, key in ipairs(ns.StatsDefs.KEYS) do
       local raw = f[prefix .. "_" .. key]
       local v = type(raw) == "string" and tonumber(raw) or nil
-      if v and v == v and v >= 0 and v < math.huge then snap[prefix][key] = math.floor(v) end
+      if v and v == v and v >= 0 and v <= WIRE_MAX then
+        v = math.floor(v)
+        if v == 0 then v = 0 end -- folds -0
+        snap[prefix][key] = v
+      end
     end
   end
   return snap

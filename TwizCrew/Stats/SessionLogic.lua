@@ -49,14 +49,18 @@ end
 
 -- The session to be in after logging in, and whether my counts so far are kept.
 -- own: saved { id, start, manual, lastActive } or nil; heard: sessions of the online crew.
+-- Spec 7: my saved session continues only if nobody online has moved on. Nobody online in a session: my own when
+-- it can be resumed (counts kept), else a new automatic one. Someone online: the best of theirs; my counts are
+-- kept only when that is my own (still resumable) session.
 function Logic.atLogin(own, heard, wall, me, resume)
   local canResume = Logic.resumable(own, wall, resume)
   local best
   for _, s in ipairs(heard or {}) do best = Logic.better(best, s) end
-  if canResume then best = Logic.better(best, own) end
-  if best == nil then return Logic.newSession(me, wall, false), false end
-  local keep = canResume and (best.id == own.id or (not isManual(best) and not isManual(own)))
-  return best, keep and true or false
+  if best == nil then
+    if canResume then return own, true end
+    return Logic.newSession(me, wall, false), false
+  end
+  return best, (canResume and best.id == own.id) and true or false
 end
 
 -- Hearing `incoming` while in `current`: session, changed, keep.

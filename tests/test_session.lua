@@ -98,11 +98,20 @@ return {
       s, keep = S.atLogin({ id = "Twiz-6000", start = 6000, lastActive = 7000 }, {}, 10000, "Twiz", 1800)
       A.eq(s, { id = "Twiz-10000", start = 10000, manual = false }); A.eq(keep, false)
 
+      -- someone online has moved on (spec 7): join the best session heard, my counts start over
       s, keep = S.atLogin(own, { auto("Frostie-9800", 9800) }, 10000, "Twiz", 1800)
-      A.eq(s.id, "Twiz-9000"); A.eq(keep, true)
+      A.eq(s.id, "Frostie-9800"); A.eq(keep, false)
 
       s, keep = S.atLogin(own, { auto("Frostie-8000", 8000) }, 10000, "Twiz", 1800)
-      A.eq(s.id, "Frostie-8000"); A.eq(keep, true)
+      A.eq(s.id, "Frostie-8000"); A.eq(keep, false)
+
+      -- an online friend still in my session: continue it with my counts
+      s, keep = S.atLogin(own, { auto("Twiz-9000", 9000) }, 10000, "Twiz", 1800)
+      A.eq(s.id, "Twiz-9000"); A.eq(keep, true)
+      -- ... but not when it can no longer be resumed (too long ago)
+      s, keep = S.atLogin({ id = "Twiz-6000", start = 6000, lastActive = 7000 }, { auto("Twiz-6000", 6000) }, 10000,
+        "Twiz", 1800)
+      A.eq(s.id, "Twiz-6000"); A.eq(keep, false)
 
       s, keep = S.atLogin(own, { manual("Frostie-9900", 9900) }, 10000, "Twiz", 1800)
       A.eq(s.id, "Frostie-9900"); A.eq(keep, false)
@@ -111,10 +120,13 @@ return {
       s, keep = S.atLogin(nil, { auto("Frostie-8000", 8000) }, 10000, "Twiz", 1800)
       A.eq(s.id, "Frostie-8000"); A.eq(keep, false)
 
-      -- my own hand-started session continues with its counts
+      -- my own hand-started session, but the online crew has moved on: join theirs, counts start over
       s, keep = S.atLogin({ id = "Twiz-9000", start = 9000, manual = true, lastActive = 9500 },
         { auto("Frostie-8000", 8000) }, 10000, "Twiz", 1800)
-      A.eq(s.id, "Twiz-9000"); A.eq(keep, true)
+      A.eq(s.id, "Frostie-8000"); A.eq(keep, false)
+      -- the best of the heard sessions wins, whatever order they come in
+      s, keep = S.atLogin(own, { auto("Frostie-9800", 9800), auto("Ginkan-9700", 9700) }, 10000, "Twiz", 1800)
+      A.eq(s.id, "Ginkan-9700"); A.eq(keep, false)
 
       -- my hand-started session, and an online friend already in it: same session, counts kept
       s, keep = S.atLogin({ id = "Twiz-9000", start = 9000, manual = true, lastActive = 9500 },

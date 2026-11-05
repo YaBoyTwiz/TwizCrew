@@ -61,7 +61,9 @@ ns.StatsDefs.AWARDS = {
     value = function(st)
       local pt = st.pt
       if type(pt) ~= "number" or pt < ns.Config.COUCH_MIN_PLAYED then return nil end
-      return (st.st or 0) / (pt / 3600)
+      -- no steps at all = not taking part (Count steps off, or nothing counted): never a winner with 0
+      if type(st.st) ~= "number" or st.st <= 0 then return nil end
+      return st.st / (pt / 3600)
     end,
     icon = "Interface\\Icons\\INV_Misc_Fork&Knife",
     info = "Walked the fewest steps per hour (needs at least 30 minutes played).",

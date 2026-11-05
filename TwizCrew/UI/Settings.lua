@@ -360,9 +360,10 @@ ns.Bus.on(FEATURE, "SETTINGS_RESET", Win.rebuild)
 ns.Bus.on(FEATURE, "MODULE_TOGGLED", Win.rebuild)
 ns.Bus.on(FEATURE, "VERSION_NEWER", Win.rebuild)
 ns.Bus.on(FEATURE, "SETTING_CHANGED", function() if isOpen then Win.refresh() end end)
--- The crew versions list: a friend came, went or changed version. Its height may change, so lay out again.
+-- The crew versions list: a friend came, went or changed version. Its height may change, so lay out again
+-- (now if the window is open, otherwise on the next open).
 local function crewChanged(_, changes)
-  if isOpen and (type(changes) ~= "table" or changes.version) then Win.rebuild() end
+  if type(changes) ~= "table" or changes.version then Win.rebuild() end
 end
 ns.Bus.on(FEATURE, "MEMBER_ONLINE", crewChanged)
 ns.Bus.on(FEATURE, "MEMBER_OFFLINE", crewChanged)

@@ -291,6 +291,37 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    versions_list_relaid_after_reopening = function(ns, A, W)
+      boot(W)
+      ns.Settings.open()
+      ns.Settings.close()
+      local before = ns.Settings.layoutCountForTest()
+      friend(W, ns, "Frostie", "0.1.0")
+      friend(W, ns, "Ginkan", "0.0.9")
+      ns.Settings.open()
+      A.eq(ns.Settings.layoutCountForTest(), before + 1, "laid out again: the list grew while closed")
+      A.eq(#ns.Settings.rowForTest("version", "versions").shownLines, 3)
+    end,
+
+    stranger_request_does_not_touch_the_version_check = function(ns, A, W)
+      boot(W)
+      ask(W, ns, "Stranger", "9.9.9", "0.1.0")
+      A.eq(ns.Version.summary(), "everyone up to date")
+      for _, line in ipairs(W.printed) do A.no(line:find("9.9.9", 1, true), line) end
+    end,
+
+    older_request_in_a_fight_does_not_replace_a_newer_one = function(ns, A, W)
+      boot(W)
+      friend(W, ns, "Frostie", "0.3.0")
+      friend(W, ns, "Ginkan", "0.2.0")
+      W.state.combat = true
+      ask(W, ns, "Frostie", "0.3.0", "0.1.0")
+      ask(W, ns, "Ginkan", "0.2.0", "0.1.0")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.eq(ns.Updates.promptForTest().title, "Frostie says v0.3.0 is out")
+    end,
+
     report_says_versions = function(ns, A, W)
       boot(W)
       ns.TOC_VERSION = "0.0.9"

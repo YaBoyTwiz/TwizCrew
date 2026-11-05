@@ -57,9 +57,10 @@ ns.Modules.register({
     { key = "chatNotice", label = "Tell me in chat", kind = "toggle",
       info = "Tells you in chat when a friend has a newer version of TwizCrew." },
     { key = "tellCrew", label = "Tell crew to update", kind = "button",
-      info = "Press this after you updated TwizCrew yourself. Every friend online who has an older version gets a "
-        .. "small window with a Reload button, so they load the new version. They still need to update in WowUp "
-        .. "first. You can press it again after 30 seconds.",
+      info = "Press this after you updated TwizCrew yourself. Friends online who have an older version get a "
+        .. "small window with a Reload button, so they load the new version (unless they turned off Update "
+        .. "reminders, or their copy is too old to know this button). They still need to update in WowUp first. "
+        .. "You can press it again after 30 seconds.",
       onClick = function() ns.Updates.tellCrew() end },
     { key = "versions", label = "Crew versions", kind = "list",
       info = "Which TwizCrew version each friend runs. A green tick means up to date (the newest version seen), "

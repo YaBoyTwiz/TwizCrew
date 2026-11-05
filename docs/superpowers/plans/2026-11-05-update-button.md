@@ -100,3 +100,15 @@ tests/test_lint.lua            .toc version == ADDON_VERSION
 - **Tests:** in the multi-client helper, `state.version` / `state.restartSince` now stand for another release's code
   (the constants in `Core/Init.lua`); the fake game's addon list reads `state.tocVersion` (falls back to
   `state.version`). No earlier test changed.
+- **After the review (one fix wave):**
+  - The Crew versions list is laid out again on the next open when a friend came, went or changed version while the
+    settings window was closed (before, the rows below it could overlap).
+  - A request only feeds the Version check ("X has vY…") when it comes from the crew list with a plain version, so a
+    stranger's whisper cannot put a fake version in the settings window.
+  - An older request never replaces a newer one held during a fight (same rule as for an open window).
+  - The request handler runs under the module's own error guard ("updates"), so repeated errors turn Update
+    reminders off instead of repeating inside the essential connection.
+  - The window's texts are pinned at their top corners (a `RIGHT` point would also pin the middle and squash them).
+    v1's pop-ups and the settings subtitle use the old way; noted for the in-game check, not changed.
+  - The `.toc` version also tries the old global `GetAddOnMetadata` when `C_AddOns` is missing.
+  - The button's (i) text says that friends who turned Update reminders off, or whose copy is too old, get nothing.

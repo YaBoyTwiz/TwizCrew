@@ -17,6 +17,8 @@ do -- what the game's addon list says (may be the old .toc after a /reload; show
   local version
   if C_AddOns and C_AddOns.GetAddOnMetadata then
     version = C_AddOns.GetAddOnMetadata(ADDON, "Version")
+  elseif type(GetAddOnMetadata) == "function" then
+    version = GetAddOnMetadata(ADDON, "Version")
   end
   if type(version) == "string" and version ~= "" then ns.TOC_VERSION = version end
 end

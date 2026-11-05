@@ -92,11 +92,11 @@ local function build()
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewUpdate") end -- Escape closes it
   title = T.text(frame, T.FONT.normal, C.title)
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)
-  title:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
+  title:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -PAD)
   title:SetJustifyH("LEFT")
   note = T.text(frame, T.FONT.small, C.text)
   note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-  note:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
+  note:SetPoint("TOPRIGHT", title, "BOTTOMRIGHT", 0, -8)
   note:SetJustifyH("LEFT")
   reloadButton = Widgets.button(frame, "Reload now", reloadClick, nil, FEATURE)
   reloadButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 10)
@@ -126,20 +126,29 @@ local function remember(req)
     ns.wallclock()
 end
 
-local function onRequest(sender, fields)
-  if ns.Version and ns.Version.seen then ns.Version.seen(sender, fields.ver) end
+local function newerThan(req, other)
+  return not other or ns.Util.compareVersions(req.ver, other.ver) >= 0
+end
+
+local function handleRequest(sender, fields)
+  local isCrew = ns.roster ~= nil and ns.roster:get(sender) ~= nil
+  if isCrew and ns.Util.isVersion(fields.ver) and ns.Version and ns.Version.seen then
+    ns.Version.seen(sender, fields.ver)
+  end
   local req = { sender = sender, name = sender, ver = fields.ver, rs = fields.rs }
   local ok, why = Logic.accept(req, {
     myVersion = ns.VERSION, enabled = ns.Modules.isEnabled(FEATURE),
-    isCrew = ns.roster ~= nil and ns.roster:get(sender) ~= nil,
+    isCrew = isCrew,
     shown = shown, now = ns.now(), repeatGap = ns.Config.UPDATE_REPEAT_GAP,
   })
   if not ok then
     ns.Log.add("info", "update request from %s (v%s) ignored: %s", tostring(sender), tostring(fields.ver), why)
     return
   end
-  if current and ns.Util.compareVersions(req.ver, current.ver) < 0 then
-    ns.Log.add("info", "update request from %s ignored: v%s is already shown", sender, tostring(current.ver))
+  local ahead = (current and not newerThan(req, current)) and current or (waiting and not newerThan(req, waiting)
+    and waiting) or nil
+  if ahead then
+    ns.Log.add("info", "update request from %s ignored: v%s is newer", sender, tostring(ahead.ver))
     return
   end
   shown[req.ver] = ns.now()
@@ -162,7 +171,8 @@ local function onFightEnd()
   end
 end
 
-ns.Comm.on("UPDREQ", onRequest)
+-- Under this module's own error guard (Comm's guard is the essential "comm", which never turns off).
+ns.Comm.on("UPDREQ", function(sender, fields) ns.Log.safe(FEATURE, handleRequest, sender, fields) end)
 
 ---------------------------------------------------------------------------------------------------- after a login
 -- Taken at login and forgotten at once, so a request heard in the first seconds is kept for the next login.

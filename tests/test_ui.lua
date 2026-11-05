@@ -313,5 +313,89 @@ return {
       W:fire("ADDON_LOADED", "SomeOtherAddon")
       A.eq(W.env.TwizCrewDB, ns.db)
     end,
+
+    -- stats Task 9: new commands and report lines
+    session_new_command = function(ns, A, W)
+      boot(W)
+      W:advance(20)
+      local mark = #W.sent
+      tc(W, "session new")
+      local cur = ns.Session.current()
+      A.ok(cur and cur.manual, "a hand-started session")
+      A.ok(printedLine(W, "TwizCrew: new session started. Everyone's session stats start from 0."))
+      W:advance(3)
+      local found = false
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "UPDATE" and msg.fields.sid == cur.id then found = true end
+      end
+      A.ok(found, "an UPDATE with the new session")
+      for _, line in ipairs(W.printed) do A.no(line:find(cur.id, 1, true), "no session id in chat") end
+    end,
+
+    stats_reset_asks_first = function(ns, A, W)
+      boot(W)
+      W:advance(20)
+      ns.Stats.count("dt", 3)
+      tc(W, "stats reset")
+      A.eq(ns.StatsStore.get("session", "dt"), 3, "nothing reset before yes")
+      A.eq(ns.StatsStore.get("all", "dt"), 3)
+      A.ok(printedLine(W, "TwizCrew: this sets all your own stats (this session and all time) back to 0. "
+        .. "Type /tc stats reset yes to do it."))
+      local mark = #W.sent
+      tc(W, "stats reset yes")
+      A.eq(ns.StatsStore.get("session", "dt"), 0)
+      A.eq(ns.StatsStore.get("all", "dt"), 0)
+      A.ok(printedLine(W, "TwizCrew: your stats are back to 0."))
+      W:advance(1)
+      local sent = 0
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "STATS" then sent = sent + 1 end
+      end
+      A.ok(sent >= 1, "friends get the zeros")
+    end,
+
+    awards_command_opens_show = function(ns, A, W)
+      boot(W)
+      W:advance(20)
+      tc(W, "awards")
+      A.ok(ns.AwardsShow.isOpen())
+      ns.AwardsShow.close()
+      A.no(ns.AwardsShow.isOpen())
+      tc(W, "awards all")
+      A.ok(ns.AwardsShow.isOpen())
+      W:advance(5)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    help_lists_new_commands = function(ns, A, W)
+      boot(W)
+      tc(W, "help")
+      local text = table.concat(W.printed, "\n")
+      for _, cmd in ipairs({ "/tc awards", "/tc awards all", "/tc session new", "/tc stats reset" }) do
+        A.contains(text, cmd)
+      end
+    end,
+
+    report_has_stats_lines = function(ns, A, W)
+      boot(W)
+      local lines = ns.Report.lines()
+      A.eq(lines[6], "Stats: on, steps by speed, detectors off: none")
+      A.eq(lines[7], "Session: not decided yet")
+      A.eq(lines[8], "Stats sent never, heard never")
+      W:advance(20)
+      receive(W, "Frostie", "STATS", { sid = ns.Session.current().id, q = "1", s_dt = "1" }, ns)
+      W:advance(120)
+      lines = ns.Report.lines()
+      local cur = ns.Session.current()
+      A.eq(lines[7], "Session: " .. cur.id .. " started " .. ns.BoardLogic.timeText(cur.start) .. " (automatic)")
+      A.eq(lines[8], "Stats sent 2m ago, heard 2m ago from Frostie")
+      A.eq(lines[5], "Turned off after errors: none", "v1 lines stay where they were")
+      W.state.missing.JumpOrAscendStart = true
+      ns.Modules.setEnabled("stats", false)
+      lines = ns.Report.lines()
+      A.eq(lines[6]:sub(1, 12), "Stats: off, ")
+    end,
   },
 }

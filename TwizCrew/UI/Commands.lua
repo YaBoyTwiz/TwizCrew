@@ -17,6 +17,10 @@ local HELP = {
   "/tc debug - turn technical chat messages on or off",
   "/tc add <name> - add a friend by name, used when the hidden channel does not work",
   "/tc remove <name> - take a name off that list",
+  "/tc awards - the awards show for this session, great on stream",
+  "/tc awards all - the awards show for all time",
+  "/tc session new - start a new crew session, everyone's session stats start from 0",
+  "/tc stats reset - set your own stats back to 0 (asks first)",
 }
 
 local function say(text) print("TwizCrew: " .. text) end
@@ -108,6 +112,40 @@ local function toggleDebug()
   say(on and "technical messages on. Type /tc debug again to turn them off." or "technical messages off.")
 end
 
+local function printHelp()
+  for _, line in ipairs(HELP) do print(line) end
+end
+
+local function awards(rest)
+  local what = rest:lower()
+  if what == "" then
+    ns.AwardsShow.start("session")
+  elseif what == "all" then
+    ns.AwardsShow.start("all")
+  else
+    say("type /tc awards for this session or /tc awards all for all time.")
+  end
+end
+
+local function session(rest)
+  if rest:lower() ~= "new" then printHelp(); return end
+  ns.Session.newByHand()
+  say("new session started. Everyone's session stats start from 0.")
+end
+
+local function stats(rest)
+  local what = rest:lower():gsub("%s+", " ")
+  if what == "reset" then
+    say("this sets all your own stats (this session and all time) back to 0. Type /tc stats reset yes to do it.")
+  elseif what == "reset yes" then
+    ns.StatsStore.resetMine()
+    if ns.Modules.isEnabled("stats") then ns.Stats.send() end -- friends see the zeros (off: they see nothing)
+    say("your stats are back to 0.")
+  else
+    printHelp()
+  end
+end
+
 local ACTIONS = {
   [""] = function() ns.Settings.toggle() end,
   show = function() setPanel(true) end,
@@ -121,6 +159,9 @@ local ACTIONS = {
   debug = toggleDebug,
   add = addName,
   remove = removeName,
+  awards = awards,
+  session = session,
+  stats = stats,
 }
 
 function Commands.run(msg)
@@ -129,7 +170,7 @@ function Commands.run(msg)
   if action then
     action(rest)
   else
-    for _, line in ipairs(HELP) do print(line) end
+    printHelp()
   end
 end
 

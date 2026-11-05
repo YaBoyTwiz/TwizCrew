@@ -82,6 +82,36 @@ local function checkLines(add)
   add("Log: " .. #ns.Log.lines() .. " lines kept (written to disk at /reload or logout)")
 end
 
+-- Stats board lines: counting and detectors, the crew session, the last STATS sent and heard.
+local function statsLines(add)
+  local on = ns.Modules.isEnabled("stats")
+  local off = {}
+  if on then
+    for _, d in ipairs(ns.Detectors.status()) do
+      if not d.on then off[#off + 1] = d.id .. (d.why and (" (" .. tostring(d.why) .. ")") or "") end
+    end
+  end
+  local offText = on and (#off > 0 and table.concat(off, ", ") or "none") or "all (stats are turned off)"
+  add("Stats: " .. (on and "on" or "off") .. ", steps by " .. tostring(ns.Detectors.stepsMethod())
+    .. ", detectors off: " .. offText)
+  local s = ns.Session.decided() and ns.Session.current()
+  if s then
+    add("Session: " .. tostring(s.id) .. " started " .. ns.BoardLogic.timeText(s.start) .. " ("
+      .. (s.manual and "by hand" or "automatic") .. ")")
+  else
+    add("Session: not decided yet")
+  end
+  local st = ns.Stats.status()
+  local wall = ns.wallclock()
+  local sent = type(st.lastSent) == "number" and ns.Util.ago(math.max(0, wall - st.lastSent)) or "never"
+  local h = st.lastHeard
+  local heardText = "never"
+  if type(h) == "table" and type(h.at) == "number" then
+    heardText = ns.Util.ago(math.max(0, wall - h.at)) .. " from " .. tostring(h.name)
+  end
+  add("Stats sent " .. sent .. ", heard " .. heardText)
+end
+
 function Report.lines()
   local out = {}
   local function add(s) out[#out + 1] = s end
@@ -91,6 +121,7 @@ function Report.lines()
   add("Class icons: " .. tostring(ns.ClassIcon.method()))
   local broken = ns.Modules.broken()
   add("Turned off after errors: " .. (#broken > 0 and table.concat(broken, ", ") or "none"))
+  statsLines(add)
   crewLines(add)
   add("Recent errors:")
   local errors = ns.Log.errors(10)

@@ -71,7 +71,15 @@ for line in p:lines() do testFiles[#testFiles + 1] = line end
 p:close()
 
 for _, path in ipairs(testFiles) do
-  local suite = assert(loadfile(path))()
+  local chunk, loadErr = loadfile(path)
+  local suiteOk, suite = false, loadErr
+  if chunk then suiteOk, suite = pcall(chunk) end
+  if not suiteOk or type(suite) ~= "table" or type(suite.tests) ~= "table" then
+    total = total + 1
+    failed = failed + 1
+    failures[#failures + 1] = "FAIL " .. path .. " (could not load)\n  " .. tostring(suiteOk and "no tests table returned" or suite)
+    suite = { tests = {} }
+  end
   local names = {}
   for name in pairs(suite.tests) do names[#names + 1] = name end
   table.sort(names)
@@ -99,6 +107,10 @@ for _, path in ipairs(testFiles) do
 end
 
 for _, f in ipairs(failures) do print(f) end
+if total == 0 then
+  print("NO TESTS MATCHED")
+  os.exit(1)
+end
 if failed > 0 then
   print("FAILED " .. failed .. " of " .. total)
   os.exit(1)

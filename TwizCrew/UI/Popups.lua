@@ -1,6 +1,7 @@
 -- Small pop-ups near the top centre for layer changes and deaths (module "popups").
 -- Rules about what shows and when live in PopupLogic; this file only owns the frames.
 -- When more than POPUP_MAX pop-ups are due at once, the oldest visible one is replaced (nothing is queued).
+-- Roasts (Popups.showRoast, called by the roasts module) use the same frames and work even while this module is off.
 local _, ns = ...
 
 local FEATURE = "popups"
@@ -9,7 +10,8 @@ local C = T.COLOR
 local Widgets = ns.Widgets
 local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
-local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888" }
+local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
+local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00" }
 
 local logic          -- PopupLogic instance (nil while the module is off)
 local ticker
@@ -102,10 +104,12 @@ local function newFrame()
   f.sub:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.sub:SetJustifyH("LEFT")
   Widgets.script(f, "OnClick", function(self) click(self) end, FEATURE)
-  -- Only the fade is smooth; showing and hiding is decided by the ticker.
+  -- Only the fade is smooth; showing and hiding is decided by the ticker. A roast closes itself here once its
+  -- time is over, so it also goes away while this module (and its ticker) is off.
   Widgets.script(f, "OnUpdate", function(self)
     if not self.tcShown then return end
     local left = self.tcExpires - ns.now()
+    if left <= 0 and self.tcPopup and self.tcPopup.kind == "roast" then close(self); return end
     self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
   end, FEATURE)
   pool[#pool + 1] = f
@@ -119,6 +123,12 @@ local function takeFrame()
   return visibleFrames()[1]
 end
 
+-- Kept without colour codes; an escaped "||" (a "|" in a name) stays as it is.
+local function remember(text)
+  history[#history + 1] = (text:gsub("||", "\1"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("\1", "||"))
+  if #history > 20 then table.remove(history, 1) end
+end
+
 local function show(p)
   local f = takeFrame()
   local names = {}
@@ -127,8 +137,8 @@ local function show(p)
     subzone = p.extra.subzone and ns.Util.safeText(p.extra.subzone) }
   local text, sub = ns.PopupLogic.text(p.kind, names, extra, colorName)
   seq = seq + 1
-  history[#history + 1] = (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-  if #history > 20 then table.remove(history, 1) end
+  remember(text)
+  f:SetWidth(WIDTH)
   f.tcSeq, f.tcShown, f.tcPopup = seq, true, p
   f.tcText, f.tcSub = text, sub or false
   f.tcExpires = ns.now() + (tonumber(setting("seconds")) or 5) + FADE
@@ -271,6 +281,25 @@ ns.Modules.register({
 
 local Popups = {}
 ns.Popups = Popups
+
+-- Shows one roast line (already safe plain text) for `seconds` plus the fade, whether or not this module is on.
+-- Clicking it closes it.
+function Popups.showRoast(text, seconds)
+  if type(text) ~= "string" or text == "" then return end
+  local f = takeFrame()
+  seq = seq + 1
+  remember(text)
+  f.tcSeq, f.tcShown, f.tcPopup = seq, true, { kind = "roast" }
+  f.tcText, f.tcSub = text, false
+  f.tcExpires = ns.now() + (tonumber(seconds) or ns.Config.ROAST_SECONDS) + FADE
+  f:SetWidth(ROAST_WIDTH)
+  T.color(f.edge, EDGE.roast, 1)
+  f.title:SetText(text)
+  f.sub:SetText("")
+  f:SetAlpha(1)
+  f:Show()
+  layout()
+end
 
 -- Test hooks.
 function Popups.visibleCount() return #visibleFrames() end

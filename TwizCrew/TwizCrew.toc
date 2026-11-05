@@ -37,6 +37,7 @@ Stats\Session.lua
 Stats\StatsStore.lua
 Stats\Detectors.lua
 Stats\Stats.lua
+Stats\Roasts.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

@@ -45,6 +45,22 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Class icons in the Crew panel (owner).** The game has its own class icons built in, so no picture making is
   needed for these.
 
+## Next feature being brainstormed: stats board (2026-11-05)
+
+- **Owner picked the stats board** as the next idea to flesh out.
+- **Purpose (owner):** "mostly for laughs, roasting each other on stream". Not serious progress tracking.
+- Owner: "up to you, be creative as needed". **Claude's pitch (not approved yet):** three ways it shows up: live
+  roast pop-ups, a "Hall of Shame" tab in the Crew panel (weekly awards, resets Monday), and an awards show the
+  owner starts on stream (`/tc awards`). Mockup: `.superpowers/brainstorm/…/stats-board.html`. Stats are limited to
+  what an addon can see without the combat log (deaths with fall/drown/weak-mob guesses, first into combat,
+  rezzes given, AFK time, jumps, hearthstones, junk looted, repair bills, quests abandoned, duels lost).
+- **Time ranges (owner):** "session based stats, plus all time". Replaces the weekly reset in the pitch.
+- **Track steps too (owner)**, "find an efficient way… so it's not spamming". Claude's plan: a 0.5 s local timer adds
+  `GetUnitSpeed("player") × time` (fallback: distance between `UnitPosition` readings), split into on foot (shown as
+  steps, about 1.2 steps per yard), mounted, swimming; flight paths excluded. Counting stays local; totals are
+  shared only every few minutes when changed, at logout, and when someone opens the board. Milestone roasts only
+  at big round numbers.
+
 ## Decisions (owner)
 
 - **Goal:** slowly build "the ultimate addon" for the owner and a small group of friends, useful for playing
@@ -147,6 +163,21 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **New files:** since 9.0.1 a `/reload` picks up new files in an existing addon folder; a new addon folder or a
   changed `.toc` needs a full game restart (reported; test).
 - Assets cannot be sent between players: every friend needs the file already, so new art/sounds ship in an update.
+
+## In-world waypoints (Claude's knowledge, not yet checked for Forever)
+
+- Addons can't draw freely in the 3D world (there is no "world to screen" function). The in-world marker comes from
+  Blizzard's own **map pin + tracking**: `C_Map.SetUserWaypoint(...)` and
+  `C_SuperTrack.SetSuperTrackedUserWaypoint(true)` show a floating marker with distance; addons can restyle it via
+  `C_Navigation.GetFrame()`. Markers on units (players, NPCs) are attached to their nameplates.
+- **Forever has them:** QuestMaster (installed here, `Modules/WorldMarker.lua`) says "WoW Forever has them" and
+  uses them. Its method: put a map waypoint (`C_Map.SetUserWaypoint` + `UiMapPoint.CreateFromCoordinates`), super-track
+  it, then hang its own marker art on `C_Navigation.GetFrame()` (the game moves that frame to the target's spot on
+  screen), hide the game's diamond, scale with `C_Navigation.GetDistance()`, and show an edge arrow when
+  `C_Navigation.WasClampedToScreen()`. It credits WaypointUI for the technique. Limit: **one** navigation target at a
+  time (the game only super-tracks one thing), and it fights with QuestMaster/Blizzard over that one slot.
+- QuestMaster is GPL-3.0: learn the technique, don't copy its code or art.
+- Possible use: the "come here" ping.
 
 ## 3D models (research 2026-11-05, Warcraft Wiki + forums; not tested in Forever)
 

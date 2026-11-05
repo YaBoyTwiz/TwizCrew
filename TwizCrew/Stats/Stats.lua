@@ -1,6 +1,8 @@
--- Module "stats": counting glue between the detectors and the saved numbers, deaths, milestones and the session.
--- Sharing (STATS / STATSREQ) comes in Task 6. Roasts go through ns.Roasts when it exists (reached at call time).
--- Turning the module off stops my own counting (spec 12b); saved numbers are kept.
+-- Module "stats": counting glue between the detectors and the saved numbers, deaths, milestones and the session,
+-- and sharing: one bulk STATS rarely (after the session is decided or changes, every STATS_SEND_INTERVAL s when a
+-- number changed, at logout, in reply to STATSREQ). Roasts go through ns.Roasts when it exists (call time).
+-- Turning the module off stops my own counting and sharing (spec 12b): one STATS with off=1 goes out instead, and
+-- again in reply to STATSREQ. Saved numbers are kept. Friends' STATS are saved whether the module is on or off.
 local _, ns = ...
 
 local Stats = {}
@@ -10,9 +12,17 @@ local FEATURE = "stats"
 local Logic = ns.StatsLogic
 local Store = ns.StatsStore
 
+local SHARE = "stats_share" -- friends' messages run under their own id: a broken one never trips "stats"
+local WIRE_OPTS = { repeatKeys = { "sid", "q", "off" } }
+
 local enabled = false
 local lastFire       -- when STATS_CHANGED last fired
 local trailing = false
+local lastSent       -- wallclock of the last STATS we sent (nil = never)
+local lastHeard      -- { name, at = wallclock } of the last friend's STATS saved
+local lastRequest    -- session clock of our last STATSREQ
+local replyPending = false -- one shared, jittered reply to every STATSREQ heard while it waits
+local sendTicker
 
 -- stat key -> milestone kind and the view it is counted in
 local MILESTONES = {
@@ -105,6 +115,69 @@ function Stats.wipe(zone)
   roast("wipe", nil, zone)
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- Sharing
+
+-- My numbers, or only { sid, q, off = 1 } while the module is off. Through the queue (rate limit, boss-fight hold).
+function Stats.send()
+  ns.Comm.send("STATS", Logic.toWire(Store.snapshot(not enabled)), WIRE_OPTS)
+  if enabled then Store.markSent() end
+  lastSent = ns.wallclock()
+end
+
+-- STATSREQ (when the Hall of Shame opens or the awards show starts): at most once per STATSREQ_GAP s.
+function Stats.request()
+  local now = ns.now()
+  if lastRequest and now - lastRequest < ns.Config.STATSREQ_GAP then return false end
+  lastRequest = now
+  ns.Comm.send("STATSREQ", {})
+  return true
+end
+
+function Stats.status()
+  return { lastSent = lastSent, lastHeard = lastHeard and { name = lastHeard.name, at = lastHeard.at } or nil }
+end
+
+local function onStats(sender, fields)
+  local wall = ns.wallclock()
+  if not Store.applyWire(sender, fields, wall) then return end
+  lastHeard = { name = sender, at = wall }
+  fireChanged()
+end
+
+local function onRequest()
+  if replyPending then return end
+  replyPending = true
+  local c = ns.Config
+  local delay = c.HELLO_JITTER_MIN + math.random() * (c.HELLO_JITTER_MAX - c.HELLO_JITTER_MIN)
+  C_Timer.After(delay, function()
+    ns.Log.safe(SHARE, function()
+      replyPending = false
+      Stats.send()
+    end)
+  end)
+end
+
+-- Registered once at file load (ns.Comm loads earlier): friends' numbers are kept even while the module is off.
+ns.Comm.on("STATS", function(sender, fields) ns.Log.safe(SHARE, onStats, sender, fields) end)
+ns.Comm.on("STATSREQ", function(sender) ns.Log.safe(SHARE, onRequest, sender) end)
+
+local function sendIfChanged()
+  if enabled and Store.dirty() then Stats.send() end
+end
+
+-- The queue may never run again at logout: each piece goes straight out, like v1's BYE.
+local function sendAtLogout()
+  if not enabled or not Store.dirty() then return end
+  for _, text in ipairs(ns.Codec.encode("STATS", Logic.toWire(Store.snapshot()), WIRE_OPTS)) do
+    for _, dest in ipairs(ns.Transport.destinations()) do
+      ns.Transport.send(text, dest)
+    end
+  end
+  Store.markSent()
+  lastSent = ns.wallclock()
+end
+
 local api = {
   count = function(key, n) Stats.count(key, n) end,
   died = function() Stats.died() end,
@@ -116,6 +189,7 @@ local function onSession(new, old, keep)
   if type(new) ~= "table" then return end
   Store.setSession(new.id, type(old) == "table" and old.id or nil, keep)
   changed(true)
+  Stats.send() -- friends see our (new) session quickly
 end
 
 ns.Modules.register({
@@ -142,9 +216,15 @@ ns.Modules.register({
     local cur = ns.Session and ns.Session.decided() and ns.Session.current()
     if cur then Store.setSession(cur.id, nil, false) end
     ns.Detectors.startAll(api)
+    ns.Events.on(FEATURE, "PLAYER_LOGOUT", sendAtLogout)
+    sendTicker = C_Timer.NewTicker(ns.Config.STATS_SEND_INTERVAL, function() ns.Log.safe(FEATURE, sendIfChanged) end)
+    if cur then Stats.send() end -- turned back on: friends see my numbers again
   end,
+  -- Also runs when the error breaker turns the module off: both are announced the same way.
   onDisable = function()
     enabled = false
     ns.Detectors.stopAll()
+    if sendTicker then sendTicker:Cancel(); sendTicker = nil end
+    Stats.send() -- off = 1
   end,
 })

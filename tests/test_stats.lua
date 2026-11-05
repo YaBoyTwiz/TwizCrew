@@ -516,12 +516,14 @@ return {
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
         "repair", "abandon", "duel" })
+      -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
+      A.ok(#W.sent > 0, "the crew messages went out")
+      local mark = #W.sent
       W.state.speed = 7
       W.env.JumpOrAscendStart()
       W:advance(30)
-      A.ok(#W.sent > 0, "the crew messages went out")
-      for _, m in ipairs(W.sent) do
-        local msg = ns.Codec.decode(m.text)
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
         A.ok(msg and msg.type ~= "STATS", "counting alone sends nothing")
       end
     end,

@@ -20,3 +20,6 @@ Crew\SelfState.lua
 Crew\Crew.lua
 Core\Version.lua
 Tags\Tags.lua
+Layer\LayerKey.lua
+Layer\LayerSensor.lua
+Layer\Layer.lua

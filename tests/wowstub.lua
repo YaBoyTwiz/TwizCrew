@@ -140,6 +140,11 @@ local function build(W)
   env.UnitOnTaxi = function() return st.taxi end
   env.UnitIsAFK = function() return st.afk end
 
+  -- layer sensing (Task 10)
+  st.guids, st.secret = {}, {}
+  env.UnitGUID = function(unit) return st.guids[unit] end
+  env.issecretvalue = function(v) return st.secret[v] == true end
+
   return env
 end
 

@@ -28,6 +28,30 @@ local function member(t)
   return m
 end
 
+-- Frames made from now on remember their text, record a few calls, and are listed by name.
+local function recordingFrames(W)
+  local byName, calls = {}, {}
+  local create = W.env.CreateFrame
+  W.env.CreateFrame = function(kind, name, ...)
+    local f = create(kind, name, ...)
+    if name then byName[name] = f end
+    rawset(f, "SetText", function(self, t) rawset(self, "tcText", t) end)
+    rawset(f, "GetText", function(self) return rawget(self, "tcText") or "" end)
+    for _, method in ipairs({ "SetDontSavePosition", "SetUserPlaced", "SetMaxLetters", "StopMovingOrSizing",
+      "StartMoving" }) do
+      rawset(f, method, function(self, v) calls[#calls + 1] = { frame = self, method = method, value = v } end)
+    end
+    return f
+  end
+  return byName, calls
+end
+
+local function callsOf(calls, frame, method)
+  local out = {}
+  for _, c in ipairs(calls) do if c.frame == frame and c.method == method then out[#out + 1] = c.value end end
+  return out
+end
+
 local function never() return "unknown" end
 local function different() return "different" end
 
@@ -197,20 +221,82 @@ return {
       local items = ns.Panel.menuItems()
       local labels = {}
       for i, item in ipairs(items) do labels[i] = item.label end
-      A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Open settings",
-        "Hide panel" })
+      A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Set my status",
+        "Open settings", "Hide panel" })
       A.eq(items[1].checked(), true)
       items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), false)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
       items[3].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
       items[4].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)
       items[5].onClick()
-      items[6].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
+      items[6].onClick()
+      items[7].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
       W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       ns.Modules.setEnabled("panel", true); W:advance(1)
       A.eq(ns.Panel.isShown(), true)
       ns.Widgets.menu(W.env.UIParent, items)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    set_my_status_saves_once = function(ns, A, W)
+      local frames, calls = recordingFrames(W)
+      start(ns, W)
+      ns.db.myStatus = "brb"
+      local saves = {}
+      local setStatus = ns.Self.setStatus
+      ns.Self.setStatus = function(text) saves[#saves + 1] = text; setStatus(text) end
+      local item
+      for _, it in ipairs(ns.Panel.menuItems()) do if it.label == "Set my status" then item = it end end
+      item.onClick()
+      local box = frames.TwizCrewStatus
+      A.ok(box, "our own status frame")
+      local edit = box.edit
+      A.eq(edit:GetText(), "brb", "prefilled with the current status")
+      A.eq(callsOf(calls, edit, "SetMaxLetters"), { ns.Config.STATUS_MAX })
+      edit:SetText("LF Deadmines")
+      edit:GetScript("OnEnterPressed")(edit)
+      edit:GetScript("OnEnterPressed")(edit)
+      if edit:GetScript("OnEditFocusLost") then edit:GetScript("OnEditFocusLost")(edit) end
+      A.eq(saves, { "LF Deadmines" }, "saved exactly once")
+      A.eq(ns.db.myStatus, "LF Deadmines")
+      -- Escape cancels
+      item.onClick()
+      A.eq(edit:GetText(), "LF Deadmines")
+      edit:SetText("never saved")
+      edit:GetScript("OnEscapePressed")(edit)
+      A.eq(#saves, 1)
+      A.eq(ns.db.myStatus, "LF Deadmines")
+      -- empty text clears
+      item.onClick()
+      edit:SetText("")
+      edit:GetScript("OnEnterPressed")(edit)
+      A.eq(saves, { "LF Deadmines", "" })
+      A.eq(ns.db.myStatus, "")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    panel_position_is_ours_and_drag_cannot_stick = function(ns, A, W)
+      local frames, calls = recordingFrames(W)
+      start(ns, W)
+      W:advance(1)
+      local root = frames.TwizCrewPanel
+      A.ok(root)
+      A.eq(callsOf(calls, root, "SetDontSavePosition"), { true }, "the game does not save the panel position")
+      root:GetScript("OnDragStart")(root)
+      A.ok(ns.Panel.isMovingForTest())
+      root:GetScript("OnDragStop")(root)
+      A.no(ns.Panel.isMovingForTest())
+      A.eq(callsOf(calls, root, "SetUserPlaced"), { false })
+      -- hidden in the middle of a drag: the drag ends
+      root:GetScript("OnDragStart")(root)
+      ns.Modules.setEnabled("panel", false)
+      A.no(ns.Panel.isMovingForTest(), "hiding ends the drag")
+      ns.Modules.setEnabled("panel", true)
+      root:GetScript("OnDragStart")(root)
+      root:GetScript("OnHide")(root)
+      A.no(ns.Panel.isMovingForTest(), "OnHide ends the drag")
+      local stops = 0
+      for _, c in ipairs(calls) do if c.frame == root and c.method == "StopMovingOrSizing" then stops = stops + 1 end end
+      A.eq(stops, 3)
       A.eq(ns.Log.errors(10), {})
     end,
     widgets_build_without_errors = function(ns, A, W)

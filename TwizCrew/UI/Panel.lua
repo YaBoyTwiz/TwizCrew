@@ -105,6 +105,8 @@ local function stopDrag()
   if not moving then return end
   moving = false
   if root.StopMovingOrSizing then root:StopMovingOrSizing() end
+  -- We save the position ourselves; the game's own layout cache must not move the panel at the next login.
+  if root.SetUserPlaced then root:SetUserPlaced(false) end
   savePosition()
 end
 
@@ -247,7 +249,10 @@ end
 
 ---------------------------------------------------------------------------------------------------------- redraw
 local function hide()
-  if root then root:Hide() end
+  if root then
+    stopDrag() -- a drag cut short by hiding must not leave the panel "moving"
+    root:Hide()
+  end
   shown = false
   Widgets.closeMenu()
 end
@@ -353,6 +358,7 @@ function Panel.menuItems()
     { label = "Row style: " .. choiceLabel("rowStyle", setting("rowStyle")),
       onClick = function() set("rowStyle", NEXT_STYLE[setting("rowStyle")] or "full") end },
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
+    { label = "Set my status", onClick = function() Panel.openStatusBox() end },
     { label = "Open settings", onClick = function()
       if ns.Settings and ns.Settings.open then ns.Settings.open() end
     end },
@@ -363,15 +369,78 @@ function Panel.menuItems()
   }
 end
 
+---------------------------------------------------------------------------------------------------- status box
+-- A small box of our own (not a StaticPopup) to type the status: Enter saves, Escape cancels, empty clears.
+local statusBox
+
+local function closeStatusBox()
+  if not statusBox then return end
+  statusBox.edit:ClearFocus()
+  statusBox:Hide()
+end
+
+local function saveStatus()
+  if not statusBox or not statusBox.open then return end -- one save per opening
+  statusBox.open = false
+  local text = statusBox.edit:GetText()
+  ns.Self.setStatus(type(text) == "string" and text or "")
+  local now = ns.db and ns.db.myStatus or ""
+  if now == "" then print("TwizCrew: status cleared")
+  else print('TwizCrew: status set to "' .. ns.Util.safeText(now) .. '"') end
+  closeStatusBox()
+end
+
+local function buildStatusBox()
+  local f = T.frame("Frame", "TwizCrewStatus", UIParent)
+  f:SetSize(280, 76)
+  f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+  f:SetFrameStrata("DIALOG")
+  if f.SetClampedToScreen then f:SetClampedToScreen(true) end
+  f:EnableMouse(true)
+  T.paint(f, C.backdrop, 0.95, C.border, 2)
+  local title = T.text(f, T.FONT.normal, C.title)
+  title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -10)
+  title:SetText("Set my status")
+  local e = T.frame("EditBox", nil, f)
+  e:SetSize(256, 22)
+  e:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -30)
+  T.paint(e, C.row, 1, C.buttonBorder, 1)
+  e:SetAutoFocus(false)
+  if e.SetFontObject then e:SetFontObject(T.FONT.small) end
+  if e.SetTextInsets then e:SetTextInsets(5, 5, 0, 0) end
+  if e.SetMaxLetters then e:SetMaxLetters(ns.Config.STATUS_MAX) end
+  local hint = T.text(f, T.FONT.small, C.muted)
+  hint:SetPoint("TOPLEFT", e, "BOTTOMLEFT", 0, -4)
+  hint:SetText("Enter saves, Escape cancels. Leave it empty to clear it.")
+  script(e, "OnEnterPressed", saveStatus)
+  script(e, "OnEscapePressed", closeStatusBox)
+  script(f, "OnHide", function() f.open = false end)
+  f.edit = e
+  f:Hide()
+  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewStatus") end -- Escape closes it
+  return f
+end
+
+function Panel.openStatusBox()
+  if not statusBox then statusBox = buildStatusBox() end
+  statusBox.edit:SetText(tostring(ns.db and ns.db.myStatus or ""))
+  statusBox.open = true
+  statusBox:Show()
+  statusBox.edit:SetFocus()
+  if statusBox.edit.HighlightText then statusBox.edit:HighlightText() end
+end
+
 ---------------------------------------------------------------------------------------------------------- build
 local function build()
   root = T.frame("Frame", "TwizCrewPanel", UIParent)
   root:SetFrameStrata("MEDIUM")
   root:SetMovable(true)
+  if root.SetDontSavePosition then root:SetDontSavePosition(true) end -- the position lives in our saved data
   if root.SetClampedToScreen then root:SetClampedToScreen(true) end
   root:SetSize(ROW_WIDTH.full + 2 * PAD, HEADER_HEIGHT + 2 * PAD)
   T.paint(root, C.backdrop, clamp(setting("bgAlpha"), 0, 1, 0.8), C.border, 2)
   draggable(root)
+  script(root, "OnHide", stopDrag)
   if root.EnableMouseWheel then root:EnableMouseWheel(true) end
   script(root, "OnMouseWheel", function(_, delta) Panel.scroll(delta) end)
 
@@ -406,6 +475,7 @@ function Panel.headerText() return header end
 function Panel.rowCountForTest() return visibleRows end
 function Panel.firstRowForTest() return firstRow end
 function Panel.redrawCountForTest() return redraws end
+function Panel.isMovingForTest() return moving end
 
 local function onEnable()
   enabled = true

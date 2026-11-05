@@ -19,6 +19,7 @@ function DB.init(saved, defs)
     log = {},
     myStatus = "",
     stats = { chars = {}, crew = {}, session = {} },
+    update = {}, -- the newest version a friend told us about (Update reminders); not a setting
   })
   local known = {}
   for _, def in ipairs(defs or {}) do

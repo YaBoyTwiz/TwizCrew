@@ -232,6 +232,53 @@ function Widgets.text(parent, label, info, get, set, password)
   return f
 end
 
+-- An action row: a button with its (i) button after it (settings kind "button").
+function Widgets.action(parent, label, info, onClick, featureId)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetSize(ROW_WIDTH, ROW_HEIGHT)
+  f.button = Widgets.button(f, label, onClick, nil, featureId)
+  f.button:SetPoint("LEFT", f, "LEFT", 0, 0)
+  f.info = Widgets.infoButton(f, label, info)
+  f.info:SetPoint("LEFT", f.button, "RIGHT", 4, 0)
+  f.control = f.button
+  f.Refresh = function() end
+  f.SetActive = function(self, on) self:SetAlpha(on and 1 or 0.45) end
+  return f
+end
+
+-- A read-only list: a label with its (i) button, then one line of text per entry (settings kind "list").
+-- getLines() -> { text, ... } (already safe to show). f:Height() is the height the lines need.
+local LIST_LINE = 16
+function Widgets.lines(parent, label, info, getLines)
+  local f = settingRow(parent, label, info)
+  f.label:ClearAllPoints()
+  f.label:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -5)
+  local texts = {}
+  f.control = false
+  f.shownLines = {}
+  f.Height = function() return ROW_HEIGHT + #f.shownLines * LIST_LINE end
+  f.Refresh = function()
+    local ok, lines = pcall(getLines)
+    if not ok or type(lines) ~= "table" then lines = {} end
+    f.shownLines = lines
+    for i, line in ipairs(lines) do
+      local fs = texts[i]
+      if not fs then
+        fs = T.text(f, T.FONT.small, C.text)
+        fs:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -ROW_HEIGHT - (i - 1) * LIST_LINE)
+        fs:SetJustifyH("LEFT")
+        texts[i] = fs
+      end
+      fs:SetText(tostring(line))
+      fs:Show()
+    end
+    for i = #lines + 1, #texts do texts[i]:Hide() end
+    f:SetHeight(f.Height())
+  end
+  f.Refresh()
+  return f
+end
+
 ---------------------------------------------------------------------------------------------------------- button
 -- A plain button with a label. kind "danger" is the red one (reset).
 function Widgets.button(parent, label, onClick, kind, featureId)

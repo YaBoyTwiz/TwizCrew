@@ -41,6 +41,8 @@ ns.Config = {
   ROAST_GAP = 10, WIPE_ROAST_DEDUPE = 60, ROAST_SECONDS = 6,
   SHOW_WAIT = 5, SHOW_BADGE = 0.6, SHOW_DRUMROLL = 1.5,
   COUCH_MIN_PLAYED = 1800, NEVERWALKS_MIN_YARDS = 1000,
+  -- tell crew to update
+  UPDATE_BUTTON_COOLDOWN = 30, UPDATE_REPEAT_GAP = 600, UPDATE_LOGIN_DELAY = 5,
 }
 
 function ns.now() return GetTime() end

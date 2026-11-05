@@ -5,7 +5,10 @@ local Modules = {}
 ns.Modules = Modules
 
 local TIERS = { essential = true, module = true, extra = true }
-local KINDS = { toggle = true, slider = true, choice = true, text = true }
+local KINDS = { toggle = true, slider = true, choice = true, text = true,
+  button = true, -- an action (onClick), holds no value
+  list = true }  -- read-only lines (lines() -> { text, ... }), holds no value
+local NO_VALUE = { button = true, list = true }
 
 local defs, byId = {}, {}
 local db
@@ -30,7 +33,12 @@ function Modules.register(def)
     assert(type(s.key) == "string", "module " .. id .. " has a setting without a key")
     assert(not isBlank(s.info), "module " .. id .. " setting " .. s.key .. " needs an info text")
     assert(KINDS[s.kind], "module " .. id .. " setting " .. s.key .. " has an unknown kind")
-    if s.store ~= "crew" then
+    if s.kind == "button" then
+      assert(type(s.onClick) == "function", "module " .. id .. " button " .. s.key .. " needs onClick")
+    elseif s.kind == "list" then
+      assert(type(s.lines) == "function", "module " .. id .. " list " .. s.key .. " needs lines")
+    end
+    if s.store ~= "crew" and not NO_VALUE[s.kind] then
       assert(def.defaults[s.key] ~= nil, "module " .. id .. " setting " .. s.key .. " has no default")
     end
   end

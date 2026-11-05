@@ -30,6 +30,25 @@ function Version.summary()
   return line(best)
 end
 
+-- The game's ready-check icons: the default font has no tick or cross letters.
+local ICON = {
+  ok = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14|t",
+  old = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:14:14|t",
+  unknown = "   ", -- about as wide as an icon, so the names line up
+}
+
+-- One line per crew member for the settings window: tick (up to date), cross (older) or "?" (offline, unknown).
+function Version.lines()
+  local members = ns.roster and ns.roster:members() or {}
+  local out = {}
+  for i, row in ipairs(ns.UpdateLogic.versionRows(ns.playerName(), ns.VERSION, members)) do
+    local name = ns.Util.safeText(row.name) .. (row.me and " (you)" or "")
+    local ver = row.version == "?" and "?" or ("v" .. ns.Util.safeText(row.version))
+    out[i] = (ICON[row.mark] or ICON.unknown) .. " " .. name .. "  " .. ver
+  end
+  return out
+end
+
 ns.Modules.register({
   id = "version", name = "Version check", tier = "essential",
   info = "Notices when a friend has a newer version of TwizCrew than you.",
@@ -37,5 +56,14 @@ ns.Modules.register({
   settings = {
     { key = "chatNotice", label = "Tell me in chat", kind = "toggle",
       info = "Tells you in chat when a friend has a newer version of TwizCrew." },
+    { key = "tellCrew", label = "Tell crew to update", kind = "button",
+      info = "Press this after you updated TwizCrew yourself. Every friend online who has an older version gets a "
+        .. "small window with a Reload button, so they load the new version. They still need to update in WowUp "
+        .. "first. You can press it again after 30 seconds.",
+      onClick = function() ns.Updates.tellCrew() end },
+    { key = "versions", label = "Crew versions", kind = "list",
+      info = "Which TwizCrew version each friend runs. A green tick means up to date (the newest version seen), "
+        .. "a red cross means older: they should update in WowUp. A ? means offline or not known yet.",
+      lines = function() return Version.lines() end },
   },
 })

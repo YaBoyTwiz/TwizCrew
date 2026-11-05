@@ -42,6 +42,7 @@ Stats\Roasts.lua
 UI\BoardLogic.lua
 UI\Board.lua
 UI\AwardsShow.lua
+UI\Updates.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

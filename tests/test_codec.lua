@@ -6,6 +6,11 @@ return {
       local out = ns.Codec.encode("STATE", f); A.eq(#out, 1)
       A.eq(ns.Codec.decode(out[1]), { protocol = 1, type = "STATE", fields = f })
     end,
+    updreq_roundtrip = function(ns, A)
+      local out = ns.Codec.encode("UPDREQ", { ver = "0.2.10", rs = "0.2.0" })
+      A.eq(out, { "1^UPDREQ^rs=0.2.0~ver=0.2.10" })
+      A.eq(ns.Codec.decode(out[1]), { protocol = 1, type = "UPDREQ", fields = { ver = "0.2.10", rs = "0.2.0" } })
+    end,
     encode_is_stable = function(ns, A)
       A.eq(ns.Codec.encode("PING", {})[1], "1^PING^")
       A.eq(ns.Codec.encode("STATE", { b = "2", a = "1" })[1], "1^STATE^a=1~b=2")

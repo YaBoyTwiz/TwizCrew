@@ -154,7 +154,11 @@ local function settingRow(def, s)
     local function get() return ns.Modules.setting(id, key) end
     local function set(v) Win.save(id, key, v) end
     local r
-    if s.kind == "toggle" then
+    if s.kind == "button" then
+      r = Widgets.action(content, s.label or key, s.info, s.onClick, FEATURE)
+    elseif s.kind == "list" then
+      r = Widgets.lines(content, s.label or key, s.info, s.lines)
+    elseif s.kind == "toggle" then
       r = Widgets.toggle(content, s.label or key, s.info, get, set)
     elseif s.kind == "slider" then
       local step = s.step or 0.05
@@ -165,6 +169,7 @@ local function settingRow(def, s)
     else
       r = Widgets.text(content, s.label or key, s.info, get, set, s.password)
     end
+    r.tcList = s.kind == "list"
     return r
   end)
 end
@@ -217,8 +222,9 @@ local function layout()
         for _, s in ipairs(def.settings) do
           local sr = settingRow(def, s)
           sr.tcModule, sr.tcParent = def.id, s.parent or false
-          place(sr, s.parent and INDENT.child or INDENT.setting, ROW, (s.parent and "child:" or "setting:") .. def.id
-            .. ":" .. s.key)
+          if sr.tcList then sr.Refresh() end -- a list: its height depends on its lines
+          place(sr, s.parent and INDENT.child or INDENT.setting, sr.tcList and sr.Height() or ROW,
+            (s.parent and "child:" or "setting:") .. def.id .. ":" .. s.key)
         end
       end
       y = y + 4
@@ -345,6 +351,7 @@ function Win.answerReset(yes)
 end
 
 function Win.isOpen() return isOpen end
+function Win.rowForTest(id, key) return rows["setting:" .. id .. ":" .. key] end
 function Win.isConfirming() return confirming end
 function Win.describeForTest() return described end
 function Win.layoutCountForTest() return layouts end
@@ -353,6 +360,13 @@ ns.Bus.on(FEATURE, "SETTINGS_RESET", Win.rebuild)
 ns.Bus.on(FEATURE, "MODULE_TOGGLED", Win.rebuild)
 ns.Bus.on(FEATURE, "VERSION_NEWER", Win.rebuild)
 ns.Bus.on(FEATURE, "SETTING_CHANGED", function() if isOpen then Win.refresh() end end)
+-- The crew versions list: a friend came, went or changed version. Its height may change, so lay out again.
+local function crewChanged(_, changes)
+  if isOpen and (type(changes) ~= "table" or changes.version) then Win.rebuild() end
+end
+ns.Bus.on(FEATURE, "MEMBER_ONLINE", crewChanged)
+ns.Bus.on(FEATURE, "MEMBER_OFFLINE", crewChanged)
+ns.Bus.on(FEATURE, "MEMBER_UPDATED", crewChanged)
 
 ---------------------------------------------------------------------------------------------------- Options → AddOns
 local function buildCanvas()

@@ -123,6 +123,38 @@ return {
       for _ = 1, 3 do ns.Log.safe("m1", function() error("boom") end) end
       A.no(ns.Modules.isEnabled("m1"))
     end,
+    init_builds_update_memory_and_reset_keeps_it = function(ns, A)
+      setup(ns)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      A.eq(db.update, {})
+      A.eq(ns.DB.init({ update = "x" }, ns.Modules.list()).update, {})
+      db.update.told = "0.2.0"
+      ns.db = db; ns.Modules.attach(db); ns.Modules.resetAll()
+      A.eq(db.update.told, "0.2.0")
+    end,
+    button_and_list_settings_need_no_default_and_are_never_saved = function(ns, A)
+      attached(ns)
+      local clicks = 0
+      ns.Modules.register({ id = "acts", name = "Acts", tier = "essential", info = "Has actions.",
+        settings = {
+          { key = "go", label = "Go", kind = "button", info = "Does it.", onClick = function() clicks = clicks + 1 end },
+          { key = "who", label = "Who", kind = "list", info = "Lists.", lines = function() return { "a" } end },
+        } })
+      A.eq(ns.Modules.setting("acts", "go"), nil)
+      A.no(ns.Modules.set("acts", "go", true), "a button holds no value")
+      A.errors(function()
+        ns.Modules.register({ id = "acts2", name = "A", tier = "module", info = "x",
+          settings = { { key = "go", label = "Go", kind = "button", info = "x" } } })
+      end, "onClick")
+      A.errors(function()
+        ns.Modules.register({ id = "acts3", name = "A", tier = "module", info = "x",
+          settings = { { key = "who", label = "Who", kind = "list", info = "x" } } })
+      end, "lines")
+      A.errors(function()
+        ns.Modules.register({ id = "acts4", name = "A", tier = "module", info = "x",
+          settings = { { key = "go", label = "Go", kind = "button", onClick = function() end } } })
+      end, "info")
+    end,
     init_builds_stats_and_reset_keeps_it = function(ns, A)
       setup(ns)
       local db = ns.DB.init(nil, ns.Modules.list())

@@ -47,8 +47,8 @@ local function tagList(m, settings, relationOf, tagsOn)
   return list
 end
 
--- members: already sorted. Returns row models.
-function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall)
+-- members: already sorted. titleOf(name) -> award title | nil (optional; online rows only). Returns row models.
+function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf)
   settings = settings or {}
   local out = {}
   for _, m in ipairs(members or {}) do
@@ -65,6 +65,9 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall)
         else
           row.offlineText = "Offline"
         end
+      elseif titleOf then
+        local title = titleOf(m.name)
+        if type(title) == "string" and title ~= "" then row.title = text(title) end
       end
       out[#out + 1] = row
     end

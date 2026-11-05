@@ -1,5 +1,7 @@
 -- The Crew panel: a movable window with one row per friend. Registers the module "panel".
 -- Hiding the panel = turning the module off. Redraws are coalesced: many requests in one frame -> one redraw.
+-- While the stats module is on, two tabs sit under the header: "Crew" (the rows, with award titles under the
+-- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved.
 local _, ns = ...
 
 local Panel = {}
@@ -12,14 +14,17 @@ local C = T.COLOR
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
 local ICON_SIZE = { full = 18, compact = 16, tiny = 14 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
+local TAB_HEIGHT, BOARD_WIDTH = 18, 300
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
   BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
-  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED" }
+  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED" }
 
 local root, countText, noteText
+local tabBar, crewTab, shameTab
+local tab = "crew"     -- "crew" | "shame" (session only)
 local rowFrames = {}   -- pool, created once and reused (at most PANEL_MAX_ROWS)
 local models = {}      -- row models of the last redraw
 local header = ""
@@ -52,6 +57,21 @@ end
 local function relationOf(name)
   if ns.Layer then return ns.Layer.relationOf(name) end
   return "unknown"
+end
+
+-- The Hall of Shame tab and titles exist only while the stats module is on.
+local function statsOn()
+  return ns.Board ~= nil and tabBar ~= nil and ns.Modules.isEnabled("stats")
+end
+
+-- titleOf(name) for the row models, computed once per redraw (nil = no titles).
+local function titleOf()
+  if not statsOn() then return nil end
+  local view = ns.Modules.setting("stats", "titles")
+  if view ~= "session" and view ~= "all" then return nil end
+  local session = ns.Session and ns.Session.current()
+  local titles = ns.StatsLogic.titles(ns.StatsLogic.awards(ns.StatsStore.entries(view, session and session.id)))
+  return function(name) return titles[name] end
 end
 
 local function inDungeon()
@@ -152,7 +172,8 @@ local function createRow()
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
   r.status = T.text(r, T.FONT.small, C.status)
-  for _, fs in ipairs({ r.name, r.zone, r.status }) do
+  r.title = T.text(r, T.FONT.small, C.muted)
+  for _, fs in ipairs({ r.name, r.zone, r.status, r.title }) do
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
   end
@@ -216,6 +237,17 @@ local function layoutRow(r, m, style, s, width)
   end
 
   local y = 5 + icon + 2
+  if m.title then -- award title: a small muted line under the name, in every row style
+    local left = 6 + icon + 5
+    r.title:ClearAllPoints()
+    r.title:SetPoint("TOPLEFT", r, "TOPLEFT", left, -(y - 2))
+    r.title:SetWidth(width - left - 8)
+    r.title:SetText(m.title)
+    r.title:Show()
+    y = y + LINE
+  else
+    r.title:Hide()
+  end
   r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide()
   if style == "full" then
     local line = m.offline and m.offlineText or (s.showZone and m.zoneText ~= "" and m.zoneText)
@@ -260,6 +292,7 @@ end
 local function redraw()
   redraws = redraws + 1
   if not root or not enabled then return end
+  if not statsOn() then tab = "crew" end
   local s = allSettings()
   local online, total = 0, 0
   if ns.roster then online, total = ns.roster:onlineCount() end
@@ -272,9 +305,32 @@ local function redraw()
   if s.showSelf and ns.Self then
     table.insert(members, 1, Logic.selfMember(ns.playerName(), ns.Self.lastSent()))
   end
-  models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock())
+  models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(), titleOf())
   header = Logic.headerText(online, total)
   countText:SetText(header)
+
+  local top = HEADER_HEIGHT
+  if statsOn() then
+    crewTab:SetActive(tab == "crew")
+    shameTab:SetActive(tab == "shame")
+    tabBar:Show()
+    top = top + TAB_HEIGHT
+  elseif tabBar then
+    tabBar:Hide()
+  end
+
+  if tab == "shame" then
+    for _, r in ipairs(rowFrames) do r:Hide() end
+    visibleRows = 0
+    noteText:Hide()
+    local h = ns.Board.draw(root, top + GAP, BOARD_WIDTH)
+    root:SetSize(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD)
+    root:Show()
+    shown = true
+    normalizeAnchor()
+    return
+  end
+  if ns.Board then ns.Board.hide() end
 
   local max = ns.Config.PANEL_MAX_ROWS
   local first, last = Logic.window(#models, offset, max)
@@ -282,7 +338,7 @@ local function redraw()
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style]
   local alpha = clamp(s.bgAlpha, 0, 1, 0.8)
-  local y = HEADER_HEIGHT + GAP
+  local y = top + GAP
   local used = 0
   for i = first, last do
     used = used + 1
@@ -459,6 +515,19 @@ local function build()
   countText:SetPoint("RIGHT", head, "RIGHT", -PAD, -2)
   noteText = T.text(root, T.FONT.small, C.muted)
   noteText:SetJustifyH("LEFT")
+
+  if ns.Board then -- tabs, shown only while the stats module is on
+    tabBar = CreateFrame("Frame", nil, root)
+    tabBar:SetPoint("TOPLEFT", root, "TOPLEFT", 0, -(HEADER_HEIGHT - 2))
+    tabBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, -(HEADER_HEIGHT - 2))
+    tabBar:SetHeight(TAB_HEIGHT)
+    draggable(tabBar)
+    crewTab = ns.Board.textButton(tabBar, "Crew", function() Panel.setTab("crew") end)
+    crewTab:SetPoint("LEFT", tabBar, "LEFT", PAD - 5, 0)
+    shameTab = ns.Board.textButton(tabBar, "Hall of Shame", function() Panel.setTab("shame") end)
+    shameTab:SetPoint("LEFT", crewTab, "RIGHT", 4, 0)
+    tabBar:Hide()
+  end
   root:Hide()
 end
 
@@ -468,6 +537,23 @@ function Panel.scroll(delta)
   offset = offset - (tonumber(delta) or 0)
   requestRedraw()
 end
+
+-- "crew" | "shame". Opening the Hall of Shame asks the crew for fresh numbers (Stats.request rate-limits itself).
+function Panel.setTab(id)
+  if id == "shame" then
+    if not statsOn() then return end
+    tab = "shame"
+    ns.Stats.request()
+  elseif id == "crew" then
+    tab = "crew"
+  else
+    return
+  end
+  requestRedraw()
+end
+
+function Panel.tab() return (tab == "shame" and statsOn()) and "shame" or "crew" end
+function Panel.refresh() requestRedraw() end
 
 function Panel.isShown() return shown end
 function Panel.models() return models end

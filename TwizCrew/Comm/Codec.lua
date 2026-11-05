@@ -5,7 +5,8 @@ local _, ns = ...
 local Codec = {}
 ns.Codec = Codec
 
-local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BYE = true }
+local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BYE = true,
+  STATS = true, STATSREQ = true, ROAST = true }
 
 local ESCAPE = { ["%"] = "%25", ["^"] = "%5E", ["~"] = "%7E", ["="] = "%3D" }
 local UNESCAPE = { ["25"] = "%", ["5E"] = "^", ["7E"] = "~", ["3D"] = "=" }
@@ -39,12 +40,36 @@ end
 
 -- Zone, instance and layer key go first, so they always arrive together in the first piece (a friend's layer
 -- is never compared with a zone from another message). The rest follows sorted by key.
-local FIRST = { zn = 1, ins = 2, lk = 3 }
+local FIRST = { zn = 1, ins = 2, lk = 3, sid = 4, sst = 5 }
 
-function Codec.encode(msgType, fields)
+-- Pieces of a continued message keep their type, except STATE which continues as UPDATE (v1 copies need that).
+local function continuation(msgType)
+  if msgType == "STATE" then return "UPDATE" end
+  return msgType
+end
+
+local function isNumber(value)
+  return string.find(value, "^%-?%d+%.?%d*$") ~= nil
+end
+
+-- opts.repeatKeys: keys written first (in that order, when present) in every piece. They are never cut.
+-- A plain number is never cut either: if it cannot fit even in a fresh piece it is dropped.
+function Codec.encode(msgType, fields, opts)
   local max = ns.Config.MAX_MESSAGE
+  fields = fields or {}
+  local repeated, isRepeat, prefix = {}, {}, nil
+  for _, k in ipairs(opts and opts.repeatKeys or {}) do
+    if fields[k] ~= nil and not isRepeat[k] then
+      isRepeat[k] = true
+      repeated[#repeated + 1] = escape(tostring(k)) .. "=" .. escape(tostring(fields[k]))
+    end
+  end
+  prefix = table.concat(repeated, "~")
+
   local keys = {}
-  for k in pairs(fields or {}) do keys[#keys + 1] = k end
+  for k in pairs(fields) do
+    if not isRepeat[k] then keys[#keys + 1] = k end
+  end
   table.sort(keys, function(a, b)
     local fa, fb = FIRST[a], FIRST[b]
     if fa or fb then
@@ -54,24 +79,34 @@ function Codec.encode(msgType, fields)
     return tostring(a) < tostring(b)
   end)
 
-  local out, curType, cur = {}, msgType, nil -- cur: string of entries in the open chunk
+  local out, curType = {}, msgType
+  local cur, used = prefix, false -- cur: entries in the open piece; used: it holds more than the repeated keys
+  local function join(entry)
+    if cur == "" then return entry end
+    return cur .. "~" .. entry
+  end
   for _, k in ipairs(keys) do
     local ek, value = escape(tostring(k)), tostring(fields[k])
-    local entry = fitEntry(ek, value, max - #header(curType))
-    if entry then
-      local entryFull = ek .. "=" .. escape(value)
-      if cur and #header(curType) + #cur + 1 + #entryFull <= max then
-        cur = cur .. "~" .. entryFull
-      else
-        if cur then
-          out[#out + 1] = header(curType) .. cur
-          curType = "UPDATE"
-        end
-        cur = fitEntry(ek, value, max - #header(curType))
+    local entryFull = ek .. "=" .. escape(value)
+    if #header(curType) + #join(entryFull) <= max then
+      cur = join(entryFull); used = true
+    else
+      if used then
+        out[#out + 1] = header(curType) .. cur
+        curType = continuation(curType)
+        cur, used = prefix, false
+      end
+      -- a fresh piece (or the first one, still empty)
+      local room = max - #header(curType) - (cur == "" and 0 or #cur + 1)
+      if not isNumber(value) then
+        local entry = fitEntry(ek, value, room)
+        if entry then cur = join(entry); used = true end
+      elseif #entryFull <= room then
+        cur = join(entryFull); used = true
       end
     end
   end
-  out[#out + 1] = header(curType) .. (cur or "")
+  out[#out + 1] = header(curType) .. cur
   return out
 end
 

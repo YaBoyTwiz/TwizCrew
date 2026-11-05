@@ -123,5 +123,14 @@ return {
       for _ = 1, 3 do ns.Log.safe("m1", function() error("boom") end) end
       A.no(ns.Modules.isEnabled("m1"))
     end,
+    init_builds_stats_and_reset_keeps_it = function(ns, A)
+      setup(ns)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      A.eq(db.stats, { chars = {}, crew = {}, session = {} })
+      A.eq(ns.DB.init({ stats = 5 }, ns.Modules.list()).stats.chars, {})
+      db.stats.chars.Twiz = { sid = "x", s = { dt = 1 }, a = { dt = 4 } }
+      ns.db = db; ns.Modules.attach(db); ns.Modules.resetAll()
+      A.eq(db.stats.chars.Twiz.a.dt, 4)
+    end,
   },
 }

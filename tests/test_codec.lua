@@ -68,5 +68,41 @@ return {
       end
       A.ok(pcall(ns.Codec.decode, nil)); A.ok(pcall(ns.Codec.decode, 5))
     end,
+    stats_pieces_keep_type_and_repeat_keys = function(ns, A)
+      local f = { sid = "Holyb\195\184i-Realm-1700000000", q = "1700000000-1" }
+      local keys = { "dt", "df", "dd", "dw", "db", "ld", "pl", "wp", "af", "ds", "st", "mt", "sw", "jp", "hs", "jk",
+        "rp", "qa", "dl", "dv", "rz", "pt" }
+      for i, k in ipairs(keys) do
+        f["s_" .. k] = tostring(100000 + i); f["a_" .. k] = tostring(123456789 + i)
+      end
+      local out = ns.Codec.encode("STATS", f, { repeatKeys = { "sid", "q", "off" } })
+      A.ok(#out >= 2)
+      local merged = {}
+      for _, s in ipairs(out) do
+        A.ok(#s <= 255)
+        local m = ns.Codec.decode(s)
+        A.eq(m.type, "STATS"); A.eq(m.fields.sid, f.sid); A.eq(m.fields.q, f.q)
+        for k, v in pairs(m.fields) do merged[k] = v end
+      end
+      A.eq(merged, f)
+    end,
+    session_fields_follow_layer_fields = function(ns, A)
+      A.eq(ns.Codec.encode("STATE", { a = "1", sst = "5m", sid = "T-5", lk = "1", zn = "Z" })[1],
+        "1^STATE^zn=Z~lk=1~sid=T-5~sst=5m~a=1")
+    end,
+    new_types_decode = function(ns, A)
+      for _, t in ipairs({ "STATS", "STATSREQ", "ROAST" }) do A.eq(ns.Codec.decode("1^" .. t .. "^").type, t) end
+    end,
+    numbers_are_never_cut = function(ns, A)
+      local out = ns.Codec.encode("STATS", { sid = "T-1", st = string.rep("x", 300), s_dt = "12345" },
+        { repeatKeys = { "sid" } })
+      local found = false
+      for _, s in ipairs(out) do
+        A.ok(#s <= 255)
+        local m = ns.Codec.decode(s)
+        if m.fields.s_dt == "12345" then found = true end
+      end
+      A.ok(found)
+    end,
   },
 }

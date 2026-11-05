@@ -18,6 +18,7 @@ function DB.init(saved, defs)
     roster = {},
     log = {},
     myStatus = "",
+    stats = { chars = {}, crew = {}, session = {} },
   })
   local known = {}
   for _, def in ipairs(defs or {}) do

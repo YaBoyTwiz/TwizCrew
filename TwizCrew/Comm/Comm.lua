@@ -39,8 +39,8 @@ local function flushPending()
   for _, text in ipairs(texts) do pushToDestinations(text) end
 end
 
-function Comm.send(msgType, fields)
-  local texts = ns.Codec.encode(msgType, fields or {})
+function Comm.send(msgType, fields, opts)
+  local texts = ns.Codec.encode(msgType, fields or {}, opts)
   for _, text in ipairs(texts) do
     if ns.Transport.isPending() then keep(text) else pushToDestinations(text) end
   end

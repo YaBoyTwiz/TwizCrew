@@ -164,6 +164,7 @@ add({ id = "timers", label = "time AFK, dead and played",
   end })
 
 local readTarget -- set by the target detector, used again at death
+local confirmBreath -- set by the drown detector, used again at death
 
 local function alive()
   if player(UnitIsDeadOrGhost) then return end
@@ -176,6 +177,7 @@ add({ id = "death", label = "deaths",
   start = function()
     onEvent(byId.death, "PLAYER_DEAD", function()
       if isLive(byId.target) then guard(byId.target, readTarget, true) end
+      if isLive(byId.drown) then guard(byId.drown, confirmBreath) end
       api.died()
     end)
     onEvent(byId.death, "PLAYER_ALIVE", alive)
@@ -183,12 +185,41 @@ add({ id = "death", label = "deaths",
   end })
 
 local breath = {} -- running mirror timers that drown or tire you
+local BREATH_TIMERS = { BREATH = true, EXHAUSTION = true }
+
+-- Asks the game which breath / fatigue timers really run (GetMirrorTimerInfo slots 1..3). nil when it can't tell.
+local function mirrorRunning()
+  if not fn("GetMirrorTimerInfo") then return nil end
+  local found = {}
+  for i = 1, 3 do
+    local timer, _, _, _, paused = GetMirrorTimerInfo(i)
+    if not secret(timer) and not secret(paused) and BREATH_TIMERS[timer] and (not paused or paused == 0) then
+      found[timer] = true
+    end
+  end
+  return found
+end
+
+local function setBreath(found)
+  for timer in pairs(breath) do breath[timer] = nil end
+  for timer in pairs(found) do breath[timer] = true end
+  ctx.breathRunning = next(breath) ~= nil
+end
+
+-- At death: a stop event we missed must not make every later death a drowning.
+confirmBreath = function()
+  local found = mirrorRunning()
+  if found then setBreath(found) end
+end
+
 add({ id = "drown", label = "drowning deaths",
   needs = function() return true end,
   start = function()
     local d = byId.drown
+    -- a loading screen may swallow MIRROR_TIMER_STOP: start over from what the game shows (if it can tell)
+    onEvent(d, "PLAYER_ENTERING_WORLD", function() setBreath(mirrorRunning() or {}) end)
     onEvent(d, "MIRROR_TIMER_START", function(timer)
-      if timer == "BREATH" or timer == "EXHAUSTION" then
+      if BREATH_TIMERS[timer] then
         breath[timer] = true
         ctx.breathRunning = true
       end
@@ -202,7 +233,10 @@ add({ id = "drown", label = "drowning deaths",
     end)
   end })
 
--- atDeath: a dead target (a mob you killed earlier) is not what killed you, so it is forgotten.
+-- The possible killer: the last attackable, living, non-player target seen IN COMBAT (on target change and every
+-- tick), with the time it was seen. A critter you clicked on is never fighting, so it is never blamed.
+-- atDeath: only forgets a dead target (a mob you killed earlier is not what killed you); the time of the last
+-- in-combat sighting is kept, so WEAK_WINDOW counts from then.
 readTarget = function(atDeath)
   if not UnitExists("target") then return end
   if fn("UnitIsDead") then
@@ -212,7 +246,10 @@ readTarget = function(atDeath)
       return
     end
   end
+  if atDeath then return end
   if UnitIsPlayer("target") or not UnitCanAttack("player", "target") then return end
+  local fighting = UnitAffectingCombat("target")
+  if secret(fighting) or not fighting then return end
   local level, name = UnitLevel("target"), UnitName("target")
   if secret(level) or secret(name) or type(level) ~= "number" or type(name) ~= "string" then return end
   ctx.target = { level = level, name = name, at = ns.now() }
@@ -220,18 +257,55 @@ end
 
 add({ id = "target", label = "deaths to weak monsters",
   needs = function()
-    local why = missingOf("UnitExists", "UnitCanAttack", "UnitIsPlayer", "UnitLevel", "UnitName")
+    local why = missingOf("UnitExists", "UnitCanAttack", "UnitIsPlayer", "UnitLevel", "UnitName",
+      "UnitAffectingCombat")
     return why == nil, why
   end,
-  start = function() onEvent(byId.target, "PLAYER_TARGET_CHANGED", function() readTarget(false) end) end })
+  start = function() onEvent(byId.target, "PLAYER_TARGET_CHANGED", function() readTarget(false) end) end,
+  tick = function() readTarget(false) end })
+
+-- A pull: my fight in a dungeon starts, and for PULL_WAIT s (and the PULL_WAIT s before) no crew member in the
+-- same dungeon shows FIGHTING, while at least one is there. Their FIGHTING arrives late (their update is sent
+-- after a short delay), hence the wait.
+local PULL_WAIT = 2
+local lastFight = {} -- name -> when their tags last showed COMBAT (set when it appears and when it goes)
+local fighting = {}  -- name -> true while their tags show COMBAT
+local pullPending = false
+
+local function friendFoughtSince(zone, since)
+  for _, m in ipairs(ns.roster:members()) do
+    if m.online and m.inInstance and m.zone == zone then
+      if (m.tags and m.tags.COMBAT) or (lastFight[m.name] and lastFight[m.name] >= since) then return true end
+    end
+  end
+  return false
+end
+
+local function checkPull(started)
+  pullPending = false
+  if not ns.roster then return end
+  local me = { dungeon = inDungeon(), zone = call(GetRealZoneText) }
+  if not Logic.isPull(me, ns.roster:members()) then return end
+  if friendFoughtSince(me.zone, started - PULL_WAIT) then return end
+  api.count("pl", 1)
+end
 
 add({ id = "pulls", label = "pulls in dungeons",
   needs = function() return true end,
   start = function()
-    onEvent(byId.pulls, "PLAYER_REGEN_DISABLED", function()
-      if not ns.roster then return end
-      local me = { dungeon = inDungeon(), zone = call(GetRealZoneText) }
-      if Logic.isPull(me, ns.roster:members()) then api.count("pl", 1) end
+    local d = byId.pulls
+    pullPending = false
+    onBus(d, "MEMBER_UPDATED", function(name)
+      local m = ns.roster and ns.roster:get(name)
+      local on = m and m.tags and m.tags.COMBAT and true or false
+      if on or fighting[name] then lastFight[name] = ns.now() end
+      fighting[name] = on or nil
+    end)
+    onEvent(d, "PLAYER_REGEN_DISABLED", function()
+      if pullPending or not ns.roster or not inDungeon() then return end
+      pullPending = true
+      local started = ns.now()
+      C_Timer.After(PULL_WAIT, function() guard(d, checkPull, started) end)
     end)
   end })
 
@@ -295,8 +369,9 @@ end
 add({ id = "spells", label = "hearthstones and rezzes",
   needs = function() return true end,
   start = function()
-    onEvent(byId.spells, "UNIT_SPELLCAST_SUCCEEDED", function(unit, _, spellID)
-      if unit ~= "player" or secret(spellID) or type(spellID) ~= "number" then return end
+    local d = byId.spells
+    local function onCast(_, _, spellID)
+      if secret(spellID) or type(spellID) ~= "number" then return end
       local name
       if type(C_Spell) == "table" and type(C_Spell.GetSpellName) == "function" then
         name = C_Spell.GetSpellName(spellID)
@@ -306,6 +381,11 @@ add({ id = "spells", label = "hearthstones and rezzes",
       if secret(name) or type(name) ~= "string" then name = nil end
       local kind = spellKind(spellID, name)
       if kind == "hearth" then api.count("hs", 1) elseif kind == "rez" then api.count("rz", 1) end
+    end
+    -- raids cast all the time: other units' casts leave before the guard (no tables made, no xpcall)
+    ns.Events.on(fid(d), "UNIT_SPELLCAST_SUCCEEDED", function(unit, ...)
+      if unit ~= "player" then return end
+      guard(d, onCast, unit, ...)
     end)
   end })
 
@@ -322,12 +402,29 @@ add({ id = "junk", label = "gray junk looted",
     end)
   end })
 
-local merchantOpen, repairCost = false, 0
+local merchantOpen, repairCost, repairMoney = false, 0, nil
+-- My money (nil when the game can't tell).
+local function money()
+  if not fn("GetMoney") then return nil end
+  local m = GetMoney()
+  if secret(m) or type(m) ~= "number" or m ~= m then return nil end
+  return m
+end
+
 local function readCost()
   if not merchantOpen then return end
   local cost, can = GetRepairAllCost()
   if secret(cost) or type(cost) ~= "number" or cost ~= cost then return end
   repairCost = (can and cost > 0) and cost or 0
+  repairMoney = money()
+end
+
+-- Repairing without enough money repairs nothing. The hook runs right after the click: the money may or may not
+-- be taken yet, so either the money read with the cost or the money now must cover it.
+local function couldPay(cost)
+  local now = money()
+  if now == nil and repairMoney == nil then return true end
+  return math.max(now or 0, repairMoney or 0) >= cost
 end
 
 add({ id = "repair", label = "money spent on repairs",
@@ -337,12 +434,13 @@ add({ id = "repair", label = "money spent on repairs",
   end,
   start = function()
     local d = byId.repair
-    merchantOpen, repairCost = false, 0
+    merchantOpen, repairCost, repairMoney = false, 0, nil
     onEvent(d, "MERCHANT_SHOW", function() merchantOpen = true; readCost() end)
-    onEvent(d, "MERCHANT_CLOSED", function() merchantOpen, repairCost = false, 0 end)
+    onEvent(d, "MERCHANT_CLOSED", function() merchantOpen, repairCost, repairMoney = false, 0, nil end)
     onEvent(d, "UPDATE_INVENTORY_DURABILITY", readCost)
     hook(d, nil, "RepairAllItems", function(guild)
       if guild or not merchantOpen or repairCost <= 0 then return end
+      if not couldPay(repairCost) then return end
       api.count("rp", repairCost)
       repairCost = 0
     end)
@@ -432,7 +530,8 @@ function D.stopAll()
   end
   for timer in pairs(breath) do breath[timer] = nil end
   ctx.breathRunning = false
-  merchantOpen, repairCost, lastPos = false, 0, nil
+  merchantOpen, repairCost, repairMoney, lastPos = false, 0, nil, nil
+  pullPending = false
 end
 
 -- { id, on, why } per detector, in order (why is nil while on).

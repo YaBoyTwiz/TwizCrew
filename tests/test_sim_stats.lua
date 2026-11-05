@@ -87,7 +87,7 @@ return {
       local c = twoFriends(H)
       local fr = c.fr
       fr.state.level = 20
-      fr.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      fr.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
       fr:fire("PLAYER_TARGET_CHANGED")
       H.advance(4)
       die(fr)
@@ -257,7 +257,7 @@ return {
       A.eq(awardsOf(c.twNs).corpse, nil, "no award for a hidden friend")
       -- no counting and no roasts about Frostie while off
       c.fr.state.level = 20
-      c.fr.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      c.fr.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
       c.fr:fire("PLAYER_TARGET_CHANGED")
       H.advance(11) -- past the roast gap
       die(c.fr)

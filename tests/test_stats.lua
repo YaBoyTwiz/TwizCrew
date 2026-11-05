@@ -198,7 +198,7 @@ return {
     dead_weak_target_is_not_blamed = function(ns, A, W)
       local roasts = start(ns, W)
       W.state.level = 20
-      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       W:advance(3)
       W.state.units.target.dead = true -- killed it; still targeted when a patrol kills me
@@ -270,7 +270,7 @@ return {
     weak_mob_death = function(ns, A, W)
       local roasts = start(ns, W)
       W.state.level = 20
-      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       W:advance(5)
       die(W)
@@ -283,12 +283,12 @@ return {
     friendly_or_player_targets_are_not_weak_mobs = function(ns, A, W)
       local roasts = start(ns, W)
       W.state.level = 20
-      W.state.units.target = { name = "Ginkan", level = 3, hostile = true, player = true }
+      W.state.units.target = { name = "Ginkan", level = 3, hostile = true, player = true, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       die(W)
       revive(W)
       W:advance(120)
-      W.state.units.target = { name = "Stormwind Guard", level = 3, hostile = false }
+      W.state.units.target = { name = "Stormwind Guard", level = 3, hostile = false, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       die(W)
       A.eq(get(ns, "all", "dw"), 0)
@@ -298,8 +298,10 @@ return {
 
     drown_and_again = function(ns, A, W)
       local roasts = start(ns, W)
+      W.state.mirror = { { name = "BREATH" } }
       W:fire("MIRROR_TIMER_START", "BREATH", 0, 60000, -1, 0, "Breath")
       die(W)
+      W.state.mirror = {}
       W:fire("MIRROR_TIMER_STOP", "BREATH")
       A.eq(get(ns, "session", "dd"), 1)
       W:advance(30)
@@ -333,7 +335,7 @@ return {
       A.eq(get(ns, "all", "st"), 0, "secret speed")
       W.state.level = 20
       W.state.secret[3] = true
-      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       die(W)
       A.eq(get(ns, "all", "dw"), 0, "secret target level")
@@ -388,13 +390,187 @@ return {
         W.state.zone, W.state.inInstance, W.state.instanceType = "The Deadmines", true, "party"
       end)
       W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2.1)
       A.eq(get(ns, "all", "pl"), 0, "alone: not a pull")
       receive(W, "Frostie", "STATE", { ver = "0.1.0", zn = "The Deadmines", ins = "1", tg = "" }, ns)
+      W:advance(10)
       W:fire("PLAYER_REGEN_DISABLED")
-      A.eq(get(ns, "all", "pl"), 1)
+      W:advance(1.9)
+      A.eq(get(ns, "all", "pl"), 0, "not yet: the crew gets 2 s to join in")
+      W:advance(0.2)
+      A.eq(get(ns, "all", "pl"), 1, "no friend fighting: a pull")
       receive(W, "Frostie", "UPDATE", { tg = "COMBAT" }, ns)
+      W:advance(10)
       W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2.1)
       A.eq(get(ns, "all", "pl"), 1, "friend already fighting")
+    end,
+
+    pull_not_counted_when_a_friend_joins_within_2s = function(ns, A, W)
+      start(ns, W, function()
+        W.state.zone, W.state.inInstance, W.state.instanceType = "The Deadmines", true, "party"
+      end)
+      receive(W, "Frostie", "STATE", { ver = "0.1.0", zn = "The Deadmines", ins = "1", tg = "" }, ns)
+      W:advance(10)
+      W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(1.5)
+      receive(W, "Frostie", "UPDATE", { tg = "COMBAT" }, ns) -- their FIGHTING arrives 1.5 s after my start
+      W:advance(1)
+      A.eq(get(ns, "all", "pl"), 0, "the crew was fighting too")
+      -- a friend whose fight ended just before mine (inside the 2 s before my start) was not left behind either
+      receive(W, "Frostie", "UPDATE", { tg = "" }, ns)
+      W:advance(1)
+      W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2.1)
+      A.eq(get(ns, "all", "pl"), 0, "friend fought 1 s before my start")
+      -- a long while later, with nobody fighting: a pull
+      W:advance(30)
+      W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2.1)
+      A.eq(get(ns, "all", "pl"), 1)
+      -- out of the dungeon: no check at all
+      W.state.inInstance, W.state.instanceType = false, "none"
+      W:advance(10)
+      W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2.1)
+      A.eq(get(ns, "all", "pl"), 1)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    weak_mob_must_be_seen_in_combat = function(ns, A, W)
+      local roasts = start(ns, W)
+      W.state.level = 20
+      -- a critter I clicked on, never fighting me, while something else kills me
+      W.state.units.target = { name = "Rabbit", level = 1, hostile = true, combat = false }
+      W:fire("PLAYER_TARGET_CHANGED")
+      W:advance(3)
+      die(W)
+      A.eq(get(ns, "all", "dw"), 0, "an out-of-combat critter is not the killer")
+      revive(W)
+      W:advance(120)
+      -- an in-combat weak mob, last seen fighting 3 s before my death
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
+      W:fire("PLAYER_TARGET_CHANGED")
+      W:advance(1)
+      W.state.units.target.combat = false
+      W:advance(3)
+      die(W)
+      A.eq(get(ns, "all", "dw"), 1, "seen in combat 3 s before death")
+      A.eq(roasts[#roasts], { "weak", 3, "Kobold Miner" })
+      revive(W)
+      W:advance(120)
+      -- one last seen in combat 15 s before my death
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
+      W:fire("PLAYER_TARGET_CHANGED")
+      W:advance(1)
+      W.state.units.target.combat = false
+      W:advance(15)
+      die(W)
+      A.eq(get(ns, "all", "dw"), 1, "seen in combat 15 s before death: too long ago")
+      revive(W)
+      W:advance(120)
+      -- a weak mob that joins the fight after I target it is picked up by the 0.5 s tick
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = false }
+      W:fire("PLAYER_TARGET_CHANGED")
+      W:advance(30)
+      W.state.units.target.combat = true
+      W:advance(1)
+      die(W)
+      A.eq(get(ns, "all", "dw"), 2, "the tick saw it fighting")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    other_units_casts_skip_the_guard = function(ns, A, W)
+      start(ns, W)
+      local real, calls = W.env.xpcall, 0
+      W.env.xpcall = function(...) calls = calls + 1; return real(...) end
+      W:fire("UNIT_SPELLCAST_SUCCEEDED", "raid7", "x", 8690)
+      A.eq(calls, 1, "only the event dispatcher's own safe call")
+      W.env.xpcall = real
+      A.eq(get(ns, "all", "hs"), 0)
+      W:fire("UNIT_SPELLCAST_SUCCEEDED", "player", "x", 8690)
+      A.eq(get(ns, "all", "hs"), 1, "my own cast still counts")
+    end,
+
+    drown_flag_does_not_stick = function(ns, A, W)
+      local roasts = start(ns, W)
+      -- a breath timer started, then the loading screen ate its stop event
+      W:fire("MIRROR_TIMER_START", "BREATH", 0, 60000, -1, 0, "Breath")
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.eq(ns.Detectors.ctx.breathRunning, false, "reset by the loading screen")
+      W:advance(30)
+      die(W)
+      A.eq(get(ns, "all", "dd"), 0)
+      revive(W)
+      W:advance(120)
+      -- a loading screen while the game still shows a running breath timer: it is read back
+      W.state.mirror = { { name = "UNKNOWN" }, { name = "BREATH", paused = 0 } }
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.eq(ns.Detectors.ctx.breathRunning, true, "read back from the game")
+      W.state.mirror = { { name = "EXHAUSTION", paused = 1 } }
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.eq(ns.Detectors.ctx.breathRunning, false, "a paused timer is not running")
+      -- at death the game is asked: a stop event that never came does not make a drowning
+      W:fire("MIRROR_TIMER_START", "BREATH", 0, 60000, -1, 0, "Breath")
+      W.state.mirror = {}
+      W:advance(30)
+      die(W)
+      A.eq(get(ns, "all", "dd"), 0, "no breath timer running at death")
+      revive(W)
+      W:advance(120)
+      W.state.mirror = { { name = "EXHAUSTION", paused = 0 } }
+      W:fire("MIRROR_TIMER_START", "EXHAUSTION", 0, 60000, -1, 0, "Fatigue")
+      die(W)
+      A.eq(get(ns, "all", "dd"), 1, "a real one still counts")
+      A.eq(roasts[#roasts], { "drown" })
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    drown_without_mirror_info_trusts_the_events = function(ns, A, W)
+      start(ns, W, function() W.state.missing.GetMirrorTimerInfo = true end)
+      W:fire("MIRROR_TIMER_START", "BREATH", 0, 60000, -1, 0, "Breath")
+      die(W)
+      A.eq(get(ns, "all", "dd"), 1)
+      W:fire("MIRROR_TIMER_STOP", "BREATH")
+      revive(W)
+      W:advance(120)
+      W:fire("MIRROR_TIMER_START", "BREATH", 0, 60000, -1, 0, "Breath")
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.eq(ns.Detectors.ctx.breathRunning, false, "still reset by the loading screen")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    repair_counted_only_when_paid = function(ns, A, W)
+      start(ns, W)
+      W.state.money = 500
+      W.state.repairCost = 1000
+      W:fire("MERCHANT_SHOW")
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 0, "could not pay: nothing repaired")
+      W:fire("MERCHANT_CLOSED")
+      W.state.money = 1500
+      W.state.repairCost = 1000
+      W:fire("MERCHANT_SHOW")
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 1000, "paid")
+      W:fire("MERCHANT_CLOSED")
+      -- the money already taken when the hook runs: the amount read before the repair still counts
+      W.state.repairCost = 1000
+      W:fire("MERCHANT_SHOW")
+      W.state.money = 500
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 2000, "money read before the repair")
+      W:fire("MERCHANT_CLOSED")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    repair_without_getmoney_still_counts = function(ns, A, W)
+      start(ns, W, function() W.state.missing.GetMoney = true end)
+      W.state.repairCost = 1000
+      W:fire("MERCHANT_SHOW")
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 1000)
+      A.ok(statusOf(ns, "repair").on)
     end,
 
     wipe_counts_once = function(ns, A, W)

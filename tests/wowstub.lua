@@ -274,6 +274,23 @@ local function build(W)
     return v1UnitLevel(u)
   end
 
+  -- final review fixes: other units' combat (st.units[u].combat), mirror timers, money.
+  -- st.mirror = { { name = "BREATH", paused = 0 }, ... } (slots 1..3; a missing slot is "UNKNOWN");
+  -- st.money in copper (default plenty). GetMirrorTimerInfo and GetMoney are hideable through st.missing.
+  st.mirror, st.money = {}, 100000000
+  fakes.GetMirrorTimerInfo = function(i)
+    local m = type(st.mirror) == "table" and st.mirror[i]
+    if type(m) ~= "table" then return "UNKNOWN", 0, 0, 0, 0, "" end
+    return m.name, 30000, 60000, -1, m.paused or 0, "Breath"
+  end
+  fakes.GetMoney = function() return st.money end
+  local v1UnitAffectingCombat = env.UnitAffectingCombat
+  env.UnitAffectingCombat = function(u)
+    local x = u ~= "player" and unit(u)
+    if x then return x.combat and true or false end
+    return v1UnitAffectingCombat(u)
+  end
+
   return env
 end
 

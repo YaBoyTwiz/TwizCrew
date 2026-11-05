@@ -160,6 +160,12 @@ local function build(W)
   end }
   env.UISpecialFrames = {}
 
+  -- pop-ups (Task 12)
+  W.invites, W.sounds = {}, {}   -- names passed to InviteUnit, sound ids passed to PlaySound
+  env.C_PartyInfo = { InviteUnit = function(name) W.invites[#W.invites + 1] = name end }
+  env.PlaySound = function(id) W.sounds[#W.sounds + 1] = id end
+  env.SOUNDKIT = { RAID_WARNING = 8959 }
+
   return env
 end
 

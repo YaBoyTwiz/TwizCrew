@@ -28,3 +28,6 @@ UI\Widgets.lua
 UI\ClassIcon.lua
 UI\PanelLogic.lua
 UI\Panel.lua
+UI\PopupLogic.lua
+UI\Popups.lua
+UI\Extras.lua

@@ -946,3 +946,4 @@ no_errors_anywhere: after all of the above, every client's ns.Log.errors(50) is 
   re-anchored at the panel's top-left corner (grow down) or bottom-left corner (grow up), without moving it, so new
   rows push the panel away from that corner. The default `{ point = "LEFT", x = 40, y = 100 }` is kept as the
   starting place.
+- **Pop-up quiet period starts at the popups module's first enable (Task 12).** The plan said "time of `PLAYER_LOGIN` + `LOGIN_QUIET`", but Boot enables modules inside its own PLAYER_LOGIN handler, so a listener registered in `onEnable` may never fire. `quietUntil` is `ns.now() + LOGIN_QUIET` at the first `onEnable` of the session; the ticker calls `endQuiet` once when it expires. When more than `POPUP_MAX` pop-ups are due at once the oldest visible one is replaced (nothing is queued).

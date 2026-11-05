@@ -89,6 +89,15 @@ return {
       A.contains(text, "\n## SavedVariables: TwizCrewDB\n")
       A.contains(text, "\n## Version: ")
     end,
+    toc_version_matches_the_code = function(ns, A)
+      local toc = readFile("TwizCrew/TwizCrew.toc"):match("\n## Version:%s*([^\r\n]-)%s*[\r\n]")
+      local init = readFile("TwizCrew/Core/Init.lua")
+      local code = init:match('local ADDON_VERSION%s*=%s*"([^"]+)"')
+      local since = init:match('local RESTART_SINCE%s*=%s*"([^"]+)"')
+      A.ok(toc and code and since, "## Version in the .toc, ADDON_VERSION and RESTART_SINCE in Core/Init.lua")
+      A.eq(code, toc, "ADDON_VERSION in Core/Init.lua must match ## Version in TwizCrew.toc")
+      A.ok(since:match("^%d+[%.%d]*$"), "RESTART_SINCE is a plain version")
+    end,
     no_forbidden_lua = function(ns, A)
       for _, f in ipairs(tocFiles()) do
         local src = readFile("TwizCrew/" .. f:gsub("\\", "/"))

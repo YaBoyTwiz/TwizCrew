@@ -16,6 +16,22 @@ return {
       A.eq(ns.Util.compareVersions("0.9", "1.0"), -1)
       A.eq(ns.Util.compareVersions("abc", "0"), 0)
     end,
+    compareVersions_handles_release_formats = function(ns, A)
+      A.eq(ns.Util.compareVersions("1.2.10", "1.2.9"), 1)
+      A.eq(ns.Util.compareVersions("1.2.9", "1.2.10"), -1)
+      A.eq(ns.Util.compareVersions("1.2.10", "1.2.10"), 0)
+      A.eq(ns.Util.compareVersions("0.10.0", "0.9.9"), 1)
+      A.eq(ns.Util.compareVersions("2.0", "1.99.99"), 1)
+      A.eq(ns.Util.compareVersions("v1.2.10", "1.2.10"), 0, "a leading v is ignored")
+      A.eq(ns.Util.compareVersions("1.2.3-beta", "1.2.3"), 0, "text after the number is ignored")
+      A.eq(ns.Util.compareVersions(nil, "0.1.0"), -1)
+    end,
+    isVersion_accepts_only_plain_numbers = function(ns, A)
+      A.ok(ns.Util.isVersion("0.1.0")); A.ok(ns.Util.isVersion("1.2.10")); A.ok(ns.Util.isVersion("3"))
+      A.no(ns.Util.isVersion("")); A.no(ns.Util.isVersion("1..2")); A.no(ns.Util.isVersion("1.2.")); A.no(ns.Util.isVersion("v1.2"))
+      A.no(ns.Util.isVersion("1.2|r")); A.no(ns.Util.isVersion(nil)); A.no(ns.Util.isVersion(12))
+      A.no(ns.Util.isVersion(string.rep("1.", 20) .. "1"), "absurdly long")
+    end,
     truncateUTF8_keeps_letters_whole = function(ns, A)
       A.eq(ns.Util.truncateUTF8("Holybøi rocks", 6), "Holybø")
       A.eq(ns.Util.truncateUTF8("abc", 40), "abc")

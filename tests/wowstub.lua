@@ -82,7 +82,7 @@ local function build(W)
     return name
   end
   env.C_AddOns = { GetAddOnMetadata = function(_, field)
-    if field == "Version" then return W.state.version end
+    if field == "Version" then return W.state.tocVersion or W.state.version end
   end }
   env.GetBuildInfo = function() return "1.15.0", "00000", "Jan 1 2026", 16001 end
 

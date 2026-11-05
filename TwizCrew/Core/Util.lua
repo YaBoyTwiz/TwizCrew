@@ -42,12 +42,20 @@ function Util.mergeDefaults(target, defaults)
   return target
 end
 
+-- "v1.2.10-beta" -> { 1, 2, 10 }: a leading v and text after a number are ignored, junk counts as 0.
 local function versionParts(v)
   local parts = {}
-  for piece in string.gmatch(tostring(v), "[^.]+") do
-    parts[#parts + 1] = tonumber(piece) or 0
+  local s = string.gsub(tostring(v or ""), "^[vV]", "")
+  for piece in string.gmatch(s, "[^.]+") do
+    parts[#parts + 1] = tonumber(string.match(piece, "^%d+") or "") or 0
   end
   return parts
+end
+
+-- Only plain versions like "0.2.10" (as sent by another copy) are trusted.
+function Util.isVersion(v)
+  return type(v) == "string" and #v <= 20 and string.find(v, "^%d+[%.%d]*$") ~= nil
+    and not string.find(v, "..", 1, true) and string.sub(v, -1) ~= "."
 end
 
 function Util.compareVersions(a, b)

@@ -117,6 +117,9 @@ local function newHarness()
     W.cursor = 0
     local ns = {}
     loadFiles(W, ns, tocFiles())
+    -- state.version / state.restartSince stand for another release's code (the constants in Core/Init.lua)
+    if W.state.version then ns.VERSION = W.state.version end
+    if W.state.restartSince then ns.RESTART_SINCE = W.state.restartSince end
     H.clients[#H.clients + 1] = W
     return W, ns
   end

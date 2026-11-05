@@ -3,13 +3,22 @@ local ADDON, ns = ...
 
 ns.ADDON = ADDON
 
-do
+-- Release maker: bump ADDON_VERSION for every release, together with "## Version" in TwizCrew.toc (a test checks
+-- they match). Set RESTART_SINCE to the new version when a release adds or removes files or changes the .toc in any
+-- other way (the game reads those only when it starts): older copies are then told to restart the game, not reload.
+-- The version is kept here and not read from the .toc, because the game may keep the old .toc after a /reload.
+local ADDON_VERSION = "0.1.0"
+local RESTART_SINCE = "0.1.0"
+
+ns.VERSION = ADDON_VERSION
+ns.RESTART_SINCE = RESTART_SINCE
+
+do -- what the game's addon list says (may be the old .toc after a /reload; shown in /tc report)
   local version
   if C_AddOns and C_AddOns.GetAddOnMetadata then
     version = C_AddOns.GetAddOnMetadata(ADDON, "Version")
   end
-  if type(version) ~= "string" or version == "" then version = "0.0.0" end
-  ns.VERSION = version
+  if type(version) == "string" and version ~= "" then ns.TOC_VERSION = version end
 end
 
 -- The one place for tunable values.

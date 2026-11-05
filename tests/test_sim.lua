@@ -184,6 +184,28 @@ return {
       noErrors(A, c.twNs, c.frNs)
     end,
 
+    friend_logging_back_in_shows_no_old_layer = function(_, A, _, H)
+      local c = twoFriends(H, { wait = 31 })
+      seeNpc(c.tw, "Creature-0-1-0-111-299-0000ABCDEF")
+      seeNpc(c.fr, "Creature-0-1-0-111-299-0000ABCDEF")
+      H.advance(3)
+      A.eq(c.twNs.Layer.relationOf("Frostie"), "same")
+      c.fr:fire("PLAYER_LOGOUT")           -- Frostie logs out (sends BYE)
+      H.advance(1)
+      for i, L in ipairs(H.linked) do if L == c.fr then table.remove(H.linked, i) end end
+      A.no(c.twNs.roster:get("Frostie").online)
+      seeNpc(c.tw, "Creature-0-1-0-333-299-0000ABCDEF") -- meanwhile Twiz ends up on another layer
+      H.advance(3)
+      local fr2, fr2Ns = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
+      H.link(fr2)
+      login(fr2)                           -- Frostie logs back in, no layer key yet
+      local seen = advanceWatching(H, c.twNs, 15)
+      A.ok(c.twNs.roster:get("Frostie").online, "Frostie is back")
+      A.no(seen["Frostie is on a different layer"], "no pop-up from Frostie's old layer key")
+      A.eq(c.twNs.Layer.relationOf("Frostie"), "unknown")
+      noErrors(A, c.twNs, fr2Ns)
+    end,
+
     newer_version_is_announced = function(_, A, _, H)
       local c = twoFriends(H)
       local pwNs = newerVersion(H, A, c)

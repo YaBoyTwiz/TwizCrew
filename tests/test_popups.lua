@@ -37,6 +37,15 @@ local function frostieMoves(ns, W)
   receive(ns, W, "Frostie", "UPDATE", { lk = "222" })
 end
 
+-- Texts of the layer pop-ups shown so far, in order.
+local function layerShows(ns)
+  local out = {}
+  for _, t in ipairs(ns.Popups.shownForTest()) do
+    if t:find("layer", 1, true) then out[#out + 1] = t end
+  end
+  return out
+end
+
 return {
   files = "toc",
   tests = {
@@ -114,6 +123,49 @@ return {
       receive(ns, W, "Frostie", "UPDATE", { lk = "111" }); W:advance(4)
       A.eq(ns.Popups.textsForTest()[1].text, "Frostie is back on your layer")
       A.no(ns.Popups.textsForTest()[1].subtext)
+    end,
+    batch_drops_friends_no_longer_on_another_layer = function(ns, A, W)
+      ready(ns, W)
+      frostieMoves(ns, W)
+      W:advance(1)
+      receive(ns, W, "Frostie", "UPDATE", { lk = "" })   -- their key is gone: unknown, not "back"
+      W:advance(4)
+      A.eq(ns.Popups.visibleCount(), 0)
+      A.eq(layerShows(ns), {})
+    end,
+    different_unknown_different_shows_once = function(ns, A, W)
+      ready(ns, W)
+      frostieMoves(ns, W); W:advance(4)
+      receive(ns, W, "Frostie", "UPDATE", { zn = "Westfall" }); W:advance(1)
+      receive(ns, W, "Frostie", "UPDATE", { zn = "Elwynn Forest" }); W:advance(4)
+      A.eq(ns.Layer.relationOf("Frostie"), "different")
+      A.eq(layerShows(ns), { "Frostie is on a different layer" })
+    end,
+    different_same_different_shows_each = function(ns, A, W)
+      ready(ns, W)
+      frostieMoves(ns, W); W:advance(4)
+      receive(ns, W, "Frostie", "UPDATE", { lk = "111" }); W:advance(4)
+      frostieMoves(ns, W); W:advance(4)
+      A.eq(layerShows(ns), { "Frostie is on a different layer", "Frostie is back on your layer",
+        "Frostie is on a different layer" })
+    end,
+    summary_counts_as_announced = function(ns, A, W)
+      start(ns, W)
+      seeMouseover(W, "Creature-0-1-0-111-299-01")
+      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
+      W:advance(25)
+      A.eq(layerShows(ns), { "Frostie is on a different layer" })
+      receive(ns, W, "Frostie", "UPDATE", { zn = "Westfall" }); W:advance(1)
+      receive(ns, W, "Frostie", "UPDATE", { zn = "Elwynn Forest" }); W:advance(4)
+      A.eq(layerShows(ns), { "Frostie is on a different layer" })
+    end,
+    offline_and_back_announces_again = function(ns, A, W)
+      ready(ns, W)
+      frostieMoves(ns, W); W:advance(4)
+      receive(ns, W, "Frostie", "BYE", {}); W:advance(1)
+      receive(ns, W, "Frostie", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" }); W:advance(4)
+      A.eq(layerShows(ns), { "Frostie is on a different layer", "Frostie is on a different layer" })
     end,
     invite_skips_people_already_in_group = function(ns, A, W)
       ready(ns, W)

@@ -27,14 +27,17 @@ local function announce(name, m, changes, events)
   end
 end
 
-local function onState(sender, fields)
+-- cleared: fields already changed before this message (see onHello), reported together with the new ones.
+local function onState(sender, fields, cleared)
   local m, changes, events = ns.roster:apply(sender, fields, ns.now(), ns.wallclock())
+  for key in pairs(cleared or {}) do changes[key] = true end
   noteVersion(sender, fields.ver)
   announce(sender, m, changes, events)
 end
 
 local function onHello(sender, fields)
-  onState(sender, { ver = fields.ver })
+  -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
+  onState(sender, { ver = fields.ver }, ns.roster:clearSession(sender))
   if replyPending then return end
   replyPending = true
   local c = ns.Config

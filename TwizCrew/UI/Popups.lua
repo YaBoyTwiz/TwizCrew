@@ -17,6 +17,10 @@ local pool = {}      -- frames, created on first use, then reused
 local seq = 0        -- shows counted, so "oldest" is well defined even within one tick
 local quietUntil     -- set once, the first time the module is enabled in this session
 local quietDone = false
+-- Per friend, so the same news is not shown twice: the last layer pop-up shown ("different" / "same"), and
+-- whether they were seen on our layer since the last "different" one. Forgotten when they go offline.
+local announced, sameSince = {}, {}
+local history = {}   -- texts of the last pop-ups shown (test hook)
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 
@@ -123,6 +127,8 @@ local function show(p)
     subzone = p.extra.subzone and ns.Util.safeText(p.extra.subzone) }
   local text, sub = ns.PopupLogic.text(p.kind, names, extra, colorName)
   seq = seq + 1
+  history[#history + 1] = (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+  if #history > 20 then table.remove(history, 1) end
   f.tcSeq, f.tcShown, f.tcPopup = seq, true, p
   f.tcText, f.tcSub = text, sub or false
   f.tcExpires = ns.now() + (tonumber(setting("seconds")) or 5) + FADE
@@ -143,6 +149,37 @@ local function differentNames()
   return out
 end
 
+-- "Different" was already shown for them and they have not been on our layer since: nothing new to say.
+local function alreadyAnnounced(name)
+  return announced[name] == "different" and not sameSince[name]
+end
+
+local function relation(name)
+  return ns.Layer and ns.Layer.relationOf(name) or "unknown"
+end
+
+-- Just before a layer pop-up shows: keep only the names it is still true for (their relation may have changed
+-- while the pop-up waited) and that are news. Returns nil when nobody is left.
+local WANT = { layer_diff = "different", layer_same = "same" }
+local function stillTrue(p)
+  local want = WANT[p.kind]
+  if not want then return p end
+  local names = {}
+  for _, name in ipairs(p.names) do
+    if relation(name) == want and not (want == "different" and alreadyAnnounced(name)) then
+      names[#names + 1] = name
+    end
+  end
+  if #names == 0 then return nil end
+  for _, name in ipairs(names) do
+    announced[name] = want
+    if want == "different" then sameSince[name] = false end
+  end
+  local out = { kind = p.kind, names = names, extra = p.extra or {} }
+  if p.invite then out.invite = names end
+  return out
+end
+
 local function tick()
   if not logic then return end
   local now = ns.now()
@@ -157,19 +194,29 @@ local function tick()
       if summary then due[#due + 1] = summary end
     end
   end
-  for _, p in ipairs(due) do show(p) end
+  local shown = 0
+  for _, p in ipairs(due) do
+    p = stillTrue(p)
+    if p then show(p); shown = shown + 1 end
+  end
   layout()
-  if #due > 0 and setting("sound") and type(PlaySound) == "function" and SOUNDKIT then
+  if shown > 0 and setting("sound") and type(PlaySound) == "function" and SOUNDKIT then
     ns.Log.safe(FEATURE, PlaySound, SOUNDKIT.RAID_WARNING)
   end
 end
 
 local function onRelation(name, old, new)
   if new == "different" and old ~= "different" then
-    if setting("layerDiff") then logic:push("layer_diff", name, ns.now()) end
-  elseif old == "different" and new == "same" then
-    if setting("layerSame") then logic:push("layer_same", name, ns.now()) end
+    if setting("layerDiff") and not alreadyAnnounced(name) then logic:push("layer_diff", name, ns.now()) end
+  elseif new == "same" then
+    local wasAway = old == "different" or announced[name] == "different"
+    sameSince[name] = true
+    if wasAway and setting("layerSame") then logic:push("layer_same", name, ns.now()) end
   end
+end
+
+local function onOffline(name)
+  announced[name], sameSince[name] = nil, nil
 end
 
 local function onDied(name, zone, subzone)
@@ -188,6 +235,7 @@ local function onEnable()
   logic = ns.PopupLogic.new({ combineWindow = ns.Config.POPUP_COMBINE_WINDOW, quietUntil = quietUntil })
   ns.Bus.on(FEATURE, "LAYER_RELATION", onRelation)
   ns.Bus.on(FEATURE, "MEMBER_DIED", onDied)
+  ns.Bus.on(FEATURE, "MEMBER_OFFLINE", onOffline)
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
   end
@@ -237,6 +285,9 @@ local function plain(s)
   s = s:gsub("||", "\1"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("\1", "||")
   return s
 end
+
+-- Texts of the last pop-ups shown (at most 20), oldest first, without colour codes.
+function Popups.shownForTest() return history end
 
 -- Visible pop-ups, oldest first, with the colour codes taken out.
 function Popups.textsForTest()

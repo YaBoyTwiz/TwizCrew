@@ -57,6 +57,24 @@ return {
       r:gone("Ginkan"); A.eq(r:get("Ginkan").online, false)
       r:gone("Nobody")
     end,
+    going_offline_forgets_session_data = function(ns, A)
+      local r = ns.Roster.new({})
+      local m = r:apply("Ginkan", { lk = "111", ins = "1", tg = "AFK", zn = "Elwynn Forest", lv = "5" }, 0, 100)
+      A.eq(m.layerKey, "111"); A.eq(m.inInstance, true); A.eq(m.tags, { AFK = true })
+      r:gone("Ginkan")
+      A.eq(m.layerKey, nil); A.eq(m.inInstance, false); A.eq(m.tags, nil)
+      A.eq(m.zone, "Elwynn Forest"); A.eq(m.level, 5)
+      r:apply("Ginkan", { lk = "222", ins = "1", tg = "COMBAT" }, 1, 101)
+      A.eq(r:tick(500), { "Ginkan" })
+      A.eq(m.layerKey, nil); A.eq(m.inInstance, false); A.eq(m.tags, nil)
+    end,
+    clear_session_reports_changes = function(ns, A)
+      local r = ns.Roster.new({})
+      r:apply("Ginkan", { lk = "111", tg = "" }, 0, 100)
+      A.eq(r:clearSession("Ginkan"), { layerKey = true, tags = true })
+      A.eq(r:clearSession("Ginkan"), {})
+      A.eq(r:clearSession("Nobody"), {})
+    end,
     saved_members_start_offline = function(ns, A)
       local r = ns.Roster.new({ Stabz = { class = "ROGUE", level = 9, lastSeen = 500 }, junk = 5, [3] = {} })
       local m = r:get("Stabz")
@@ -80,7 +98,7 @@ return {
       local r = ns.Roster.new({ Cat = { level = 60 } })
       r:apply("Zed", { lv = "10" }, 0, 1); r:apply("amy", { lv = "20" }, 0, 1); r:apply("Bob", { lv = "15" }, 0, 1)
       local function names(list) local o = {}; for i, m in ipairs(list) do o[i] = m.name end; return o end
-      A.eq(names(r:sorted("name")), { "amy", "Bob", "Zed", "Cat" })
+      A.eq(names(r:sorted("name")), { "amy", "Bob", "Cat", "Zed" }, "pure A-Z, offline mixed in")
       A.eq(names(r:sorted("level")), { "amy", "Bob", "Zed", "Cat" })
       A.eq(names(r:sorted("online")), { "amy", "Bob", "Zed", "Cat" })
       local rel = function(n) return n == "Zed" and "same" or "other" end

@@ -241,6 +241,32 @@ return {
       A.eq(#off, 1)
       A.no(ns.roster:get("Frostie").online)
     end,
+    hello_starts_a_fresh_session = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lk = "111", ins = "1", tg = "AFK", zn = "Elwynn Forest" })
+      local upd = record(ns, "MEMBER_UPDATED")
+      receive(ns, W, "Frostie", "HELLO", { ver = "0.1.0" })
+      local m = ns.roster:get("Frostie")
+      A.eq(m.layerKey, nil); A.eq(m.inInstance, false); A.eq(m.tags, nil)
+      A.eq(m.class, "MAGE"); A.eq(m.zone, "Elwynn Forest")
+      A.ok(upd[1] and upd[1][2].layerKey, "the cleared layer key is reported as a change")
+    end,
+    bye_forgets_layer_key = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { lk = "111", zn = "Elwynn Forest" })
+      receive(ns, W, "Frostie", "BYE", {})
+      A.eq(ns.roster:get("Frostie").layerKey, nil)
+    end,
+    full_state_tells_the_rest_of_the_addon = function(ns, A, W)
+      start(ns, W)
+      local upd = record(ns, "SELF_UPDATED")
+      W.state.level = 11
+      local full = ns.Self.fullState()
+      A.eq(full.lv, "11")
+      A.eq(upd, { { { lv = "11" } } })
+      ns.Self.fullState()
+      A.eq(#upd, 1, "nothing changed: no event")
+    end,
     ping_ticker_sends_ping = function(ns, A, W)
       start(ns, W)
       local n = #W.sent

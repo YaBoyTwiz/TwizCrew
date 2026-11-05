@@ -118,9 +118,24 @@ function Roster:heard(name, now, wall)
   return events
 end
 
+-- Forgets what is only true for one play session (layer key, in a dungeon, tags): called when a friend goes
+-- offline and when they log in again (HELLO), so old values never show. Returns the fields that changed.
+function Roster:clearSession(name)
+  local m = self.byName[name]
+  local changes = {}
+  if not m then return changes end
+  if m.layerKey ~= nil then m.layerKey = nil; changes.layerKey = true end
+  if m.inInstance then m.inInstance = false; changes.inInstance = true end
+  if m.tags ~= nil then m.tags = nil; changes.tags = true end
+  return changes
+end
+
 function Roster:gone(name)
   local m = self.byName[name]
-  if m then m.online = false end
+  if m then
+    m.online = false
+    self:clearSession(name)
+  end
 end
 
 function Roster:tick(now)
@@ -129,6 +144,7 @@ function Roster:tick(now)
   for name, m in pairs(self.byName) do
     if m.online and m.lastHeard and now - m.lastHeard > limit then
       m.online = false
+      self:clearSession(name)
       gone[#gone + 1] = name
     end
   end
@@ -168,6 +184,7 @@ function Roster:sorted(mode, relationOf)
     return a.name < b.name
   end
   local function rank(m)
+    if mode == "name" then return 1 end -- plain A-Z, offline friends mixed in
     if not m.online then return 3 end
     if mode == "layer" and relationOf and relationOf(m.name) == "same" then return 1 end
     return 2

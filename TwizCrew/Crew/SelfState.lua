@@ -80,9 +80,12 @@ function Self.refresh(reason)
   C_Timer.After(ns.Config.SELF_FLUSH_DELAY, function() ns.Log.safe(FEATURE, flush) end)
 end
 
--- Everything we share; also becomes the new "last sent".
+-- Everything we share; also becomes the new "last sent" (and tells the rest of the addon what changed).
 function Self.fullState()
-  last = Self.gather()
+  local now = Self.gather()
+  local changes = Self.diff(last, now)
+  last = now
+  if next(changes) ~= nil then ns.Bus.fire("SELF_UPDATED", changes) end
   return copy(last)
 end
 

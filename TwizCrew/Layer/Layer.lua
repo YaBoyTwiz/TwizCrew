@@ -28,7 +28,11 @@ local function recompute()
     local old = relations[m.name] or "unknown"
     local new = compute(m, me)
     relations[m.name] = new
-    if new ~= old then ns.Bus.fire("LAYER_RELATION", m.name, old, new) end
+    if new ~= old then
+      ns.Log.add("info", "layer %s: %s -> %s (mine %s in %s, theirs %s in %s)", m.name, old, new,
+        tostring(me.lk or "none"), tostring(me.zn or "?"), tostring(m.layerKey or "none"), tostring(m.zone or "?"))
+      ns.Bus.fire("LAYER_RELATION", m.name, old, new)
+    end
   end
 end
 

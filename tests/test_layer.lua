@@ -24,6 +24,11 @@ local function record(ns, name)
   return log
 end
 
+local function logHas(ns, text)
+  for _, line in ipairs(ns.Log.lines()) do if line:find(text, 1, true) then return true end end
+  return false
+end
+
 local function seeMouseover(W, guid, times)
   W.state.guids.mouseover = guid
   for _ = 1, times or 2 do W:fire("UPDATE_MOUSEOVER_UNIT") end
@@ -80,6 +85,28 @@ return {
       A.eq(ns.LayerSensor.current(), "111")
       A.eq(ns.LayerSensor.info().secretSkipped, 2)
       A.eq(ns.Log.errors(10), {})
+    end,
+    sensor_asks_about_secrets_before_looking_at_the_guid = function(ns, A, W)
+      start(ns, W)
+      local asked = {}
+      W.env.issecretvalue = function(v) asked[#asked + 1] = v == nil and "nil" or v; return false end
+      W.state.guids.mouseover = nil
+      W:fire("UPDATE_MOUSEOVER_UNIT")
+      A.eq(asked, { "nil" }, "checked even before the nil test")
+      W.env.issecretvalue = function() error("broken") end
+      W.state.guids.mouseover = "Creature-0-1-0-111-299-01"
+      W:fire("UPDATE_MOUSEOVER_UNIT"); W:fire("UPDATE_MOUSEOVER_UNIT")
+      A.no(ns.LayerSensor.current(), "a failing secret check skips the value")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    layer_changes_are_logged = function(ns, A, W)
+      start(ns, W)
+      seeMouseover(W, "Creature-0-1-0-111-299-01")
+      A.ok(logHas(ns, "INFO layer key 111 confirmed in Elwynn Forest (mouseover)"))
+      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
+      A.ok(logHas(ns, "INFO layer Frostie: unknown -> different (mine 111 in Elwynn Forest, theirs 222 in Elwynn Forest)"))
+      W:fire("ZONE_CHANGED_NEW_AREA")
+      A.ok(logHas(ns, "INFO layer key reset in Elwynn Forest (zone change)"))
     end,
     sensor_tolerates_missing_api = function(ns, A, W)
       start(ns, W)

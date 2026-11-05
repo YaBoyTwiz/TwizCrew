@@ -15,3 +15,4 @@ Comm\Codec.lua
 Comm\Queue.lua
 Comm\Transport.lua
 Comm\Comm.lua
+Crew\Roster.lua

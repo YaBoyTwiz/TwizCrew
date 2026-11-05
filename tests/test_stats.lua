@@ -168,13 +168,103 @@ return {
     fall_death_counts = function(ns, A, W)
       local roasts = start(ns, W)
       W.state.falling = true
-      W:advance(1)
+      W:advance(1.5)
       W.state.falling = false
       die(W)
       A.eq(get(ns, "session", "dt"), 1)
       A.eq(get(ns, "session", "df"), 1)
       A.eq(get(ns, "all", "df"), 1)
       A.eq(roasts, { { "fall" } })
+    end,
+
+    a_jump_is_not_a_fall = function(ns, A, W)
+      local roasts = start(ns, W)
+      W.state.falling = true
+      W:advance(0.5) -- one jump: seen falling for a single tick
+      W.state.falling = false
+      die(W)
+      A.eq(get(ns, "session", "df"), 0)
+      A.eq(roasts, {})
+      revive(W)
+      W:advance(120)
+      W.state.falling = true
+      W:advance(1.5)
+      W.state.falling = false
+      die(W)
+      A.eq(get(ns, "session", "df"), 1, "a real fall")
+      A.eq(roasts, { { "fall" } })
+    end,
+
+    dead_weak_target_is_not_blamed = function(ns, A, W)
+      local roasts = start(ns, W)
+      W.state.level = 20
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true }
+      W:fire("PLAYER_TARGET_CHANGED")
+      W:advance(3)
+      W.state.units.target.dead = true -- killed it; still targeted when a patrol kills me
+      W:advance(2)
+      die(W)
+      A.eq(get(ns, "all", "dw"), 0)
+      A.eq(get(ns, "all", "ld"), 0)
+      A.eq(roasts, {})
+      A.eq(ns.Detectors.ctx.target, nil, "forgotten at death")
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, dead = true }
+      W:fire("PLAYER_TARGET_CHANGED")
+      A.eq(ns.Detectors.ctx.target, nil, "a dead target is never read")
+    end,
+
+    abandon_counted_from_either_function = function(ns, A, W)
+      start(ns, W)
+      W.env.AbandonQuest()
+      A.eq(get(ns, "all", "qa"), 1, "only the global called")
+      W:advance(2)
+      W.env.C_QuestLog.AbandonQuest()
+      A.eq(get(ns, "all", "qa"), 2, "only the table one called")
+      A.eq(W.abandoned, 2)
+    end,
+
+    abandon_wrapper_counts_once = function(ns, A, W)
+      start(ns, W, function()
+        W.env.AbandonQuest = function() W.env.C_QuestLog.AbandonQuest() end
+      end)
+      W.env.AbandonQuest()
+      A.eq(get(ns, "all", "qa"), 1)
+      A.eq(W.abandoned, 1)
+    end,
+
+    abandon_with_only_the_global = function(ns, A, W)
+      start(ns, W, function() W.state.missing["C_QuestLog.AbandonQuest"] = true end)
+      A.ok(statusOf(ns, "abandon").on)
+      W.env.AbandonQuest()
+      A.eq(get(ns, "all", "qa"), 1)
+    end,
+
+    repair_twice_in_one_visit = function(ns, A, W)
+      start(ns, W)
+      W.state.repairCost = 1000
+      W:fire("MERCHANT_SHOW")
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 1000)
+      W.env.RepairAllItems() -- nothing left to repair (cost 0 now): nothing counted
+      W:advance(1)
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 1000)
+      W:fire("MERCHANT_CLOSED")
+      W.state.repairCost = 700
+      W:fire("MERCHANT_SHOW")
+      W.state.repairCost = 0 -- repaired item by item: the cost read earlier is stale
+      W:advance(1)
+      W.env.RepairAllItems()
+      A.eq(get(ns, "all", "rp"), 1000, "a stale cost is not counted")
+    end,
+
+    motion_needs_taxi_and_dead_checks = function(ns, A, W)
+      start(ns, W, function() W.env.UnitOnTaxi = nil end) -- a v1 fake: removed, not hidden
+      local s = statusOf(ns, "motion")
+      A.no(s.on)
+      A.eq(s.why, "UnitOnTaxi missing")
+      A.eq(ns.Detectors.stepsMethod(), "off")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     weak_mob_death = function(ns, A, W)
@@ -366,7 +456,7 @@ return {
       local roasts = start(ns, W)
       ns.Stats.count("dt", 4)
       W.state.falling = true
-      W:advance(1)
+      W:advance(1.5)
       W.state.falling = false
       die(W)
       A.eq(get(ns, "session", "dt"), 5)

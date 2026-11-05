@@ -60,8 +60,15 @@ end
 -- Runs f(...) for detector d; an error turns d off. Does nothing while d (or the module) is off.
 local function guard(d, f, ...)
   if not isLive(d) then return end
-  local ok, err = pcall(f, ...)
-  if not ok then turnOff(d, "error", "error", tostring(err)) end
+  local args, count = { ... }, select("#", ...)
+  local trace
+  local ok, err = xpcall(function() return f(unpack(args, 1, count)) end, function(e)
+    if type(debugstack) == "function" then trace = debugstack(2) end
+    return e
+  end)
+  if ok then return end
+  turnOff(d, "error", "error", tostring(err))
+  if trace then ns.Log.add("debug", "stats_%s traceback: %s", d.id, (tostring(trace):gsub("\n", " < "))) end
 end
 
 local function onEvent(d, event, f)
@@ -108,7 +115,7 @@ local function countSteps() return ns.Modules.setting("stats", "countSteps") ~= 
 add({ id = "motion", label = "steps, riding and swimming",
   needs = function()
     if not fn("GetUnitSpeed") and not fn("UnitPosition") then return false, "GetUnitSpeed and UnitPosition missing" end
-    local why = missingOf("IsMounted", "IsSwimming")
+    local why = missingOf("IsMounted", "IsSwimming", "UnitOnTaxi", "UnitIsDeadOrGhost")
     return why == nil, why
   end,
   start = function() lastPos = nil end,
@@ -135,9 +142,18 @@ add({ id = "motion", label = "steps, riding and swimming",
     else api.count("sw", yards) end
   end })
 
+-- IsFalling() is also true during every jump: only a fall seen for at least FALL_MIN s counts as falling.
+local FALL_MIN = 1
+local fallStart -- when the current fall was first seen (nil = not falling)
 add({ id = "fall", label = "falling deaths",
   needs = function() local why = missingOf("IsFalling"); return why == nil, why end,
-  tick = function() if IsFalling() then ctx.fallingAt = ns.now() end end })
+  start = function() fallStart = nil end,
+  tick = function()
+    if not IsFalling() then fallStart = nil; return end
+    local now = ns.now()
+    fallStart = fallStart or now
+    if now - fallStart >= FALL_MIN then ctx.fallingAt = now end
+  end })
 
 add({ id = "timers", label = "time AFK, dead and played",
   needs = function() return true end,
@@ -159,7 +175,7 @@ add({ id = "death", label = "deaths",
   needs = function() return true end,
   start = function()
     onEvent(byId.death, "PLAYER_DEAD", function()
-      if isLive(byId.target) then guard(byId.target, readTarget) end
+      if isLive(byId.target) then guard(byId.target, readTarget, true) end
       api.died()
     end)
     onEvent(byId.death, "PLAYER_ALIVE", alive)
@@ -186,8 +202,17 @@ add({ id = "drown", label = "drowning deaths",
     end)
   end })
 
-readTarget = function()
-  if not UnitExists("target") or UnitIsPlayer("target") or not UnitCanAttack("player", "target") then return end
+-- atDeath: a dead target (a mob you killed earlier) is not what killed you, so it is forgotten.
+readTarget = function(atDeath)
+  if not UnitExists("target") then return end
+  if fn("UnitIsDead") then
+    local dead = UnitIsDead("target")
+    if secret(dead) or dead then
+      if atDeath then ctx.target = nil end
+      return
+    end
+  end
+  if UnitIsPlayer("target") or not UnitCanAttack("player", "target") then return end
   local level, name = UnitLevel("target"), UnitName("target")
   if secret(level) or secret(name) or type(level) ~= "number" or type(name) ~= "string" then return end
   ctx.target = { level = level, name = name, at = ns.now() }
@@ -198,7 +223,7 @@ add({ id = "target", label = "deaths to weak monsters",
     local why = missingOf("UnitExists", "UnitCanAttack", "UnitIsPlayer", "UnitLevel", "UnitName")
     return why == nil, why
   end,
-  start = function() onEvent(byId.target, "PLAYER_TARGET_CHANGED", readTarget) end })
+  start = function() onEvent(byId.target, "PLAYER_TARGET_CHANGED", function() readTarget(false) end) end })
 
 add({ id = "pulls", label = "pulls in dungeons",
   needs = function() return true end,
@@ -302,7 +327,7 @@ local function readCost()
   if not merchantOpen then return end
   local cost, can = GetRepairAllCost()
   if secret(cost) or type(cost) ~= "number" or cost ~= cost then return end
-  if can and cost > 0 then repairCost = cost end
+  repairCost = (can and cost > 0) and cost or 0
 end
 
 add({ id = "repair", label = "money spent on repairs",
@@ -324,6 +349,8 @@ add({ id = "repair", label = "money spent on repairs",
   end,
   tick = readCost })
 
+local ABANDON_DEDUPE = 1
+local lastAbandon
 add({ id = "abandon", label = "quests abandoned",
   needs = function()
     if not fn("hooksecurefunc") then return false, "hooksecurefunc missing" end
@@ -332,12 +359,18 @@ add({ id = "abandon", label = "quests abandoned",
     return false, "AbandonQuest missing"
   end,
   start = function()
-    local count = function() api.count("qa", 1) end
+    -- The quest log may call the global AbandonQuest, C_QuestLog.AbandonQuest, or one through the other:
+    -- every one that exists is hooked, and a second abandon within ABANDON_DEDUPE s is the same one.
+    local function count()
+      local now = ns.now()
+      if lastAbandon and now - lastAbandon < ABANDON_DEDUPE then return end
+      lastAbandon = now
+      api.count("qa", 1)
+    end
     if type(C_QuestLog) == "table" and type(C_QuestLog.AbandonQuest) == "function" then
       hook(byId.abandon, C_QuestLog, "AbandonQuest", count)
-    else
-      hook(byId.abandon, nil, "AbandonQuest", count)
     end
+    if fn("AbandonQuest") then hook(byId.abandon, nil, "AbandonQuest", count) end
   end })
 
 add({ id = "duel", label = "duels won and lost",

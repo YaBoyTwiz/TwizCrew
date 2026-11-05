@@ -194,7 +194,7 @@ local function build(W)
   -- are already loaded by then). Table functions use dotted names: "C_QuestLog.AbandonQuest", "C_Spell.GetSpellName".
   -- A function a test (or hooksecurefunc) stores on env or the table itself is a plain field and is never hidden.
   -- Other state: st.speed, st.mounted, st.swimming, st.falling, st.pos = { x, y, instance } (nil = no position),
-  -- st.units[unit] = { name, level, hostile, player }, st.repairCost (0 after RepairAllItems), st.spellNames[id].
+  -- st.units[unit] = { name, level, hostile, player, dead }, st.repairCost (0 after RepairAllItems), st.spellNames[id].
   -- W.jumps, W.repairs, W.abandoned count calls of the game's own functions.
   st.missing, st.units, st.spellNames = {}, {}, {}
   st.speed, st.mounted, st.swimming, st.falling, st.repairCost = 0, false, false, false, 0
@@ -223,6 +223,11 @@ local function build(W)
     UnitCanAttack = function(_, u)
       local x = unit(u)
       return (x and x.hostile) and true or false
+    end,
+    UnitIsDead = function(u)
+      if u == "player" then return st.dead and true or false end
+      local x = unit(u)
+      return (x and x.dead) and true or false
     end,
     UnitIsPlayer = function(u)
       local x = unit(u)

@@ -163,7 +163,7 @@ local function settingRow(def, s)
     elseif s.kind == "choice" then
       r = Widgets.choice(content, s.label or key, s.info, s.choices or {}, get, set)
     else
-      r = Widgets.text(content, s.label or key, s.info, get, set)
+      r = Widgets.text(content, s.label or key, s.info, get, set, s.password)
     end
     return r
   end)

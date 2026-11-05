@@ -231,6 +231,16 @@ return {
       A.eq(ns.Widgets.percent(1.25), "125%")
       local x = ns.Widgets.text(p, "Text", "Info", function() return value.x end, function(v) value.x = v end)
       A.ok(x.control)
+      local secret
+      local create = W.env.CreateFrame
+      W.env.CreateFrame = function(...)
+        local f = create(...)
+        rawset(f, "SetPassword", function(_, on) secret = on end)
+        return f
+      end
+      ns.Widgets.text(p, "Code", "Info", function() return "x" end, function() end, true)
+      A.eq(secret, true)
+      W.env.CreateFrame = create
       local pill = ns.Widgets.tagPill(p)
       pill:SetTag("LAYER")
       A.eq(pill.tag, "LAYER")

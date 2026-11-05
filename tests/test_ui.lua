@@ -169,6 +169,31 @@ return {
       A.eq(ns.Log.errors(10), { lines[e + 1] }, "show() adds no errors")
     end,
 
+    report_counts_echoes_and_never_shows_the_code = function(ns, A, W)
+      boot(W)
+      ns.Settings.save("comm", "password", "murloc")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz-Realm")
+      local lines = ns.Report.lines()
+      A.eq(lines[#lines], "Channel echoes heard: 1")
+      local text = table.concat(lines, "\n")
+      A.no(text:find("murloc", 1, true), "the crew code is not in the report")
+      A.no(text:find("goldshire", 1, true), "the old crew code is not in the report")
+    end,
+
+    crew_code_box_hides_its_letters = function(ns, A, W)
+      local hidden = {}
+      local create = W.env.CreateFrame
+      W.env.CreateFrame = function(...)
+        local f = create(...)
+        rawset(f, "SetPassword", function(self, on) hidden[#hidden + 1] = on end)
+        return f
+      end
+      boot(W)
+      ns.Settings.open()
+      A.eq(hidden, { true }, "only the crew code box hides what is typed")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     report_channel_failure_reason = function(ns, A, W)
       boot(W, function() W.state.channelJoinFails = true end)
       W:advance(20)
@@ -239,6 +264,7 @@ return {
       W.env.JoinChannelByName = function(name, pw) joins[#joins + 1] = name; join(name, pw) end
       A.ok(ns.Settings.save("comm", "channel", "  CrewTwo "))
       A.eq(ns.db.crew.channel, "CrewTwo")
+      W:advance(3) -- leave, then join again after a short wait
       A.eq(joins, { "CrewTwo" }, "rejoined once")
       A.no(ns.Settings.save("comm", "channel", "   "), "a blank channel is refused")
       A.eq(ns.db.crew.channel, "CrewTwo")
@@ -246,6 +272,7 @@ return {
       A.eq(#joins, 1)
       A.ok(ns.Settings.save("comm", "password", "murloc"))
       A.eq(ns.db.crew.password, "murloc")
+      W:advance(3)
       A.eq(#joins, 2)
     end,
 

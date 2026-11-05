@@ -101,8 +101,14 @@ local function build(W)
       return W.state.sendResult or 0
     end,
   }
-  env.JoinChannelByName = function(name, _password)
+  W.joins, W.leaves = {}, {}  -- { name, password } per JoinChannelByName call; names per LeaveChannelByName call
+  env.JoinChannelByName = function(name, password)
+    W.joins[#W.joins + 1] = { name = name, password = password }
     if not W.state.channelJoinFails then W.state.channels[name] = 5 end
+  end
+  env.LeaveChannelByName = function(name)
+    W.leaves[#W.leaves + 1] = name
+    W.state.channels[name] = nil
   end
   env.GetChannelName = function(name) return W.state.channels[name] or 0 end
   env.ChatFrame_RemoveChannel = function(frame, name)

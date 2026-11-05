@@ -98,6 +98,10 @@ function Report.lines()
   for _, e in ipairs(errors) do add(e) end
   add("In-game checks:")
   checkLines(add)
+  if ns.Transport.status().hideFailed then
+    add("Warning: the crew channel could not be taken out of the chat windows")
+  end
+  add("Channel echoes heard: " .. tostring(ns.Comm.echoCount and ns.Comm.echoCount() or 0))
   return out
 end
 

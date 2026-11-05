@@ -208,7 +208,8 @@ function Widgets.choice(parent, label, info, choices, get, set)
 end
 
 -- Saves on Enter or when the box loses focus; Escape puts the saved text back.
-function Widgets.text(parent, label, info, get, set)
+-- password: the box shows stars instead of the letters (when the game supports it).
+function Widgets.text(parent, label, info, get, set, password)
   local f = settingRow(parent, label, info)
   local e = T.frame("EditBox", nil, f)
   e:SetSize(140, 20)
@@ -217,6 +218,7 @@ function Widgets.text(parent, label, info, get, set)
   e:SetAutoFocus(false)
   if e.SetFontObject then e:SetFontObject(T.FONT.small) end
   if e.SetTextInsets then e:SetTextInsets(5, 5, 0, 0) end
+  if password and e.SetPassword then e:SetPassword(true) end
   f.control = e
   local function save()
     local v = e:GetText()

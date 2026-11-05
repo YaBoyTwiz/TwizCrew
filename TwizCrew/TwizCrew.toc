@@ -9,3 +9,5 @@ Core\Init.lua
 Core\Util.lua
 Core\Log.lua
 Core\Events.lua
+Core\Modules.lua
+Core\DB.lua

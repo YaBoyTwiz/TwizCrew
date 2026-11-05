@@ -126,8 +126,24 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **The owner said we can use their Twiz-Orchestrator for images** (`~/Documents/GitHub/Twiz-Orchestrator`, their
   own app that runs ComfyUI; its default text-to-image and edit model is Qwen Image 2.1). Use it for icons, tags,
   pop-up pictures, emojis and the like.
-- WoW reads **`.tga`** (and `.blp`) pictures, with sides that are powers of two (64, 128, 256…) and an alpha channel
-  for transparency. Convert the PNGs before shipping. Check in game which formats Forever accepts.
+- WoW reads **`.blp`, `.tga`, `.png` and `.jpg`** pictures (Warcraft Wiki), with sides that are powers of two (64,
+  128, 256…). Path must include `.png` for PNGs. Check in game which formats Forever accepts.
+- **Sounds:** `.ogg` and `.mp3` from the addon folder with `PlaySoundFile(path, "Master")` ("Master" so muted
+  effects don't silence it). **Fonts:** own `.ttf` works.
+- **Animated pictures:** sprite sheets with the `FlipBook` animation (since 10.0). This is how Blender renders become
+  "3D-looking" effects.
+- **No video** from addons. **No custom 3D model files** (treat as impossible).
+- **New files:** since 9.0.1 a `/reload` picks up new files in an existing addon folder; a new addon folder or a
+  changed `.toc` needs a full game restart (reported; test).
+- Assets cannot be sent between players: every friend needs the file already, so new art/sounds ship in an update.
+
+## 3D models (research 2026-11-05, Warcraft Wiki + forums; not tested in Forever)
+
+- Addons can show **game** models: `PlayerModel`, `DressUpModel`, `ModelScene` actors. Units (`player`, `party1`,
+  `target`) only when that player is loaded nearby; far away they show blank.
+- Any creature by display ID; any item tried on with `DressUpModel:TryOn`.
+- A far-away friend's look can only be **approximated**: a stand-in body of their race wearing their item IDs (sent
+  over addon messages). Face, hair and skin cannot be set. No existing addon does the far-away version.
 
 ## Working with the owner
 

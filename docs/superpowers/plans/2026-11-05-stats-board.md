@@ -801,4 +801,59 @@ no_errors_with_stats: the v1 sequence (other layer, zone change, death, odd stat
 
 ## Changes during build
 
-(Filled in while building.)
+- **Falls need a real fall (ruling, changes spec section 5's literal rule).** `IsFalling()` is also true during every
+  normal jump, so "falling in the last 2 s before death" would have turned most deaths in a fight into "Gravity
+  Tester" and fall roasts. A death counts as a fall only when the player had been falling for at least 1 second in a
+  row within the last 2 seconds. Cost: a very short deadly fall (under 1 s) is not counted. Drowning stays as the spec
+  says (a breath or fatigue timer running at death).
+- **No blame on a mob you already killed.** A dead target is never taken as the killer, and the target read at death
+  is cleared when the target is a corpse (in Classic a looted corpse often stays targeted).
+- **Abandoned quests:** both `C_QuestLog.AbandonQuest` and the global `AbandonQuest` are hooked when they exist (the
+  Classic quest log calls the global), with a 1 s guard so one abandon is never counted twice.
+- **Repairs:** the cost read while the merchant is open drops back to 0 when nothing is left to repair, so a second
+  "Repair all" in the same visit cannot count an old cost. Steps also need `UnitOnTaxi` and `UnitIsDeadOrGhost`
+  (otherwise flight paths and ghost runs could count). Detector errors log a traceback line.
+- **Crew session:**
+  - Resuming after a `/reload` compares session ids (not table identity), so a hand-started stream session keeps its
+    numbers when friends are online in it.
+  - `/tc session new` always wins: its start time is later than every hand-started session we know, even when a
+    friend's PC clock is ahead.
+  - Copies re-share their session: when a friend is heard in a different (losing) session, and when a friend comes
+    back online, the copy sends its `sid`/`sst` again (at most once every 30 s). A friend's session fields are only
+    forgotten when they log in again (HELLO), not when they time out.
+  - Every session change sends one `STATS` (not only the first), so friends see the new session quickly.
+- **Stats off is announced at every login** (one `STATS` with `off=1` on each session change while off), so a friend
+  who was offline when you switched off still hides your numbers. An off message from a character without a session
+  of its own carries the current session id. `STATSREQ` is answered at most once a minute.
+- **Roasts:** the viewer's switches are checked before the 10-second limit (a hidden roast does not use up the
+  limit); wipe roasts use only the 60-second duplicate guard (no per-person limit), on both sides.
+- **Award titles** on the Crew tab are hidden while your own stats module is off (like the Hall of Shame tab).
+- **Awards show:** when the fight ends, the open show takes the Space key back; `/tc awards <other text>` prints a
+  short hint; with stats off the report says "detectors off: all (stats are turned off)".
+- **Tests:** the sharing tests are in `tests/test_stats_share.lua`; the session tests (pure and with the game) share
+  one file; one Task 5 test now only checks messages sent after start-up, because a `STATS` at the session decision is
+  intended. No v1 test was changed.
+- **After the whole-branch review (one fix wave):**
+  - Couch Potato needs steps: someone with 0 steps (or "Count steps" off) no longer wins it ("never a winner with 0").
+  - Hall of Shame rows use two lines (award and number, then the winners), so ties and long numbers fit; more than two
+    winners show as "Name, Name +N" with every name in the tooltip.
+  - The Hall of Shame and the award titles run under their own error guard ("board"), so a stats bug can never switch
+    off the Crew panel.
+  - Friends answer a numbers request after 0.2–2 s (not the 0.5–5 s HELLO delay), so the awards show's 5-second wait
+    catches them; asking for numbers also sends your own when they changed, so every board agrees.
+  - **Resuming a session (changes the plan's rule, follows spec section 7):** after a `/reload` you continue your
+    session only if nobody online has moved on; if the crew online is in another session you join theirs.
+  - **Died to a Weakling:** only a hostile mob seen in a fight in the last 10 s can be the killer (a targeted critter
+    or a corpse is never blamed).
+  - **Leeroy:** the pull check waits 2 s, because friends' FIGHTING tags arrive 1–2 s late; if any crew member in the
+    dungeon was fighting in that window, it is not your pull.
+  - Smaller: friends' absurd numbers (over a trillion) are ignored; roast numbers over a billion and long or odd mob
+    names from friends are cut; two roast lines reworded; spell events from other units are dropped first (raids);
+    the awards show closes itself if a key is pressed during a fight; the drowning flag is checked again after loading
+    screens and at death; repairs count only when you can pay; titles and text patterns are cached; the mouse wheel
+    does nothing on the Hall of Shame tab.
+  - Not changed (noted for later): a death that gets a roast skips that death's milestone roast; a friend's death can
+    show both v1's "died" pop-up and a roast; the session line shows a time but no date; on the whisper fallback every
+    message costs one whisper per friend.
+- **Build bookkeeping:** the build ran on the local branch `stats-board`. One commit got a wrong co-author line from a
+  helper's tool and was corrected before review.

@@ -19,6 +19,8 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **v1 is built (2026-11-05):** every test outside the game passes (`tests/run.sh`, including a simulation of two
   and three copies talking to each other). **Not yet tested in game, not published.** What the owner can try in
   game, riskiest first: `docs/TESTING.md`.
+- **Stats board built too (2026-11-05):** Hall of Shame tab, live roasts, `/tc awards`. Not tested in game, not
+  published. Details in the "Stats board" section below.
 - **Testing with friends needs the owner's go-ahead:** friends can only get TwizCrew once it is published (public
   GitHub repository + WowUp, below), and the final name has to be picked before that (see the note at the top).
 - The owner liked the idea of sharing information and triggering effects on each other's screens.
@@ -45,11 +47,17 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Class icons in the Crew panel (owner).** The game has its own class icons built in, so no picture making is
   needed for these.
 
-## Next feature being brainstormed: stats board (2026-11-05)
+## Stats board ("Hall of Shame"), live roasts, awards show (2026-11-05)
 
-- **Design approved by the owner ("do it"):** `docs/superpowers/specs/2026-11-05-stats-board-design.md`. Plan
-  and build handed to a background agent. Sessions: one shared crew session, started
-  automatically, restartable with `/tc session new` (Claude's call).
+- **Design approved by the owner ("do it"):** `docs/superpowers/specs/2026-11-05-stats-board-design.md`. Sessions:
+  one shared crew session, started automatically, restartable with `/tc session new` (Claude's call).
+- **Built (2026-11-05), not yet tested in game, not published.** Plan and every change made while building (with
+  the reasons): `docs/superpowers/plans/2026-11-05-stats-board.md` ("Changes during build"). All tests outside the
+  game pass (`tests/run.sh`, including two and three copies talking). Built on the local git branch `stats-board`.
+  What the owner can try in game, riskiest first: `docs/TESTING.md`, section "Stats, roasts and the awards show".
+- **Changed from the design while building (Claude's call):** a death counts as a fall only after about a second of
+  real falling (a normal jump is not a fall); "Died to a Weakling" only blames a mob that was fighting you; a
+  `/reload` continues your session only if the crew online hasn't moved to another one.
 
 - **Owner picked the stats board** as the next idea to flesh out.
 - **Purpose (owner):** "mostly for laughs, roasting each other on stream". Not serious progress tracking.

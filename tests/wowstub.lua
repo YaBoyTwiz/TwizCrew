@@ -145,6 +145,21 @@ local function build(W)
   env.UnitGUID = function(unit) return st.guids[unit] end
   env.issecretvalue = function(v) return st.secret[v] == true end
 
+  -- panel, widgets, class icons (Task 11)
+  st.atlases = {}            -- atlas name -> info table, for atlases that "exist"
+  env.C_Texture = { GetAtlasInfo = function(name) return st.atlases[name] end }
+  env.CLASS_ICON_TCOORDS = { WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.49609375, 0, 0.25 } }
+  env.RAID_CLASS_COLORS = {
+    WARRIOR = { r = 0.78, g = 0.61, b = 0.43, colorStr = "ffc79c6e" },
+    MAGE = { r = 0.25, g = 0.78, b = 0.92, colorStr = "ff3fc7eb" },
+  }
+  env.C_ClassColor = { GetClassColor = function(classFile)
+    local c = env.RAID_CLASS_COLORS[classFile]
+    if not c then return nil end
+    return { r = c.r, g = c.g, b = c.b, GenerateHexColor = function() return c.colorStr end }
+  end }
+  env.UISpecialFrames = {}
+
   return env
 end
 

@@ -23,3 +23,8 @@ Tags\Tags.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua
 Layer\Layer.lua
+UI\Theme.lua
+UI\Widgets.lua
+UI\ClassIcon.lua
+UI\PanelLogic.lua
+UI\Panel.lua

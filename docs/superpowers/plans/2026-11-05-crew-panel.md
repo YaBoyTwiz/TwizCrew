@@ -937,3 +937,12 @@ no_errors_anywhere: after all of the above, every client's ns.Log.errors(50) is 
 - **No "player not found" spam when whispering.** In the whisper fallback, whispering a friend who is offline makes the
   game print "No player named X is currently playing." in chat. TwizCrew now remembers who it whispered in the last 10
   seconds and hides that one line for those names. Other system messages are untouched.
+- **Panel status line is in quotes but not italic.** The game has no built-in italic font, so the typed status is
+  shown in quotes in a lighter colour instead.
+- **Offline friends show no activity tags**, only the greyed row and "Offline, last seen …": their last tags
+  (FIGHTING, FLYING…) would be stale. **OTHER LAYER is never taken from a friend's own tag list**, only from the
+  layer tracker, so a wrong or old copy cannot make an OTHER LAYER tag appear.
+- **Panel position follows the grow direction.** After a drag (and once after a reset) the saved position is
+  re-anchored at the panel's top-left corner (grow down) or bottom-left corner (grow up), without moving it, so new
+  rows push the panel away from that corner. The default `{ point = "LEFT", x = 40, y = 100 }` is kept as the
+  starting place.

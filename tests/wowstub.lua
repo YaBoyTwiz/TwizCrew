@@ -123,6 +123,23 @@ local function build(W)
     return false
   end
 
+  -- own state (Task 8)
+  local st = W.state
+  st.class, st.level, st.xp, st.xpMax = "WARRIOR", 10, 0, 100
+  st.zone, st.subzone, st.inInstance, st.instanceType = "Elwynn Forest", "Goldshire", false, "none"
+  st.combat, st.dead, st.taxi, st.afk = false, false, false, false
+  env.UnitClass = function(_) return "Warrior", st.class end
+  env.UnitLevel = function(_) return st.level end
+  env.UnitXP = function(_) return st.xp end
+  env.UnitXPMax = function(_) return st.xpMax end
+  env.GetRealZoneText = function() return st.zone end
+  env.GetSubZoneText = function() return st.subzone end
+  env.IsInInstance = function() return st.inInstance, st.instanceType end
+  env.UnitAffectingCombat = function() return st.combat end
+  env.UnitIsDeadOrGhost = function() return st.dead end
+  env.UnitOnTaxi = function() return st.taxi end
+  env.UnitIsAFK = function() return st.afk end
+
   return env
 end
 

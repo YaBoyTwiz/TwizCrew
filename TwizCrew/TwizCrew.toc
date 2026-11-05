@@ -16,3 +16,6 @@ Comm\Queue.lua
 Comm\Transport.lua
 Comm\Comm.lua
 Crew\Roster.lua
+Crew\SelfState.lua
+Crew\Crew.lua
+Tags\Tags.lua

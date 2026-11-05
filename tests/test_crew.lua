@@ -1,0 +1,235 @@
+local function start(ns, W)
+  local db = ns.DB.init(nil, ns.Modules.list())
+  ns.db = db
+  ns.Modules.attach(db)
+  ns.Comm.start()
+  ns.Crew.start()
+  ns.Self.start()
+  W:fire("PLAYER_ENTERING_WORLD")
+  W:advance(6)
+  return db
+end
+
+local function receive(ns, W, sender, msgType, fields)
+  for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+  end
+end
+
+-- decoded messages sent since index `from`
+local function sentSince(ns, W, from)
+  local out = {}
+  for i = from + 1, #W.sent do
+    local msg = ns.Codec.decode(W.sent[i].text)
+    if msg then out[#out + 1] = msg end
+  end
+  return out
+end
+
+local function record(ns, name)
+  local log = {}
+  ns.Bus.on("test", name, function(...) log[#log + 1] = { ... } end)
+  return log
+end
+
+local function noErrors(ns, A) A.eq(ns.Log.errors(10), {}) end
+
+return {
+  files = "toc",
+  tests = {
+    tags_detect_and_encode = function(ns, A, W)
+      W.state.dead = true; W.state.afk = true
+      A.eq(ns.Tags.encode(ns.Tags.detectSelf()), "DEAD,AFK")
+      A.eq(ns.Tags.decode("AFK,BOGUS,DEAD"), { AFK = true, DEAD = true })
+      W.state.inInstance = true; W.state.instanceType = "party"
+      A.ok(ns.Tags.detectSelf().DUNGEON)
+      W.state.instanceType = "pvp"
+      A.no(ns.Tags.detectSelf().DUNGEON)
+      A.no(ns.Tags.detectSelf().LAYER)
+      A.eq(ns.Tags.ordered({ AFK = true, DEAD = true, COMBAT = true }), { "DEAD", "COMBAT", "AFK" })
+    end,
+    tags_module_is_registered = function(ns, A)
+      local d = ns.Modules.get("tags")
+      A.ok(d); A.eq(d.name, "Activity tags")
+      for _, id in ipairs(ns.Tags.ORDER) do
+        A.ok(ns.Tags.LABEL[id]); A.ok(ns.Tags.COLOR[id]); A.ok(ns.Tags.INFO[id])
+      end
+    end,
+    self_diff_only_changes = function(ns, A)
+      A.eq(ns.Self.diff({ zn = "A", lv = "10" }, { zn = "B", lv = "10", st = "" }), { zn = "B", st = "" })
+    end,
+    login_sends_hello_then_state = function(ns, A, W)
+      start(ns, W)
+      local msgs = sentSince(ns, W, 0)
+      A.eq(msgs[1].type, "HELLO")
+      A.eq(msgs[1].fields.ver, "0.1.0")
+      A.eq(msgs[2].type, "STATE")
+      A.eq(msgs[2].fields.cl, "WARRIOR")
+      A.eq(msgs[2].fields.zn, "Elwynn Forest")
+      A.eq(msgs[2].fields.ins, "0")
+      A.eq(msgs[2].fields.xp, "0")
+      noErrors(ns, A)
+    end,
+    xp_sends_on_whole_percent_only = function(ns, A, W)
+      start(ns, W)
+      W.state.xp = 10
+      ns.Self.refresh("test"); W:advance(2)
+      local n = #W.sent
+      W.state.xp = 10.4
+      ns.Self.refresh("test"); W:advance(2)
+      A.eq(#W.sent, n)
+      W.state.xp = 11
+      ns.Self.refresh("test"); W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "UPDATE"); A.eq(msgs[1].fields, { xp = "11" })
+    end,
+    xp_zero_max_gives_zero = function(ns, A, W)
+      start(ns, W)
+      W.state.xpMax = 0; W.state.xp = 5
+      A.eq(ns.Self.gather().xp, "0")
+    end,
+    zone_change_sends_one_update = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      local seen = record(ns, "SELF_UPDATED")
+      W.state.zone = "Westfall"
+      W:fire("ZONE_CHANGED_NEW_AREA"); W:fire("ZONE_CHANGED")
+      W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "UPDATE"); A.eq(msgs[1].fields, { zn = "Westfall" })
+      A.eq(#seen, 1); A.eq(seen[1][1], { zn = "Westfall" })
+      noErrors(ns, A)
+    end,
+    nothing_changed_sends_nothing = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      W:fire("ZONE_CHANGED"); W:advance(2)
+      A.eq(#W.sent, n)
+    end,
+    taxi_shows_flight_path_text = function(ns, A, W)
+      start(ns, W)
+      W.state.taxi = true
+      local f = ns.Self.gather()
+      A.eq(f.sz, "On a flight path"); A.eq(f.tg, "TAXI")
+    end,
+    setStatus_trims_and_caps = function(ns, A, W)
+      local db = start(ns, W)
+      ns.Self.setStatus("  " .. string.rep("é", 50) .. "  ")
+      A.eq(db.myStatus, string.rep("é", 40))
+      local n = #W.sent
+      W:advance(2)
+      local msgs = sentSince(ns, W, n - 0)
+      A.eq(msgs[#msgs].fields.st, string.rep("é", 40))
+    end,
+    hello_gets_jittered_state_reply = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      receive(ns, W, "Ginkan", "HELLO", { ver = "0.1.0" })
+      A.eq(#W.sent, n)
+      W:advance(0.2)
+      A.eq(#W.sent, n)
+      W:advance(5)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "STATE")
+      noErrors(ns, A)
+    end,
+    hello_burst_gets_one_reply = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      for i = 1, 3 do
+        receive(ns, W, "Ginkan", "HELLO", { ver = "0.1." .. i })
+        W:advance(0.1)
+      end
+      W:advance(8)
+      local states = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
+      A.eq(states, 1)
+    end,
+    state_from_friend_fills_roster_and_fires = function(ns, A, W)
+      start(ns, W)
+      local upd, on = record(ns, "MEMBER_UPDATED"), record(ns, "MEMBER_ONLINE")
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", tg = "" })
+      local m = ns.roster:get("Frostie")
+      A.eq(m.class, "MAGE"); A.eq(m.level, 12)
+      A.eq(#upd, 1); A.eq(upd[1][1], "Frostie"); A.ok(upd[1][2].class)
+      A.eq(#on, 1); A.eq(on[1][1], "Frostie")
+      noErrors(ns, A)
+    end,
+    friend_death_fires_MEMBER_DIED_with_place = function(ns, A, W)
+      start(ns, W)
+      local died = record(ns, "MEMBER_DIED")
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest", sz = "Goldshire", tg = "" })
+      A.eq(#died, 0)
+      W:advance(3)
+      receive(ns, W, "Frostie", "UPDATE", { tg = "DEAD" })
+      A.eq(#died, 1)
+      A.eq(died[1], { "Frostie", "Elwynn Forest", "Goldshire" })
+    end,
+    version_is_passed_on_if_present = function(ns, A, W)
+      start(ns, W)
+      local seen = {}
+      ns.Version = { seen = function(name, ver) seen[#seen + 1] = { name, ver } end }
+      receive(ns, W, "Frostie", "STATE", { ver = "0.2.0" })
+      A.eq(seen, { { "Frostie", "0.2.0" } })
+    end,
+    ping_from_stranger_triggers_hello = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      receive(ns, W, "Stranger", "PING", {})
+      W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "HELLO")
+      -- a second ping soon after does not make us send again
+      W:advance(5)
+      n = #W.sent
+      W:advance(1)
+      receive(ns, W, "Stranger", "PING", { x = "1" })
+      W:advance(2)
+      for _, m in ipairs(sentSince(ns, W, n)) do A.no(m.type == "HELLO") end
+    end,
+    ping_from_known_member_marks_online = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(200)
+      A.no(ns.roster:get("Frostie").online)
+      local on = record(ns, "MEMBER_ONLINE")
+      local n = #W.sent
+      receive(ns, W, "Frostie", "PING", {})
+      A.ok(ns.roster:get("Frostie").online)
+      A.eq(#on, 1)
+      W:advance(2)
+      for _, m in ipairs(sentSince(ns, W, n)) do A.no(m.type == "HELLO") end
+    end,
+    silence_marks_offline = function(ns, A, W)
+      start(ns, W)
+      local off = record(ns, "MEMBER_OFFLINE")
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(200)
+      A.eq(#off, 1); A.eq(off[1][1], "Frostie")
+      A.no(ns.roster:get("Frostie").online)
+    end,
+    bye_marks_offline_now = function(ns, A, W)
+      start(ns, W)
+      local off = record(ns, "MEMBER_OFFLINE")
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Frostie", "BYE", {})
+      A.eq(#off, 1)
+      A.no(ns.roster:get("Frostie").online)
+    end,
+    ping_ticker_sends_ping = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      W:advance(61)
+      local pings = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "PING" then pings = pings + 1 end end
+      A.ok(pings >= 1)
+    end,
+    logout_sends_bye_directly = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      W:fire("PLAYER_LOGOUT")
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "BYE")
+    end,
+  },
+}

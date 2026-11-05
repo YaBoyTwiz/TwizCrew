@@ -116,6 +116,11 @@ return {
         { auto("Frostie-8000", 8000) }, 10000, "Twiz", 1800)
       A.eq(s.id, "Twiz-9000"); A.eq(keep, true)
 
+      -- my hand-started session, and an online friend already in it: same session, counts kept
+      s, keep = S.atLogin({ id = "Twiz-9000", start = 9000, manual = true, lastActive = 9500 },
+        { manual("Twiz-9000", 9000) }, 10000, "Twiz", 1800)
+      A.eq(s.id, "Twiz-9000"); A.eq(keep, true)
+
       -- broken saved data is ignored
       s, keep = S.atLogin({ id = "Twiz-9000", start = 9000, lastActive = "soon" }, {}, 10000, "Twiz", 1800)
       A.eq(s.id, "Twiz-10000"); A.eq(keep, false)
@@ -292,6 +297,91 @@ return {
       A.eq(#changes, 1)
       A.eq(changes[1].old.id, "Twiz-1"); A.eq(changes[1].keep, true)
       A.ok(ns.db.stats.session.lastActive >= ns.wallclock() - 1)
+    end,
+
+    resume_with_friend_in_same_session_keeps_counts = function(ns, A, W)
+      local changes = {}
+      boot(W, function()
+        ns.db.stats.session = { id = "Twiz-1", start = 1, manual = true, lastActive = ns.wallclock() - 600 }
+        ns.Bus.on("test", "SESSION_CHANGED", function(new, old, keep)
+          changes[#changes + 1] = { new = new, old = old, keep = keep }
+        end)
+      end)
+      W:advance(3)
+      receive(W, "Frostie", "STATE", { ver = "0.1.0", sid = "Twiz-1", sst = "1m" }, ns)
+      W:advance(18)
+      A.eq(ns.Session.current(), { id = "Twiz-1", start = 1, manual = true })
+      A.eq(#changes, 1)
+      A.eq(changes[1].old.id, "Twiz-1"); A.eq(changes[1].keep, true)
+    end,
+
+    by_hand_beats_a_friend_whose_clock_is_ahead = function(ns, A, W)
+      bootDecided(ns, W)
+      local ahead = ns.wallclock() + 300
+      receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. ahead, sst = ahead .. "m" }, ns)
+      local theirs = ns.Session.current()
+      A.eq(theirs.id, "Frostie-" .. ahead)
+      local s = ns.Session.newByHand()
+      A.eq(s.start, ahead + 1)
+      A.eq(s.id, "Twiz-" .. (ahead + 1))
+      A.eq(ns.SessionLogic.better(s, theirs), s)
+      A.eq(ns.SessionLogic.better(theirs, s), s)
+      -- a second restart right away still gets a new, winning id
+      local again = ns.Session.newByHand()
+      A.ok(again.id ~= s.id)
+      A.eq(ns.SessionLogic.better(s, again), again)
+    end,
+
+    reshare_when_a_friend_is_in_a_losing_session = function(ns, A, W)
+      bootDecided(ns, W)
+      W:advance(1)
+      local mine = ns.Session.current()
+      local function sharesOfMine(from)
+        local count = 0
+        for _, m in ipairs(sentSince(ns, W, from)) do
+          if m.type == "UPDATE" and m.fields.sid == mine.id then count = count + 1 end
+        end
+        return count
+      end
+      local newer = mine.start + 100
+      local n = #W.sent
+      receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer) }, ns)
+      W:advance(1)
+      A.eq(ns.Session.current().id, mine.id)
+      A.eq(sharesOfMine(n), 1, "our session is sent once")
+      receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer), st = "x" }, ns)
+      W:advance(10)
+      A.eq(sharesOfMine(n), 1, "not again within 30 s")
+      W:advance(20)
+      receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer), st = "y" }, ns)
+      W:advance(1)
+      A.eq(sharesOfMine(n), 2, "again after 30 s")
+      for _, line in ipairs(W.printed) do A.no(line:find(mine.id, 1, true), "never in chat") end
+    end,
+
+    friend_coming_back_hears_our_session = function(ns, A, W)
+      bootDecided(ns, W)
+      W:advance(1)
+      local mine = ns.Session.current()
+      local n = #W.sent
+      receive(W, "Frostie", "PING", {}, ns) -- unknown: no MEMBER_ONLINE
+      receive(W, "Frostie", "UPDATE", { st = "back" }, ns) -- known now and online
+      W:advance(1)
+      local count = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do
+        if m.type == "UPDATE" and m.fields.sid == mine.id then count = count + 1 end
+      end
+      A.eq(count, 1)
+    end,
+
+    offline_friend_keeps_session_fields = function(ns, A, W)
+      bootDecided(ns, W)
+      local mine = ns.Session.current()
+      receive(W, "Frostie", "UPDATE", { sid = "Frostie-5" }, ns)
+      receive(W, "Frostie", "BYE", {}, ns)
+      receive(W, "Frostie", "UPDATE", { sst = "5" }, ns)
+      A.eq(ns.Session.current().id, "Frostie-5", "the sid heard before going offline still counts")
+      A.ok(mine.id ~= "Frostie-5")
     end,
 
     stale_saved_session_starts_new = function(ns, A, W)

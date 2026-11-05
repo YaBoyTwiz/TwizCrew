@@ -13,7 +13,9 @@ local Logic = ns.SessionLogic
 local current          -- { id, start, manual } or nil
 local isDecided = false
 local started = false
-local heard = {}       -- sender -> { sid = ..., sst = ... } as merged from their STATE / UPDATE pieces
+local heard = {}       -- sender -> { sid = ..., sst = ... } as merged from their STATE / UPDATE pieces (HELLO forgets)
+local RESHARE_GAP = 30 -- seconds between re-sends of our sid/sst to a friend in another session or coming back
+local lastReshare      -- session clock of the last re-send
 
 local function copy(s)
   if s == nil then return nil end
@@ -72,7 +74,7 @@ local function decide()
   local fromCrew = false
   for _, x in ipairs(list) do if x == s then fromCrew = true end end
   local why
-  if old and s == own then
+  if old and s.id == old.id then
     why = "continued after a short break"
   elseif fromCrew then
     why = "joined the crew's session"
@@ -82,6 +84,17 @@ local function decide()
   change(s, old, keep, why)
 end
 
+-- sid/sst only travel in UPDATEs when they change, so one lost message could leave a friend in another session:
+-- tell the crew ours again (at most once per RESHARE_GAP seconds).
+local function reshare()
+  if not isDecided or not current then return end
+  local now = ns.now()
+  if lastReshare and now - lastReshare < RESHARE_GAP then return end
+  lastReshare = now
+  local sid, sst = Logic.toWire(current)
+  ns.Comm.send("UPDATE", { sid = sid, sst = sst })
+end
+
 local function onFields(sender, fields)
   if type(fields) ~= "table" or (fields.sid == nil and fields.sst == nil) then return end
   local h = heard[sender]
@@ -89,29 +102,41 @@ local function onFields(sender, fields)
   if fields.sid ~= nil then h.sid = fields.sid end
   if fields.sst ~= nil then h.sst = fields.sst end
   if not isDecided then return end
-  local s, changed, keep = Logic.switch(current, sessionOf(sender))
+  local theirs = sessionOf(sender)
+  local s, changed, keep = Logic.switch(current, theirs)
   if changed then
     change(s, current, keep, "heard from " .. tostring(sender)
       .. (s.manual and " (started by hand, counts start over)" or " (older session, counts kept)"))
+  elseif theirs and current and theirs.id ~= current.id then
+    reshare() -- ours wins: make sure they hear it
   end
 end
 
 local function forget(sender) heard[sender] = nil end
 
 -- Registered once at file load (ns.Comm loads earlier); the handlers only merge until the decision is made.
-ns.Comm.on("STATE", onFields)
-ns.Comm.on("UPDATE", onFields)
-ns.Comm.on("HELLO", forget)
+-- Offline friends keep their fields (the decision only looks at online ones); a HELLO means a new login.
+ns.Comm.on("STATE", function(sender, fields) ns.Log.safe(FEATURE, onFields, sender, fields) end)
+ns.Comm.on("UPDATE", function(sender, fields) ns.Log.safe(FEATURE, onFields, sender, fields) end)
+ns.Comm.on("HELLO", function(sender) ns.Log.safe(FEATURE, forget, sender) end)
 
 function Session.current() return copy(current) end
 function Session.decided() return isDecided end
 function Session.wire() return Logic.toWire(current) end
 
 -- "/tc session new": a hand-started session from me, now (even before the decision). Counts start over.
+-- Its start is later than every hand-started session we know of, so it wins even when a friend's PC clock is
+-- ahead of ours (and two quick restarts never share an id).
 function Session.newByHand()
   isDecided = true
   local old = current
-  change(Logic.newSession(ns.playerName(), ns.wallclock(), true), old, false, "started by hand")
+  local start = ns.wallclock()
+  if current and current.manual and current.start + 1 > start then start = current.start + 1 end
+  for name in pairs(heard) do
+    local s = sessionOf(name)
+    if s and s.manual and s.start + 1 > start then start = s.start + 1 end
+  end
+  change(Logic.newSession(ns.playerName(), start, true), old, false, "started by hand")
   return copy(current)
 end
 
@@ -125,7 +150,7 @@ end
 function Session.start()
   if started then return end
   started = true
-  ns.Bus.on(FEATURE, "MEMBER_OFFLINE", forget)
+  ns.Bus.on(FEATURE, "MEMBER_ONLINE", reshare) -- a friend coming back hears our session even if nothing changes
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", saveActive)
   C_Timer.After(ns.Config.SESSION_DECIDE_AFTER, function() ns.Log.safe(FEATURE, decide) end)
   C_Timer.NewTicker(ns.Config.SESSION_ACTIVE_TICK, function() ns.Log.safe(FEATURE, saveActive) end)

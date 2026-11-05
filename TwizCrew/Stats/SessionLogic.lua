@@ -55,7 +55,7 @@ function Logic.atLogin(own, heard, wall, me, resume)
   for _, s in ipairs(heard or {}) do best = Logic.better(best, s) end
   if canResume then best = Logic.better(best, own) end
   if best == nil then return Logic.newSession(me, wall, false), false end
-  local keep = canResume and (best == own or (not isManual(best) and not isManual(own)))
+  local keep = canResume and (best.id == own.id or (not isManual(best) and not isManual(own)))
   return best, keep and true or false
 end
 

@@ -251,6 +251,53 @@ this is the list of what to report:
 - **Abandoning quests**: does Quitter count when you abandon from the quest log?
 - **Sounds**: does the awards show (and a roast, if **Play a sound** is on under **Live roasts**) make a sound?
 
+## "Tell crew to update" button
+
+Built too, every test outside the game passes (including an old and a new copy talking). **Not tried in the game
+yet.** Riskiest first. Most of it only makes sense once friends have TwizCrew (after publishing), but the first two
+checks work alone.
+
+### Alone
+
+1. **Does `/reload` load a new version?** This decides whether "Reload now" is enough. Ask Claude to make a pretend
+   new version (Claude changes the version number in the files on this PC). Then, in the game, `/reload` (not a
+   restart) and type `/tc report`:
+   - The first line should say the **new** number (`TwizCrew v0.1.1`, say).
+   - The line starting with `Update:` says what the game's own addon list says ("addon list says v…"). Tell Claude
+     whether it shows the old or the new number: if it is the old one, the game only reads the addon's list of
+     files when it starts, which is why updates that add files ask for a game restart.
+   - Ask Claude to put the number back afterwards.
+2. **The settings window** (`/tc`), under **Version check**:
+   - A **Tell crew to update** button with an (i) next to it, and a **Crew versions** list with your name, "(you)"
+     and your version.
+   - Next to your name there should be a small **green tick** picture. If you see an empty square, a question mark
+     box or nothing at all, tell Claude (the picture name would need changing).
+   - Press **Tell crew to update**: chat says "told your crew that v… is out". Press it again right away: chat says
+     to wait a few seconds. No error pop-ups.
+3. Under **Modules** there is **Update reminders** with an (i), on. Turn it off, press **Reset everything to
+   defaults**: it is on again.
+
+### With a friend (after publishing)
+
+Easiest when you have just released a new version and your friend still has the old one.
+
+1. **Reload now.** Update yourself in WowUp, `/reload`, then press **Tell crew to update**. Your friend gets a small
+   window "<you> says v… is out" with **Reload now** and "If nothing changed, open WowUp and click Update first".
+   They update in WowUp, then click **Reload now**: the game reloads, and afterwards **Crew versions** shows a
+   green tick next to both of you. If clicking **Reload now** does nothing, or shows "action blocked", tell Claude.
+2. **Not updated yet.** Your friend clicks **Reload now** *without* updating in WowUp first. About 5 seconds after
+   the reload, their chat says once: "Still on v…. Open WowUp, click Update, then /reload".
+3. **In a fight.** Your friend starts a fight while the window is open: **Reload now** goes grey, and clicking it
+   only says "not during a fight". Press the button again while they are fighting (after 30 seconds): their window
+   only appears when the fight is over.
+4. **Ticks and crosses.** While your friend is on the older version, **Crew versions** on your screen shows a red
+   cross next to them. When they log off, their version becomes "?".
+5. **Only newer counts.** Your friend (on the older version) presses **Tell crew to update**: nothing appears on
+   your screen.
+6. **Updates that add files** (Claude says so when releasing): the window says "Close and restart the game to load
+   it" with no Reload button. After a full restart the version is right.
+7. **Turned off.** Your friend turns off **Update reminders**: when you press the button, no window for them.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

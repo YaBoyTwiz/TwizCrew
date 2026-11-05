@@ -82,4 +82,21 @@ tests/test_lint.lua            .toc version == ADDON_VERSION
 
 ## Changes during build
 
-(filled in while building)
+- **Version formats:** `Util.compareVersions` ignores a leading `v` and text after a number (`1.2.3-beta` counts as
+  `1.2.3`); `1.2.10` is newer than `1.2.9`. A version from a friend is only used when it is plain numbers and dots
+  (`Util.isVersion`, at most 20 characters).
+- **Settings registry gained two kinds:** `button` (needs `onClick`) and `list` (needs `lines()`). They hold no value,
+  need no default and are never saved, so reset has nothing to do for them. A list row is as tall as its lines; the
+  settings window lays itself out again while open when a friend comes, goes or changes version.
+- **The after-login check runs even when Update reminders is off,** but then only for the "added new files, restart
+  the game" line (a half-loaded addon matters more than the switch). The "Still on" line follows the switch.
+  `db.update` is read and cleared at login, and the line is printed 5 s later, so a request heard in the first
+  seconds after login is kept for the next login instead of being mixed up with the old one.
+- **An older request never replaces a newer window** that is still open (e.g. two friends on different new versions).
+- **The window's second button** says "Later" (with Reload now) or "OK" (restart case). Escape closes it; it can be
+  dragged.
+- **`/tc report`** has a new line `Update: addon list says v…, restart needed since v…, last request heard: …`, placed
+  after the stats lines so the older lines keep their places.
+- **Tests:** in the multi-client helper, `state.version` / `state.restartSince` now stand for another release's code
+  (the constants in `Core/Init.lua`); the fake game's addon list reads `state.tocVersion` (falls back to
+  `state.version`). No earlier test changed.

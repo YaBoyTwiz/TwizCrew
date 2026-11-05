@@ -21,6 +21,8 @@ Other players never see any of it. The messages are hidden addon messages, not c
   game, riskiest first: `docs/TESTING.md`.
 - **Stats board built too (2026-11-05):** Hall of Shame tab, live roasts, `/tc awards`. Not tested in game, not
   published. Details in the "Stats board" section below.
+- **"Tell crew to update" button built (2026-11-05):** not tested in game, not published. Details in its section
+  below.
 - **Testing with friends needs the owner's go-ahead:** friends can only get TwizCrew once it is published (public
   GitHub repository + WowUp, below), and the final name has to be picked before that (see the note at the top).
 - The owner liked the idea of sharing information and triggering effects on each other's screens.
@@ -73,7 +75,7 @@ Other players never see any of it. The messages are hidden addon messages, not c
   shared only every few minutes when changed, at logout, and when someone opens the board. Milestone roasts only
   at big round numbers.
 
-## Queued next: "Tell crew to update" button (owner approved 2026-11-05, build after the stats board)
+## "Tell crew to update" button (owner approved 2026-11-05)
 
 - Addons can't update themselves (no downloads, no file writes). Flow: owner says "release it" → GitHub release →
   friends' WowUp auto-update (each friend turns it on once) → owner presses **Tell crew to update** in `/tc`
@@ -83,6 +85,13 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - Settings window lists every crew member's version with ✓ / ✗.
 - Safety (Claude's call): a copy only accepts the request from someone whose version is newer than its own.
 - Needs publishing first (owner's go-ahead + final name) before it does anything useful.
+- **Built (2026-11-05), not tested in game, not published.** Plan, Claude's calls and every change made while
+  building: `docs/superpowers/plans/2026-11-05-update-button.md`. In-game checks: `docs/TESTING.md`, section
+  "Tell crew to update" button. Built on the local branch `update-button`.
+- **Releasing (for Claude):** bump `ADDON_VERSION` in `TwizCrew/Core/Init.lua` and `## Version` in
+  `TwizCrew/TwizCrew.toc` together (a test checks they match). When a release adds or removes files or changes the
+  `.toc` in any other way, also set `RESTART_SINCE` (same file) to the new version, and say "restart the game" in
+  the release notes.
 
 ## Decisions (owner)
 

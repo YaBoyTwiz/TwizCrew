@@ -985,3 +985,29 @@ Fixes after the final review:
   drag; the game is told not to save the panel position itself; sending a full state also tells the rest of the
   addon what changed; the saved log keeps only text lines; more log lines (own layer key confirmed or reset, every
   layer change between friends, one debug line per message sent).
+
+Fixes after the first in-game test:
+
+- **The channel no longer gives up for the whole session when its sends are refused.** On the owner's first login
+  the channel joined and the sends in that same second came back with result 7 (very likely `InvalidChannel`: the
+  game was not ready for addon messages on the brand-new channel). Three refusals made TwizCrew fall back to
+  whispers for the rest of the session, which with an empty crew list meant nobody heard anything. Now:
+  - refusals in the first `CHANNEL_JOIN_GRACE` (10) seconds after any join or rejoin do not count towards giving
+    up; the message stays at the front of the queue and is tried again about once a second, like a throttled one
+    (one log line per join, one per waiting message);
+  - when refusals do make the channel fail, the whisper / group fallback takes over and the channel is tried again
+    after `CHANNEL_RETRY_FIRST` (60) seconds, then 120, 240 and every `CHANNEL_RETRY_MAX` (300) seconds. A try
+    calls `JoinChannelByName` again (harmless while still in the channel) and goes back to the channel when its
+    number is there; the fallback keeps working meanwhile. Back on the channel, the Bus event `CHANNEL_BACK` makes
+    Crew send `HELLO` and `STATE` there, so friends who missed the login hello learn about you. The first good send
+    logs "works again" and resets the pace. The first three tries are logged, then every sixth;
+  - a wrong crew code and a join that times out still give up for the session (Claude's call: a retry cannot fix
+    a wrong code, the settings change already rejoins, and repeated joins that fail may show game errors). A wrong
+    code that arrives while retrying stops the tries. Changing the channel name or code starts over;
+  - `/tc report` says why and how long the channel has been down, what carries messages meanwhile and when the
+    next try is, e.g. `failed: sends to the channel were refused (result 7); down for 2 min; using whispers, next
+    try in 40 s`.
+  - Tests: the fake game can refuse channel sends for N seconds after a join (`channelReadyAfter`) or always
+    (`channelSendResult`), records each send's result, and the two-copy harness only delivers accepted messages.
+    New simulations replay the first-login log and a channel that comes back; unit tests cover a channel that keeps
+    refusing for an hour (pace, number of sends, log lines).

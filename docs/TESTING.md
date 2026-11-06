@@ -33,6 +33,8 @@ stop there and tell Claude.
      "Joined Channel: TwizCrewHQ" line in chat, and nothing from that channel should ever show up in chat.
    - General should still be channel 1 and Trade channel 2 (type `/chatlist` if you're not sure).
    - Type `/tc report`. The second line should say `Connection: auto (channel TwizCrewHQ joined)`.
+     If it says `failed: sends to the channel were refused`, wait for the "next try in" time it shows and type
+     `/tc report` again: it should say `joined` by then. If it still fails after a few tries, tell Claude.
    - Log out to the character screen and log back in. Check the same things again (the game may join the channel
      on its own at login, before TwizCrew does).
 

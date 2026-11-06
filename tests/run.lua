@@ -83,7 +83,9 @@ local function channelNameOf(W, index)
 end
 
 -- Would this addon message (as recorded in from.sent) reach `to` in the real game?
+-- A message the game refused (a result other than success) reaches nobody.
 local function reaches(from, to, m)
+  if m.result ~= nil and m.result ~= 0 and m.result ~= true then return false end
   local t = m.chatType
   if t == "CHANNEL" then
     local name = channelNameOf(from, m.target)

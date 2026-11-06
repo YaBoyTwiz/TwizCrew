@@ -198,7 +198,21 @@ return {
       boot(W, function() W.state.channelJoinFails = true end)
       W:advance(20)
       local lines = ns.Report.lines()
-      A.eq(lines[2], "Connection: auto (channel TwizCrewHQ failed: the channel did not join in time)")
+      A.eq(lines[2], "Connection: auto (channel TwizCrewHQ failed: the channel did not join in time; down for 11 s)")
+    end,
+
+    report_says_when_and_why_the_channel_is_down_and_when_it_is_tried_again = function(ns, A, W)
+      boot(W)
+      W:advance(10)
+      W.state.channelSendResult = 7 -- every channel send refused from now on
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(1)
+      W:advance(30)
+      A.eq(ns.Report.lines()[2], "Connection: auto (channel TwizCrewHQ failed: sends to the channel were refused "
+        .. "(result 7); down for 31 s; using whispers, next try in 30 s)")
+      W.state.inGroup = true
+      W:advance(110)
+      A.contains(ns.Report.lines()[2], "down for 2 min; using group chat and whispers, next try in")
     end,
 
     settings_builds_and_resets_without_errors = function(ns, A, W)

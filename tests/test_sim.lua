@@ -270,6 +270,83 @@ return {
       noErrors(A, c.twNs, c.frNs)
     end,
 
+    -- The owner's first-ever login (from the saved log): the channel joined as 6 and the HELLO, STATE and UPDATE
+    -- sent in that same second came back with result 7. Then the copy gave up on the channel for the session.
+    first_login_refusals_right_after_join_still_reach_a_friend = function(_, A, _, H)
+      local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
+      H.link(fr)
+      login(fr)
+      H.advance(10)
+      local hellos = {}
+      frNs.Comm.on("HELLO", function(sender) hellos[#hellos + 1] = sender end)
+      local tw, twNs = H.client("Twiz", { channelReadyAfter = 2 }) -- refuses channel sends for 2 s after joining
+      H.link(tw)
+      login(tw)
+      H.advance(20)
+      local refused, firstGood = 0, nil
+      for i, m in ipairs(tw.sent) do
+        if m.chatType == "CHANNEL" and m.result == 7 then refused = refused + 1 end
+        if not firstGood and m.result == 0 then firstGood = i end
+      end
+      A.ok(refused >= 1, "the first channel sends were refused, like in the game")
+      A.eq(tw.sent[1].result, 7)
+      A.ok(firstGood, "something got through")
+      A.contains(tw.sent[firstGood].text, "HELLO", "the refused HELLO was kept and sent again")
+      A.eq(tw.sent[firstGood].chatType, "CHANNEL")
+      local st = twNs.Transport.status()
+      A.ok(st.joined, "on the channel"); A.no(st.failed, "never gave up on it")
+      A.eq(hellos, { "Twiz" }, "Frostie heard Twiz's HELLO")
+      A.ok(frNs.roster:get("Twiz") and frNs.roster:get("Twiz").online, "Frostie sees Twiz")
+      A.ok(twNs.roster:get("Frostie") and twNs.roster:get("Frostie").online, "Twiz sees Frostie")
+      A.contains(twNs.Report.lines()[2], "TwizCrewHQ joined)")
+      noErrors(A, twNs, frNs)
+    end,
+
+    -- A channel that refuses for longer: the copy falls back, tries the channel again a minute later, and when it
+    -- works says HELLO there, so a friend who never heard it learns about it.
+    channel_back_after_refusals_says_hello_to_the_crew = function(_, A, _, H)
+      local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
+      H.link(fr)
+      login(fr)
+      H.advance(10)
+      local hellos = {}
+      frNs.Comm.on("HELLO", function(sender) hellos[#hellos + 1] = sender end)
+      local tw, twNs = H.client("Twiz", { channelSendResult = 7 })
+      H.link(tw)
+      login(tw)
+      H.advance(70) -- joined at 5 s, refusals waited out until 15 s, then counted: down at about 20 s
+      local st = twNs.Transport.status()
+      A.ok(st.failed, "Twiz gave up on the channel for now")
+      A.contains(twNs.Report.lines()[2], "failed: sends to the channel were refused (result 7)")
+      A.contains(twNs.Report.lines()[2], "next try in")
+      -- meanwhile the fallback covers: Twiz heard Frostie on the channel, so Twiz whispers her
+      local whispered = false
+      for _, m in ipairs(tw.sent) do
+        if m.chatType == "WHISPER" and m.target == "Frostie" and m.result == 0 then whispered = true end
+      end
+      A.ok(whispered, "the fallback whispers Frostie")
+      local heardBefore, sentBefore = #hellos, #tw.sent
+      tw.state.channelSendResult = nil -- the game takes channel messages again
+      H.advance(st.nextRetryIn + 15)
+      st = twNs.Transport.status()
+      A.ok(st.joined, "back on the channel"); A.no(st.failed)
+      local helloOnChannel = false
+      for i = sentBefore + 1, #tw.sent do
+        local m = tw.sent[i]
+        if m.chatType == "CHANNEL" and m.result == 0 and m.text:find("^%d+%^HELLO%^") then helloOnChannel = true end
+      end
+      A.ok(helloOnChannel, "Twiz said HELLO on the channel when it came back")
+      A.ok(#hellos > heardBefore and hellos[#hellos] == "Twiz", "Frostie heard it")
+      A.ok(frNs.roster:get("Twiz") and frNs.roster:get("Twiz").online, "Frostie sees Twiz")
+      A.eq(frNs.roster:get("Twiz").class, "WARRIOR", "and Twiz's STATE")
+      A.ok(twNs.roster:get("Frostie") and twNs.roster:get("Frostie").online, "Twiz sees Frostie (her reply)")
+      local log = table.concat(twNs.Log.lines(), "\n")
+      A.contains(log, "trying channel TwizCrewHQ again (try 1)")
+      A.contains(log, "channel TwizCrewHQ works again")
+      A.contains(twNs.Report.lines()[2], "TwizCrewHQ joined)")
+      noErrors(A, twNs, frNs)
+    end,
+
     friend_logging_back_in_shows_no_old_layer = function(_, A, _, H)
       local c = twoFriends(H, { wait = 31 })
       seeNpc(c.tw, "Creature-0-1-0-111-299-0000ABCDEF")

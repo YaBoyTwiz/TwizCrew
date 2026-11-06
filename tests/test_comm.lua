@@ -30,6 +30,23 @@ local function joinsOf(W, name)
   return n
 end
 
+local function countLog(ns, text)
+  local n = 0
+  for _, line in ipairs(ns.Log.lines()) do if line:find(text, 1, true) then n = n + 1 end end
+  return n
+end
+
+-- Times (W.clock) of every JoinChannelByName call, recorded from now on.
+local function recordJoinTimes(W)
+  local times = {}
+  local join = W.env.JoinChannelByName
+  W.env.JoinChannelByName = function(...)
+    times[#times + 1] = W.clock
+    return join(...)
+  end
+  return times
+end
+
 return {
   files = { "Core/Init.lua", "Core/Util.lua", "Core/Log.lua", "Core/Events.lua", "Core/Modules.lua", "Core/DB.lua",
     "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
@@ -113,7 +130,7 @@ return {
     fallback_after_bad_send_results = function(ns, A, W)
       local db = boot(ns, W)
       db.crew.extra = { "Ginkan" }
-      W:advance(6)
+      W:advance(6 + 10) -- joined, and past the moment right after joining when refusals are only waited out
       W.state.sendResult = 7 -- InvalidChannel: a real refusal
       for _ = 1, 3 do ns.Comm.send("PING", {}) end
       W:advance(3)
@@ -473,6 +490,207 @@ return {
       W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Twiz")
       A.eq(n, 0)
       A.eq(ns.Comm.echoCount(), 2)
+    end,
+    -- The owner's first login: the channel joined, and the sends in that same second were refused (result 7).
+    refusals_right_after_join_are_waited_out = function(ns, A, W)
+      boot(ns, W)
+      W.state.channelReadyAfter = 2 -- the game refuses channel sends for 2 s after the join
+      ns.Comm.send("HELLO", { ver = "1" })
+      ns.Comm.send("STATE", { lv = "10" })
+      ns.Comm.send("UPDATE", { zn = "Elwynn Forest" })
+      W:advance(5.3)
+      A.ok(ns.Transport.status().joined)
+      A.eq(W.sent[1].result, 7, "refused like in the game")
+      W:advance(10)
+      local st = ns.Transport.status()
+      A.no(st.failed, "refusals right after joining do not count")
+      A.ok(st.joined)
+      local good = {}
+      for _, m in ipairs(W.sent) do
+        if m.result == 0 then good[#good + 1] = m.chatType .. " " .. m.text:match("^%d+%^(%u+)%^") end
+      end
+      A.eq(good, { "CHANNEL HELLO", "CHANNEL STATE", "CHANNEL UPDATE" }, "all three went out on the channel, in order")
+      A.ok(#W.sent <= 3 + 3, "the refused message was tried about once a second, not more")
+      A.eq(countLog(ns, "refused a send right after joining (result 7)"), 1)
+      A.eq(countLog(ns, "has to wait"), 1, "one line for the message that waited")
+      A.eq(countLog(ns, "channel failed"), 0)
+      A.eq(joinsOf(W, "TwizCrewHQ"), 1)
+      noErrors(ns, A)
+    end,
+    refusals_after_a_rejoin_are_waited_out_too = function(ns, A, W)
+      boot(ns, W)
+      W:advance(20)
+      ns.Modules.set("comm", "password", "newcode") -- leaves and joins again: a new channel for the game
+      W.state.channelReadyAfter = 2
+      W:advance(2.1)
+      ns.Comm.send("PING", {})
+      W:advance(5)
+      A.no(ns.Transport.status().failed)
+      A.eq(W.sent[#W.sent].result, 0)
+      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
+    end,
+    channel_that_keeps_refusing_is_tried_again_at_a_slow_pace = function(ns, A, W)
+      local db = boot(ns, W)
+      db.crew.extra = { "Ginkan" }
+      W.state.channelSendResult = 7 -- every channel send refused, whispers fine
+      local joinTimes = recordJoinTimes(W)
+      local ticker = W.env.C_Timer.NewTicker(20, function() ns.Comm.send("PING", {}) end) -- some traffic
+      W:advance(5 + 10 + 3 * 20 + 10) -- three refused PINGs after the grace, then one more PING
+      local st = ns.Transport.status()
+      A.ok(st.failed, "gave up on the channel for now")
+      A.eq(st.failReason, "sends to the channel were refused (result 7)")
+      A.ok(st.nextRetryIn and st.nextRetryIn > 0 and st.nextRetryIn <= 60, "a try is planned")
+      A.eq(W.sent[#W.sent].chatType, "WHISPER", "the fallback carries the messages")
+      local logStart = #ns.Log.lines()
+      local sentStart = #W.sent
+      W:advance(3600)
+      ticker:Cancel()
+      -- tries: 60 s, then 120, 240 and 300 s apart (plus the time the channel needs to fail again each time)
+      A.ok(#joinTimes >= 8 and #joinTimes <= 16, "tries in an hour: " .. #joinTimes)
+      local gaps = {}
+      for i = 2, #joinTimes do gaps[#gaps + 1] = joinTimes[i] - joinTimes[i - 1] end
+      A.ok(gaps[1] >= 60 and gaps[1] < 120, "first gap " .. tostring(gaps[1]))
+      for i, g in ipairs(gaps) do A.ok(g >= 60 and g <= 300 + 10 + 3 * 20 + 1, "gap " .. i .. ": " .. g) end
+      A.ok(gaps[#gaps] >= 300, "the pace settles at about 5 minutes")
+      -- nothing spams: per try, the waiting message is tried about once a second while the channel is new, then
+      -- the refusals count; everything else goes out as whispers at the normal pace.
+      local channelSends = 0
+      for i = sentStart + 1, #W.sent do if W.sent[i].chatType == "CHANNEL" then channelSends = channelSends + 1 end end
+      A.ok(channelSends <= #joinTimes * 15, "channel sends in an hour: " .. channelSends)
+      -- no endless log flood: the first tries are logged, then only every sixth
+      local channelLines = 0
+      local lines = ns.Log.lines()
+      for i = logStart + 1, #lines do
+        if lines[i]:find("channel", 1, true) and not lines[i]:find("DEBUG", 1, true) then
+          channelLines = channelLines + 1
+        end
+      end
+      A.ok(channelLines <= 20, "channel lines in an hour: " .. channelLines)
+      A.ok(countLog(ns, "trying channel TwizCrewHQ again (try 1)") == 1)
+      A.ok(ns.Transport.status().failed)
+      noErrors(ns, A)
+    end,
+    channel_comes_back_after_refusals = function(ns, A, W)
+      local db = boot(ns, W)
+      db.crew.extra = { "Ginkan" }
+      local back = 0
+      ns.Bus.on("test", "CHANNEL_BACK", function() back = back + 1 end)
+      W:advance(16)
+      W.state.channelSendResult = 7
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(2)
+      A.ok(ns.Transport.status().failed)
+      A.ok(logHas(ns, "using the fallback, trying the channel again in 60 s"))
+      W.state.channelSendResult = nil -- the game takes channel messages again
+      W:advance(57)
+      A.ok(ns.Transport.status().failed, "not before the minute is up")
+      A.eq(back, 0)
+      W:advance(2)
+      A.ok(ns.Transport.status().joined)
+      A.no(ns.Transport.status().failed)
+      A.eq(back, 1, "CHANNEL_BACK fired once")
+      A.ok(logHas(ns, "trying channel TwizCrewHQ again (try 1)"))
+      A.ok(logHas(ns, "channel TwizCrewHQ joined again as 5 (try 1)"))
+      ns.Comm.send("PING", {})
+      W:advance(1)
+      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
+      A.eq(W.sent[#W.sent].result, 0)
+      A.ok(logHas(ns, "channel TwizCrewHQ works again"))
+      noErrors(ns, A)
+    end,
+    refusals_right_after_coming_back_are_waited_out = function(ns, A, W)
+      boot(ns, W)
+      W:advance(16)
+      W.state.channelSendResult = 7
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(2)
+      A.ok(ns.Transport.status().failed)
+      ns.Bus.on("test", "CHANNEL_BACK", function()
+        ns.Comm.send("HELLO", {}); ns.Comm.send("STATE", {}); ns.Comm.send("PING", {})
+        W.env.C_Timer.After(2, function() W.state.channelSendResult = nil end) -- the game is ready 2 s later
+      end)
+      W:advance(70)
+      local st = ns.Transport.status()
+      A.ok(st.joined); A.no(st.failed, "refusals right after joining again do not count either")
+      local good = {}
+      for _, m in ipairs(W.sent) do
+        if m.result == 0 and m.chatType == "CHANNEL" then good[#good + 1] = m.text:match("^%d+%^(%u+)%^") end
+      end
+      A.eq(good, { "HELLO", "STATE", "PING" })
+      noErrors(ns, A)
+    end,
+    wrong_code_during_a_try_stops_the_tries = function(ns, A, W)
+      boot(ns, W)
+      W:advance(16)
+      W.state.channelSendResult = 7
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(2)
+      W.state.channels.TwizCrewHQ = nil       -- we are out of the channel, and joining it again fails
+      W.state.channelJoinFails = true
+      W:advance(59)                           -- the try starts and waits for the channel number
+      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
+      A.eq(ns.Transport.status().failReason, "wrong crew code")
+      local joins = joinsOf(W, "TwizCrewHQ")
+      W:advance(1200)
+      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "no more tries")
+      A.eq(ns.Transport.status().nextRetryIn, nil)
+    end,
+    tries_start_slow_again_after_the_channel_worked = function(ns, A, W)
+      boot(ns, W)
+      W:advance(16)
+      local function failNow()
+        W.state.channelSendResult = 7
+        for _ = 1, 3 do ns.Comm.send("PING", {}) end
+        W:advance(2)
+        A.ok(ns.Transport.status().failed)
+      end
+      failNow()
+      W.state.channelSendResult = nil
+      W:advance(61)
+      ns.Comm.send("PING", {})
+      W:advance(1)
+      A.eq(ns.Transport.status().retries, 0, "a good send ends the tries")
+      W:advance(15)
+      failNow()
+      A.ok(ns.Transport.status().nextRetryIn <= 60, "the next failure waits a minute again, not longer")
+    end,
+    wrong_code_while_trying_again_stops_the_tries = function(ns, A, W)
+      boot(ns, W)
+      W:advance(16)
+      W.state.channelSendResult = 7
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(2)
+      A.ok(ns.Transport.status().nextRetryIn)
+      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
+      A.eq(ns.Transport.status().failReason, "wrong crew code")
+      A.eq(ns.Transport.status().nextRetryIn, nil)
+      local joins = joinsOf(W, "TwizCrewHQ")
+      W:advance(1200)
+      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "no more tries")
+    end,
+    join_timeout_is_not_tried_again = function(ns, A, W)
+      boot(ns, W, function(w) w.state.channelJoinFails = true end)
+      W:advance(16)
+      A.ok(ns.Transport.status().failed)
+      A.eq(ns.Transport.status().nextRetryIn, nil)
+      W:advance(1200)
+      A.eq(joinsOf(W, "TwizCrewHQ"), 1)
+    end,
+    changing_the_code_while_trying_again_starts_over = function(ns, A, W)
+      boot(ns, W)
+      W:advance(16)
+      W.state.channelSendResult = 7
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end
+      W:advance(2)
+      W.state.channelSendResult = nil
+      ns.Modules.set("comm", "password", "newcode")
+      W:advance(3)
+      local st = ns.Transport.status()
+      A.ok(st.joined); A.no(st.failed); A.eq(st.retries, 0)
+      local joins = joinsOf(W, "TwizCrewHQ")
+      W:advance(120)
+      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "the old planned try does nothing")
+      noErrors(ns, A)
     end,
     sends_are_logged_for_debugging = function(ns, A, W)
       boot(ns, W)

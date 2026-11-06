@@ -92,19 +92,38 @@ local function build(W)
   W.state.channels = {}      -- channel name -> index, once joined
   W.state.groupMembers = {}  -- names counted as "in party"
   W.state.sendResult = 0
+  -- Channel sends only: st.channelSendResult (nil = use sendResult) answers every CHANNEL send; st.channelReadyAfter
+  -- = N makes CHANNEL sends answer 7 (InvalidChannel) for N seconds after the join that put us in the channel, like
+  -- the game did on the owner's first login. Every W.sent entry keeps its result; the harness delivers only
+  -- messages the game accepted.
+  W.state.channelJoinedAt = {}
   W.removedChannels = {}     -- { frame, channel } for every ChatFrame_RemoveChannel call
   env.Enum = { SendAddonMessageResult = { Success = 0 } }
+  local function sendResultFor(chatType, target)
+    if chatType == "CHANNEL" then
+      local name
+      for n, i in pairs(W.state.channels) do if i == target then name = n end end
+      local at = name and W.state.channelJoinedAt[name]
+      if W.state.channelReadyAfter and at and W.clock - at < W.state.channelReadyAfter then return 7 end
+      if W.state.channelSendResult ~= nil then return W.state.channelSendResult end
+    end
+    return W.state.sendResult or 0
+  end
   env.C_ChatInfo = {
     RegisterAddonMessagePrefix = function(prefix) W.state.prefix = prefix; return true end,
     SendAddonMessage = function(prefix, text, chatType, target)
-      W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target }
-      return W.state.sendResult or 0
+      local result = sendResultFor(chatType, target)
+      W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target, result = result }
+      return result
     end,
   }
   W.joins, W.leaves = {}, {}  -- { name, password } per JoinChannelByName call; names per LeaveChannelByName call
   env.JoinChannelByName = function(name, password)
     W.joins[#W.joins + 1] = { name = name, password = password }
-    if not W.state.channelJoinFails then W.state.channels[name] = 5 end
+    if not W.state.channelJoinFails then
+      if not W.state.channels[name] then W.state.channelJoinedAt[name] = W.clock end
+      W.state.channels[name] = 5
+    end
   end
   env.LeaveChannelByName = function(name)
     W.leaves[#W.leaves + 1] = name

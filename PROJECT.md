@@ -150,6 +150,10 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **No playing for you:** it cannot move, cast, or target on its own. Every action needs a key press or a click.
 - **Short messages, few per second:** about 255 characters per message, and the game throttles bursts (send a few
   per second at most; queue the rest).
+- **A brand-new custom channel refuses addon messages for a moment (seen in game, 2026-11-05):** on the owner's
+  first login TwizCrew created `TwizCrewHQ`, and the sends in the same second as the join came back with result 7
+  (very likely `InvalidChannel`). On the next login every send worked. TwizCrew now waits out refusals for 10 s
+  after a join and tries a failed channel again after 1 minute (then 2, 4, 5 min…); details in the crew-panel plan.
 - **Boss fights:** addon messages are reported to be **blocked during a boss fight** inside dungeons and raids. Plan:
   queue them and send after `ENCOUNTER_END`. The rest of the dungeon (trash, between pulls) is reported to work.
   Your own screen can still show things during a boss fight.

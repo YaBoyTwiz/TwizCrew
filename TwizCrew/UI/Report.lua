@@ -25,10 +25,28 @@ local function interface()
   return ok and n and tostring(n) or "unknown"
 end
 
+local function duration(seconds)
+  seconds = math.ceil(seconds)
+  if seconds < 60 then return seconds .. " s" end
+  if seconds < 3600 then return math.floor(seconds / 60) .. " min" end
+  return math.floor(seconds / 3600) .. " h " .. math.floor(seconds % 3600 / 60) .. " min"
+end
+
+local function fallbackName()
+  local ok, grouped = try(IsInGroup)
+  return (ok and grouped) and "group chat and whispers" or "whispers"
+end
+
 local function connection()
   local s = ns.Transport.status()
   local state
-  if s.failed then state = "failed: " .. tostring(s.failReason)
+  if s.failed then
+    state = "failed: " .. tostring(s.failReason)
+    if type(s.downFor) == "number" then state = state .. "; down for " .. duration(s.downFor) end
+    if type(s.nextRetryIn) == "number" then
+      local using = s.mode == "auto" and ("using " .. fallbackName() .. ", ") or ""
+      state = state .. "; " .. using .. "next try in " .. duration(s.nextRetryIn)
+    end
   elseif s.joined then state = "joined"
   else state = "not joined" end
   return "Connection: " .. tostring(s.mode) .. " (channel " .. tostring(s.channel) .. " " .. state .. ")"

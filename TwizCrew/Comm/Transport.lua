@@ -1,6 +1,10 @@
 -- Delivery: a hidden custom chat channel, with whisper / party / guild fallbacks.
 -- The channel has three states: pending (not joined, not failed yet), joined, failed.
 -- When the state leaves "pending" the Bus event TRANSPORT_READY fires, so Comm can send what it kept back.
+-- Right after a (re)join the game may refuse channel sends for a moment: refusals in the first
+-- CHANNEL_JOIN_GRACE seconds are kept and tried again, like throttled ones. A failure because sends were refused
+-- never lasts the session: the channel is tried again after CHANNEL_RETRY_FIRST seconds (doubling up to
+-- CHANNEL_RETRY_MAX) while the fallback carries the messages; when it is back, CHANNEL_BACK fires (Crew says HELLO).
 local _, ns = ...
 
 local Transport = {}
@@ -21,6 +25,7 @@ local state = {
   joined = false,
   failed = false,
   failReason = nil,
+  failedAt = nil,     -- when the channel went down (for /tc report)
   badSends = 0,       -- consecutive non-success results on channel sends (throttling does not count)
   lastResult = nil,
   generation = 0,     -- bumped by every (re)join, so old timers do nothing
@@ -28,6 +33,10 @@ local state = {
   leftAt = nil,       -- when we last left the channel on purpose
   nextAutoJoin = nil, -- when the last rejoin after losing the channel was (or will be) started
   hideFailed = false, -- no way to take the channel out of the chat windows in this game version
+  joinedAt = nil,     -- when the channel last joined (refusals soon after are not counted)
+  graceNoted = false, -- the "refused right after joining" line was logged for this join
+  retries = 0,        -- tries since the channel last failed because sends were refused (0 = not retrying)
+  nextRetryAt = nil,  -- when the next try is due (nil = no try planned)
 }
 local ourNames = {}   -- lower-case names of every channel we joined this session (their chat lines are hidden)
 
@@ -48,11 +57,53 @@ local function resolved()
   ns.Bus.fire("TRANSPORT_READY")
 end
 
-local function markFailed(reason)
-  if state.failed then return end
+local tryAgain -- defined below
+
+-- Plans the next try at the channel (60 s, 120 s, 240 s, then every 300 s with the default settings).
+local function scheduleRetry()
+  local c = ns.Config
+  local delay = math.min(c.CHANNEL_RETRY_MAX, c.CHANNEL_RETRY_FIRST * 2 ^ state.retries)
+  state.retries = state.retries + 1
+  state.nextRetryAt = ns.now() + delay
+  local gen = state.generation
+  C_Timer.After(delay, function()
+    ns.Log.safe(FEATURE, function()
+      if gen == state.generation and state.failed and state.nextRetryAt then tryAgain() end
+    end)
+  end)
+  return delay
+end
+
+-- Logs the first few tries, then only every sixth, so a channel that never works does not flood the log.
+local function retryWorthLogging()
+  return state.retries <= 3 or state.retries % 6 == 0
+end
+
+-- retry: the failure may pass (sends were refused), so the channel is tried again later.
+local function markFailed(reason, retry)
+  if state.failed then
+    if not retry and state.retries > 0 then -- e.g. a wrong crew code while we were retrying: stop retrying
+      state.generation = state.generation + 1
+      state.nextRetryAt, state.retries = nil, 0
+      state.failReason = reason
+      ns.Log.add("warn", "channel failed: %s (no more tries)", reason)
+    end
+    return
+  end
   state.failed = true
   state.failReason = reason
-  ns.Log.add("warn", "channel failed: %s", reason)
+  -- still trying again after refusals (the channel never worked in between): it has been down since the first
+  if state.retries == 0 or not state.failedAt then state.failedAt = ns.now() end
+  if retry then
+    local logIt = retryWorthLogging() -- same answer as for the try that just failed (none yet: logged)
+    local delay = scheduleRetry()
+    if logIt then
+      ns.Log.add("warn", "channel failed: %s; using the fallback, trying the channel again in %d s", reason, delay)
+    end
+  else
+    state.retries, state.nextRetryAt = 0, nil
+    ns.Log.add("warn", "channel failed: %s", reason)
+  end
   resolved()
 end
 
@@ -120,42 +171,80 @@ local function lookupIndex()
   return ok and tonumber(index) or 0
 end
 
-local function markJoined(index)
+-- quiet: log nothing about this join (not even a refusal right after it); the caller logs what it wants.
+local function markJoined(index, quiet)
   if state.joined or state.failed then return end
   state.joined = true
   state.index = index
   state.badSends = 0
+  state.joinedAt = ns.now()
+  state.graceNoted = quiet and true or false
   hideChannel()
-  ns.Log.add("info", "channel %s joined as %d", tostring(state.channelName), index)
+  if not quiet then ns.Log.add("info", "channel %s joined as %d", tostring(state.channelName), index) end
   resolved()
 end
 
--- Joins now, then looks once a second until it worked or CHANNEL_JOIN_TIMEOUT has passed.
-local function joinNow()
+-- Looks for the channel number now and then once a second, until it is there or CHANNEL_JOIN_TIMEOUT has passed.
+-- waiting() says whether we still want it (checked before every look).
+local function watchJoin(waiting, onJoined, onTimeout)
   local gen = state.generation
-  state.channelName = crew().channel
-  if type(state.channelName) == "string" then ourNames[state.channelName:lower()] = true end
-  JoinChannelByName(state.channelName, crew().password)
   local waited = 0
   local function check()
-    if gen ~= state.generation or state.joined or state.failed then return end
+    if gen ~= state.generation or not waiting() then return end
     local index = lookupIndex()
-    if index > 0 then markJoined(index); return end
-    if waited >= ns.Config.CHANNEL_JOIN_TIMEOUT then
-      markFailed("the channel did not join in time")
-      return
-    end
+    if index > 0 then onJoined(index); return end
+    if waited >= ns.Config.CHANNEL_JOIN_TIMEOUT then onTimeout(); return end
     waited = waited + 1
     C_Timer.After(1, function() ns.Log.safe(FEATURE, check) end)
   end
   check()
 end
 
+local function startJoin()
+  state.channelName = crew().channel
+  if type(state.channelName) == "string" then ourNames[state.channelName:lower()] = true end
+  JoinChannelByName(state.channelName, crew().password)
+end
+
+-- Joins now, then waits for the channel number (sends are kept meanwhile).
+local function joinNow()
+  startJoin()
+  watchJoin(function() return not state.joined and not state.failed end, markJoined,
+    function() markFailed("the channel did not join in time") end)
+end
+
+-- After sends were refused: join again (harmless if we are still in the channel) while the fallback keeps working.
+-- When the channel number is there, go back to the channel; otherwise plan the next try.
+tryAgain = function()
+  if not usesChannel(mode()) then scheduleRetry(); return end -- not using the channel right now: look again later
+  state.nextRetryAt = nil
+  local try = state.retries
+  local logIt = retryWorthLogging()
+  if logIt then ns.Log.add("info", "trying channel %s again (try %d)", tostring(crew().channel), try) end
+  local ok = ns.Log.safe(FEATURE, startJoin)
+  local function notThere()
+    local delay = scheduleRetry()
+    if logIt then ns.Log.add("warn", "channel %s did not join on try %d; next try in %d s", tostring(state.channelName),
+      try, delay) end
+  end
+  if not ok then notThere(); return end
+  watchJoin(function() return state.failed end, function(index)
+    -- joined is still set from before the refusals; failedAt stays until a send works (see Transport.send)
+    state.joined, state.failed, state.failReason = false, false, nil
+    markJoined(index, true)
+    state.graceNoted = not logIt -- a refusal right after this join is logged only when the try was
+    if logIt then ns.Log.add("info", "channel %s joined again as %d (try %d); saying hello there",
+      tostring(state.channelName), index, try) end
+    ns.Bus.fire("CHANNEL_BACK")
+  end, notThere)
+end
+
 -- Forgets the current connection (old timers stop); sends wait until the next join resolves.
 local function resetConnection()
   state.generation = state.generation + 1
-  state.joined, state.failed, state.failReason = false, false, nil
+  state.joined, state.failed, state.failReason, state.failedAt = false, false, nil, nil
   state.index, state.badSends = 0, 0
+  state.retries, state.nextRetryAt = 0, nil
 end
 
 local function joinLater(delay)
@@ -341,10 +430,22 @@ function Transport.send(text, dest)
   if dest.chatType == "CHANNEL" then
     if good then
       state.badSends = 0
+      if state.retries > 0 then
+        ns.Log.add("info", "channel %s works again", tostring(state.channelName))
+        state.retries, state.failedAt = 0, nil
+      end
+    elseif state.joinedAt and ns.now() - state.joinedAt < ns.Config.CHANNEL_JOIN_GRACE then
+      -- Just joined: the game may not take messages on the channel yet. Keep this one and try again soon.
+      if not state.graceNoted then
+        state.graceNoted = true
+        ns.Log.add("info", "channel %s refused a send right after joining (result %s); trying again shortly",
+          tostring(state.channelName), tostring(result))
+      end
+      return false, true
     else
       state.badSends = state.badSends + 1
       if state.badSends >= ns.Config.CHANNEL_FAILS_BEFORE_FALLBACK then
-        markFailed("sends to the channel were refused (result " .. tostring(result) .. ")")
+        markFailed("sends to the channel were refused (result " .. tostring(result) .. ")", true)
       end
     end
   end
@@ -352,9 +453,13 @@ function Transport.send(text, dest)
 end
 
 function Transport.status()
+  local now = ns.now()
   return {
     mode = mode(), channel = state.channelName or crew().channel, channelIndex = state.index,
     joined = state.joined, failed = state.failed, failReason = state.failReason, lastResult = state.lastResult,
     hideFailed = state.hideFailed,
+    downFor = state.failed and state.failedAt and math.max(0, now - state.failedAt) or nil,
+    nextRetryIn = state.failed and state.nextRetryAt and math.max(0, state.nextRetryAt - now) or nil,
+    retries = state.retries,
   }
 end

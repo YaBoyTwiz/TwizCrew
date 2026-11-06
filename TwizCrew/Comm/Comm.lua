@@ -92,9 +92,13 @@ end
 local function sendItem(item)
   local ok, retryLater = ns.Transport.send(item.text, item.dest)
   if retryLater then
-    -- The game is throttling us: keep the message at the front and wait a moment.
+    -- The game is throttling us (or the channel was only just joined): keep the message at the front, wait a
+    -- moment. Logged once per message, so a message kept for a while does not fill the log.
     pausedUntil = ns.now() + THROTTLE_PAUSE
-    ns.Log.debug("send to %s throttled, trying again soon", tostring(item.dest.target or item.dest.chatType))
+    if not item.waitLogged then
+      item.waitLogged = true
+      ns.Log.debug("send to %s has to wait, trying again soon", tostring(item.dest.target or item.dest.chatType))
+    end
     return false
   end
   ns.Log.debug("send %s via %s to %s%s", tostring(item.text:match("^%d+%^(%u+)%^") or "?"),

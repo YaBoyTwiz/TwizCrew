@@ -1,7 +1,6 @@
 # TwizCrew: a WoW Forever addon for me and my friends
 
-> Working name. It can change; the addon's folder name in WoW is the addon's name, so pick the final one before
-> friends install it.
+> **Final name: TwizCrew** (owner, 2026-11-05). Public repository: https://github.com/YaBoyTwiz/TwizCrew
 
 ## What we are making
 
@@ -23,8 +22,10 @@ Other players never see any of it. The messages are hidden addon messages, not c
   published. Details in the "Stats board" section below.
 - **"Tell crew to update" button built (2026-11-05):** not tested in game, not published. Details in its section
   below.
-- **Testing with friends needs the owner's go-ahead:** friends can only get TwizCrew once it is published (public
-  GitHub repository + WowUp, below), and the final name has to be picked before that (see the note at the top).
+- **Published (2026-11-05, owner said yes to "keep the name TwizCrew and publish now"):** public repository
+  https://github.com/YaBoyTwiz/TwizCrew, release v0.1.0. Friends install it with WowUp (README.md). Still not
+  tested in game. Before going public, the owner's WoW account folder name was removed from every file and from
+  the history; docs use `WTF/Account/*/` instead. Never write it into the repository.
 - The owner liked the idea of sharing information and triggering effects on each other's screens.
 - **First feature picked (owner):** show what **layer** each friend is on, and **what each friend with the addon
   is doing**. Details not designed yet.
@@ -88,10 +89,13 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Built (2026-11-05), not tested in game, not published.** Plan, Claude's calls and every change made while
   building: `docs/superpowers/plans/2026-11-05-update-button.md`. In-game checks: `docs/TESTING.md`, section
   "Tell crew to update" button. Built on the local branch `update-button`.
-- **Releasing (for Claude):** bump `ADDON_VERSION` in `TwizCrew/Core/Init.lua` and `## Version` in
+- **Releasing (for Claude):** only when the owner says "release it". Bump `ADDON_VERSION` in `TwizCrew/Core/Init.lua` and `## Version` in
   `TwizCrew/TwizCrew.toc` together (a test checks they match). When a release adds or removes files or changes the
   `.toc` in any other way, also set `RESTART_SINCE` (same file) to the new version, and say "restart the game" in
-  the release notes.
+  the release notes. Commit, then run `scripts/release.sh "notes for friends"`: it checks versions and tests,
+  builds `TwizCrew-<version>-forever.zip` (WowUp picks a zip ending in `-forever`) plus `release.json` (flavor
+  `forever`), tags `v<version>`, pushes `master` and creates the GitHub release. Then the owner can press **Tell
+  crew to update**.
 
 ## Decisions (owner)
 
@@ -224,7 +228,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - Plain words, short messages, one question at a time. The owner often types from a phone: read for intent, not typos.
 - No multiple-choice pop-ups; ask in plain words.
 - The owner streams (OBS + Discord). Anything on the game screen is on stream.
-- Nothing is published (GitHub release, public repository) until the owner says so.
+- The repository is public (owner's go-ahead, 2026-11-05), but each new release still waits for the owner's
+  "release it". Pushing work-in-progress commits to GitHub also waits for that.
 
 ## Sources
 

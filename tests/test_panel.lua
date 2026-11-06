@@ -112,6 +112,82 @@ return {
       rows = ns.PanelLogic.rows(list, { showOffline = false }, never, true, 0, WALL)
       A.eq(#rows, 1); A.eq(rows[1].name, "Ginkan")
     end,
+    xp_text_fits_each_row_style = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.xpText("full", 12, 63, false), "Lv 12 \194\183 63%")
+      A.eq(L.xpText("compact", 12, 63, false), "Lv 12 \194\183 63%")
+      A.eq(L.xpText("tiny", 12, 63, false), "63%")
+      A.eq(L.xpText("full", 60, 0, true), "Lv 60 \194\183 max level")
+      A.eq(L.xpText("compact", 60, 0, true), "Lv 60 \194\183 max")
+      A.eq(L.xpText("tiny", 60, 0, true), "max")
+      A.eq(L.xpText("full", nil, 40, false), "40%")
+      A.eq(L.xpText("full", 12, nil, false), nil, "XP unknown: no text")
+      A.eq(L.xpText("tiny", 60, nil, true), "max")
+    end,
+    max_level_from_need_or_level = function(ns, A)
+      local L = ns.PanelLogic
+      A.ok(L.isMaxLevel({ level = 30, xpMax = 0 }, 60))
+      A.ok(L.isMaxLevel({ level = 60 }, 60), "an older copy sends no xm")
+      A.no(L.isMaxLevel({ level = 30, xpMax = 1000 }, 60))
+      A.no(L.isMaxLevel({ level = 30 }, nil))
+    end,
+    thousands_and_durations = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.thousands(1234), "1,234"); A.eq(L.thousands(999), "999"); A.eq(L.thousands(1234567), "1,234,567")
+      A.eq(L.thousands(0), "0"); A.eq(L.thousands(12.7), "12")
+      A.eq(L.durationText(30), "About 1 min to level")
+      A.eq(L.durationText(25 * 60 + 10), "About 25 min to level")
+      A.eq(L.durationText(80 * 60), "About 1 h 20 min to level")
+      A.eq(L.durationText(120 * 60 + 20), "About 2 h to level")
+    end,
+    time_to_level_only_with_a_real_pace = function(ns, A)
+      local L = ns.PanelLogic
+      local t = { first = 0, lastGain = 600, earned = 6000, active = 600, gains = 5 } -- 10 XP a second
+      A.eq(L.timeToLevel(t, 1500, 700), 150)
+      A.eq(L.timeToLevel(nil, 1500, 700), nil, "no pace yet")
+      A.eq(L.timeToLevel(t, 0, 700), nil, "nothing left")
+      A.eq(L.timeToLevel({ first = 0, lastGain = 60, earned = 600, active = 60, gains = 1 }, 1500, 70), nil,
+        "one gain is not a pace")
+      A.eq(L.timeToLevel({ first = 0, lastGain = 120, earned = 600, active = 120, gains = 3 }, 1500, 130), nil,
+        "under 3 minutes of playing")
+      A.eq(L.timeToLevel(t, 1500, 600 + ns.Config.XP_IDLE_AFTER + 1), nil, "idle: last gain too old")
+      A.eq(L.timeToLevel({ first = 0, lastGain = 600, earned = 10, active = 600, gains = 2 }, 100000, 700), nil,
+        "over 12 hours is a wild guess")
+    end,
+    tooltip_lines_for_a_friend = function(ns, A)
+      local L = ns.PanelLogic
+      local m = member({ level = 12, xp = 63, xpCur = 637, xpMax = 1871, rested = 2000,
+        xpTrack = { first = 0, lastGain = 600, earned = 6000, active = 600, gains = 5 } })
+      A.eq(L.tooltipLines(m, 700, 60), { "Level 12 \194\183 63%", "1,234 XP to level 13", "Rested: 2,000 XP",
+        "About 2 min to level" })
+      m.rested, m.xpTrack = 0, nil
+      A.eq(L.tooltipLines(m, 700, 60), { "Level 12 \194\183 63%", "1,234 XP to level 13" })
+      A.eq(L.tooltipLines(member({ level = 60, xp = 0, xpCur = 0, xpMax = 0, rested = 50 }), 700, 60),
+        { "Level 60", "Max level" })
+      local old = member({ level = 12, xp = 63 })   -- an older copy: no exact numbers
+      A.eq(L.tooltipLines(old, 700, 60), { "Level 12 \194\183 63%" })
+      A.eq(L.tooltipLines(member({ online = false, xpCur = 5, xpMax = 10 }), 700, 60), { "Level 14" },
+        "offline: just the level")
+    end,
+    rows_carry_xp_text_and_tooltip = function(ns, A)
+      local L = ns.PanelLogic
+      local list = { member({ xpCur = 620, xpMax = 1000 }), member({ name = "Stabz", online = false }),
+        member({ name = "Maxi", level = 60, xp = 0, xpMax = 0 }) }
+      local rows = L.rows(list, { rowStyle = "compact" }, never, true, 0, WALL, nil, 60)
+      A.eq(rows[1].xpText, "Lv 14 \194\183 62%")
+      A.eq(rows[1].tip, { "Level 14 \194\183 62%", "380 XP to level 15" })
+      A.eq(rows[2].xpText, nil, "offline rows keep today's look")
+      A.eq(rows[2].tip, { "Level 14" })
+      A.eq(rows[3].xpText, "Lv 60 \194\183 max"); A.ok(rows[3].atMax)
+      rows = L.rows(list, { rowStyle = "tiny", xpText = false, xpTooltip = false }, never, true, 0, WALL, nil, 60)
+      A.eq(rows[1].xpText, nil, "numbers switched off")
+      A.eq(rows[1].tip, nil, "hover detail switched off")
+      A.eq(L.rows(list, {}, never, true, 0, WALL)[1].xpText, "Lv 14 \194\183 62%", "full is the default style")
+    end,
+    self_member_carries_xp_numbers = function(ns, A)
+      local m = ns.PanelLogic.selfMember("Twiz", { lv = "10", xp = "37", xc = "370", xm = "1000", rx = "40" })
+      A.eq({ m.xpCur, m.xpMax, m.rested }, { 370, 1000, 40 })
+    end,
     title_version_fits_the_row_style = function(ns, A)
       local L = ns.PanelLogic
       A.eq(L.titleVersion("full", "0.1.1"), "v0.1.1")
@@ -157,8 +233,8 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showXP", "fadeOut", "fadeAlpha", "locked",
-        "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "tag_DEAD",
+      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showXP", "xpText", "xpTooltip",
+        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
@@ -190,6 +266,59 @@ return {
       ns.Modules.resetAll()
       W:advance(31)
       A.eq(#ns.Panel.models(), 12)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    panel_draws_level_progress_in_every_style = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12", xp = "63", xc = "637", xm = "1871", rx = "2000",
+        zn = "Elwynn Forest", ver = "0.1.0" })
+      W:advance(1)
+      local DOT = "\194\183"
+      A.eq(ns.Panel.rowTextsForTest(1), { bar = "Lv 12 " .. DOT .. " 63%" }, "full: next to the bar, no corner")
+      ns.Modules.set("panel", "rowStyle", "compact"); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), { corner = "Lv 12 " .. DOT .. " 63%" })
+      ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), { corner = "63%" })
+      ns.Modules.set("panel", "xpText", false); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), {}, "tiny without numbers: as before")
+      ns.Modules.set("panel", "rowStyle", "compact"); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "compact without numbers: the level, as before")
+      ns.Modules.set("panel", "rowStyle", "full"); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "full without numbers: as before")
+      ns.Modules.resetAll(); W:advance(1)
+      A.eq(ns.Modules.setting("panel", "xpText"), true)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "60", xm = "0", xc = "0", xp = "0" }); W:advance(1)
+      A.eq(ns.Panel.rowTextsForTest(1), { bar = "Lv 60 " .. DOT .. " max level" })
+      A.eq(ns.Log.errors(10), {})
+    end,
+    row_tooltip_shows_xp_detail = function(ns, A, W)
+      local tip = { lines = {}, shown = false }
+      W.env.GameTooltip = {
+        SetOwner = function(_, owner) tip.owner = owner; tip.lines = {} end,
+        SetText = function(_, t) tip.lines[#tip.lines + 1] = t end,
+        AddLine = function(_, t) tip.lines[#tip.lines + 1] = t end,
+        Show = function() tip.shown = true end,
+        Hide = function() tip.shown = false end,
+        IsOwned = function(_, f) return tip.owner == f end,
+        IsShown = function() return tip.shown end,
+      }
+      start(ns, W)
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12", xp = "63", xc = "637", xm = "1871", rx = "2000",
+        zn = "Elwynn Forest", ver = "0.1.0" })
+      W:advance(1)
+      local r = ns.Panel.rowFrameForTest(1)
+      r._scripts.OnEnter(r)
+      A.ok(tip.shown)
+      A.eq(tip.lines, { "Ginkan", "Level 12 \194\183 63%", "1,234 XP to level 13", "Rested: 2,000 XP" })
+      -- new numbers while the mouse is on the row: the tooltip follows
+      receive(ns, W, "Ginkan", "UPDATE", { xc = "871", xp = "46" })
+      W:advance(1)
+      A.eq(tip.lines[3], "1,000 XP to level 13")
+      r._scripts.OnLeave(r)
+      A.no(tip.shown)
+      ns.Modules.set("panel", "xpTooltip", false); W:advance(1)
+      r._scripts.OnEnter(r)
+      A.no(tip.shown, "hover detail switched off")
       A.eq(ns.Log.errors(10), {})
     end,
     panel_title_shows_the_version = function(ns, A, W)

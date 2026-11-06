@@ -47,9 +47,91 @@ local function tagList(m, settings, relationOf, tagsOn)
   return list
 end
 
--- members: already sorted. titleOf(name) -> award title | nil (optional; online rows only). Returns row models.
-function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf)
+---------------------------------------------------------------------------------------------- level progress
+local DOT = "\194\183" -- the middle dot "·" (UTF-8)
+
+local function count(v)
+  local n = tonumber(v)
+  if n == nil or n ~= n or n == math.huge or n == -math.huge then return nil end
+  return n
+end
+
+-- Max level: the friend's copy says it needs no XP (xm = 0), or the level is the game's max (older copies).
+function PanelLogic.isMaxLevel(m, maxLevel)
+  if count(m.xpMax) == 0 then return true end
+  local lv = level(m.level)
+  return lv ~= nil and maxLevel ~= nil and lv >= maxLevel
+end
+
+-- The level and XP text on a row, made to fit the row style (nil when there is nothing to say):
+-- full and compact "Lv 12 · 63%", tiny "63%"; at max level "Lv 60 · max level" (full), "Lv 60 · max", "max".
+function PanelLogic.xpText(style, lv, xp, atMax)
+  lv, xp = level(lv), percent(xp)
+  if atMax then
+    if style == "tiny" or not lv then return "max" end
+    return "Lv " .. lv .. " " .. DOT .. (style == "full" and " max level" or " max")
+  end
+  if not xp then return nil end
+  if style == "tiny" or not lv then return xp .. "%" end
+  return "Lv " .. lv .. " " .. DOT .. " " .. xp .. "%"
+end
+
+-- 1234567 -> "1,234,567" (whole numbers, rounded down)
+function PanelLogic.thousands(n)
+  local s = tostring(math.floor(tonumber(n) or 0))
+  local sign, digits = s:match("^(%-?)(%d+)$")
+  if not digits then return s end
+  digits = digits:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+  if digits:sub(1, 1) == "," then digits = digits:sub(2) end
+  return sign .. digits
+end
+
+-- "About 25 min to level", "About 1 h 20 min to level"
+function PanelLogic.durationText(seconds)
+  local minutes = math.max(1, math.floor(seconds / 60 + 0.5))
+  if minutes < 60 then return "About " .. minutes .. " min to level" end
+  local h, mm = math.floor(minutes / 60), minutes % 60
+  if mm == 0 then return "About " .. h .. " h to level" end
+  return "About " .. h .. " h " .. mm .. " min to level"
+end
+
+-- Seconds to the next level at the friend's pace this play session (track: see Roster), or nil when there is no
+-- real pace yet (too few gains, too little playing time), the friend looks idle, or the answer would be wild.
+function PanelLogic.timeToLevel(track, left, now)
+  local c = ns.Config
+  if type(track) ~= "table" or not count(left) or left <= 0 or not count(now) then return nil end
+  if (track.gains or 0) < c.XP_MIN_GAINS or (track.active or 0) < c.XP_MIN_ACTIVE then return nil end
+  if (track.earned or 0) <= 0 or now - (track.lastGain or 0) > c.XP_IDLE_AFTER then return nil end
+  local seconds = left / (track.earned / track.active)
+  if seconds > c.XP_MAX_ESTIMATE then return nil end
+  return seconds
+end
+
+-- The lines under the name in a row's tooltip.
+function PanelLogic.tooltipLines(m, now, maxLevel)
+  local lv, xp = level(m.level), percent(m.xp)
+  local lines = {}
+  local head = lv and ("Level " .. lv) or "Level unknown"
+  if not m.online then return { head } end
+  if PanelLogic.isMaxLevel(m, maxLevel) then return { head, "Max level" } end
+  lines[1] = xp and (head .. " " .. DOT .. " " .. xp .. "%") or head
+  local cur, need = count(m.xpCur), count(m.xpMax)
+  if cur and need and need > 0 then
+    local left = math.max(0, need - cur)
+    lines[#lines + 1] = PanelLogic.thousands(left) .. " XP to level " .. (lv and lv + 1 or "next")
+    local rested = count(m.rested)
+    if rested and rested > 0 then lines[#lines + 1] = "Rested: " .. PanelLogic.thousands(rested) .. " XP" end
+    local seconds = PanelLogic.timeToLevel(m.xpTrack, left, now)
+    if seconds then lines[#lines + 1] = PanelLogic.durationText(seconds) end
+  end
+  return lines
+end
+
+-- members: already sorted. titleOf(name) -> award title | nil (optional; online rows only). maxLevel: the game's
+-- max level (optional). Returns row models.
+function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf, maxLevel)
   settings = settings or {}
+  local style = settings.rowStyle or "full"
   local out = {}
   for _, m in ipairs(members or {}) do
     local offline = not m.online
@@ -59,6 +141,11 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         status = text(m.status), xp = percent(m.xp), tags = tagList(m, settings, relationOf, tagsOn),
         offline = offline,
       }
+      if not offline then
+        row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
+        if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end
+      end
+      if settings.xpTooltip ~= false then row.tip = PanelLogic.tooltipLines(m, now, maxLevel) end
       if offline then
         if type(m.lastSeen) == "number" and type(wall) == "number" then
           row.offlineText = "Offline, last seen " .. ns.Util.ago(wall - m.lastSeen)
@@ -107,6 +194,7 @@ function PanelLogic.selfMember(name, fields)
   fields = fields or {}
   return {
     name = name, class = fields.cl, level = tonumber(fields.lv), xp = tonumber(fields.xp),
+    xpCur = tonumber(fields.xc), xpMax = tonumber(fields.xm), rested = tonumber(fields.rx),
     zone = fields.zn, subzone = fields.sz, status = fields.st, tags = ns.Tags.decode(fields.tg), online = true,
   }
 end

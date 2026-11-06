@@ -70,6 +70,15 @@ function ns.shortName(name)
   return name:match("^([^%s%-]+)") or name
 end
 
+-- The game's max level (for "max level" and the ding's "N to go"); MAX_LEVEL_FALLBACK when it cannot tell.
+function ns.maxLevel()
+  if type(GetMaxPlayerLevel) == "function" then
+    local ok, n = pcall(GetMaxPlayerLevel)
+    if ok and type(n) == "number" and n > 0 and n < 1000 then return math.floor(n) end
+  end
+  return ns.Config.MAX_LEVEL_FALLBACK
+end
+
 function ns.playerName()
   return ns.shortName(UnitName("player") or "Unknown")
 end

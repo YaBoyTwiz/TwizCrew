@@ -202,13 +202,24 @@ local function createRow()
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
   end
+  r.xpText = T.text(r, T.FONT.small, C.zone) -- "Lv 12 · 63%" next to the bar (full style)
+  r.xpText:SetJustifyH("RIGHT")
   r.xpBack = r:CreateTexture(nil, "ARTWORK")
   T.color(r.xpBack, C.xpBack, 1)
   r.xpFill = r:CreateTexture(nil, "OVERLAY")
   T.color(r.xpFill, C.xp, 1)
   r.pills = {}
   draggable(r)
+  script(r, "OnEnter", function(self) Panel.showRowTip(self) end)
+  script(r, "OnLeave", function(self) Panel.hideRowTip(self) end)
   return r
+end
+
+-- Width of a font string's text (a guess from its length when the game cannot tell yet).
+local function textWidth(fs, text)
+  local w = fs.GetStringWidth and fs:GetStringWidth()
+  if type(w) ~= "number" or w ~= w or w <= 0 then w = #text * 5 end
+  return w
 end
 
 local function placeLine(r, fs, text, y, width)
@@ -245,21 +256,28 @@ local function layoutRow(r, m, style, s, width)
   r.icon:SetPoint("TOPLEFT", r, "TOPLEFT", 6, -5)
   ns.ClassIcon.apply(r.icon, m.class)
 
+  r.tcModel = m
+  -- Top-right corner: the level and XP text in compact and tiny (when on), else the level number in full and
+  -- compact. In full the text sits next to the XP bar instead, so the corner number would say the same twice.
+  local corner
+  if style ~= "full" and m.xpText then corner = m.xpText
+  elseif style ~= "tiny" and m.level and not (style == "full" and m.xpText) then corner = tostring(m.level) end
+  r.tcCorner = corner
   local roomRight = style == "tiny" and 8 or 34
-  r.name:ClearAllPoints()
-  r.name:SetPoint("LEFT", r.icon, "RIGHT", 5, 0)
-  r.name:SetWidth(width - 6 - icon - 5 - roomRight)
-  r.name:SetText(m.name)
-  r.name:SetTextColor(T.classColor(m.class))
-
-  if style ~= "tiny" and m.level then
+  if corner then
     r.level:ClearAllPoints()
     r.level:SetPoint("RIGHT", r, "TOPRIGHT", -8, -(5 + icon / 2))
-    r.level:SetText(tostring(m.level))
+    r.level:SetText(corner)
     r.level:Show()
+    roomRight = math.max(roomRight, textWidth(r.level, corner) + 14)
   else
     r.level:Hide()
   end
+  r.name:ClearAllPoints()
+  r.name:SetPoint("LEFT", r.icon, "RIGHT", 5, 0)
+  r.name:SetWidth(math.max(20, width - 6 - icon - 5 - roomRight))
+  r.name:SetText(m.name)
+  r.name:SetTextColor(T.classColor(m.class))
 
   local y = 5 + icon + 2
   if m.title then -- award title: a small muted line under the name, in every row style
@@ -273,7 +291,8 @@ local function layoutRow(r, m, style, s, width)
   else
     r.title:Hide()
   end
-  r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide()
+  r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide(); r.xpText:Hide()
+  r.tcBarText = nil
   if style == "full" then
     local line = m.offline and m.offlineText or (s.showZone and m.zoneText ~= "" and m.zoneText)
     if line then placeLine(r, r.zone, line, y, width); y = y + LINE end
@@ -281,8 +300,24 @@ local function layoutRow(r, m, style, s, width)
       placeLine(r, r.status, '"' .. m.status .. '"', y, width)
       y = y + LINE
     end
-    if not m.offline and s.showXP and m.xp then
-      local barWidth = width - 16
+    -- XP line: the bar (none at max level) with "Lv 12 · 63%" on its right, or the text alone.
+    local bar = not m.offline and s.showXP and m.xp and not m.atMax
+    local label = not m.offline and m.xpText
+    local barWidth = width - 16
+    if label then
+      r.tcBarText = label
+      r.xpText:ClearAllPoints()
+      r.xpText:SetText(label)
+      if bar then
+        local w = textWidth(r.xpText, label)
+        barWidth = math.max(40, barWidth - w - 6)
+        r.xpText:SetPoint("RIGHT", r, "TOPRIGHT", -8, -(y + 5))
+      else
+        r.xpText:SetPoint("LEFT", r, "TOPLEFT", 8, -(y + 5))
+      end
+      r.xpText:Show()
+    end
+    if bar then
       r.xpBack:ClearAllPoints()
       r.xpBack:SetPoint("TOPLEFT", r, "TOPLEFT", 8, -(y + 2))
       r.xpBack:SetSize(barWidth, 6)
@@ -294,14 +329,45 @@ local function layoutRow(r, m, style, s, width)
         r.xpFill:SetSize(math.max(1, barWidth * xp / 100), 6)
         r.xpFill:Show()
       end
-      y = y + 10
     end
+    if label then y = y + LINE elseif bar then y = y + 10 end
   end
   local height = y + 4
   r:SetHeight(height)
   r:SetAlpha(m.offline and 0.4 or 1)
   layoutPills(r, m.tags)
   return height
+end
+
+---------------------------------------------------------------------------------------------------------- row tooltip
+local tipRow -- the row whose tooltip is showing (redraws refresh it)
+
+-- Name in class colour, then the row model's tip lines (level, XP to level, rested, time to level).
+function Panel.showRowTip(r)
+  local m = r and r.tcModel
+  if not GameTooltip or type(m) ~= "table" or type(m.tip) ~= "table" then return end
+  GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
+  GameTooltip:SetText(m.name, T.classColor(m.class))
+  local cr, cg, cb = T.rgb(C.text)
+  for _, line in ipairs(m.tip) do GameTooltip:AddLine(line, cr, cg, cb) end
+  GameTooltip:Show()
+  tipRow = r
+end
+
+function Panel.hideRowTip(r)
+  if tipRow ~= r then return end
+  tipRow = nil
+  if GameTooltip then GameTooltip:Hide() end
+end
+
+-- After a redraw: the row under the mouse may show someone else now, or new numbers.
+local function refreshRowTip()
+  local r = tipRow
+  if not r then return end
+  if GameTooltip and GameTooltip.IsOwned and not GameTooltip:IsOwned(r) then tipRow = nil; return end
+  local m = r.tcModel -- hidden rows already closed their tooltip (redraw)
+  if type(m) ~= "table" or type(m.tip) ~= "table" then Panel.hideRowTip(r); return end
+  Panel.showRowTip(r)
 end
 
 ---------------------------------------------------------------------------------------------------------- update
@@ -343,6 +409,7 @@ local function hide()
     stopDrag() -- a drag cut short by hiding must not leave the panel "moving"
     root:Hide()
   end
+  if tipRow then Panel.hideRowTip(tipRow) end
   shown = false
   note = nil
   Widgets.closeMenu()
@@ -364,7 +431,8 @@ local function redraw()
   if s.showSelf and ns.Self then
     table.insert(members, 1, Logic.selfMember(ns.playerName(), ns.Self.lastSent()))
   end
-  models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(), titleOf())
+  models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(), titleOf(),
+    ns.maxLevel())
   header = Logic.headerText(online, total)
   countText:SetText(header)
 
@@ -380,6 +448,7 @@ local function redraw()
 
   if tab == "shame" then
     for _, r in ipairs(rowFrames) do r:Hide() end
+    if tipRow then Panel.hideRowTip(tipRow) end
     visibleRows = 0
     local ok, h = ns.Log.safe("board", ns.Board.draw, root, top + GAP, BOARD_WIDTH)
     if ok and type(h) == "number" then
@@ -422,8 +491,12 @@ local function redraw()
     r:Show()
     y = y + h + GAP
   end
-  for i = used + 1, #rowFrames do rowFrames[i]:Hide() end
+  for i = used + 1, #rowFrames do
+    rowFrames[i]:Hide()
+    if tipRow == rowFrames[i] then Panel.hideRowTip(tipRow) end
+  end
   visibleRows = used
+  refreshRowTip()
 
   note = nil
   if #models == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
@@ -664,6 +737,13 @@ function Panel.isMovingForTest() return moving end
 function Panel.titleVersionForTest() return titleVersion end
 function Panel.updateLineForTest() return updateLine end
 function Panel.updateLineButtonForTest() return updateBar end
+function Panel.rowFrameForTest(i) return rowFrames[i] end
+-- What row i shows as level / XP text: { corner = top-right text, bar = text next to the XP bar } (nil = hidden).
+function Panel.rowTextsForTest(i)
+  local r = rowFrames[i]
+  if not r then return nil end
+  return { corner = rawget(r, "tcCorner"), bar = rawget(r, "tcBarText") }
+end
 
 local function onEnable()
   enabled = true
@@ -703,6 +783,7 @@ ns.Modules.register({
     .. "Drag it to move it; right-click its title for quick options.",
   defaults = {
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
+    xpText = true, xpTooltip = true,
     fadeOut = false, fadeAlpha = 0.3, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = true, sort = "online", showSelf = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
@@ -717,13 +798,19 @@ ns.Modules.register({
     { key = "rowStyle", label = "Row style", kind = "choice",
       choices = { { "full", "Full" }, { "compact", "Compact" }, { "tiny", "Tiny" } },
       info = "How much each friend's row shows. Full: zone, status and XP. Compact: name, level and tags. "
-        .. "Tiny: just the name and tags." },
+        .. "Tiny: just the name and tags (and the XP percent, if level and XP numbers are on)." },
     { key = "showZone", label = "Show zone line", kind = "toggle",
       info = "Shows where each friend is, like \"Elwynn Forest, Goldshire\"." },
     { key = "showStatus", label = "Show typed status", kind = "toggle",
       info = "Shows the short note a friend typed with /tc status, like \"LF Deadmines\"." },
     { key = "showXP", label = "Show XP bar", kind = "toggle",
       info = "Shows a purple bar with how close each friend is to their next level." },
+    { key = "xpText", label = "Show level and XP numbers", kind = "toggle",
+      info = "Shows each friend's level and how far into it they are, like \"Lv 12 \194\183 63%\". Full rows show it "
+        .. "next to the XP bar, Compact rows in the top-right corner, Tiny rows just the percent." },
+    { key = "xpTooltip", label = "XP details on hover", kind = "toggle",
+      info = "Hover over a friend's row to see the exact XP they need for the next level, their rested XP, "
+        .. "and about how long until they level at their pace this session (shown once there is a steady pace)." },
     { key = "fadeOut", label = "Fade when the mouse is not over it", kind = "toggle",
       info = "Makes the panel see-through while your mouse is somewhere else, so it gets in the way less." },
     { key = "fadeAlpha", label = "How much to fade", kind = "slider", min = 0.1, max = 1, step = 0.05,

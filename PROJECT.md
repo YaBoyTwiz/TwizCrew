@@ -173,7 +173,9 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **Where the game is on this PC:** Lutris (Flatpak) → Battle.net (on GE-Proton11-12) → WoW Forever.
   AddOns folder:
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/`
-- **Already installed there:** Questie, QuestieDB, QuestMaster, and **TwizTracker** (a small starter addon Claude wrote:
+- **Already installed there:** Questie, QuestieDB, QuestMaster, OpenMap (v0.7.5-beta from
+  https://github.com/openmap-world/openmap, installed by hand 2026-11-05; conflicts with Leatrix Maps, Mapster and
+  Magnify), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **How TwizCrew gets into the game (set up 2026-11-05):** the AddOns folder has a symbolic link `TwizCrew` →
   `~/Documents/GitHub/twizcrew/TwizCrew`, so an edit here plus `/reload` in game is the whole test loop. Lutris is a

@@ -317,6 +317,11 @@ local function build(W)
   fakes.Minimap = minimap
   fakes.GetCursorPosition = function() return st.cursor.x, st.cursor.y end
   fakes.GetMinimapShape = function() return st.minimapShape or "ROUND" end
+  -- level progress: rested XP (st.rested, nil = none, like the game) and the max level (st.maxLevel), both
+  -- hideable through st.missing ("GetXPExhaustion", "GetMaxPlayerLevel"). Level-up sounds land in W.sounds.
+  st.maxLevel = 60
+  fakes.GetXPExhaustion = function() return st.rested end
+  fakes.GetMaxPlayerLevel = function() return st.maxLevel end
   local v1UnitAffectingCombat = env.UnitAffectingCombat
   env.UnitAffectingCombat = function(u)
     local x = u ~= "player" and unit(u)

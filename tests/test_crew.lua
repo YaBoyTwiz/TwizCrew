@@ -81,7 +81,88 @@ return {
       W.state.xp = 11
       ns.Self.refresh("test"); W:advance(2)
       local msgs = sentSince(ns, W, n)
-      A.eq(#msgs, 1); A.eq(msgs[1].type, "UPDATE"); A.eq(msgs[1].fields, { xp = "11" })
+      -- the exact XP rides along with the percent (level progress)
+      A.eq(#msgs, 1); A.eq(msgs[1].type, "UPDATE"); A.eq(msgs[1].fields, { xp = "11", xc = "11" })
+    end,
+    self_sends_raw_xp_numbers = function(ns, A, W)
+      W.state.level, W.state.xp, W.state.xpMax, W.state.rested = 12, 637.9, 1000, 500
+      local f = ns.Self.gather()
+      A.eq({ f.lv, f.xp, f.xc, f.xm, f.rx }, { "12", "63", "637", "1000", "500" })
+      W.state.rested = nil
+      A.eq(ns.Self.gather().rx, "0", "no rested XP")
+      W.state.missing.GetXPExhaustion = true
+      A.eq(ns.Self.gather().rx, "0", "no way to read rested XP")
+    end,
+    max_level_sends_zero_need = function(ns, A, W)
+      W.state.level, W.state.xp, W.state.xpMax, W.state.rested = 60, 0, 0, 900
+      local f = ns.Self.gather()
+      A.eq({ f.xc, f.xm, f.rx, f.xp }, { "0", "0", "0", "0" })
+      -- at the max level some games still answer an XP max: the level decides
+      W.state.xp, W.state.xpMax = 5, 209800
+      f = ns.Self.gather()
+      A.eq({ f.xc, f.xm }, { "0", "0" })
+      W.state.missing.GetMaxPlayerLevel = true
+      A.eq(ns.Self.gather().xm, "209800", "without GetMaxPlayerLevel only XP max 0 means max level")
+    end,
+    secret_xp_keeps_what_was_sent = function(ns, A, W)
+      start(ns, W)
+      W.state.xp, W.state.xpMax = 40, 100
+      ns.Self.refresh("test"); W:advance(2)
+      W.state.xp = 55
+      W.state.secret[55] = true
+      local f = ns.Self.gather()
+      A.eq({ f.xp, f.xc, f.xm }, { "40", "40", "100" }, "a secret value counts as unknown")
+      noErrors(ns, A)
+    end,
+    xp_detail_alone_sends_nothing_and_rides_along = function(ns, A, W)
+      start(ns, W)
+      W.state.xp, W.state.xpMax, W.state.rested = 100, 1000, 300
+      ns.Self.refresh("test"); W:advance(2)
+      local n = #W.sent
+      W.state.xp, W.state.rested = 104, 296    -- still 10%: only xc and rx change
+      W:fire("PLAYER_XP_UPDATE"); W:advance(2)
+      A.eq(#W.sent, n, "no message for a change in xc / rx alone")
+      W.state.combat = true                   -- a fight starts: the FIGHTING tag goes out, xc and rx with it
+      W:fire("PLAYER_REGEN_DISABLED"); W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1)
+      A.eq(msgs[1].fields, { tg = "COMBAT", xc = "104", rx = "296" })
+      noErrors(ns, A)
+    end,
+    level_up_sends_level_and_numbers_together = function(ns, A, W)
+      start(ns, W)
+      W.state.xp, W.state.xpMax = 950, 1000
+      ns.Self.refresh("test"); W:advance(2)
+      local n = #W.sent
+      W.state.level, W.state.xp, W.state.xpMax = 11, 30, 1200
+      W:fire("PLAYER_LEVEL_UP"); W:fire("PLAYER_XP_UPDATE"); W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 1)
+      A.eq(msgs[1].fields, { lv = "11", xm = "1200", xc = "30", xp = "2" })
+      -- lv, xm and xc lead the message, right after the zone / layer / session keys
+      A.contains(W.sent[#W.sent].text, "^lv=11~xm=1200~xc=30~")
+    end,
+    longest_state_with_xp_numbers_fits = function(ns, A, W)
+      start(ns, W)
+      W.state.zone, W.state.subzone = string.rep("Z", 120), string.rep("S", 120)
+      W.state.level, W.state.xp, W.state.xpMax, W.state.rested = 59, 9999998, 9999999, 9999999
+      W.state.dead, W.state.combat, W.state.afk, W.state.inInstance, W.state.instanceType = true, true, true, true, "party"
+      ns.db.myStatus = string.rep("^", 40)
+      local f = ns.Self.gather()
+      f.lk = "123456789"
+      local merged = {}
+      local texts = ns.Codec.encode("STATE", f)
+      for _, text in ipairs(texts) do
+        A.ok(#text <= 255, "piece of " .. #text)
+        for k, v in pairs(ns.Codec.decode(text).fields) do merged[k] = v end
+      end
+      A.eq(merged, f, "every field arrives whole")
+      -- with a normal zone name the level and XP numbers all travel in the first piece
+      W.state.zone, W.state.subzone = "Stranglethorn Vale", "The Crystal Shore"
+      f = ns.Self.gather()
+      f.lk = "123456789"
+      local first = ns.Codec.decode(ns.Codec.encode("STATE", f)[1]).fields
+      A.eq({ first.lv, first.xm, first.xc, first.rx }, { "59", "9999999", "9999998", "9999999" })
     end,
     xp_zero_max_gives_zero = function(ns, A, W)
       start(ns, W)

@@ -39,8 +39,9 @@ local function fitEntry(ek, value, room)
 end
 
 -- Zone, instance and layer key go first, so they always arrive together in the first piece (a friend's layer
--- is never compared with a zone from another message). The rest follows sorted by key.
-local FIRST = { zn = 1, ins = 2, lk = 3, sid = 4, sst = 5 }
+-- is never compared with a zone from another message). Then the level and XP numbers (level, XP needed, current
+-- XP, rested), so they arrive together and the level comes no later than the XP. The rest follows sorted by key.
+local FIRST = { zn = 1, ins = 2, lk = 3, sid = 4, sst = 5, lv = 6, xm = 7, xc = 8, rx = 9 }
 
 -- Pieces of a continued message keep their type, except STATE which continues as UPDATE (v1 copies need that).
 local function continuation(msgType)

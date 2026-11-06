@@ -29,12 +29,42 @@ local function copy(t)
   return out
 end
 
+-- A number we may do math on: nil when missing or secret (issecretvalue, combat rules), or not a real number.
+local function readable(v)
+  if v == nil then return nil end
+  if type(issecretvalue) == "function" then
+    local ok, secret = pcall(issecretvalue, v)
+    if not ok or secret then return nil end
+  end
+  local n = tonumber(v)
+  if n == nil or n ~= n or n == math.huge or n == -math.huge then return nil end
+  return n
+end
+
+-- xp (percent), xc (current XP), xm (XP needed for this level; "0" at max level), rx (rested XP; "0" if none).
+-- Unreadable numbers keep what was last sent, so a secret value never shows as a drop to 0.
+local function xpFields(level)
+  local xp, xpMax = readable((try(UnitXP, "player"))), readable((try(UnitXPMax, "player")))
+  if xp == nil or xpMax == nil then
+    return { xp = last.xp or "0", xc = last.xc or "", xm = last.xm or "", rx = last.rx or "0" }
+  end
+  local maxLevel = readable((try(GetMaxPlayerLevel)))
+  if xpMax <= 0 or (maxLevel and maxLevel > 0 and level >= maxLevel) then
+    return { xp = "0", xc = "0", xm = "0", rx = "0" }
+  end
+  local rested = readable((try(GetXPExhaustion))) or 0
+  return {
+    xp = tostring(math.floor(xp / xpMax * 100)),
+    xc = tostring(math.floor(math.max(0, xp))),
+    xm = tostring(math.floor(xpMax)),
+    rx = tostring(math.floor(math.max(0, rested))),
+  }
+end
+
 function Self.gather()
   local _, class = try(UnitClass, "player")
   local level = tonumber((try(UnitLevel, "player"))) or 0
-  local xp, xpMax = tonumber((try(UnitXP, "player"))) or 0, tonumber((try(UnitXPMax, "player"))) or 0
-  local percent = 0
-  if xpMax > 0 then percent = math.floor(xp / xpMax * 100) end
+  local x = xpFields(level)
   local inInstance = try(IsInInstance)
   local onTaxi = try(UnitOnTaxi, "player")
   local subzone = try(GetSubZoneText) or ""
@@ -46,7 +76,10 @@ function Self.gather()
   return {
     cl = tostring(class or ""),
     lv = tostring(level),
-    xp = tostring(percent),
+    xp = x.xp,
+    xc = x.xc, -- level progress: raw numbers for the tooltip and the time-to-level estimate
+    xm = x.xm,
+    rx = x.rx,
     zn = tostring(try(GetRealZoneText) or ""),
     sz = tostring(subzone),
     st = tostring(ns.db and ns.db.myStatus or ""),
@@ -69,12 +102,23 @@ function Self.diff(old, new)
   return changes
 end
 
+-- Keys that never send a message on their own: they wait for the next UPDATE that goes out anyway (the XP
+-- percent, a fight starting or ending, a zone change...), so earning XP adds no messages.
+local RIDE_ALONG = { xc = true, rx = true }
+
+local function onlyRideAlong(changes)
+  for key in pairs(changes) do
+    if not RIDE_ALONG[key] then return false end
+  end
+  return true
+end
+
 local function flush()
   scheduled = false
   local now = Self.gather()
   local changes = Self.diff(last, now)
+  if next(changes) == nil or onlyRideAlong(changes) then return end -- "last" keeps the old xc / rx: they stay changed
   last = now
-  if next(changes) == nil then return end
   ns.Comm.send("UPDATE", changes)
   ns.Bus.fire("SELF_UPDATED", changes)
 end

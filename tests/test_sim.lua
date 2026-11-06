@@ -155,9 +155,78 @@ local function reload(H, c, version)
   return fr2, fr2Ns
 end
 
+-- How many times the update notice showed on this copy (its log says so each time).
+local function noticesShown(ns)
+  local n = 0
+  for _, line in ipairs(ns.Log.lines()) do
+    if line:find("INFO update notice: v", 1, true) then n = n + 1 end
+  end
+  return n
+end
+
 return {
   files = {},
   tests = {
+    update_notice_once_on_the_old_copy = function(_, A, _, H)
+      local c = oldAndNew(H)                     -- Twiz v0.2.0 (restart since v0.1.0), Frostie v0.1.0
+      A.ok(c.frNs.MinimapButton.badgeShownForTest(), "badge as soon as Twiz is heard")
+      A.eq(c.frNs.Panel.updateLineForTest(), "Update available: v0.2.0")
+      A.eq(c.frNs.Updates.promptForTest(), nil, "the pop-up waits a little")
+      H.advance(60)
+      A.eq(noticesShown(c.frNs), 1, "exactly one pop-up")
+      A.eq(c.frNs.Updates.promptForTest(), { title = "Update available: v0.2.0",
+        note = "Twiz has it. Open WowUp and click Update, then press Reload now.", reload = true })
+      A.eq(noticesShown(c.twNs), 0, "the new copy gets nothing")
+      A.no(c.twNs.MinimapButton.badgeShownForTest())
+      A.eq(c.twNs.Panel.updateLineForTest(), nil)
+      A.eq(c.twNs.Panel.titleVersionForTest(), "v0.2.0")
+      A.eq(c.frNs.Panel.titleVersionForTest(), "v0.1.0")
+      local reloads = 0
+      c.fr.env.ReloadUI = function() reloads = reloads + 1 end
+      local b = c.frNs.Updates.reloadButtonForTest()
+      b._scripts.OnClick(b, "LeftButton")
+      A.eq(reloads, 1)
+
+      local fr2, fr2Ns = reload(H, c, "0.1.0")   -- WowUp had not downloaded it yet
+      A.ok(printedLine(fr2, "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then /reload"))
+      local before = noticesShown(fr2Ns)       -- the saved log came along
+      H.advance(60)
+      A.eq(noticesShown(fr2Ns), before, "no pop-up again for the same version after a /reload")
+      A.eq(fr2Ns.Updates.promptForTest(), nil)
+      A.ok(fr2Ns.MinimapButton.badgeShownForTest(), "the badge stays while still old")
+
+      local fr3, fr3Ns = reload(H, { fr = fr2, frNs = fr2Ns }, "0.2.0")   -- updated
+      H.advance(60)
+      A.no(fr3Ns.MinimapButton.badgeShownForTest(), "on that version: no badge")
+      A.eq(fr3Ns.Panel.updateLineForTest(), nil)
+      A.eq(fr3Ns.Updates.promptForTest(), nil)
+      for _, line in ipairs(fr3.printed) do A.no(line:find("Still on", 1, true), line) end
+      noErrors(A, c.twNs, fr3Ns)
+    end,
+
+    update_notice_says_restart_when_files_were_added = function(_, A, _, H)
+      local c = oldAndNew(H, { restartSince = "0.2.0" })
+      H.advance(60)
+      A.eq(noticesShown(c.frNs), 1)
+      A.eq(c.frNs.Updates.promptForTest(), { title = "Update available: v0.2.0",
+        note = "Twiz has it. Close WoW, open WowUp and click Update, then start WoW again.", reload = false })
+      c.twNs.Updates.tellCrew()                  -- the owner presses the button anyway: still one window
+      H.advance(3)
+      A.eq(c.frNs.Updates.promptForTest().title, "Twiz says v0.2.0 is out")
+      local fr2 = reload(H, c, "0.1.0")
+      A.ok(printedLine(fr2, "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then restart the game"))
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
+    tell_crew_right_away_means_no_second_pop_up = function(_, A, _, H)
+      local c = oldAndNew(H)
+      c.twNs.Updates.tellCrew()
+      H.advance(60)
+      A.eq(c.frNs.Updates.promptForTest().title, "Twiz says v0.2.0 is out")
+      A.eq(noticesShown(c.frNs), 0, "the request won")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
     update_request_goes_from_new_to_old_only = function(_, A, _, H)
       local c = oldAndNew(H)
       c.frNs.Updates.tellCrew()   -- the old copy asks: the new one ignores it

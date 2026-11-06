@@ -346,7 +346,7 @@ return {
       A.ok(seen.tip.shown)
       A.eq(seen.tip.owner, f)
       A.eq(seen.tip.lines, {
-        "TwizCrew",
+        "TwizCrew v0.1.0",
         "Left-click: open settings",
         "Right-click: hide the Crew panel",
         "Drag: move it around the minimap",
@@ -354,6 +354,46 @@ return {
       })
       f._scripts.OnLeave(f)
       A.no(seen.tip.shown)
+    end,
+
+    update_badge_and_tooltip_line = function(ns, A, W)
+      local seen = record(W)
+      boot(W)
+      local f = seen.button
+      A.no(ns.MinimapButton.badgeShownForTest(), "up to date: no badge")
+      for _, text in ipairs(ns.Codec.encode("STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", ver = "0.2.0",
+        rs = "0.1.0" })) do
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie")
+      end
+      A.ok(ns.MinimapButton.badgeShownForTest(), "a friend is newer: gold !")
+      f._scripts.OnEnter(f)
+      A.eq(seen.tip.lines[#seen.tip.lines], "Update available: v0.2.0 (Frostie has it)")
+      ns.Modules.setEnabled("updates", false)
+      A.no(ns.MinimapButton.badgeShownForTest(), "Update reminders off: no badge")
+      f._scripts.OnEnter(f)
+      A.eq(seen.tip.lines[#seen.tip.lines], "Crew online: 1 of 1", "and no tooltip line")
+      A.eq(seen.tip.lines[1], "TwizCrew v0.1.0", "the version stays")
+      ns.Modules.setEnabled("updates", true)
+      A.ok(ns.MinimapButton.badgeShownForTest())
+      tc(W, "minimap"); tc(W, "minimap")
+      A.ok(ns.MinimapButton.badgeShownForTest(), "still there after hiding and showing the button")
+      A.eq(#ns.Log.errors(5), 0)
+    end,
+
+    a_broken_update_check_never_breaks_the_button = function(ns, A, W)
+      local seen = record(W)
+      boot(W)
+      ns.Updates.available = function() error("boom") end
+      for _, text in ipairs(ns.Codec.encode("STATE", { cl = "MAGE", ver = "0.2.0" })) do
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie")
+      end
+      A.no(ns.MinimapButton.badgeShownForTest())
+      local f = seen.button
+      f._scripts.OnEnter(f)
+      A.ok(seen.tip.shown, "the tooltip still shows")
+      click(f, "LeftButton")
+      A.ok(ns.Settings.isOpen(), "clicks still work")
+      for _, e in ipairs(ns.Log.errors(10)) do A.contains(e, "ERROR updates: ") end
     end,
 
     drag_hides_the_tooltip = function(ns, A, W)
@@ -407,7 +447,7 @@ return {
       W.env.TwizCrew_OnAddonCompartmentEnter("TwizCrew", owner)
       A.ok(seen.tip.shown)
       A.eq(seen.tip.owner, owner)
-      A.eq(seen.tip.lines[1], "TwizCrew")
+      A.eq(seen.tip.lines[1], "TwizCrew v0.1.0")
       A.no(hasLine(seen.tip.lines, "Drag: move it around the minimap"), "the list entry cannot be dragged")
       W.env.TwizCrew_OnAddonCompartmentLeave("TwizCrew", owner)
       A.no(seen.tip.shown)

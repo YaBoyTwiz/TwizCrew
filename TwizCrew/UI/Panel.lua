@@ -15,15 +15,18 @@ local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
 local ICON_SIZE = { full = 18, compact = 16, tiny = 14 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
+local UPDATE_HEIGHT = 15 -- the gold "Update available: vX" line under the header
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
   BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
-  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED" }
+  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN" }
 
 local root, countText, noteText
+local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
+local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local tabBar, crewTab, shameTab
 local tab = "crew"     -- "crew" | "shame" (session only)
 local rowFrames = {}   -- pool, created once and reused (at most PANEL_MAX_ROWS)
@@ -301,6 +304,39 @@ local function layoutRow(r, m, style, s, width)
   return height
 end
 
+---------------------------------------------------------------------------------------------------------- update
+-- "Update available: vX" or nil, worked out inside Update reminders' own guard: an error there means "no line",
+-- never a broken panel.
+local function updateText()
+  if not ns.Updates or not ns.Updates.available then return nil end
+  local ok, text = ns.Log.safe("updates", function()
+    return ns.UpdateLogic.availableText(ns.Updates.available())
+  end)
+  if ok and type(text) == "string" then return ns.Util.safeText(text) end
+  return nil
+end
+
+-- Title version and the update line; returns how far down the content starts.
+local function drawHeader(s)
+  titleVersion = Logic.titleVersion(s.rowStyle, ns.VERSION)
+  versionText:SetText(titleVersion)
+  updateLine = updateText()
+  local top = HEADER_HEIGHT
+  if updateLine then
+    updateBar.text:SetText(updateLine)
+    updateBar:Show()
+    top = top + UPDATE_HEIGHT
+  else
+    updateBar:Hide()
+  end
+  if tabBar then
+    tabBar:ClearAllPoints()
+    tabBar:SetPoint("TOPLEFT", root, "TOPLEFT", 0, -(top - 2))
+    tabBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, -(top - 2))
+  end
+  return top
+end
+
 ---------------------------------------------------------------------------------------------------------- redraw
 local function hide()
   if root then
@@ -332,7 +368,7 @@ local function redraw()
   header = Logic.headerText(online, total)
   countText:SetText(header)
 
-  local top = HEADER_HEIGHT
+  local top = drawHeader(s)
   if statsOn() then
     crewTab:SetActive(tab == "crew")
     shameTab:SetActive(tab == "shame")
@@ -546,8 +582,34 @@ local function build()
   local title = T.text(head, T.FONT.normal, C.title)
   title:SetPoint("LEFT", head, "LEFT", PAD, -2)
   title:SetText("TwizCrew")
+  versionText = T.text(head, T.FONT.small, C.muted)
+  versionText:SetPoint("LEFT", title, "RIGHT", 4, 0)
   countText = T.text(head, T.FONT.small, C.muted)
   countText:SetPoint("RIGHT", head, "RIGHT", -PAD, -2)
+
+  updateBar = CreateFrame("Button", nil, root)
+  updateBar:SetPoint("TOPLEFT", root, "TOPLEFT", 2, -(HEADER_HEIGHT - 2))
+  updateBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", -2, -(HEADER_HEIGHT - 2))
+  updateBar:SetHeight(UPDATE_HEIGHT)
+  local glow = updateBar:CreateTexture(nil, "BACKGROUND")
+  glow:SetAllPoints(updateBar)
+  T.color(glow, C.title, 0.12)
+  local hl = updateBar:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints(updateBar)
+  T.color(hl, C.title, 0.12)
+  updateBar.text = T.text(updateBar, T.FONT.small, C.title)
+  updateBar.text:SetPoint("LEFT", updateBar, "LEFT", PAD - 2, 0)
+  updateBar.text:SetPoint("RIGHT", updateBar, "RIGHT", -(PAD - 2), 0)
+  updateBar.text:SetJustifyH("LEFT")
+  script(updateBar, "OnClick", function() ns.Log.safe("updates", ns.Updates.showHowTo) end)
+  script(updateBar, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Click for how to update", T.rgb(C.title))
+    GameTooltip:Show()
+  end)
+  script(updateBar, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  updateBar:Hide()
   noteText = T.text(root, T.FONT.small, C.muted)
   noteText:SetJustifyH("LEFT")
 
@@ -599,6 +661,9 @@ function Panel.rowCountForTest() return visibleRows end
 function Panel.firstRowForTest() return firstRow end
 function Panel.redrawCountForTest() return redraws end
 function Panel.isMovingForTest() return moving end
+function Panel.titleVersionForTest() return titleVersion end
+function Panel.updateLineForTest() return updateLine end
+function Panel.updateLineButtonForTest() return updateBar end
 
 local function onEnable()
   enabled = true

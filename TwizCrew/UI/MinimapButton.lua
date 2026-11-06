@@ -1,6 +1,7 @@
 -- The round TwizCrew button on the minimap's edge (essential "minimap") and the addon compartment entry.
 -- Left-click: the settings window (like /tc). Right-click: show or hide the Crew panel. Drag: move it around the
--- edge (the angle is saved when the drag ends). Plain frames only, every script inside ns.Log.safe.
+-- edge (the angle is saved when the drag ends). A small gold "!" while a friend has a newer TwizCrew (and Update
+-- reminders is on). Plain frames only, every script inside ns.Log.safe.
 -- The maths lives in UI/MinimapLogic.lua; the icon and starting angle in ns.Config (MINIMAP_ICON, MINIMAP_ANGLE).
 local _, ns = ...
 
@@ -15,7 +16,8 @@ local FALLBACK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local OPEN_FAILED = "TwizCrew: the settings window could not open. Type /tc report for details."
 local OPEN_FAILED_FIGHT = "TwizCrew: the settings window could not open during this fight. Try again when it ends."
 
-local button
+local button, badge
+local badgeShown = false
 local dragging = false
 local dragAngle            -- where the drag has the button now (saved at the end)
 local iconMissing = false
@@ -44,6 +46,21 @@ local function place(angle)
   button:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
+-- The update Update reminders knows about, asked inside its own guard: an error there means "none", never a broken
+-- button.
+local function availableUpdate()
+  if not ns.Updates or not ns.Updates.available then return nil end
+  local ok, up = ns.Log.safe("updates", ns.Updates.available)
+  if ok and type(up) == "table" then return up end
+  return nil
+end
+
+local function refreshBadge()
+  if not badge then return end
+  badgeShown = availableUpdate() ~= nil
+  if badgeShown then badge:Show() else badge:Hide() end
+end
+
 ---------------------------------------------------------------------------------------------------- clicks, tooltip
 function MinimapButton.click(mouseButton)
   if mouseButton == "RightButton" then
@@ -60,11 +77,18 @@ local function showTip(owner, withDrag)
   if not GameTooltip or not owner or dragging then return end
   local online, total = 0, 0
   if ns.roster then online, total = ns.roster:onlineCount() end
-  local lines = Logic.tooltipLines(online, total, ns.Modules.isEnabled("panel"), withDrag)
+  local lines = Logic.tooltipLines(online, total, ns.Modules.isEnabled("panel"), withDrag,
+    { version = ns.VERSION, update = availableUpdate() })
   GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
   GameTooltip:SetText(lines[1], T.rgb(C.title))
   local r, g, b = T.rgb(C.text)
-  for i = 2, #lines do GameTooltip:AddLine(lines[i], r, g, b) end
+  for i = 2, #lines do
+    if i == lines.attention then
+      GameTooltip:AddLine(lines[i], T.rgb(C.title))
+    else
+      GameTooltip:AddLine(lines[i], r, g, b)
+    end
+  end
   GameTooltip:Show()
 end
 
@@ -137,6 +161,12 @@ local function build()
     ns.Log.add("warn", "minimap: icon %s is missing in this game, showing a question mark", ns.Config.MINIMAP_ICON)
   end
   texture("OVERLAY", "Interface\\Minimap\\MiniMap-TrackingBorder", 53, 0, 0)
+  -- the update badge: a gold "!" at the icon's top-right, above the ring
+  badge = T.text(button, "GameFontNormalLarge", C.title, "OVERLAY")
+  if badge.SetDrawLayer then badge:SetDrawLayer("OVERLAY", 7) end
+  badge:SetPoint("CENTER", button, "TOPLEFT", 25, -7)
+  badge:SetText("!")
+  badge:Hide()
   button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   button:RegisterForDrag("LeftButton")
   script(button, "OnClick", function(_, which) MinimapButton.click(which) end)
@@ -153,6 +183,7 @@ local function apply()
   if setting("show") then
     if not button and not build() then return end
     place()
+    refreshBadge()
     button:Show()
   elseif button then
     stopDrag(false)
@@ -173,6 +204,8 @@ function MinimapButton.toggleShown()
   ns.Modules.set(FEATURE, "show", not setting("show"))
   return setting("show") and true or false
 end
+
+function MinimapButton.badgeShownForTest() return badgeShown end
 
 -- /tc report line.
 function MinimapButton.reportLine()
@@ -198,6 +231,8 @@ ns.Modules.register({
     apply()
     -- a minimap addon may change the shape while loading: place the button again after each loading screen
     ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", function() place() end)
+    ns.Bus.on(FEATURE, "UPDATE_SEEN", refreshBadge)
+    ns.Bus.on(FEATURE, "MODULE_TOGGLED", refreshBadge)
   end,
   onSettingChanged = function(key)
     if key == "show" then apply() elseif key == "angle" then place() end

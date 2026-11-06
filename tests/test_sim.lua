@@ -155,6 +155,47 @@ local function reload(H, c, version)
   return fr2, fr2Ns
 end
 
+---------------------------------------------------------------------------------------------- level progress
+local DOT = "\194\183"
+
+-- Twiz and Frostie (mage 12, 200 of 1871 XP), linked, past the login quiet time.
+local function levelingFriends(H)
+  local tw, twNs = H.client("Twiz")
+  local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, xp = 200, xpMax = 1871, subzone = "Northshire" })
+  H.link(tw, fr)
+  login(tw)
+  login(fr)
+  H.advance(35)
+  return { tw = tw, twNs = twNs, fr = fr, frNs = frNs }
+end
+
+-- Frostie fights a mob for `fight` seconds and gets `xp` for it (her game fires what the real one does).
+local function kill(H, c, xp, fight, newLevel, newMax)
+  c.fr.state.combat = true
+  c.fr:fire("PLAYER_REGEN_DISABLED")
+  H.advance(fight or 20)
+  c.fr.state.combat = false
+  c.fr.state.xp = c.fr.state.xp + xp
+  if newLevel then
+    c.fr.state.level, c.fr.state.xp, c.fr.state.xpMax = newLevel, c.fr.state.xp - c.fr.state.xpMax, newMax
+    c.fr:fire("PLAYER_LEVEL_UP", newLevel)
+  end
+  c.fr:fire("PLAYER_XP_UPDATE", "player")
+  c.fr:fire("PLAYER_REGEN_ENABLED")
+end
+
+local function shownCount(ns, text)
+  local n = 0
+  for _, t in ipairs(ns.Popups.shownForTest()) do if t == text then n = n + 1 end end
+  return n
+end
+
+local function dings(ns)
+  local n = 0
+  for _, t in ipairs(ns.Popups.shownForTest()) do if t:find("reached level", 1, true) then n = n + 1 end end
+  return n
+end
+
 -- How many times the update notice showed on this copy (its log says so each time).
 local function noticesShown(ns)
   local n = 0
@@ -442,6 +483,112 @@ return {
       local c = twoFriends(H)
       local pwNs = newerVersion(H, A, c)
       noErrors(A, c.twNs, c.frNs, pwNs)
+    end,
+
+    level_progress_reaches_a_friend = function(_, A, _, H)
+      local c = levelingFriends(H)
+      local row = rowOf(c.twNs, "Frostie")
+      A.eq(row.xpText, "Lv 12 " .. DOT .. " 10%", "the number on the bar")
+      A.eq(row.tip, { "Level 12 " .. DOT .. " 10%", "1,671 XP to level 13" }, "no pace yet, so no estimate")
+      local sentBefore = #c.fr.sent
+      for _ = 1, 6 do                    -- a mob a minute, 120 XP each
+        kill(H, c, 120, 20)
+        H.advance(40)
+      end
+      -- two UPDATEs per mob (the fight starts; it ends with the XP), as before this feature
+      local updates = 0
+      for i = sentBefore + 1, #c.fr.sent do
+        local msg = c.frNs.Codec.decode(c.fr.sent[i].text)
+        if msg and msg.type == "UPDATE" then updates = updates + 1 end
+      end
+      A.eq(updates, 6 * 2)
+      row = rowOf(c.twNs, "Frostie")
+      A.eq(row.xpText, "Lv 12 " .. DOT .. " 49%")
+      A.eq(row.tip[2], "951 XP to level 13")
+      local minutes = tonumber(row.tip[3]:match("^About (%d+) min to level$"))
+      A.ok(minutes and minutes >= 7 and minutes <= 9, "estimate near 8 min (2 XP a second): " .. tostring(row.tip[3]))
+      -- rested XP shows when Frostie has some
+      c.fr.state.rested = 2500
+      kill(H, c, 120, 20)
+      H.advance(5)
+      A.eq(rowOf(c.twNs, "Frostie").tip[3], "Rested: 2,500 XP")
+      -- Frostie goes idle: after 10 minutes without XP the estimate is left out
+      H.advance(11 * 60)
+      row = rowOf(c.twNs, "Frostie")
+      A.eq(#row.tip, 3, "no estimate while idle")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
+    level_up_gives_exactly_one_ding = function(_, A, _, H)
+      local c = levelingFriends(H)
+      c.fr.state.xp = 1800
+      kill(H, c, 20, 5)                  -- 1820 of 1871: not yet
+      H.advance(5)
+      local seen = {}
+      kill(H, c, 100, 5, 13, 2000)        -- 1920: level 13 with 49 XP
+      H.advance(10, function()
+        for _, p in ipairs(c.twNs.Popups.textsForTest()) do seen[p.text] = p.subtext end
+      end)
+      A.eq(seen["Frostie reached level 13!"], "Only 47 to go.", "ding on Twiz's screen")
+      H.advance(60)
+      kill(H, c, 30, 5)
+      H.advance(30)
+      A.eq(shownCount(c.twNs, "Frostie reached level 13!"), 1, "exactly one ding")
+      A.eq(dings(c.frNs), 0, "no ding for your own level-up")
+      local row = rowOf(c.twNs, "Frostie")
+      A.eq(row.xpText, "Lv 13 " .. DOT .. " 3%")
+      A.eq(row.tip[2], "1,921 XP to level 14")
+      A.eq(c.twNs.roster:get("Frostie").xpTrack.earned, 1920 - 200 + 30, "the level-up counts as XP earned")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
+    no_ding_on_login_reload_or_reconnect = function(_, A, _, H)
+      local c = levelingFriends(H)
+      -- Frostie logs out at 12, levels on another computer (say), logs back in at 13
+      c.fr:fire("PLAYER_LOGOUT")
+      H.advance(1)
+      for i, L in ipairs(H.linked) do if L == c.fr then table.remove(H.linked, i) end end
+      H.advance(60)
+      local fr2, fr2Ns = H.client("Frostie", { class = "MAGE", level = 13, xp = 10, xpMax = 2000 })
+      fr2.env.TwizCrewDB = c.frNs.db
+      H.link(fr2)
+      login(fr2)
+      H.advance(40)
+      A.eq(c.twNs.roster:get("Frostie").level, 13)
+      A.eq(dings(c.twNs), 0, "logging back in a level higher is not a ding")
+      -- Twiz reloads; even if the saved list still said 12, Frostie's state at 13 is not a ding
+      for i, L in ipairs(H.linked) do if L == c.tw then table.remove(H.linked, i) end end
+      c.twNs.db.roster.Frostie.level = 12
+      local tw2, tw2Ns = H.client("Twiz")
+      tw2.env.TwizCrewDB = c.twNs.db
+      H.link(tw2)
+      login(tw2)
+      H.advance(40)
+      A.eq(tw2Ns.roster:get("Frostie").level, 13)
+      A.eq(dings(tw2Ns), 0, "a reload is not a ding")
+      -- Frostie's game crashes (no goodbye): Twiz marks her offline after 3 minutes; she comes back at 14
+      for i, L in ipairs(H.linked) do if L == fr2 then table.remove(H.linked, i) end end
+      H.advance(4 * 60)
+      A.no(tw2Ns.roster:get("Frostie").online)
+      local fr3, fr3Ns = H.client("Frostie", { class = "MAGE", level = 14, xp = 5, xpMax = 2200 })
+      fr3.env.TwizCrewDB = fr2Ns.db
+      H.link(fr3)
+      login(fr3)
+      H.advance(40)
+      A.ok(tw2Ns.roster:get("Frostie").online, "Frostie is back")
+      A.eq(tw2Ns.roster:get("Frostie").level, 14)
+      A.eq(dings(tw2Ns), 0, "a level seen after a gap is not a ding")
+      -- and a real one still works afterwards, once
+      fr3.state.combat = true
+      fr3:fire("PLAYER_REGEN_DISABLED")
+      H.advance(5)
+      fr3.state.combat = false
+      fr3.state.level, fr3.state.xp, fr3.state.xpMax = 15, 1, 2400
+      fr3:fire("PLAYER_LEVEL_UP", 15)
+      fr3:fire("PLAYER_REGEN_ENABLED")
+      H.advance(30)
+      A.eq(dings(tw2Ns), 1)
+      noErrors(A, tw2Ns, fr3Ns)
     end,
 
     no_errors_anywhere = function(_, A, _, H)

@@ -46,5 +46,6 @@ UI\Updates.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua
+UI\MinimapLogic.lua
 UI\Commands.lua
 Core\Boot.lua

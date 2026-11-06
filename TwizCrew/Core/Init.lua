@@ -46,6 +46,9 @@ ns.Config = {
   COUCH_MIN_PLAYED = 1800, NEVERWALKS_MIN_YARDS = 1000,
   -- tell crew to update
   UPDATE_BUTTON_COOLDOWN = 30, UPDATE_REPEAT_GAP = 600, UPDATE_LOGIN_DELAY = 5,
+  -- minimap button: the icon (must match "## IconTexture" in TwizCrew.toc, a test checks it) and the starting angle
+  -- in degrees (0 = right, counter-clockwise; 190 = left edge, just below the middle)
+  MINIMAP_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout", MINIMAP_ANGLE = 190,
 }
 
 function ns.now() return GetTime() end

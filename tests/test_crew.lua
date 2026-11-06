@@ -146,7 +146,8 @@ return {
       start(ns, W)
       W.state.zone, W.state.subzone = string.rep("Z", 120), string.rep("S", 120)
       W.state.level, W.state.xp, W.state.xpMax, W.state.rested = 59, 9999998, 9999999, 9999999
-      W.state.dead, W.state.combat, W.state.afk, W.state.inInstance, W.state.instanceType = true, true, true, true, "party"
+      W.state.dead, W.state.combat, W.state.afk = true, true, true
+      W.state.inInstance, W.state.instanceType = true, "party"
       ns.db.myStatus = string.rep("^", 40)
       local f = ns.Self.gather()
       f.lk = "123456789"
@@ -219,6 +220,19 @@ return {
       -- an old copy says HELLO without rs: what we knew is forgotten
       receive(ns, W, "Ginkan", "HELLO", { ver = "0.3.0" })
       A.eq(ns.roster:get("Ginkan").restartSince, "")
+      noErrors(ns, A)
+    end,
+    friend_level_up_fires_once = function(ns, A, W)
+      start(ns, W)
+      local ups = record(ns, "MEMBER_LEVELUP")
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12", xc = "900", xm = "1000" })
+      A.eq(#ups, 0, "first state")
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13", xm = "1100", xc = "20" })
+      A.eq(ups, { { "Ginkan", 13 } })
+      receive(ns, W, "Ginkan", "UPDATE", { xc = "80" })
+      receive(ns, W, "Ginkan", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Ginkan", "STATE", { lv = "14" })
+      A.eq(#ups, 1, "no ding for the state after a HELLO")
       noErrors(ns, A)
     end,
     taxi_shows_flight_path_text = function(ns, A, W)

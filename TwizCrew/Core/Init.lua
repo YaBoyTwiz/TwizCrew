@@ -48,6 +48,10 @@ ns.Config = {
   UPDATE_BUTTON_COOLDOWN = 30, UPDATE_REPEAT_GAP = 600, UPDATE_LOGIN_DELAY = 5,
   -- update notice: seconds between hearing of a newer version and its pop-up (a quick "Tell crew to update" wins)
   UPDATE_NOTICE_DELAY = 30,
+  -- level progress: a gap between XP gains counts at most this long (s), and no estimate when the last gain is older
+  -- (idle); an estimate needs XP_MIN_GAINS gains and XP_MIN_ACTIVE s of playing time, and is left out past
+  -- XP_MAX_ESTIMATE s. MAX_LEVEL_FALLBACK when the game has no GetMaxPlayerLevel.
+  XP_IDLE_AFTER = 600, XP_MIN_GAINS = 2, XP_MIN_ACTIVE = 180, XP_MAX_ESTIMATE = 12 * 3600, MAX_LEVEL_FALLBACK = 60,
   -- minimap button: the icon (must match "## IconTexture" in TwizCrew.toc, a test checks it) and the starting angle
   -- in degrees (0 = right, counter-clockwise; 190 = left edge, just below the middle)
   MINIMAP_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout", MINIMAP_ANGLE = 190,

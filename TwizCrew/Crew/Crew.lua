@@ -25,6 +25,8 @@ local function announce(name, m, changes, events)
       ns.Bus.fire("MEMBER_ONLINE", name)
     elseif e == "died" then
       ns.Bus.fire("MEMBER_DIED", name, m.zone, m.subzone)
+    elseif e == "levelup" then
+      ns.Bus.fire("MEMBER_LEVELUP", name, m.level)
     end
   end
 end

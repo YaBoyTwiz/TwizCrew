@@ -43,7 +43,38 @@ local WIRE = {
   tg  = { "tags", function(v) if type(v) == "string" then return decodeTags(v) end end },
   ver = { "version", keepString },
   rs  = { "restartSince", keepString }, -- that copy's RESTART_SINCE ("" = an older copy that does not send it)
+  xc  = { "xpCur", num },   -- level progress: current XP
+  xm  = { "xpMax", num },   -- XP needed for this level (0 = max level)
+  rx  = { "rested", num },  -- rested XP
 }
+
+-- XP pace for one play session (m.xpTrack): XP earned and the playing time it took. Called after a message that
+-- carries xc, with the member's level / need / XP as they are now (a split message brings lv and xm no later than
+-- xc). Each gap between gains counts at most XP_IDLE_AFTER, so a long break does not drag the pace down.
+-- Anything odd starts the count over: no estimate beats a wrong one.
+local function newTrack(lv, xc, xm, now)
+  return { first = now, lastGain = now, earned = 0, active = 0, gains = 0, lv = lv, xc = xc, xm = xm }
+end
+
+local function trackXP(m, now)
+  local lv, xc, xm = m.level, m.xpCur, m.xpMax
+  if not lv or not xc or not xm or xm <= 0 then m.xpTrack = nil; return end -- max level or unknown
+  if xc < 0 or xc > xm then return end -- not a real reading: ignore it
+  local t = m.xpTrack
+  if not t then m.xpTrack = newTrack(lv, xc, xm, now); return end
+  local gain
+  if lv == t.lv then gain = xc - t.xc
+  elseif lv == t.lv + 1 then gain = (t.xm - t.xc) + xc -- what was left of the old level, plus the new XP
+  end
+  if not gain or gain < 0 then m.xpTrack = newTrack(lv, xc, xm, now); return end
+  if gain > 0 then
+    t.active = t.active + math.min(math.max(0, now - t.lastGain), ns.Config.XP_IDLE_AFTER)
+    t.earned = t.earned + gain
+    t.gains = t.gains + 1
+    t.lastGain = now
+  end
+  t.lv, t.xc, t.xm = lv, xc, xm
+end
 
 function Roster.new(saved)
   local r = setmetatable({ byName = {}, saved = saved or {} }, Roster)
@@ -67,6 +98,8 @@ function Roster:apply(name, fields, now, wall)
   local isNew = m == nil
   local wasOnline = m ~= nil and m.online
   local hadTags = m ~= nil and m.tags ~= nil and not m.tags.DEAD or false
+  -- a level-up counts only when we already got their level while they were online in this play session
+  local levelBefore = m ~= nil and wasOnline and m.levelSeen and m.level or nil
   if isNew then
     m = { name = name, inInstance = false, online = false }
     self.byName[name] = m
@@ -93,11 +126,15 @@ function Roster:apply(name, fields, now, wall)
     if m.inInstance ~= ins then m.inInstance = ins; changes.inInstance = true end
   end
 
+  if fields.xc ~= nil then trackXP(m, now) end
+
   m.online = true
   m.lastHeard = now
   m.lastSeen = wall
   if not wasOnline then events[#events + 1] = "online" end
   if hadTags and m.tags and m.tags.DEAD then events[#events + 1] = "died" end
+  if levelBefore and m.level == levelBefore + 1 then events[#events + 1] = "levelup" end
+  if num(fields.lv) ~= nil then m.levelSeen = true end
 
   self.saved[name] = {
     name = name, class = m.class, level = m.level,
@@ -119,7 +156,7 @@ function Roster:heard(name, now, wall)
   return events
 end
 
--- Forgets what is only true for one play session (layer key, in a dungeon, tags): called when a friend goes
+-- Forgets what is only true for one play session (layer key, in a dungeon, tags, XP pace): called when a friend goes
 -- offline and when they log in again (HELLO), so old values never show. Returns the fields that changed.
 function Roster:clearSession(name)
   local m = self.byName[name]
@@ -128,6 +165,7 @@ function Roster:clearSession(name)
   if m.layerKey ~= nil then m.layerKey = nil; changes.layerKey = true end
   if m.inInstance then m.inInstance = false; changes.inInstance = true end
   if m.tags ~= nil then m.tags = nil; changes.tags = true end
+  m.levelSeen, m.xpTrack = nil, nil -- no level-up from a level heard before, a new XP pace
   return changes
 end
 

@@ -7,6 +7,7 @@ ns.Version = Version
 local best          -- { name =, ver = } the newest version seen so far (newer than ours)
 local plain         -- { name =, ver =, rs = } the same, plain numbers only (feeds the update notice)
 local announced = false
+local test          -- { name =, ver =, rs = } a pretend newer version from the test tools: memory only, kept apart
 
 local function line(entry)
   return ns.Util.safeText(entry.name) .. " has v" .. ns.Util.safeText(entry.ver)
@@ -37,6 +38,13 @@ end
 function Version.seen(name, ver, rs)
   if type(name) ~= "string" or name == "" or type(ver) ~= "string" or ver == "" then return end
   if ns.Util.compareVersions(ver, ns.VERSION) <= 0 then return end
+  if ns.isTestName(name) then -- test tools: shown by the update notice, never mixed with what friends really run
+    if not ns.Util.isVersion(ver) then return end
+    test = { name = name, ver = ver, rs = ns.Util.isVersion(rs) and rs or nil }
+    if ns.Modules.setting("version", "chatNotice") then print("TwizCrew: " .. line(test)) end
+    ns.Bus.fire("UPDATE_SEEN", test.name, test.ver, test.rs)
+    return
+  end
   notePlain(name, ver, rs)
   if best and ns.Util.compareVersions(ver, best.ver) <= 0 then return end
   best = { name = name, ver = ver }
@@ -47,10 +55,27 @@ function Version.seen(name, ver, rs)
   end
 end
 
--- A copy of { name, ver, rs } for the newest plain version newer than ours, or nil.
+-- A copy of { name, ver, rs } for the newest plain version newer than ours, or nil. The test tools' pretend version
+-- wins while it is on (Version.clearTest brings the real one back).
 function Version.newest()
+  local p = test or plain
+  if not p then return nil end
+  return { name = p.name, ver = p.ver, rs = p.rs }
+end
+
+-- The same, real friends only.
+function Version.realNewest()
   if not plain then return nil end
   return { name = plain.name, ver = plain.ver, rs = plain.rs }
+end
+
+-- Forgets the pretend version (test tools). Returns whether there was one.
+function Version.clearTest()
+  if not test then return false end
+  test = nil
+  local p = plain or {}
+  ns.Bus.fire("UPDATE_SEEN", p.name, p.ver, p.rs)
+  return true
 end
 
 function Version.summary()

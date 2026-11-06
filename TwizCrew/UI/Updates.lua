@@ -22,6 +22,7 @@ local waiting         -- a request held until the fight ends
 local current         -- the request whose window is open
 local noticeWait = 0  -- counts the notice's waits: only the latest one may show it
 local frame, title, note, reloadButton, closeButton
+local testShown       -- the test tools' pretend version a pop-up was shown for: memory only, never saved
 
 local function inFight()
   if type(InCombatLockdown) == "function" and InCombatLockdown() then return true end
@@ -35,12 +36,18 @@ local function cmp(a, b) return ns.Util.compareVersions(a, b) end
 local isVersion = function(v) return ns.Util.isVersion(v) end
 
 -- The newest version an update pop-up (notice or Tell crew) was shown for. Saved: once per version.
-local function shownUpTo()
+-- For a pretend version (test tools, newest.name is a fake) the mark lives in memory only.
+local function shownUpTo(newest)
+  if type(newest) == "table" and ns.isTestName(newest.name) then return testShown end
   local saved = ns.db and ns.db.updateNotice
   return type(saved) == "table" and saved.shown or nil
 end
 
-local function markShown(ver)
+local function markShown(ver, name)
+  if ns.isTestName(name) then
+    if isVersion(ver) then testShown = ver end
+    return
+  end
   local saved = ns.db and ns.db.updateNotice
   if type(saved) ~= "table" or not isVersion(ver) then return end
   if not isVersion(saved.shown) or cmp(ver, saved.shown) > 0 then saved.shown = ver end
@@ -134,7 +141,7 @@ local function show(req)
     p = Logic.prompt(name, ver, Logic.needsRestart(ns.VERSION, req.rs))
   end
   current = { kind = req.kind, name = req.name, ver = req.ver, title = p.title, note = p.note, reload = p.reload }
-  markShown(req.ver)
+  markShown(req.ver, req.name)
   title:SetText(p.title)
   note:SetText(p.note)
   if p.reload then reloadButton:Show() else reloadButton:Hide() end
@@ -145,6 +152,7 @@ end
 
 ---------------------------------------------------------------------------------------------------- receiving
 local function remember(req)
+  if ns.isTestName(req.name) then return end -- a pretend update (test tools) is never saved
   local saved = ns.db and ns.db.update
   if type(saved) ~= "table" then return end
   if isVersion(saved.told) and cmp(req.ver, saved.told) <= 0 then return end
@@ -218,7 +226,7 @@ end
 local function checkNotice()
   local newest = ns.Version and ns.Version.newest and ns.Version.newest() or nil
   local ok, why = Logic.showNotice(newest, {
-    myVersion = ns.VERSION, enabled = ns.Modules.isEnabled(FEATURE), shown = shownUpTo(), open = newestOpen(),
+    myVersion = ns.VERSION, enabled = ns.Modules.isEnabled(FEATURE), shown = shownUpTo(newest), open = newestOpen(),
   })
   if not ok then
     if why ~= "none" then ns.Log.add("info", "update notice for v%s not shown: %s", tostring(newest.ver), why) end
@@ -311,6 +319,16 @@ function Updates.reportLine()
   return "Update: addon list says v" .. tostring(ns.TOC_VERSION or "?") .. ", restart needed since v"
     .. tostring(ns.RESTART_SINCE) .. ", last request heard: " .. heard .. ", newest heard: " .. newestText
     .. ", pop-up shown for: " .. popup
+end
+
+-- Test tools' Clear: forgets the pretend version's pop-up mark and closes its window. Returns whether a window was
+-- open or waiting for it.
+function Updates.clearTest()
+  testShown = nil
+  local had = false
+  if waiting and ns.isTestName(waiting.name) then waiting = nil; had = true end
+  if current and ns.isTestName(current.name) then hide(); had = true end
+  return had
 end
 
 -- Test hooks.

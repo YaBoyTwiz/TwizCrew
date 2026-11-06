@@ -86,8 +86,8 @@ end
 
 -- sid/sst only travel in UPDATEs when they change, so one lost message could leave a friend in another session:
 -- tell the crew ours again (at most once per RESHARE_GAP seconds).
-local function reshare()
-  if not isDecided or not current then return end
+local function reshare(name)
+  if ns.isTestName(name) or not isDecided or not current then return end -- a fake (test tools) never makes us send
   local now = ns.now()
   if lastReshare and now - lastReshare < RESHARE_GAP then return end
   lastReshare = now
@@ -96,6 +96,7 @@ local function reshare()
 end
 
 local function onFields(sender, fields)
+  if ns.isTestName(sender) then return end -- fakes (test tools) have no say in the crew session
   if type(fields) ~= "table" or (fields.sid == nil and fields.sst == nil) then return end
   local h = heard[sender]
   if not h then h = {}; heard[sender] = h end

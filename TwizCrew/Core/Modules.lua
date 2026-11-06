@@ -4,7 +4,8 @@ local ADDON, ns = ...
 local Modules = {}
 ns.Modules = Modules
 
-local TIERS = { essential = true, module = true, extra = true }
+-- tools: always there like an essential, never a switch, but turns itself off after errors like a module.
+local TIERS = { essential = true, module = true, extra = true, tools = true }
 local KINDS = { toggle = true, slider = true, choice = true, text = true,
   button = true, -- an action (onClick), holds no value
   list = true }  -- read-only lines (lines() -> { text, ... }), holds no value
@@ -68,6 +69,7 @@ function Modules.isEnabled(id)
   if not d then return false end
   if d.tier == "essential" then return true end
   if d.comingSoon or broken[id] then return false end
+  if d.tier == "tools" then return true end
   local e = entry(id)
   if e and type(e.enabled) == "boolean" then return e.enabled end
   return d.defaultEnabled
@@ -101,7 +103,7 @@ end
 
 function Modules.setEnabled(id, on)
   local d = byId[id]
-  if not d or d.tier == "essential" or d.comingSoon then return end
+  if not d or d.tier == "essential" or d.tier == "tools" or d.comingSoon then return end
   on = on and true or false
   local was = Modules.isEnabled(id)
   local e = entry(id)

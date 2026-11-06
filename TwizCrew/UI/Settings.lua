@@ -20,6 +20,7 @@ local SECTIONS = {
   { tier = "essential", title = "Essentials", note = "always on, these make the rest work" },
   { tier = "module", title = "Modules", note = "turn on or off" },
   { tier = "extra", title = "Extras", note = "fun stuff, added over time" },
+  { tier = "tools", title = "Try it out", note = "pretend friends and pop-ups, only on your screen" },
 }
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"
 local RESET_QUESTION = "Reset all TwizCrew settings and the panel position?"
@@ -132,6 +133,10 @@ local function moduleRow(def, broken)
       r:SetActive(false)
       return r
     end), "coming later", MODULE_ROW
+  end
+  if def.tier == "tools" and not broken then
+    return cached("module:" .. def.id .. ":tools", function() return noteRow(def, "only on your screen") end), "tools",
+      MODULE_ROW
   end
   if broken then
     return cached("module:" .. def.id .. ":broken", function() return noteRow(def, Win.BROKEN_TEXT, true) end),

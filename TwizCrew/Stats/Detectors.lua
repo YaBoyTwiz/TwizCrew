@@ -296,6 +296,7 @@ add({ id = "pulls", label = "pulls in dungeons",
     local d = byId.pulls
     pullPending = false
     onBus(d, "MEMBER_UPDATED", function(name)
+      if ns.isTestName(name) then return end -- fakes (test tools) never count
       local m = ns.roster and ns.roster:get(name)
       local on = m and m.tags and m.tags.COMBAT and true or false
       if on or fighting[name] then lastFight[name] = ns.now() end
@@ -342,10 +343,12 @@ add({ id = "wipes", label = "wipes",
     onEvent(d, "PLAYER_ALIVE", meAlive)
     onEvent(d, "PLAYER_UNGHOST", meAlive)
     onBus(d, "MEMBER_DIED", function(name)
+      if ns.isTestName(name) then return end
       watch:dead(name, ns.now())
       checkWipe()
     end)
     onBus(d, "MEMBER_UPDATED", function(name, changes)
+      if ns.isTestName(name) then return end
       local m = ns.roster and ns.roster:get(name)
       if type(changes) == "table" and changes.tags and m and not (m.tags and m.tags.DEAD) then watch:alive(name) end
     end)

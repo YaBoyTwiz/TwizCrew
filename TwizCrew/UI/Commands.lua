@@ -22,6 +22,7 @@ local HELP = {
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
   "/tc stats reset - set your own stats back to 0 (asks first)",
+  "/tc test - try things out alone: pretend friends and pop-ups, only on your screen (/tc test lists them)",
 }
 
 local function say(text) print("TwizCrew: " .. text) end
@@ -175,6 +176,7 @@ local ACTIONS = {
   awards = awards,
   session = session,
   stats = stats,
+  test = function(rest) ns.TestTools.command(rest) end,
 }
 
 function Commands.run(msg)

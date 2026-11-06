@@ -28,9 +28,9 @@ end
 local INSTANT = { death = true, levelup = true }
 
 -- kind: "layer_diff" | "layer_same" | "death" | "levelup"; extra: { zone, subzone } (deaths),
--- { level, maxLevel } (level-ups)
-function Logic:push(kind, name, now, extra)
-  if now < self.quietUntil then return end
+-- { level, maxLevel } (level-ups). force: shown even in the quiet period (test tools' pop-ups only).
+function Logic:push(kind, name, now, extra, force)
+  if now < self.quietUntil and not force then return end
   if INSTANT[kind] then
     self.deaths[#self.deaths + 1] = { kind = kind, names = { name }, extra = extra or {} }
     return

@@ -18,13 +18,18 @@ local function mySide()
 end
 
 local function compute(m, me)
+  -- test tools: a fake's layer is whatever the Layer pop-up button says
+  if m.online and ns.isTestName(m.name) and ns.TestTools then
+    local forced = ns.TestTools.layerOf(m.name)
+    if forced then return forced end
+  end
   return ns.LayerKey.relation(me, { lk = m.layerKey, zn = m.zone, ins = m.inInstance, online = m.online })
 end
 
 local function recompute()
   if not ns.roster then return end
   local me = mySide()
-  for _, m in ipairs(ns.roster:members()) do
+  for _, m in ipairs(ns.roster:members(true)) do -- fakes too (test tools: OTHER LAYER tag, layer pop-up)
     local old = relations[m.name] or "unknown"
     local new = compute(m, me)
     relations[m.name] = new

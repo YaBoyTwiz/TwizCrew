@@ -81,7 +81,7 @@ local function click(f)
   if not p then return end
   if p.kind == "layer_diff" and p.invite then
     for _, name in ipairs(p.invite) do
-      if not inGroup(name) then invite(name) end
+      if not inGroup(name) and not ns.isTestName(name) then invite(name) end -- a fake (test tools) is never invited
     end
   end
   close(f)
@@ -225,13 +225,26 @@ local function tick()
   end
 end
 
+-- Test tools: a fake's pop-up shows only when a test button expects it (or for "My copy"), and then even in the
+-- login quiet time. Returns whether to push, and whether to force it past the quiet time.
+local function gate(kind, name)
+  if not ns.isTestName(name) then return true, false end
+  local wanted = ns.TestTools ~= nil and ns.TestTools.wants(kind, name) and true or false
+  return wanted, wanted
+end
+
+local function push(kind, name, extra)
+  local ok, force = gate(kind, name)
+  if ok then logic:push(kind, name, ns.now(), extra, force) end
+end
+
 local function onRelation(name, old, new)
   if new == "different" and old ~= "different" then
-    if setting("layerDiff") and not alreadyAnnounced(name) then logic:push("layer_diff", name, ns.now()) end
+    if setting("layerDiff") and not alreadyAnnounced(name) then push("layer_diff", name) end
   elseif new == "same" then
     local wasAway = old == "different" or announced[name] == "different"
     sameSince[name] = true
-    if wasAway and setting("layerSame") then logic:push("layer_same", name, ns.now()) end
+    if wasAway and setting("layerSame") then push("layer_same", name) end
   end
 end
 
@@ -240,13 +253,13 @@ local function onOffline(name)
 end
 
 local function onDied(name, zone, subzone)
-  if setting("death") then logic:push("death", name, ns.now(), { zone = zone, subzone = subzone }) end
+  if setting("death") then push("death", name, { zone = zone, subzone = subzone }) end
 end
 
 -- A friend went up one level while we both were online (Roster decides; never our own level-up).
 local function onLevelUp(name, level)
   if setting("levelUp") then
-    logic:push("levelup", name, ns.now(), { level = level, maxLevel = ns.maxLevel() })
+    push("levelup", name, { level = level, maxLevel = ns.maxLevel() })
   end
 end
 

@@ -65,6 +65,12 @@ end
 
 local loggedNameForm = false
 
+local function dispatch(sender, msg)
+  for _, fn in ipairs(handlers[msg.type] or {}) do
+    ns.Log.safe(FEATURE, fn, sender, msg.fields)
+  end
+end
+
 local function onAddon(prefix, text, chatType, sender)
   if prefix ~= ns.Config.PREFIX or type(sender) ~= "string" or type(text) ~= "string" then return end
   local raw = sender
@@ -91,9 +97,17 @@ local function onAddon(prefix, text, chatType, sender)
     return
   end
   ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType))
-  for _, fn in ipairs(handlers[msg.type] or {}) do
-    ns.Log.safe(FEATURE, fn, sender, msg.fields)
-  end
+  dispatch(sender, msg)
+end
+
+-- Test tools: a fake crew member's message (one encoded piece) goes through the same decode and handlers as a
+-- friend's, without the transport or the duplicate check. Only fake names (ns.isTestName) are accepted.
+function Comm.inject(sender, text)
+  if not ns.isTestName(sender) then return false end
+  local msg = ns.Codec.decode(text)
+  if not msg then return false end
+  dispatch(sender, msg)
+  return true
 end
 
 local function sendItem(item)

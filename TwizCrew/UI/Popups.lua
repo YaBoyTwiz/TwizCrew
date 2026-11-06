@@ -1,4 +1,4 @@
--- Small pop-ups near the top centre for layer changes and deaths (module "popups").
+-- Small pop-ups near the top centre for layer changes, deaths and friends' level-ups (module "popups").
 -- Rules about what shows and when live in PopupLogic; this file only owns the frames.
 -- When more than POPUP_MAX pop-ups are due at once, the oldest visible one is replaced (nothing is queued).
 -- Roasts (Popups.showRoast, called by the roasts module) use the same frames and work even while this module is off.
@@ -11,7 +11,8 @@ local Widgets = ns.Widgets
 local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
-local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00" }
+local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100" }
+local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
 local logic          -- PopupLogic instance (nil while the module is off)
 local ticker
@@ -134,7 +135,8 @@ local function show(p)
   local names = {}
   for i, n in ipairs(p.names) do names[i] = n end
   local extra = { zone = p.extra.zone and ns.Util.safeText(p.extra.zone),
-    subzone = p.extra.subzone and ns.Util.safeText(p.extra.subzone) }
+    subzone = p.extra.subzone and ns.Util.safeText(p.extra.subzone),
+    level = p.extra.level, maxLevel = p.extra.maxLevel }
   local text, sub = ns.PopupLogic.text(p.kind, names, extra, colorName)
   seq = seq + 1
   remember(text)
@@ -204,14 +206,22 @@ local function tick()
       if summary then due[#due + 1] = summary end
     end
   end
-  local shown = 0
+  local shown, dings = 0, 0
   for _, p in ipairs(due) do
     p = stillTrue(p)
-    if p then show(p); shown = shown + 1 end
+    if p then
+      show(p)
+      if p.kind == "levelup" then dings = dings + 1 else shown = shown + 1 end
+    end
   end
   layout()
+  -- A ding plays only its own sound (its own switch), so the two never stack.
   if shown > 0 and setting("sound") and type(PlaySound) == "function" and SOUNDKIT then
     ns.Log.safe(FEATURE, PlaySound, SOUNDKIT.RAID_WARNING)
+  end
+  if dings > 0 and setting("levelUpSound") and type(PlaySound) == "function" then
+    local kit = type(SOUNDKIT) == "table" and (SOUNDKIT.LEVELUP or SOUNDKIT.LEVEL_UP) or nil
+    ns.Log.safe(FEATURE, PlaySound, kit or LEVEL_UP_SOUND)
   end
 end
 
@@ -233,6 +243,13 @@ local function onDied(name, zone, subzone)
   if setting("death") then logic:push("death", name, ns.now(), { zone = zone, subzone = subzone }) end
 end
 
+-- A friend went up one level while we both were online (Roster decides; never our own level-up).
+local function onLevelUp(name, level)
+  if setting("levelUp") then
+    logic:push("levelup", name, ns.now(), { level = level, maxLevel = ns.maxLevel() })
+  end
+end
+
 local function hideAll()
   for _, f in ipairs(pool) do
     f.tcShown, f.tcPopup = false, nil
@@ -245,6 +262,7 @@ local function onEnable()
   logic = ns.PopupLogic.new({ combineWindow = ns.Config.POPUP_COMBINE_WINDOW, quietUntil = quietUntil })
   ns.Bus.on(FEATURE, "LAYER_RELATION", onRelation)
   ns.Bus.on(FEATURE, "MEMBER_DIED", onDied)
+  ns.Bus.on(FEATURE, "MEMBER_LEVELUP", onLevelUp)
   ns.Bus.on(FEATURE, "MEMBER_OFFLINE", onOffline)
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
@@ -260,9 +278,10 @@ end
 
 ns.Modules.register({
   id = FEATURE, name = "Pop-ups", tier = "module",
-  info = "Small messages near the top of the screen when a friend changes layer or dies. "
+  info = "Small messages near the top of the screen when a friend changes layer, dies or reaches a new level. "
     .. "They are short and never pile up.",
-  defaults = { layerDiff = true, layerSame = true, death = true, sound = false, seconds = 5 },
+  defaults = { layerDiff = true, layerSame = true, death = true, levelUp = true, levelUpSound = false, sound = false,
+    seconds = 5 },
   settings = {
     { key = "layerDiff", label = "Layer changes", kind = "toggle",
       info = "Shows a pop-up when a friend ends up on a different layer than you. Click it to invite them." },
@@ -270,6 +289,13 @@ ns.Modules.register({
       info = "Shows a pop-up when a friend who was on a different layer is back on yours." },
     { key = "death", label = "Deaths", kind = "toggle",
       info = "Shows a pop-up with the place when a friend dies." },
+    { key = "levelUp", label = "Level-ups", kind = "toggle",
+      info = "Shows a pop-up like \"Frostie reached level 13!\" when a friend levels up while you are both "
+        .. "online. Never for your own level-up (the game shows that), and never for levels gained while you "
+        .. "were offline." },
+    { key = "levelUpSound", label = "Level-up sound", kind = "toggle", parent = "levelUp",
+      info = "Plays the game's level-up sound with a friend's level-up pop-up. Off by default so streams stay "
+        .. "quiet." },
     { key = "sound", label = "Play a sound", kind = "toggle",
       info = "Plays a short sound when pop-ups appear. Off by default so streams stay quiet." },
     { key = "seconds", label = "How long they stay", kind = "slider", min = 2, max = 15, step = 1,

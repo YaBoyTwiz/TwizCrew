@@ -24,11 +24,15 @@ local function indexOf(list, name)
   for i, n in ipairs(list) do if n == name then return i end end
 end
 
--- kind: "layer_diff" | "layer_same" | "death"; extra (deaths only): { zone, subzone }
+-- Shown right away, one per friend (never combined): deaths and level-ups.
+local INSTANT = { death = true, levelup = true }
+
+-- kind: "layer_diff" | "layer_same" | "death" | "levelup"; extra: { zone, subzone } (deaths),
+-- { level, maxLevel } (level-ups)
 function Logic:push(kind, name, now, extra)
   if now < self.quietUntil then return end
-  if kind == "death" then
-    self.deaths[#self.deaths + 1] = { kind = "death", names = { name }, extra = extra or {} }
+  if INSTANT[kind] then
+    self.deaths[#self.deaths + 1] = { kind = kind, names = { name }, extra = extra or {} }
     return
   end
   local opposite = OPPOSITE[kind]
@@ -84,6 +88,15 @@ end
 
 local function identity(name) return name end
 
+-- The short line under a ding, for the stream: how many levels are left.
+local function levelsToGo(lv, maxLevel)
+  if not lv or not maxLevel then return nil end
+  local left = maxLevel - lv
+  if left <= 0 then return "Max level. GG!" end
+  if left == 1 then return "One more to go!" end
+  return "Only " .. left .. " to go."
+end
+
 -- Returns text, subtext (subtext may be nil). colorName(name) wraps a name for display; default is identity.
 function PopupLogic.text(kind, names, extra, colorName)
   colorName = colorName or identity
@@ -100,9 +113,14 @@ function PopupLogic.text(kind, names, extra, colorName)
     end
     return text, kind == "layer_diff" and "Click to invite them to your group" or nil
   end
+  extra = extra or {}
+  if kind == "levelup" then
+    local lv, maxLevel = tonumber(extra.level), tonumber(extra.maxLevel)
+    if not lv then return string.format("%s leveled up!", colorName(names[1])) end
+    return string.format("%s reached level %d!", colorName(names[1]), lv), levelsToGo(lv, maxLevel)
+  end
   -- death
   local text = string.format("%s died", colorName(names[1]))
-  extra = extra or {}
   local zone = (type(extra.zone) == "string" and extra.zone ~= "") and extra.zone or nil
   local sub = (type(extra.subzone) == "string" and extra.subzone ~= "") and extra.subzone or nil
   local subtext

@@ -185,6 +185,65 @@ return {
       W:advance(1.5)
       A.eq(ns.Popups.visibleCount(), 0)
     end,
+    level_up_text_and_fun_line = function(ns, A)
+      local P = ns.PopupLogic
+      A.eq({ P.text("levelup", { "Frostie" }, { level = 13, maxLevel = 60 }) },
+        { "Frostie reached level 13!", "Only 47 to go." })
+      A.eq({ P.text("levelup", { "Frostie" }, { level = 59, maxLevel = 60 }) }, { "Frostie reached level 59!",
+        "One more to go!" })
+      A.eq({ P.text("levelup", { "Frostie" }, { level = 60, maxLevel = 60 }) }, { "Frostie reached level 60!",
+        "Max level. GG!" })
+      A.eq({ P.text("levelup", { "Frostie" }, {}) }, { "Frostie leveled up!" })
+      A.eq(P.text("levelup", { "F" }, { level = 13 }, function(n) return "<" .. n .. ">" end), "<F> reached level 13!")
+    end,
+    level_up_logic_respects_quiet_time = function(ns, A)
+      local pl = ns.PopupLogic.new({ combineWindow = 3, quietUntil = 30 })
+      pl:push("levelup", "Frostie", 10, { level = 13 })
+      A.eq(pl:due(31), {}, "dropped in the quiet time")
+      pl:push("levelup", "Frostie", 40, { level = 14 })
+      pl:push("levelup", "Ginkan", 40, { level = 20 })
+      local d = pl:due(40)
+      A.eq(#d, 2, "one pop-up each, right away")
+      A.eq(d[1].kind, "levelup"); A.eq(d[1].names, { "Frostie" }); A.eq(d[1].extra.level, 14)
+    end,
+    ding_pop_up_for_a_friend = function(ns, A, W)
+      ready(ns, W)
+      receive(ns, W, "Frostie", "UPDATE", { lv = "12" })
+      W:advance(1)
+      A.eq(ns.Popups.visibleCount(), 0)
+      receive(ns, W, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(1)
+      A.eq(ns.Popups.textsForTest(), { { text = "Frostie reached level 13!", subtext = "Only 47 to go." } })
+      A.eq(W.sounds, {}, "no sound by default")
+      ns.Modules.set("popups", "sound", true)
+      receive(ns, W, "Frostie", "UPDATE", { lv = "14" })
+      W:advance(1)
+      A.eq(W.sounds, {}, "the general pop-up sound is not the ding sound")
+      ns.Modules.set("popups", "levelUpSound", true)
+      receive(ns, W, "Frostie", "UPDATE", { lv = "15" })
+      W:advance(1)
+      A.eq(W.sounds, { 888 }, "the game's level-up sound")
+      ns.Modules.set("popups", "levelUp", false)
+      receive(ns, W, "Frostie", "UPDATE", { lv = "16" })
+      W:advance(1)
+      A.eq(#ns.Popups.shownForTest(), 3, "no pop-up with Level-ups off (13, 14 and 15 only)")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    no_ding_in_the_login_quiet_time = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
+      receive(ns, W, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(40)
+      for _, t in ipairs(ns.Popups.shownForTest()) do A.no(t:find("reached", 1, true), t) end
+    end,
+    popups_settings_in_order = function(ns, A)
+      local d = ns.Modules.get("popups")
+      local keys = {}
+      for i, s in ipairs(d.settings) do keys[i] = s.key end
+      A.eq(keys, { "layerDiff", "layerSame", "death", "levelUp", "levelUpSound", "sound", "seconds" })
+      A.eq(d.defaults.levelUp, true); A.eq(d.defaults.levelUpSound, false)
+      for _, s in ipairs(d.settings) do if s.key == "levelUpSound" then A.eq(s.parent, "levelUp") end end
+    end,
     sound_off_by_default = function(ns, A, W)
       ready(ns, W)
       ns.Bus.fire("MEMBER_DIED", "Frostie", "Westfall", "")

@@ -185,7 +185,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   folders, about 2.6 GB, by hand 2026-11-05),
   Lore Forever 1.1.0 (CurseForge project 1715510, addon + male English narrator packs, no quest-dialogue packs
   because Spoken voices quests, by hand 2026-11-05),
-  DialogueUI 1.0.7 b (Peterodox, CurseForge project 989270, by hand 2026-11-05), and **TwizTracker** (a small starter addon Claude wrote:
+  DialogueUI 1.0.7 b (Peterodox, CurseForge project 989270, by hand 2026-11-05),
+  DialogKey - Numy Edition v1.2.62 (https://github.com/NumyAddon/DialogKey_Numy, by hand 2026-11-05), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
   `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote

@@ -206,6 +206,12 @@ for _, path in ipairs(testFiles) do
       local ns = {}
       local ok, err = pcall(function()
         loadFiles(W, ns, files)
+        -- Tests are written against the stub's version (W.state.version), not the real release number in
+        -- Core/Init.lua, so bumping the version for a release never breaks them.
+        if ns.VERSION and W.state.version then
+          ns.VERSION = W.state.version
+          ns.RESTART_SINCE = W.state.restartSince or W.state.version
+        end
         suite.tests[name](ns, A, W, newHarness())
       end)
       if not ok then

@@ -300,6 +300,37 @@ Easiest when you have just released a new version and your friend still has the 
    it" with no Reload button. After a full restart the version is right.
 7. **Turned off.** Your friend turns off **Update reminders**: when you press the button, no window for them.
 
+## Minimap button
+
+Built, every test outside the game passes. **Not tried in the game yet.** Riskiest first. **Restart the game fully
+first** (this update added files, so `/reload` is not enough).
+
+1. **Is it there, and does it look right?** A round button with a gold ring sits on the left edge of the minimap,
+   just below the middle, with a shouting-warrior icon inside. If you see a question mark, a green or black square,
+   or no button at all, tell Claude. `/tc report` has a line starting `Minimap button:` that says `icon ok` or
+   `icon missing`.
+2. **No red error pop-ups** at login, while hovering it, clicking it or dragging it.
+3. **Dragging.** Hold the left mouse button on it and move the mouse around the minimap: the button should follow
+   the mouse around the edge, on the side the mouse is on. If it jumps to a different spot than your mouse, or
+   goes off the edge, tell Claude. Let go, then `/reload`: it stays where you put it.
+4. **Clicks.** Left-click: the TwizCrew settings window opens; left-click again: it closes. Right-click: the Crew
+   panel disappears; right-click again: it comes back. No chat lines for these.
+5. **In a fight.** Start a fight with something and left-click the button: the settings window should still open,
+   with no "action blocked" message. Close it and finish the fight.
+6. **Hover.** A small box says "TwizCrew", what left- and right-click do, "Drag: move it around the minimap" and
+   "Crew online: …" (with friends online it counts them).
+7. **The minimap's AddOns list** (only if your minimap has one: a small button on or near the minimap that lists
+   addons; Questie's or OpenMap's entries are there too). TwizCrew should be listed, with the same icon. Click it:
+   the settings open. Right-click it: the panel hides or shows. Hover it: the same box as above, without the drag
+   line. If there is no such list, that is fine: nothing to check.
+8. **Hide and bring back.** Open the settings (`/tc`): under **Essentials** there is **Minimap button** (always
+   on) with an (i), and a **Show minimap button** switch with an (i). Turn the switch off: the button disappears.
+   Type `/tc minimap`: it comes back and chat says "minimap button shown". Type `/tc minimap` again: it hides.
+9. **Reset.** Drag the button somewhere else and hide it, then press **Reset everything to defaults** → **Yes**:
+   the button comes back, at its starting spot.
+10. **Does it cover anything?** If it sits on top of another minimap icon (Questie, the tracking icon, the mail
+    icon…), drag it away and tell Claude which icon, so the starting spot can move.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

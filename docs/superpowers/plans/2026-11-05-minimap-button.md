@@ -74,4 +74,18 @@ tests/test_minimap.lua          module, button, drag, clicks, compartment, /tc m
 
 ## Changes during build
 
-(filled in while building)
+- **`/tc report` line placement:** the `Minimap button:` line comes right after the `Update:` line, not last
+  (design note 11 said last). An earlier test checks that `Channel echoes heard` is the last line, and the first
+  five lines keep their places this way too.
+- **Right-click uses the same code as `/tc show` / `/tc hide`:** `Commands.setPanel(on, quiet)` is now shared; the
+  minimap passes `quiet`, so only the "turned itself off after errors" line can reach chat.
+- **Damaged saved values are repaired at login:** a saved `show` that is not true/false, or an `angle` that is not
+  a number, goes back to the default. Without this, `ns.Modules.set` would refuse every later drag (it only
+  accepts the saved value's type).
+- **Placed again after every loading screen** (`PLAYER_ENTERING_WORLD`), because a minimap addon may change the
+  shape while loading.
+- **Made only when shown:** a player who hid the button gets no frame at all until `/tc minimap` or the switch.
+- **Secret values:** cursor position, minimap size, centre, scale and shape go through `issecretvalue` (when the
+  game has it); an unreadable value counts as unknown (no move this frame / the normal size).
+- **Fake game:** `Minimap`, `GetCursorPosition` and `GetMinimapShape` (state `st.minimap`, `st.cursor`,
+  `st.minimapShape`), each hideable through `st.missing`. No earlier test changed.

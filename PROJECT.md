@@ -22,6 +22,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
   published. Details in the "Stats board" section below.
 - **"Tell crew to update" button built (2026-11-05):** not tested in game, not published. Details in its section
   below.
+- **Minimap button built (2026-11-05, owner asked):** left-click settings, right-click panel, drag around the edge,
+  `/tc minimap`, also in the minimap's AddOns list. Not tested in game, not published; its release needs a game
+  restart. Plan and Claude's calls: `docs/superpowers/plans/2026-11-05-minimap-button.md`; checks: `docs/TESTING.md`.
 - **Published (2026-11-05, owner said yes to "keep the name TwizCrew and publish now"):** public repository
   https://github.com/YaBoyTwiz/TwizCrew, release v0.1.0. Friends install it with WowUp (README.md). Still not
   tested in game. Before going public, the owner's WoW account folder name was removed from every file and from

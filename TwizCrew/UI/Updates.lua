@@ -1,5 +1,7 @@
 -- "Tell crew to update": the request (UPDREQ) out and in, the small window with Reload now, and the line after a
--- reload. Registers the module "updates" (Update reminders): what you see. Sending works whether it is on or not.
+-- reload. Also the update notice: the same window, once per new version, when any crew member runs a newer
+-- version (heard in HELLO / STATE), plus Updates.available() for the minimap badge and the panel line.
+-- Registers the module "updates" (Update reminders): what you see. Sending works whether it is on or not.
 -- The rules live in Core/UpdateLogic.lua.
 local _, ns = ...
 
@@ -11,13 +13,14 @@ local LOGIN_FEATURE = "updatecheck" -- the after-login check runs even when the 
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local Logic = ns.UpdateLogic
-local WIDTH, HEIGHT, PAD = 330, 104, 12
+local WIDTH, HEIGHT, PAD = 330, 112, 12
 
 local shown = {}      -- version -> time its window was shown (this session)
 local lastPress       -- time the button was last pressed
 local lastHeard       -- { name, ver, at } the last request accepted (for /tc report)
 local waiting         -- a request held until the fight ends
 local current         -- the request whose window is open
+local noticeWait = 0  -- counts the notice's waits: only the latest one may show it
 local frame, title, note, reloadButton, closeButton
 
 local function inFight()
@@ -27,6 +30,21 @@ local function inFight()
 end
 
 local function members() return ns.roster and ns.roster:members() or {} end
+
+local function cmp(a, b) return ns.Util.compareVersions(a, b) end
+local isVersion = function(v) return ns.Util.isVersion(v) end
+
+-- The newest version an update pop-up (notice or Tell crew) was shown for. Saved: once per version.
+local function shownUpTo()
+  local saved = ns.db and ns.db.updateNotice
+  return type(saved) == "table" and saved.shown or nil
+end
+
+local function markShown(ver)
+  local saved = ns.db and ns.db.updateNotice
+  if type(saved) ~= "table" or not isVersion(ver) then return end
+  if not isVersion(saved.shown) or cmp(ver, saved.shown) > 0 then saved.shown = ver end
+end
 
 ---------------------------------------------------------------------------------------------------- sending
 -- The button in the settings window. Returns true when the request went out.
@@ -105,10 +123,18 @@ local function build()
   frame:Hide()
 end
 
+-- req = { kind = "notice" | nil (a Tell crew request), name, ver, rs }. One window: a newer show replaces it.
 local function show(req)
   if not frame then build() end
-  local p = Logic.prompt(ns.Util.safeText(req.name), ns.Util.safeText(req.ver), Logic.needsRestart(ns.VERSION, req.rs))
-  current = { name = req.name, ver = req.ver, title = p.title, note = p.note, reload = p.reload }
+  local name, ver = ns.Util.safeText(req.name), ns.Util.safeText(req.ver)
+  local p
+  if req.kind == "notice" then
+    p = Logic.notice(name, ver, ns.VERSION, req.rs)
+  else
+    p = Logic.prompt(name, ver, Logic.needsRestart(ns.VERSION, req.rs))
+  end
+  current = { kind = req.kind, name = req.name, ver = req.ver, title = p.title, note = p.note, reload = p.reload }
+  markShown(req.ver)
   title:SetText(p.title)
   note:SetText(p.note)
   if p.reload then reloadButton:Show() else reloadButton:Hide() end
@@ -121,9 +147,10 @@ end
 local function remember(req)
   local saved = ns.db and ns.db.update
   if type(saved) ~= "table" then return end
-  if ns.Util.isVersion(saved.told) and ns.Util.compareVersions(req.ver, saved.told) <= 0 then return end
-  saved.told, saved.by, saved.rs, saved.at = req.ver, req.name, ns.Util.isVersion(req.rs) and req.rs or nil,
-    ns.wallclock()
+  if isVersion(saved.told) and cmp(req.ver, saved.told) <= 0 then return end
+  local rs = isVersion(req.rs) and req.rs or nil
+  if req.kind == "notice" then rs = Logic.safeRestartSince(req.rs, req.ver) end -- unknown: restart to be safe
+  saved.told, saved.by, saved.rs, saved.at = req.ver, req.name, rs, ns.wallclock()
 end
 
 local function newerThan(req, other)
@@ -133,7 +160,7 @@ end
 local function handleRequest(sender, fields)
   local isCrew = ns.roster ~= nil and ns.roster:get(sender) ~= nil
   if isCrew and ns.Util.isVersion(fields.ver) and ns.Version and ns.Version.seen then
-    ns.Version.seen(sender, fields.ver)
+    ns.Version.seen(sender, fields.ver, fields.rs)
   end
   local req = { sender = sender, name = sender, ver = fields.ver, rs = fields.rs }
   local ok, why = Logic.accept(req, {
@@ -174,6 +201,59 @@ end
 -- Under this module's own error guard (Comm's guard is the essential "comm", which never turns off).
 ns.Comm.on("UPDREQ", function(sender, fields) ns.Log.safe(FEATURE, handleRequest, sender, fields) end)
 
+---------------------------------------------------------------------------------------------------- update notice
+-- The newest version heard ({ name, ver, rs }) while it is newer than ours and Update reminders is on, else nil.
+-- The minimap badge and the panel line ask this (inside their own ns.Log.safe).
+function Updates.available()
+  local newest = ns.Version and ns.Version.newest and ns.Version.newest() or nil
+  return Logic.available(ns.VERSION, newest, ns.Modules.isEnabled(FEATURE))
+end
+
+local function newestOpen()
+  local a, b = current and current.ver, waiting and waiting.ver
+  if isVersion(a) and isVersion(b) then return cmp(a, b) >= 0 and a or b end
+  return isVersion(a) and a or (isVersion(b) and b or nil)
+end
+
+local function checkNotice()
+  local newest = ns.Version and ns.Version.newest and ns.Version.newest() or nil
+  local ok, why = Logic.showNotice(newest, {
+    myVersion = ns.VERSION, enabled = ns.Modules.isEnabled(FEATURE), shown = shownUpTo(), open = newestOpen(),
+  })
+  if not ok then
+    if why ~= "none" then ns.Log.add("info", "update notice for v%s not shown: %s", tostring(newest.ver), why) end
+    return
+  end
+  local req = { kind = "notice", name = newest.name, ver = newest.ver, rs = newest.rs }
+  remember(req)
+  ns.Log.add("info", "update notice: v%s from %s (restart since v%s)", req.ver, req.name, tostring(req.rs))
+  if inFight() then
+    waiting = req -- shown when the fight is over
+    return
+  end
+  show(req)
+end
+
+-- A short wait first, so a "Tell crew to update" pressed right away shows its own window instead (it then counts
+-- as shown and the notice stays quiet). Each news (a newer version, its rs learned) starts the wait again.
+local function scheduleNotice()
+  noticeWait = noticeWait + 1
+  local mine = noticeWait
+  C_Timer.After(ns.Config.UPDATE_NOTICE_DELAY, function()
+    if mine == noticeWait then ns.Log.safe(FEATURE, checkNotice) end
+  end)
+end
+
+-- The how-to window on demand (the panel's gold line). Returns whether there was an update to show.
+function Updates.showHowTo()
+  local up = Updates.available()
+  if not up then return false end
+  local req = { kind = "notice", name = up.name, ver = up.ver, rs = up.rs }
+  remember(req)
+  show(req)
+  return true
+end
+
 ---------------------------------------------------------------------------------------------------- after a login
 -- Taken at login and forgotten at once, so a request heard in the first seconds is kept for the next login.
 local function checkAfterLogin()
@@ -198,12 +278,15 @@ ns.Events.on(LOGIN_FEATURE, "PLAYER_LOGIN", checkAfterLogin)
 ---------------------------------------------------------------------------------------------------- module
 ns.Modules.register({
   id = FEATURE, name = "Update reminders", tier = "module",
-  info = "When a friend with a newer TwizCrew presses \"Tell crew to update\", you get a small window with a "
-    .. "Reload button, and after the reload a reminder if you are still on the old version. Turn off to never "
-    .. "get these.",
+  info = "Tells you when a friend has a newer TwizCrew: a gold ! on the minimap button, a gold line on the Crew "
+    .. "panel, and once per new version a small window that says how to update (with a Reload button when that "
+    .. "is enough). Also the window you get when a friend presses \"Tell crew to update\", and a reminder after "
+    .. "a reload if you are still on the old version. Turn off to never get these. The version number stays.",
   onEnable = function()
     ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", onFightEnd)
     ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", refreshReload)
+    ns.Bus.on(FEATURE, "UPDATE_SEEN", scheduleNotice)
+    scheduleNotice() -- turned on with an update already known: its pop-up (if not shown before) comes too
   end,
   onDisable = function()
     waiting = nil
@@ -218,8 +301,16 @@ function Updates.reportLine()
     heard = "v" .. ns.Util.safeText(lastHeard.ver) .. " from " .. ns.Util.safeText(lastHeard.name) .. ", "
       .. ns.Util.ago(math.max(0, ns.wallclock() - lastHeard.at))
   end
+  local newest = ns.Version and ns.Version.newest and ns.Version.newest()
+  local newestText = "none"
+  if newest then
+    newestText = "v" .. ns.Util.safeText(newest.ver) .. " from " .. ns.Util.safeText(newest.name)
+      .. " (restart since " .. (newest.rs and ("v" .. newest.rs) or "unknown") .. ")"
+  end
+  local popup = isVersion(shownUpTo()) and ("v" .. shownUpTo()) or "none"
   return "Update: addon list says v" .. tostring(ns.TOC_VERSION or "?") .. ", restart needed since v"
-    .. tostring(ns.RESTART_SINCE) .. ", last request heard: " .. heard
+    .. tostring(ns.RESTART_SINCE) .. ", last request heard: " .. heard .. ", newest heard: " .. newestText
+    .. ", pop-up shown for: " .. popup
 end
 
 -- Test hooks.

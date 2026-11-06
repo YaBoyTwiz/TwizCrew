@@ -45,6 +45,14 @@ local function has(list, value)
   return false
 end
 
+-- Frostie is in the crew with version `ver` and RESTART_SINCE `rs` (nil = an older copy that sends none).
+local function newerFriend(W, ns, name, ver, rs)
+  receive(W, name, "STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", ver = ver, rs = rs }, ns)
+end
+
+local NOTICE_RELOAD = "Frostie has it. Open WowUp and click Update, then press Reload now."
+local NOTICE_RESTART = "Frostie has it. Close WoW, open WowUp and click Update, then start WoW again."
+
 local RELOAD_NOTE = "If nothing changed, open WowUp and click Update first"
 local STILL_OLD = "TwizCrew: Still on v0.1.0. Open WowUp, click Update, then /reload"
 
@@ -322,6 +330,140 @@ return {
       A.eq(ns.Updates.promptForTest().title, "Frostie says v0.3.0 is out")
     end,
 
+    ---------------------------------------------------------------------------------------- update notice
+    notice_shows_once_after_a_short_wait = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      A.eq(ns.Updates.available(), { name = "Frostie", ver = "0.2.0", rs = "0.1.0" })
+      W:advance(29)
+      A.eq(ns.Updates.promptForTest(), nil, "waits, so Tell crew to update can win")
+      W:advance(2)
+      A.eq(ns.Updates.promptForTest(), { title = "Update available: v0.2.0", note = NOTICE_RELOAD, reload = true })
+      A.eq(ns.db.updateNotice.shown, "0.2.0", "saved: once per version")
+      A.eq(ns.db.update.told, "0.2.0", "remembered for the line after a reload")
+      A.eq(ns.db.update.rs, "0.1.0")
+      local reloads = 0
+      W.env.ReloadUI = function() reloads = reloads + 1 end
+      click(ns.Updates.reloadButtonForTest())
+      A.eq(reloads, 1)
+      ns.Updates.closeForTest()
+      newerFriend(W, ns, "Ginkan", "0.2.0", "0.1.0")
+      W:advance(61)
+      A.eq(ns.Updates.promptForTest(), nil, "the same version never pops up again")
+      A.ok(ns.Updates.available(), "but the update is still known (badge, panel line)")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    notice_says_restart_when_needed_or_unknown = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.2.0")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), { title = "Update available: v0.2.0", note = NOTICE_RESTART, reload = false })
+      ns.Updates.closeForTest()
+      receive(W, "Frostie", "HELLO", { ver = "0.3.0" }, ns) -- an older-style copy that sends no rs
+      newerFriend(W, ns, "Frostie", "0.3.0", nil)
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), { title = "Update available: v0.3.0", note = NOTICE_RESTART, reload = false })
+      A.eq(ns.db.update.rs, "0.3.0", "unknown counts as restart for the line after a reload too")
+      local reloads = 0
+      W.env.ReloadUI = function() reloads = reloads + 1 end
+      click(ns.Updates.reloadButtonForTest())
+      A.eq(reloads, 0, "no reload when a restart is needed")
+    end,
+
+    notice_not_again_after_a_reload = function(ns, A, W)
+      W.env.TwizCrewDB = { updateNotice = { shown = "0.2.0" } }
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), nil)
+      A.ok(ns.Updates.available())
+      newerFriend(W, ns, "Frostie", "0.2.1", "0.1.0")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.1", "a newer version shows again")
+    end,
+
+    notice_follows_update_reminders = function(ns, A, W)
+      W.env.TwizCrewDB = { modules = { updates = { enabled = false } } }
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), nil, "off: no pop-up")
+      A.eq(ns.Updates.available(), nil, "off: no badge, no panel line")
+      A.eq(ns.Updates.showHowTo(), false)
+      ns.Modules.setEnabled("updates", true)
+      A.ok(ns.Updates.available())
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0", "turned on: the pop-up comes")
+    end,
+
+    tell_crew_wins_over_the_notice = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(5)
+      ask(W, ns, "Frostie", "0.2.0", "0.1.0")
+      A.eq(ns.Updates.promptForTest().title, "Frostie says v0.2.0 is out")
+      A.eq(ns.db.updateNotice.shown, "0.2.0", "the request counts as shown")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest().title, "Frostie says v0.2.0 is out", "no notice on top")
+      ns.Updates.closeForTest()
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), nil)
+    end,
+
+    tell_crew_takes_over_an_open_notice = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.2.0")
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0")
+      ask(W, ns, "Frostie", "0.2.0", "0.2.0")
+      A.eq(ns.Updates.promptForTest(), { title = "Frostie says v0.2.0 is out",
+        note = "Close and restart the game to load it", reload = false }, "same window, Tell crew words")
+    end,
+
+    tell_crew_still_works_after_the_notice_was_closed = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(31)
+      ns.Updates.closeForTest()
+      ask(W, ns, "Frostie", "0.2.0", "0.1.0")
+      A.eq(ns.Updates.promptForTest().title, "Frostie says v0.2.0 is out", "as before")
+    end,
+
+    notice_in_a_fight_waits_for_the_end = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W.state.combat = true
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest(), nil)
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0")
+    end,
+
+    how_to_window_on_demand = function(ns, A, W)
+      boot(W)
+      A.eq(ns.Updates.showHowTo(), false, "nothing to update")
+      A.eq(ns.Updates.promptForTest(), nil)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(31)
+      ns.Updates.closeForTest()
+      A.eq(ns.Updates.showHowTo(), true, "again, even after the once-only pop-up")
+      A.eq(ns.Updates.promptForTest(), { title = "Update available: v0.2.0", note = NOTICE_RELOAD, reload = true })
+    end,
+
+    a_broken_notice_never_breaks_comms = function(ns, A, W)
+      boot(W)
+      ns.UpdateLogic.showNotice = function() error("boom") end
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      W:advance(31)
+      A.ok(ns.roster:get("Frostie").online, "the friend still arrived")
+      A.eq(ns.Updates.promptForTest(), nil)
+      local errors = ns.Log.errors(10)
+      A.ok(#errors >= 1, "logged")
+      for _, e in ipairs(errors) do A.contains(e, "ERROR updates: ", "charged to Update reminders only") end
+    end,
+
     report_says_versions = function(ns, A, W)
       boot(W)
       ns.TOC_VERSION = "0.0.9"
@@ -329,13 +471,15 @@ return {
       for _, line in ipairs(ns.Report.lines()) do
         if line:find("^Update: ") then found = line end
       end
-      A.eq(found, "Update: addon list says v0.0.9, restart needed since v0.1.0, last request heard: none")
+      A.eq(found, "Update: addon list says v0.0.9, restart needed since v0.1.0, last request heard: none, "
+        .. "newest heard: none, pop-up shown for: none")
       friend(W, ns, "Frostie", "0.2.0")
       ask(W, ns, "Frostie", "0.2.0", "0.1.0")
       for _, line in ipairs(ns.Report.lines()) do
         if line:find("^Update: ") then found = line end
       end
       A.contains(found, "last request heard: v0.2.0 from Frostie")
+      A.contains(found, "newest heard: v0.2.0 from Frostie (restart since v0.1.0), pop-up shown for: v0.2.0")
     end,
   },
 }

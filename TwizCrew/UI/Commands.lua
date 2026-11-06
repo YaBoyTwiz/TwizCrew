@@ -11,6 +11,7 @@ local HELP = {
   "/tc - open or close the settings",
   "/tc show - show the crew panel",
   "/tc hide - hide the crew panel",
+  "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
@@ -80,7 +81,8 @@ local function removeName(rest)
   say("removed " .. ns.Util.safeText(removed) .. ".")
 end
 
-local function setPanel(on)
+-- quiet: no "panel shown/hidden" line (the minimap button's right-click; the panel itself is the answer).
+local function setPanel(on, quiet)
   if on then
     for _, id in ipairs(ns.Modules.broken()) do
       if id == "panel" then
@@ -89,10 +91,19 @@ local function setPanel(on)
       end
     end
     ns.Modules.setEnabled("panel", true)
-    say("panel shown.")
+    if not quiet then say("panel shown.") end
   else
     ns.Modules.setEnabled("panel", false)
-    say("panel hidden. Type /tc show to bring it back.")
+    if not quiet then say("panel hidden. Type /tc show to bring it back.") end
+  end
+end
+Commands.setPanel = setPanel
+
+local function toggleMinimap()
+  if ns.MinimapButton.toggleShown() then
+    say("minimap button shown.")
+  else
+    say("minimap button hidden. Type /tc minimap to bring it back.")
   end
 end
 
@@ -151,6 +162,7 @@ local ACTIONS = {
   [""] = function() ns.Settings.toggle() end,
   show = function() setPanel(true) end,
   hide = function() setPanel(false) end,
+  minimap = toggleMinimap,
   status = setStatus,
   reset = function()
     ns.Settings.open()

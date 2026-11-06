@@ -303,6 +303,20 @@ local function build(W)
     return m.name, 30000, 60000, -1, m.paused or 0, "Breath"
   end
   fakes.GetMoney = function() return st.money end
+
+  -- minimap button: the Minimap frame, the cursor and the minimap shape, all hideable through st.missing
+  -- ("Minimap", "GetCursorPosition", "GetMinimapShape"). st.minimap = size, centre and effective scale of the
+  -- minimap; st.cursor = { x, y } in screen pixels; st.minimapShape = what GetMinimapShape answers (nil = "ROUND").
+  st.minimap = { width = 140, height = 140, x = 500, y = 400, scale = 1 }
+  st.cursor = { x = 0, y = 0 }
+  local minimap = permissive(W)
+  rawset(minimap, "GetWidth", function() return st.minimap.width end)
+  rawset(minimap, "GetHeight", function() return st.minimap.height end)
+  rawset(minimap, "GetCenter", function() return st.minimap.x, st.minimap.y end)
+  rawset(minimap, "GetEffectiveScale", function() return st.minimap.scale end)
+  fakes.Minimap = minimap
+  fakes.GetCursorPosition = function() return st.cursor.x, st.cursor.y end
+  fakes.GetMinimapShape = function() return st.minimapShape or "ROUND" end
   local v1UnitAffectingCombat = env.UnitAffectingCombat
   env.UnitAffectingCombat = function(u)
     local x = u ~= "player" and unit(u)

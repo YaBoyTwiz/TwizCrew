@@ -4,6 +4,10 @@
 ## Author: YaBoyTwiz
 ## Version: 0.1.0
 ## SavedVariables: TwizCrewDB
+## IconTexture: Interface\Icons\Ability_Warrior_BattleShout
+## AddonCompartmentFunc: TwizCrew_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: TwizCrew_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: TwizCrew_OnAddonCompartmentLeave
 
 Core\Init.lua
 Core\Util.lua
@@ -47,5 +51,6 @@ UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua
 UI\MinimapLogic.lua
+UI\MinimapButton.lua
 UI\Commands.lua
 Core\Boot.lua

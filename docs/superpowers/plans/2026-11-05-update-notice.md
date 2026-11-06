@@ -26,8 +26,8 @@ Builds on the earlier plans (crew panel, stats board, update button, minimap but
 - A failure in the notice never breaks the panel, comms or the minimap button: they ask `ns.Updates.available()`
   inside `ns.Log.safe("updates", ...)` and treat an error as "no update".
 - STATE stays within the codec limits (255 bytes per piece); the long-STATE codec tests keep passing.
-- **No new files in the addon and no `.toc` change**, so this alone does not need a game restart. (The previous
-  unreleased work, the minimap button, already does: its release must set `RESTART_SINCE`.)
+- **No new files in the addon and no `.toc` change**, so this alone does not need a game restart. (The minimap button,
+  which added files, already shipped in v0.1.1 with `RESTART_SINCE = "0.1.1"`.)
 
 ## Design notes (Claude's calls; the owner can overrule)
 
@@ -100,6 +100,6 @@ tests/                         updatelogic, version, crew, updates, panel, minim
   for: v…` (its test was updated).
 - **Two earlier minimap tests changed:** the tooltip title is now "TwizCrew v0.1.0" instead of "TwizCrew".
 - **Release note for Claude:** no files were added or removed and the `.toc` did not change, so this work alone does
-  not need a game restart. The next release still needs `RESTART_SINCE` set to its version because of the
-  unreleased minimap button (two new files, new `.toc` lines). Friends on v0.1.1 send no `rs`, so their copies
-  count as "unknown" and the notice says restart, which matches.
+  not need a game restart. Correction (Claude, at review): the minimap button already shipped in v0.1.1, so the
+  next release keeps `RESTART_SINCE = "0.1.1"` and a /reload is enough for anyone on v0.1.1. Friends on v0.1.1 send
+  no `rs`; that only matters to copies that are older still.

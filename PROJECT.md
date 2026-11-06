@@ -175,7 +175,7 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/`
 - **Already installed there:** Questie, QuestieDB, QuestMaster, OpenMap (v0.7.5-beta from
   https://github.com/openmap-world/openmap, installed by hand 2026-11-05; conflicts with Leatrix Maps, Mapster and
-  Magnify), and **TwizTracker** (a small starter addon Claude wrote:
+  Magnify), What's Training? Forever (v1.1.1 from CurseForge project 1701676, by hand 2026-11-05), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
   `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote

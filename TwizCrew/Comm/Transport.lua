@@ -355,8 +355,8 @@ local function whisperNames(skipGroup)
   local me = ns.playerName()
   local function add(name)
     if type(name) ~= "string" or name == "" then return end
-    name = Ambiguate(name, "none")
-    if name == me or seen[name] then return end
+    name = ns.shortName(name)
+    if ns.isMe(name) or seen[name] then return end
     if skipGroup and UnitInParty(name) then return end
     seen[name] = true
     out[#out + 1] = { chatType = "WHISPER", target = name }

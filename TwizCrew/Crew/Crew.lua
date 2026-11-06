@@ -83,9 +83,34 @@ local function sayGoodbye()
   end
 end
 
+-- Saved lists from v0.1.0 can hold "Name Realm" keys, including a ghost of ourselves: fold them into short names.
+local function tidyNames(list)
+  if type(list) ~= "table" then return end
+  local keys = {}
+  for key in pairs(list) do keys[#keys + 1] = key end
+  for _, key in ipairs(keys) do
+    if type(key) == "string" then
+      local short = ns.shortName(key)
+      if ns.isMe(short) then
+        list[key] = nil
+        ns.Log.add("info", "removed %s from the crew list (that is you)", ns.Util.safeText(key))
+      elseif short ~= key then
+        local row = list[key]
+        list[key] = nil
+        if list[short] == nil then
+          if type(row) == "table" and row.name ~= nil then row.name = short end
+          list[short] = row
+        end
+      end
+    end
+  end
+end
+
 function Crew.start()
   if started then return end
   started = true
+  ns.Log.safe(FEATURE, tidyNames, ns.db.roster)
+  if type(ns.db.stats) == "table" then ns.Log.safe(FEATURE, tidyNames, ns.db.stats.crew) end
   ns.roster = ns.Roster.new(ns.db.roster)
   ns.Comm.on("HELLO", onHello)
   ns.Comm.on("STATE", onState)

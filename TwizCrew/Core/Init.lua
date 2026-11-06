@@ -54,7 +54,20 @@ ns.Config = {
 function ns.now() return GetTime() end
 function ns.wallclock() return time() end
 
+-- A character name without its realm. WoW Forever hands us "Name Realm" (space) for party and whisper senders,
+-- other clients "Name-Realm"; character names never contain a space or a hyphen, so we keep what comes before.
+-- The crew is same-realm, so the short name is enough to whisper and to tell people apart.
+function ns.shortName(name)
+  if type(name) ~= "string" then return name end
+  local ok, amb = pcall(Ambiguate, name, "none")
+  if ok and type(amb) == "string" and amb ~= "" then name = amb end
+  return name:match("^([^%s%-]+)") or name
+end
+
 function ns.playerName()
-  local name = UnitName("player") or "Unknown"
-  return Ambiguate(name, "none")
+  return ns.shortName(UnitName("player") or "Unknown")
+end
+
+function ns.isMe(name)
+  return type(name) == "string" and ns.shortName(name):lower() == ns.playerName():lower()
 end

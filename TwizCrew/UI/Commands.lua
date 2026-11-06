@@ -60,7 +60,7 @@ local function addName(rest)
   local list = extraList()
   if not name then say("type a name after it, like /tc add Frostie"); return end
   if not list then return end
-  if Ambiguate(name, "none"):lower() == ns.playerName():lower() then
+  if ns.isMe(name) then
     say("that's you, no need to add yourself.")
     return
   end

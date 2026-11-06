@@ -63,10 +63,17 @@ local function sweepSeen(now)
   end
 end
 
+local loggedNameForm = false
+
 local function onAddon(prefix, text, chatType, sender)
   if prefix ~= ns.Config.PREFIX or type(sender) ~= "string" or type(text) ~= "string" then return end
-  sender = Ambiguate(sender, "none")
-  if sender == ns.playerName() then
+  local raw = sender
+  sender = ns.shortName(sender)
+  if raw ~= sender and not loggedNameForm then
+    loggedNameForm = true
+    ns.Log.add("info", "sender names look like \"%s\"; using \"%s\"", ns.Util.safeText(raw), ns.Util.safeText(sender))
+  end
+  if ns.isMe(sender) then
     if chatType == "CHANNEL" then echoes = echoes + 1 end
     return
   end

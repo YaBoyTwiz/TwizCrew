@@ -121,6 +121,43 @@ return {
       local msgs = sentSince(ns, W, n - 0)
       A.eq(msgs[#msgs].fields.st, string.rep("é", 40))
     end,
+    -- Found in game (WoW Forever): our own party/whisper messages came back from "Yaboytwiz Noodledog" (name plus
+    -- realm, space-separated), so the copy put itself on its own crew list and showed itself as offline.
+    own_echo_with_realm_is_ignored = function(ns, A, W)
+      start(ns, W)
+      for _, from in ipairs({ "Twiz Noodledog", "Twiz-Noodledog", "Twiz-Realm", "twiz" }) do
+        for _, text in ipairs(ns.Codec.encode("HELLO", { ver = "0.1.0" })) do
+          W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "PARTY", from)
+        end
+        A.eq(ns.roster:get(from), nil)
+      end
+      A.eq(next(ns.roster.byName), nil)
+      noErrors(ns, A)
+    end,
+    friend_names_lose_their_realm = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Ginkan Noodledog", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Frostie-Noodledog", "HELLO", { ver = "0.1.0" })
+      A.ok(ns.roster:get("Ginkan") ~= nil)
+      A.ok(ns.roster:get("Frostie") ~= nil)
+      A.eq(ns.roster:get("Ginkan Noodledog"), nil)
+      noErrors(ns, A)
+    end,
+    saved_ghost_of_self_is_removed = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.roster["Twiz Noodledog"] = { name = "Twiz Noodledog", level = 6 }
+      db.roster["Ginkan Noodledog"] = { name = "Ginkan Noodledog", level = 9 }
+      ns.db = db
+      ns.Modules.attach(db)
+      ns.Comm.start()
+      ns.Crew.start()
+      A.eq(db.roster["Twiz Noodledog"], nil)
+      A.eq(db.roster["Ginkan Noodledog"], nil)
+      A.eq(db.roster["Ginkan"].name, "Ginkan")
+      A.eq(ns.roster:get("Twiz Noodledog"), nil)
+      A.ok(ns.roster:get("Ginkan") ~= nil)
+      noErrors(ns, A)
+    end,
     hello_gets_jittered_state_reply = function(ns, A, W)
       start(ns, W)
       local n = #W.sent

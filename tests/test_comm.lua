@@ -266,7 +266,9 @@ return {
       W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Holybøi-OtherRealm")
       W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz-Realm")
       W:fire("CHAT_MSG_ADDON", "Other", "1^PING^", "CHANNEL", "Ginkan-Realm")
-      A.eq(got, { "Ginkan", "Holybøi-OtherRealm" })
+      -- Since the first in-game test: names always lose their realm (the crew is same-realm; WoW Forever sends
+      -- "Name Realm" for party and whisper senders, which made our own messages look like a friend's).
+      A.eq(got, { "Ginkan", "Holybøi" })
     end,
     receive_passes_fields_to_handlers = function(ns, A, W)
       boot(ns, W)

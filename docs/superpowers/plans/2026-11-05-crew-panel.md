@@ -988,6 +988,16 @@ Fixes after the final review:
 
 Fixes after the first in-game test:
 
+- **Our own messages no longer make us our own crew member.** In WoW Forever, party and whisper messages from
+  ourselves came back with the sender "Yaboytwiz Noodledog" (name, a space, then a second part; the character's
+  WTF folder is `91/Yaboytwiz-Noodledog`), while `UnitName("player")` and channel senders were just "Yaboytwiz".
+  The copy put itself on its own crew list and then showed itself as offline. Now `ns.shortName()` keeps only what
+  comes before the first space or hyphen (character names have neither), `ns.isMe()` compares those short names
+  (any case), and every sender, whisper target and saved crew-list key uses the short name. Saved "Name Realm"
+  keys from v0.1.0 are folded into short names at load, and the ghost of yourself is removed. The first time a
+  sender name arrives in a long form, the log says once what it looked like. Cost if the second part is not a
+  realm but a name tag: whispers (the fallback only) go to the short name.
+
 - **The channel no longer gives up for the whole session when its sends are refused.** On the owner's first login
   the channel joined and the sends in that same second came back with result 7 (very likely `InvalidChannel`: the
   game was not ready for addon messages on the brand-new channel). Three refusals made TwizCrew fall back to

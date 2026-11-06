@@ -157,6 +157,9 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   first login TwizCrew created `TwizCrewHQ`, and the sends in the same second as the join came back with result 7
   (very likely `InvalidChannel`). On the next login every send worked. TwizCrew now waits out refusals for 10 s
   after a join and tries a failed channel again after 1 minute (then 2, 4, 5 min…); details in the crew-panel plan.
+- **Sender names come in two forms (seen in game, 2026-11-05):** channel senders and `UnitName("player")` are
+  just the name ("Yaboytwiz"); party and whisper senders came as "Yaboytwiz Noodledog" (the WTF character folder
+  is `91/Yaboytwiz-Noodledog`). TwizCrew now uses the name before the first space or hyphen everywhere.
 - **Boss fights:** addon messages are reported to be **blocked during a boss fight** inside dungeons and raids. Plan:
   queue them and send after `ENCOUNTER_END`. The rest of the dungeon (trash, between pulls) is reported to work.
   Your own screen can still show things during a boss fight.

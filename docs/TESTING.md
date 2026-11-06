@@ -16,6 +16,9 @@ stop there and tell Claude.
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/WTF/Account/*/SavedVariables/TwizCrew.lua`
 - **Friends** can't send you their file. Ask them to type `/tc report`, press Ctrl+C in the box that opens, and
   paste it in Discord.
+- **Many checks work alone** with the test buttons: `/tc`, then scroll to **Try it out** at the bottom (or type
+  `/tc test` in chat for the same as commands). They make pretend friends and pop-ups on your screen only. See
+  "Test tools" below.
 
 ## Alone (riskiest first)
 
@@ -331,72 +334,119 @@ first** (this update added files, so `/reload` is not enough).
 10. **Does it cover anything?** If it sits on top of another minimap icon (Questie, the tracking icon, the mail
     icon…), drag it away and tell Claude which icon, so the starting spot can move.
 
+## Test tools ("Try it out")
+
+Pretend friends and pop-ups, so you can check things without waiting for your crew. **Only on your screen:** your
+crew never sees them, nothing is saved, and they are gone after **Clear test stuff**, **Reset everything to
+defaults** or `/reload`. Pretend names always end in **(test)**. No restart needed (no new files).
+
+1. **Where they are.** `/tc`, scroll to the bottom: a section **Try it out**, a line **Test tools** "only on your
+   screen" with an (i), then nine buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
+   pop-up**, **Layer pop-up**, **Roast pop-up**, **Update notice (reload)**, **Update notice (restart)**, **Clear
+   test stuff**. `/tc test` in chat lists the same as commands (`/tc test fake`, `/tc test ding`...).
+2. **No chat spam, no invites.** While you use them, chat should never say "No player named … is currently playing",
+   and nobody gets a group invite (that would mean TwizCrew tried to reach a pretend friend).
+3. **Each button once.** Press each one: a chat line or a pop-up, no red error. If chat says "that test did not
+   work", type `/tc report` and tell Claude.
+   - **Death pop-up:** "Testbuddy (test) died" with "Hillsbrad Foothills, Southshore" under it, and a red DEAD tag
+     on Testbuddy's row for about 15 seconds.
+   - **Layer pop-up:** press it a few times: "Testbuddy (test) is back on your layer", then "… is on a different
+     layer", taking turns (about 3 seconds after the press). The OTHER LAYER tag comes and goes with it. Click the
+     "different layer" pop-up: it closes and invites nobody.
+   - **Roast pop-up:** an orange line about Testbuddy, a different one each press. Pressed again within 10 seconds,
+     chat says why nothing showed.
+4. **Clear test stuff:** every "(test)" row, the gold **!** and the gold line go away; chat says "test stuff
+   cleared." Press it again: "nothing to clear." `/tc report` has a line `Test tools: nothing fake`.
+5. **Your crew sees nothing** (when a friend is online): ask them whether a "(test)" name, a pop-up about
+   Testbuddy or an "Update available" line showed up on their screen. Nothing should.
+
+## Level progress (XP numbers, hover detail, "Ding!" pop-up)
+
+Built, every test outside the game passes (including two copies where one earns XP and levels up). **Not tried in
+the game yet.** Riskiest first. No restart needed (no new files). **You can do the first six alone** with the test
+buttons (`/tc` → **Try it out**, see "Test tools" above).
+
+1. **One ding on a real level-up (the riskiest).** Press **Copy of me**: a row "My copy (test)" appears. It is you,
+   made from what your TwizCrew tells your crew, through the same code a friend's copy uses. Now play until you
+   level up for real. Right after the game's own level-up you should get **exactly one** pop-up near the top: "**My
+   copy (test) reached level N!**" (gold edge on the left) with a small line under it like "Only 47 to go." That is
+   what your friends will see. Tell Claude if there was none, or two, or one while only earning XP.
+   - Also press **Fake friends** and leave the game running for about 7 minutes: Testbuddy levels up by itself, and
+     you should get exactly one "Testbuddy (test) reached level 13!".
+   - **Ding** shows that pop-up at once, even right after you log in (normal pop-ups wait 30 seconds after login;
+     test ones don't).
+2. **The numbers match your own XP bar.** With **Copy of me** on, hover the "My copy (test)" row, then hover the
+   game's own XP bar, and compare:
+   - "Level 12 · 63%" with your level and the bar's percent;
+   - "3,737 XP to level 13" with the bar's numbers (for "6,363 / 10,100 XP" it should say 10,100 - 6,363 = 3,737);
+   - "Rested: 2,500 XP" with the bar's rested number (no rested line when you have none).
+   The copy updates when your TwizCrew tells your crew (each whole percent, a level-up, a new zone, a fight
+   starting or ending), so after a small kill it can be a little behind the bar until the next percent. Your
+   friends see the same. If a number is off, kill one more mob, look again, and tell Claude what both said.
+   At max level the tooltip says "Max level".
+3. **The text fits in each row style.** Press **Fake friends**: Testbuddy, Maxbuddy and Offbuddy appear. Right-click
+   the panel title → Row style, and check each style:
+   - **Full:** Testbuddy's row has "Lv 12 · 63%" on the right of the purple XP bar; the bar is a bit shorter,
+     nothing overlaps. The zone "Hillsbrad Foothills, Southshore" and the status "testing TwizCrew" fit or are cut,
+     never drawn past the edge. Maxbuddy says "Lv 60 · max level" with no bar. Offbuddy is greyed out with "Offline,
+     last seen 2h ago".
+   - **Compact:** "Lv 12 · 63%" in the top-right corner. The long name "Testbuddy (test)" is cut, not drawn under it.
+   - **Tiny:** "63%" in the top-right corner.
+   - The tags on the top edge (FIGHTING, AFK, OTHER LAYER) still read fine next to the text.
+   - Move the **Scale** slider in `/tc` too, in each style.
+4. **The little dot.** "Lv 12 · 63%": the dot in the middle shows as a dot, not a box or a question mark.
+5. **Hover Testbuddy:** a tooltip with "Testbuddy (test)" in pink (paladin), "Level 12 · 63%", "3,720 XP to level
+   13" and "Rested: 2,500 XP". Testbuddy earns XP every 20 seconds: after about 3 minutes "About N min to level"
+   appears, and the number goes down as it earns.
+   - Hover a tag pill on the row, then move back onto the row: the row's tooltip comes back (or at least nothing
+     sticks on screen).
+6. **The level-up sound** (`/tc` → **Pop-ups** → **Level-up sound**, off by default): turn it on and press
+   **Ding**: you should hear the game's own level-up sound. Tell Claude if it is silent or a different sound.
+7. **Switches:** `/tc` → **Crew panel** → **Show level and XP numbers** and **XP details on hover**, and
+   **Pop-ups** → **Level-ups**: each one turns its part off (try them with **Fake friends** and **Ding**; with
+   Level-ups off, chat says so instead). **Reset everything to defaults** turns them back on (the sound stays off)
+   and removes the pretend friends.
+8. **With a friend (later), the real thing:**
+   - When your friend levels up, you get one "<friend> reached level N!". Nothing on your friend's own screen (the
+     game shows its own).
+   - Log in or `/reload` while your friend is already a level higher than last time: no pop-up. Same when your
+     friend logs back in after leveling elsewhere.
+   - While a friend levels, nobody should see "too many messages" or get disconnected (the XP numbers ride on
+     messages TwizCrew already sent).
+
 ## Update notice and version number
 
 Built, every test outside the game passes (including an old and a new copy talking). **Not tried in the game yet.**
 Riskiest first. No restart needed for this part on its own (no new files).
 
-**How to see the notice without waiting for a release:** ask Claude to make your copy pretend to be an older
-version (say v0.0.1; Claude changes the number on this PC), then `/reload` while a friend with TwizCrew is online.
-Ask Claude to put the number back afterwards.
+**Alone, with the test buttons:** press **Update notice (reload)** in `/tc` → **Try it out**. Testbuddy pretends to
+have the next version, and the real update notice shows it (nothing is saved and your crew sees nothing). Do checks
+1 to 4 and 6 to 7, then press **Update notice (restart)** for the other kind of window, then **Clear test stuff**.
 
-1. **The gold "!" on the minimap button.** With a friend online on a newer version, a small gold **!** sits at the
-   top-right of the button's icon. Tell Claude if it is missing, hidden under the gold ring, far too big, or a box.
+1. **The gold "!" on the minimap button.** A small gold **!** sits at the top-right of the button's icon. Tell
+   Claude if it is missing, hidden under the gold ring, far too big, or a box.
 2. **The Crew panel's title** says **TwizCrew v…** in small grey after the name. Check it does not run into the
    "x of y online" text on the right, in the **Full** and **Compact** row styles (in **Tiny** the version is left
    out on purpose, the panel is too narrow).
 3. **The gold line.** Under the title, a gold **Update available: v…** line. The tabs (Crew / Hall of Shame) and
    the rows must sit below it, not on top of it. Hover it: "Click for how to update". Click it: the small window
    opens.
-4. **The pop-up**, about 30 seconds after your friend is heard: "Update available: v…", then "<friend> has it." and
-   what to do. Check all the words fit inside the window (none cut off at the bottom or right).
-   - With **Reload now**: "Open WowUp and click Update, then press Reload now". Click **Reload now**: the game
-     reloads. If it shows "action blocked", tell Claude.
-   - Without it: "Close WoW, open WowUp and click Update, then start WoW again", and an **OK** button. (Friends on
-     v0.1.1 do not say whether a reload is enough, so you get this one.)
-5. **Only once.** `/reload` while still on the older version: no pop-up this time (chat may say "Still on v…" once),
-   but the gold **!** and the gold line are still there.
+4. **The pop-up:** "Update available: v…", then "Testbuddy (test) has it." (a friend's name, for real) and what to
+   do. Check all the words fit inside the window (none cut off at the bottom or right).
+   - **Update notice (reload)**: "Open WowUp and click Update, then press Reload now". Click **Reload now**: the
+     game reloads (and the pretend update is gone afterwards). If it shows "action blocked", tell Claude.
+   - **Update notice (restart)**: "Close WoW, open WowUp and click Update, then start WoW again", and an **OK**
+     button.
+   - Close the window and wait a minute: it does not come back by itself.
+5. **Only once** (needs a real newer version from a friend): `/reload` while still on the older version: no pop-up
+   this time (chat may say "Still on v…" once), but the gold **!** and the gold line are still there.
 6. **Minimap tooltip.** Hover the button: the first line says **TwizCrew v…**, and the last line, in gold,
-   "Update available: v… (<friend> has it)".
+   "Update available: v… (Testbuddy (test) has it)".
 7. **Turned off.** In `/tc` → **Modules**, turn off **Update reminders**: the **!** and the gold line go away, the
-   version number stays.
-8. **Tell crew to update still works.** When your friend is the older one and you press **Tell crew to update**
-   within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
+   version number stays. Turn it back on.
+8. **Tell crew to update still works** (with a friend). When your friend is the older one and you press **Tell crew
+   to update** within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
 9. **After updating for real:** no **!**, no gold line, no pop-up.
-
-## Level progress (XP numbers, hover detail, "Ding!" pop-up)
-
-Built, every test outside the game passes (including two copies where one earns XP and levels up). **Not tried in
-the game yet.** Riskiest first. No restart needed (no new files). You need **one friend** with this version, and
-someone has to earn XP. Tip: for a quick look at your own numbers, turn on **Show myself in the list** in `/tc`.
-
-1. **The ding needs a real level-up while you are both online.** When your friend levels up, you should get one
-   pop-up near the top: "**<friend> reached level N!**" (name in their class colour, gold edge on the left) with a
-   small line under it like "Only 47 to go." Exactly one, even if they keep fighting. Nothing on your friend's own
-   screen (the game shows its own). Tell Claude if there was none, or two.
-2. **No ding when there shouldn't be one:** log in or `/reload` while your friend is already a level higher than
-   last time: no pop-up. Same when your friend logs back in after leveling elsewhere.
-3. **The level-up sound** (`/tc` → **Pop-ups** → **Level-up sound**, off by default): turn it on, and on the next
-   ding you should hear the game's own level-up sound. Tell Claude if it is silent or a different sound.
-4. **The little dot.** The panel text is "Lv 12 · 63%". Check the dot in the middle shows as a dot, not a box or
-   a question mark.
-5. **The text fits in each row style** (right-click the panel title → Row style):
-   - **Full:** "Lv 12 · 63%" on the right of the purple XP bar; the bar is a bit shorter, nothing overlaps.
-   - **Compact:** "Lv 12 · 63%" in the top-right corner; a long name is cut, not drawn under it.
-   - **Tiny:** "63%" in the top-right corner.
-   - Also check the tags (FIGHTING, AFK...) on the top edge still read fine next to it.
-6. **Hover a friend's row:** a tooltip with their name, "Level 12 · 63%", "1,234 XP to level 13", "Rested: …" when
-   they have rested XP. After your friend has killed a few mobs over 3+ minutes: "About 25 min to level". Check
-   the numbers match what your friend sees on their own XP bar (hovering the game's XP bar shows them).
-   - Hover a tag pill on the row, then move back onto the row: the row's tooltip comes back (or at least nothing
-     sticks on screen).
-7. **No extra chatter.** While a friend levels, nobody should see "too many messages" or get disconnected (the XP
-   numbers ride on messages TwizCrew already sent, so there should be no more than before).
-8. **Max level** (if anyone is 60): their row says "Lv 60 · max level" (Full) with no XP bar, the tooltip says
-   "Max level".
-9. **Switches:** `/tc` → **Crew panel** → **Show level and XP numbers** and **XP details on hover**, and
-   **Pop-ups** → **Level-ups**: each one turns its part off. **Reset everything to defaults** turns them back on
-   (the sound stays off).
 
 ## What to send back
 

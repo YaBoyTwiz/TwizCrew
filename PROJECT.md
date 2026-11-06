@@ -34,6 +34,10 @@ Other players never see any of it. The messages are hidden addon messages, not c
   XP to level, rested XP and "About 25 min to level", and a "<Name> reached level 13!" pop-up (sound off by
   default). Not tested in game, not published; no restart needed. Plan and Claude's calls:
   `docs/superpowers/plans/2026-11-05-level-progress.md`; checks: `docs/TESTING.md`.
+- **Test tools built (2026-11-05, owner: "in the addon add a way to test"):** `/tc` → **Try it out** (and `/tc test`):
+  pretend friends, a copy of yourself, ding / death / layer / roast pop-ups and the update notice through the real
+  code, only on your own screen, never sent or saved. Not tested in game, not published; no restart needed. Plan and
+  Claude's calls: `docs/superpowers/plans/2026-11-05-test-tools.md`; checks: `docs/TESTING.md`.
 - **Published (2026-11-05, owner said yes to "keep the name TwizCrew and publish now"):** public repository
   https://github.com/YaBoyTwiz/TwizCrew, release v0.1.0. Friends install it with WowUp (README.md). Still not
   tested in game. Before going public, the owner's WoW account folder name was removed from every file and from

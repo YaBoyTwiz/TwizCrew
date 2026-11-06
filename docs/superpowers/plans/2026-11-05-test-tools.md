@@ -65,3 +65,34 @@ Builds on the earlier plans; their Global Constraints and "Changes during build"
 5. `docs/TESTING.md` rewritten so the owner can do the risky checks alone; PROJECT.md line.
 
 ## Changes during build
+
+- **"My copy" pops up like a friend would** (added; not in the brief): while it is on, your real level-ups and
+  deaths give "My copy (test) reached level N!" / "My copy (test) died". Why: that makes the riskiest check (one
+  ding on a real level-up) doable alone, through the same path a friend's copy uses. Cost if wrong: a pop-up about
+  yourself on stream while the copy is on.
+- **The copy is called "My copy (test)", not "<your name> (test)":** `ns.shortName` of the latter is your own name,
+  so `ns.isMe` would take the fake for you.
+- **Fake friends makes three** (the optional two included): Testbuddy, Maxbuddy (max level) and Offbuddy (offline,
+  "last seen 2h ago"). Maxbuddy carries version 0.0.9, so a test proves the version list and "Tell crew to update"
+  do not count fakes.
+- **Fakes count as online on the panel** ("2 of 3 online") and in the minimap tooltip's "Crew online", because both
+  read `Roster:onlineCount`. Cost: a test row counts as a friend there while it is on.
+- **The debug log keeps test lines** ("test tools: fake pressed", "layer Testbuddy (test): unknown -> different"):
+  the log is the one saved place a fake name can appear, on purpose, so Claude can tell test actions apart when
+  reading it. Cost if wrong: one more place to clean.
+- **Logout scrub:** at logout the tools also remove any fake name from `db.roster` and the stats lists, whatever
+  happened (nothing should be there).
+- **The Roast button tells why nothing showed** (roasts off, or one about Testbuddy less than 10 s ago) by looking at
+  `Roasts.forTest.shown()` (a hook that was only used by tests).
+- **Pop-up buttons say when a switch hides them** ("Level-ups pop-ups are off…", "Update reminders is turned off…",
+  "the Crew panel is hidden…") instead of doing nothing silently.
+- **A pretend update over a real one:** the pretend version is the next one after ours or after the newest real one
+  heard, so it always shows; Clear brings the real notice back. Pressing an update button while a real update
+  window is open replaces that window (the real one comes back at the next notice or a click on the gold line).
+- **Tests:** `tests/test_testtools.lua` (29 tests, including two copies where the friend never hears about fakes, a
+  logout, and a reload from the saved data) and 4 roster tests. Each guard (session reshare, session fields, roster
+  save, roster lists, invite, update "told", update "shown", pop-up gate) was removed once to check a test catches
+  it; the whisper test was made stricter after that showed a gap (the transport shortens "Testbuddy (test)" to
+  "Testbuddy", a real player's name). No earlier test changed.
+- **Release note for Claude:** no files added, `.toc` unchanged: a `/reload` is enough after the next release
+  (`RESTART_SINCE` stays `0.1.1`). The owner's own copy (the AddOns link) needs only a `/reload`.

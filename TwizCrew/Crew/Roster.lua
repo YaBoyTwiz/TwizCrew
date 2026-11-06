@@ -42,6 +42,7 @@ local WIRE = {
   st  = { "status", keepString },
   tg  = { "tags", function(v) if type(v) == "string" then return decodeTags(v) end end },
   ver = { "version", keepString },
+  rs  = { "restartSince", keepString }, -- that copy's RESTART_SINCE ("" = an older copy that does not send it)
 }
 
 function Roster.new(saved)

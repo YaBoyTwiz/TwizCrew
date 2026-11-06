@@ -108,6 +108,56 @@ return {
         { online = false, version = "0.1.0" }, { online = true }, { online = true, version = "0.1.9" } }), 2)
     end,
 
+    -- The update notice (once per new version, badge, panel line).
+    update_available = function(ns, A)
+      local L = ns.UpdateLogic
+      local up = { name = "Frostie", ver = "0.2.0", rs = "0.1.0" }
+      A.eq(L.available("0.1.0", up, true), up)
+      A.eq(L.available("0.1.0", up, false), nil, "Update reminders off")
+      A.eq(L.available("0.2.0", up, true), nil, "on that version")
+      A.eq(L.available("0.3.0", up, true), nil, "newer than that")
+      A.eq(L.available("0.1.0", nil, true), nil)
+      A.eq(L.available("0.1.0", { name = "X", ver = "9|r" }, true), nil, "junk")
+      A.eq(L.availableText(up), "Update available: v0.2.0")
+      A.eq(L.availableText(up, true), "Update available: v0.2.0 (Frostie has it)")
+      A.eq(L.availableText(nil), nil)
+    end,
+
+    notice_once_per_version = function(ns, A)
+      local L = ns.UpdateLogic
+      local up = { name = "Frostie", ver = "0.2.0" }
+      local function c(over)
+        local t = { myVersion = "0.1.0", enabled = true }
+        for k, v in pairs(over or {}) do t[k] = v end
+        return t
+      end
+      A.eq({ L.showNotice(up, c()) }, { true })
+      A.eq({ L.showNotice(up, c({ enabled = false })) }, { false, "off" })
+      A.eq({ L.showNotice(up, c({ myVersion = "0.2.0" })) }, { false, "not newer" })
+      A.eq({ L.showNotice(up, c({ shown = "0.2.0" })) }, { false, "already shown" })
+      A.eq({ L.showNotice(up, c({ shown = "0.3.0" })) }, { false, "already shown" })
+      A.eq({ L.showNotice(up, c({ shown = "0.1.5" })) }, { true }, "a newer version than the one shown")
+      A.eq({ L.showNotice(up, c({ shown = "junk" })) }, { true })
+      A.eq({ L.showNotice(up, c({ open = "0.2.0" })) }, { false, "window open" })
+      A.eq({ L.showNotice(up, c({ open = "0.1.5" })) }, { true })
+      A.eq({ L.showNotice(nil, c()) }, { false, "none" })
+      A.eq({ L.showNotice({ name = "X", ver = "1|r" }, c()) }, { false, "none" })
+    end,
+
+    notice_texts = function(ns, A)
+      local L = ns.UpdateLogic
+      local RESTART = "Frostie has it. Close WoW, open WowUp and click Update, then start WoW again."
+      local RELOAD = "Frostie has it. Open WowUp and click Update, then press Reload now."
+      A.eq(L.notice("Frostie", "0.2.0", "0.1.0", "0.1.0"),
+        { title = "Update available: v0.2.0", note = RELOAD, reload = true })
+      A.eq(L.notice("Frostie", "0.2.0", "0.1.0", "0.2.0"),
+        { title = "Update available: v0.2.0", note = RESTART, reload = false })
+      A.eq(L.notice("Frostie", "0.2.0", "0.1.0", nil).reload, false, "older copy, no rs: restart to be safe")
+      A.eq(L.notice("Frostie", "0.2.0", "0.1.0", "junk").reload, false)
+      A.eq(L.safeRestartSince(nil, "0.2.0"), "0.2.0")
+      A.eq(L.safeRestartSince("0.1.0", "0.2.0"), "0.1.0")
+    end,
+
     cooldown = function(ns, A)
       local L = ns.UpdateLogic
       A.eq(L.cooldownLeft(nil, 100, 30), 0)

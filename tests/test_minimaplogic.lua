@@ -12,7 +12,7 @@ local function at(A, L, angle, shape, expectX, expectY, width, height)
 end
 
 return {
-  files = { "Core/Init.lua", "Core/Util.lua", "UI/MinimapLogic.lua" },
+  files = { "Core/Init.lua", "Core/Util.lua", "Core/UpdateLogic.lua", "UI/MinimapLogic.lua" },
   tests = {
     defaults_in_config = function(ns, A)
       A.eq(ns.Config.MINIMAP_ANGLE, 190)
@@ -133,6 +133,18 @@ return {
       A.eq(#lines, 4, "no drag hint outside the button")
       A.eq(lines[4], "Crew online: none seen yet")
       A.eq(L.tooltipLines(nil, nil, false, false)[4], "Crew online: none seen yet")
+    end,
+
+    tooltip_has_version_and_update_line = function(ns, A)
+      local L = ns.MinimapLogic
+      local lines = L.tooltipLines(1, 2, true, true, { version = "0.1.0" })
+      A.eq(lines[1], "TwizCrew v0.1.0")
+      A.eq(lines.attention, nil, "no update: no gold line")
+      A.eq(#lines, 5)
+      lines = L.tooltipLines(1, 2, true, false, { version = "0.1.0", update = { name = "Frostie", ver = "0.2.0" } })
+      A.eq(lines[#lines], "Update available: v0.2.0 (Frostie has it)")
+      A.eq(lines.attention, #lines, "the update line is the gold one")
+      A.eq(L.tooltipLines(1, 2, true, false, { version = 7 })[1], "TwizCrew", "junk version: just the name")
     end,
   },
 }

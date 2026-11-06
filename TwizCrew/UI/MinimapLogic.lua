@@ -82,9 +82,16 @@ function MinimapLogic.angleFromCursor(cursorX, cursorY, scale, centerX, centerY)
 end
 
 -- Tooltip text, title first. withDrag: the minimap button (the addon compartment entry cannot be dragged).
-function MinimapLogic.tooltipLines(online, total, panelShown, withDrag)
+-- info (optional) = { version = mine, update = { name, ver } or nil }. With an update the last line says so and
+-- lines.attention is its index (shown in gold).
+function MinimapLogic.tooltipLines(online, total, panelShown, withDrag, info)
+  info = type(info) == "table" and info or {}
+  local title = "TwizCrew"
+  if type(info.version) == "string" and info.version ~= "" then
+    title = title .. " v" .. ns.Util.safeText(info.version)
+  end
   local lines = {
-    "TwizCrew",
+    title,
     "Left-click: open settings",
     "Right-click: " .. (panelShown and "hide" or "show") .. " the Crew panel",
   }
@@ -94,6 +101,11 @@ function MinimapLogic.tooltipLines(online, total, panelShown, withDrag)
     lines[#lines + 1] = "Crew online: " .. online .. " of " .. total
   else
     lines[#lines + 1] = "Crew online: none seen yet"
+  end
+  local update = ns.UpdateLogic.availableText(info.update, true)
+  if update then
+    lines[#lines + 1] = ns.Util.safeText(update)
+    lines.attention = #lines
   end
   return lines
 end

@@ -112,6 +112,14 @@ return {
       rows = ns.PanelLogic.rows(list, { showOffline = false }, never, true, 0, WALL)
       A.eq(#rows, 1); A.eq(rows[1].name, "Ginkan")
     end,
+    title_version_fits_the_row_style = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.titleVersion("full", "0.1.1"), "v0.1.1")
+      A.eq(L.titleVersion("compact", "0.1.1"), "v0.1.1")
+      A.eq(L.titleVersion("tiny", "0.1.1"), "", "tiny is too narrow")
+      A.eq(L.titleVersion("full", nil), "")
+      A.eq(L.titleVersion("full", "1|r"), "v1||r", "shown as plain text")
+    end,
     visible_rules = function(ns, A)
       local v = ns.PanelLogic.visible
       A.eq(v({ hideInCombat = true }, { inCombat = true, onlineCount = 2 }), false)

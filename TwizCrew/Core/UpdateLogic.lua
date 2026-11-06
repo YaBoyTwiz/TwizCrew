@@ -100,3 +100,44 @@ function UpdateLogic.cooldownLeft(lastPress, now, cooldown)
   if left <= 0 then return 0 end
   return math.ceil(left)
 end
+
+---------------------------------------------------------------------------------------------------- update notice
+-- The newest version heard ({ name, ver, rs }) when it is newer than mine and Update reminders is on, else nil.
+function UpdateLogic.available(myVersion, newest, enabled)
+  if not enabled or type(newest) ~= "table" or not isVersion(newest.ver) then return nil end
+  if cmp(newest.ver, myVersion) <= 0 then return nil end
+  return newest
+end
+
+-- "Update available: v0.2.0", with withName "... (Frostie has it)". nil when there is no update.
+function UpdateLogic.availableText(newest, withName)
+  if type(newest) ~= "table" or type(newest.ver) ~= "string" then return nil end
+  local text = "Update available: v" .. newest.ver
+  if withName and type(newest.name) == "string" then text = text .. " (" .. newest.name .. " has it)" end
+  return text
+end
+
+-- Should the notice pop-up show for `newest`? c = { myVersion, enabled, shown = newest version a pop-up was shown
+-- for (saved), open = version of the window open or waiting }. Returns true, or false and the reason (for the log).
+function UpdateLogic.showNotice(newest, c)
+  if type(newest) ~= "table" or not isVersion(newest.ver) then return false, "none" end
+  if cmp(newest.ver, c.myVersion) <= 0 then return false, "not newer" end
+  if not c.enabled then return false, "off" end
+  if isVersion(c.shown) and cmp(newest.ver, c.shown) <= 0 then return false, "already shown" end
+  if isVersion(c.open) and cmp(newest.ver, c.open) <= 0 then return false, "window open" end
+  return true
+end
+
+-- Older copies send no rs: count it as "restart since that version", so we say restart to be safe.
+function UpdateLogic.safeRestartSince(rs, ver)
+  if isVersion(rs) then return rs end
+  return ver
+end
+
+-- The notice window's words. name and ver must already be safe to show.
+function UpdateLogic.notice(name, ver, myVersion, rs)
+  local restart = UpdateLogic.needsRestart(myVersion, UpdateLogic.safeRestartSince(rs, ver))
+  local how = restart and "Close WoW, open WowUp and click Update, then start WoW again."
+    or "Open WowUp and click Update, then press Reload now."
+  return { title = "Update available: v" .. ver, note = name .. " has it. " .. how, reload = not restart }
+end

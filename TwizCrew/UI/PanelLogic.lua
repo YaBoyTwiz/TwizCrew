@@ -92,6 +92,12 @@ function PanelLogic.window(rowCount, offset, maxRows)
   return offset + 1, math.min(rowCount, offset + maxRows)
 end
 
+-- The version shown after "TwizCrew" in the panel's title ("" in the tiny row style: the header is too narrow).
+function PanelLogic.titleVersion(style, version)
+  if style == "tiny" or type(version) ~= "string" or version == "" then return "" end
+  return "v" .. ns.Util.safeText(version)
+end
+
 function PanelLogic.headerText(online, total)
   return (online or 0) .. " of " .. (total or 0) .. " online"
 end

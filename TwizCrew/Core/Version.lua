@@ -5,6 +5,7 @@ local Version = {}
 ns.Version = Version
 
 local best          -- { name =, ver = } the newest version seen so far (newer than ours)
+local plain         -- { name =, ver =, rs = } the same, plain numbers only (feeds the update notice)
 local announced = false
 
 local function line(entry)
@@ -12,10 +13,31 @@ local function line(entry)
     .. ", you have v" .. ns.VERSION .. ". Update in WowUp."
 end
 
+-- The update notice only trusts plain versions ("0.2.0"), kept apart from `best` so a junk version from a broken
+-- copy cannot hide a real one. rs = that copy's RESTART_SINCE (nil = unknown: older copies do not send it).
+local function notePlain(name, ver, rs)
+  if not ns.Util.isVersion(ver) then return end
+  if not ns.Util.isVersion(rs) then rs = nil end
+  if plain then
+    local c = ns.Util.compareVersions(ver, plain.ver)
+    if c < 0 then return end
+    if c == 0 then
+      if plain.rs or not rs then return end
+      plain.rs = rs -- learned later (another piece, another friend on the same version)
+    else
+      plain = { name = name, ver = ver, rs = rs }
+    end
+  else
+    plain = { name = name, ver = ver, rs = rs }
+  end
+  ns.Bus.fire("UPDATE_SEEN", plain.name, plain.ver, plain.rs)
+end
+
 -- Called by Crew for every crew message that carries a version. Tolerates junk.
-function Version.seen(name, ver)
+function Version.seen(name, ver, rs)
   if type(name) ~= "string" or name == "" or type(ver) ~= "string" or ver == "" then return end
   if ns.Util.compareVersions(ver, ns.VERSION) <= 0 then return end
+  notePlain(name, ver, rs)
   if best and ns.Util.compareVersions(ver, best.ver) <= 0 then return end
   best = { name = name, ver = ver }
   ns.Bus.fire("VERSION_NEWER", name, ver)
@@ -23,6 +45,12 @@ function Version.seen(name, ver)
     announced = true
     if ns.Modules.setting("version", "chatNotice") then print("TwizCrew: " .. line(best)) end
   end
+end
+
+-- A copy of { name, ver, rs } for the newest plain version newer than ours, or nil.
+function Version.newest()
+  if not plain then return nil end
+  return { name = plain.name, ver = plain.ver, rs = plain.rs }
 end
 
 function Version.summary()

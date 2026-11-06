@@ -12,9 +12,11 @@ local helloAt = {}       -- name -> time we last said HELLO because of their PIN
 local lastStrangerHello  -- time of the last HELLO sent because of any stranger's PING
 local started = false
 
-local function noteVersion(name, ver)
-  if ns.Version and ns.Version.seen and type(ver) == "string" then ns.Version.seen(name, ver) end
+local function noteVersion(name, ver, rs)
+  if ns.Version and ns.Version.seen and type(ver) == "string" then ns.Version.seen(name, ver, rs) end
 end
+
+local function hello() return { ver = ns.VERSION, rs = ns.RESTART_SINCE } end
 
 local function announce(name, m, changes, events)
   ns.Bus.fire("MEMBER_UPDATED", name, changes)
@@ -31,13 +33,15 @@ end
 local function onState(sender, fields, cleared)
   local m, changes, events = ns.roster:apply(sender, fields, ns.now(), ns.wallclock())
   for key in pairs(cleared or {}) do changes[key] = true end
-  noteVersion(sender, fields.ver)
+  -- ver and rs are read back from the roster: a long STATE may bring them in two pieces
+  if fields.ver ~= nil or fields.rs ~= nil then noteVersion(sender, m.version, m.restartSince) end
   announce(sender, m, changes, events)
 end
 
 local function onHello(sender, fields)
   -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
-  onState(sender, { ver = fields.ver }, ns.roster:clearSession(sender))
+  -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
+  onState(sender, { ver = fields.ver, rs = fields.rs or "" }, ns.roster:clearSession(sender))
   if replyPending then return end
   replyPending = true
   local c = ns.Config
@@ -58,7 +62,7 @@ local function onPing(sender)
     if nameOk and globalOk then
       helloAt[sender] = now
       lastStrangerHello = now
-      ns.Comm.send("HELLO", { ver = ns.VERSION })
+      ns.Comm.send("HELLO", hello())
     end
     return
   end
@@ -120,7 +124,7 @@ function Crew.start()
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", sayGoodbye)
   -- The channel works again after sends were refused: friends there may never have heard our login HELLO.
   ns.Bus.on(FEATURE, "CHANNEL_BACK", function()
-    ns.Comm.send("HELLO", { ver = ns.VERSION })
+    ns.Comm.send("HELLO", hello())
     ns.Comm.send("STATE", ns.Self.fullState())
   end)
   C_Timer.NewTicker(ns.Config.PING_INTERVAL, function()
@@ -131,6 +135,6 @@ function Crew.start()
       for _, name in ipairs(ns.roster:tick(ns.now())) do ns.Bus.fire("MEMBER_OFFLINE", name) end
     end)
   end)
-  ns.Comm.send("HELLO", { ver = ns.VERSION })
+  ns.Comm.send("HELLO", hello())
   ns.Comm.send("STATE", ns.Self.fullState())
 end

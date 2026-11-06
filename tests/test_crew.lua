@@ -106,6 +106,40 @@ return {
       W:fire("ZONE_CHANGED"); W:advance(2)
       A.eq(#W.sent, n)
     end,
+    hello_and_state_carry_restart_since = function(ns, A, W)
+      start(ns, W)
+      local hello, state
+      for _, m in ipairs(sentSince(ns, W, 0)) do
+        if m.type == "HELLO" then hello = m.fields elseif m.type == "STATE" then state = state or m.fields end
+      end
+      A.eq(hello, { ver = "0.1.0", rs = "0.1.0" })
+      A.eq(state.rs, "0.1.0")
+      A.eq(ns.Self.gather().rs, "0.1.0")
+      -- the longest STATE still fits in 255-byte pieces, and ver and rs arrive
+      W.state.zone, W.state.subzone = string.rep("Z", 120), string.rep("S", 120)
+      ns.db.myStatus = string.rep("^", 40)
+      local f = ns.Self.gather()
+      local merged = {}
+      for _, text in ipairs(ns.Codec.encode("STATE", f)) do
+        A.ok(#text <= 255, "piece of " .. #text)
+        for k, v in pairs(ns.Codec.decode(text).fields) do merged[k] = v end
+      end
+      A.eq(merged.rs, "0.1.0"); A.eq(merged.ver, "0.1.0")
+    end,
+    restart_since_reaches_the_version_check = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "HELLO", { ver = "0.2.0", rs = "0.2.0" })
+      A.eq(ns.Version.newest(), { name = "Frostie", ver = "0.2.0", rs = "0.2.0" })
+      A.eq(ns.roster:get("Frostie").restartSince, "0.2.0")
+      -- a long STATE split in two pieces: rs in one, ver in the other, still put together
+      receive(ns, W, "Ginkan", "STATE", { rs = "0.2.0", cl = "MAGE" })
+      receive(ns, W, "Ginkan", "UPDATE", { ver = "0.3.0" })
+      A.eq(ns.Version.newest(), { name = "Ginkan", ver = "0.3.0", rs = "0.2.0" })
+      -- an old copy says HELLO without rs: what we knew is forgotten
+      receive(ns, W, "Ginkan", "HELLO", { ver = "0.3.0" })
+      A.eq(ns.roster:get("Ginkan").restartSince, "")
+      noErrors(ns, A)
+    end,
     taxi_shows_flight_path_text = function(ns, A, W)
       start(ns, W)
       W.state.taxi = true

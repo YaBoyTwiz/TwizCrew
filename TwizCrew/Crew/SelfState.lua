@@ -56,6 +56,7 @@ function Self.gather()
     sid = tostring(sid or ""),
     sst = tostring(sst or ""),
     ver = tostring(ns.VERSION),
+    rs = tostring(ns.RESTART_SINCE), -- a newer copy than a friend's tells it whether a /reload is enough
   }
 end
 

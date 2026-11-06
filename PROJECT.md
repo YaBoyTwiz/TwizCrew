@@ -178,7 +178,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   Magnify), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
-  `~/.local/share/applications/wowup-cf.desktop`. It must be pointed at the Wine game folder by hand. Never add
+  `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote
+  the WoW Forever install (client type 10, path to `_forever_/Wow.exe`) into `~/.config/WowUpCf/preferences.json`. Never add
   TwizCrew to it on this PC (TwizCrew is a symbolic link to the working copy, below).
 - **How TwizCrew gets into the game (set up 2026-11-05):** the AddOns folder has a symbolic link `TwizCrew` →
   `~/Documents/GitHub/twizcrew/TwizCrew`, so an edit here plus `/reload` in game is the whole test loop. Lutris is a

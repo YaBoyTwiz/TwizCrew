@@ -62,3 +62,25 @@ Builds on the earlier plans; their Global Constraints and "Changes during build"
 5. Multi-client simulation; docs (TESTING.md, PROJECT.md).
 
 ## Changes during build
+
+- **An unreadable XP number keeps what was last sent** (instead of sending 0), so a secret value can never show
+  as a drop to 0 on friends' bars. `SelfState` had no secret check for XP before; the new one uses
+  `issecretvalue` like the layer sensor.
+- **Max level hides the XP bar** in the Full style even with the numbers switched off (before, a max-level friend
+  had an empty bar). Cost if wrong: one less line on a max-level friend's row.
+- **The ding plays only the level-up sound** (`SOUNDKIT.LEVELUP` / `LEVEL_UP` if the game has a name for it,
+  else sound id 888, the game's level-up sound); the general "Play a sound" switch does not add the raid-warning
+  sound to a ding. Untested in game.
+- **The stream line under a ding** is always on (no switch of its own): "Only N to go." / "One more to go!" /
+  "Max level. GG!". The max level comes from `GetMaxPlayerLevel()`, else `MAX_LEVEL_FALLBACK` (60, in Config).
+- **Tooltip follows new numbers:** a redraw while the mouse is on a row refreshes its tooltip; a row that goes
+  away (scroll, Hall of Shame tab, panel hidden) closes it.
+- **Earlier tests changed:** `xp_sends_on_whole_percent_only` now expects `xc` riding along with `xp`; the panel's
+  settings-order test lists the two new settings.
+- **Found, not fixed (existing behaviour):** when a friend's messages stop reaching us for 3+ minutes without them
+  logging out (they are marked offline) and then their PINGs arrive again, we mark them online but do not ask for
+  a fresh STATE, so their row keeps old numbers (level, XP) until their next change. Their first level-up after
+  that is not a ding (the level heard before the gap does not count). A log-out and log-in, or a `/reload`,
+  works normally.
+- **Release note for Claude:** no files added, `.toc` unchanged: a `/reload` is enough after the next release
+  (`RESTART_SINCE` stays `0.1.1`).

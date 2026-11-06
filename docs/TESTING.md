@@ -364,6 +364,40 @@ Ask Claude to put the number back afterwards.
    within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
 9. **After updating for real:** no **!**, no gold line, no pop-up.
 
+## Level progress (XP numbers, hover detail, "Ding!" pop-up)
+
+Built, every test outside the game passes (including two copies where one earns XP and levels up). **Not tried in
+the game yet.** Riskiest first. No restart needed (no new files). You need **one friend** with this version, and
+someone has to earn XP. Tip: for a quick look at your own numbers, turn on **Show myself in the list** in `/tc`.
+
+1. **The ding needs a real level-up while you are both online.** When your friend levels up, you should get one
+   pop-up near the top: "**<friend> reached level N!**" (name in their class colour, gold edge on the left) with a
+   small line under it like "Only 47 to go." Exactly one, even if they keep fighting. Nothing on your friend's own
+   screen (the game shows its own). Tell Claude if there was none, or two.
+2. **No ding when there shouldn't be one:** log in or `/reload` while your friend is already a level higher than
+   last time: no pop-up. Same when your friend logs back in after leveling elsewhere.
+3. **The level-up sound** (`/tc` → **Pop-ups** → **Level-up sound**, off by default): turn it on, and on the next
+   ding you should hear the game's own level-up sound. Tell Claude if it is silent or a different sound.
+4. **The little dot.** The panel text is "Lv 12 · 63%". Check the dot in the middle shows as a dot, not a box or
+   a question mark.
+5. **The text fits in each row style** (right-click the panel title → Row style):
+   - **Full:** "Lv 12 · 63%" on the right of the purple XP bar; the bar is a bit shorter, nothing overlaps.
+   - **Compact:** "Lv 12 · 63%" in the top-right corner; a long name is cut, not drawn under it.
+   - **Tiny:** "63%" in the top-right corner.
+   - Also check the tags (FIGHTING, AFK...) on the top edge still read fine next to it.
+6. **Hover a friend's row:** a tooltip with their name, "Level 12 · 63%", "1,234 XP to level 13", "Rested: …" when
+   they have rested XP. After your friend has killed a few mobs over 3+ minutes: "About 25 min to level". Check
+   the numbers match what your friend sees on their own XP bar (hovering the game's XP bar shows them).
+   - Hover a tag pill on the row, then move back onto the row: the row's tooltip comes back (or at least nothing
+     sticks on screen).
+7. **No extra chatter.** While a friend levels, nobody should see "too many messages" or get disconnected (the XP
+   numbers ride on messages TwizCrew already sent, so there should be no more than before).
+8. **Max level** (if anyone is 60): their row says "Lv 60 · max level" (Full) with no XP bar, the tooltip says
+   "Max level".
+9. **Switches:** `/tc` → **Crew panel** → **Show level and XP numbers** and **XP details on hover**, and
+   **Pop-ups** → **Level-ups**: each one turns its part off. **Reset everything to defaults** turns them back on
+   (the sound stays off).
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

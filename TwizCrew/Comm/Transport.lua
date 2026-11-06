@@ -396,7 +396,14 @@ function Transport.destinations()
   elseif m == "guild" then
     if IsInGuild() then return { { chatType = "GUILD" } } end
   end
-  if state.joined and not state.failed then return { { chatType = "CHANNEL", target = state.index } } end
+  if state.joined and not state.failed then
+    -- Grouped friends also get it through the group: seen in game, two grouped copies on the channel never heard
+    -- each other. The receiver drops the second copy of the same message.
+    local out = { { chatType = "CHANNEL", target = state.index } }
+    local g = groupDestination()
+    if g then out[2] = g end
+    return out
+  end
   return fallback()
 end
 

@@ -223,6 +223,8 @@ function Report.show()
   for i, line in ipairs(lines) do safe[i] = ns.Util.safeText(line) end
   for i = 1, math.min(CHAT_LINES, #safe) do print("TwizCrew: " .. safe[i]) end
   print("TwizCrew: the full report is in the box. Press Ctrl+C to copy it.")
+  -- Also into the saved log, so Claude can read the owner's report from the SavedVariables file after a /reload.
+  for _, line in ipairs(safe) do ns.Log.add("info", "report: %s", line) end
   if not frame then build() end
   shownText = table.concat(safe, "\n")
   edit:SetHeight(#safe * LINE_HEIGHT + 10)

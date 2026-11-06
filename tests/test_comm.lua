@@ -219,6 +219,25 @@ return {
       ns.Modules.set("comm", "transport", "guild")
       A.eq(ns.Transport.destinations()[1], { chatType = "CHANNEL", target = 5 })
     end,
+    -- Found in game: grouped with a friend, both copies on the channel, yet neither heard the other. In auto mode a
+    -- group always gets the message too (the receiver drops the second copy), so grouped friends always connect.
+    auto_mode_in_group_sends_to_channel_and_group = function(ns, A, W)
+      boot(ns, W)
+      W:advance(6)
+      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 } })
+      W.state.inGroup = true
+      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 }, { chatType = "PARTY" } })
+      W.state.inRaid = true
+      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 }, { chatType = "RAID" } })
+    end,
+    group_copy_of_a_channel_message_is_dropped = function(ns, A, W)
+      boot(ns, W)
+      local got = 0
+      ns.Comm.on("PING", function() got = got + 1 end)
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan")
+      A.eq(got, 1)
+    end,
     whisper_mode_is_not_pending = function(ns, A, W)
       local db = boot(ns, W)
       db.crew.extra = { "Ginkan" }

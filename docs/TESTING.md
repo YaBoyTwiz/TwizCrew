@@ -331,6 +331,39 @@ first** (this update added files, so `/reload` is not enough).
 10. **Does it cover anything?** If it sits on top of another minimap icon (Questie, the tracking icon, the mail
     icon…), drag it away and tell Claude which icon, so the starting spot can move.
 
+## Update notice and version number
+
+Built, every test outside the game passes (including an old and a new copy talking). **Not tried in the game yet.**
+Riskiest first. No restart needed for this part on its own (no new files).
+
+**How to see the notice without waiting for a release:** ask Claude to make your copy pretend to be an older
+version (say v0.0.1; Claude changes the number on this PC), then `/reload` while a friend with TwizCrew is online.
+Ask Claude to put the number back afterwards.
+
+1. **The gold "!" on the minimap button.** With a friend online on a newer version, a small gold **!** sits at the
+   top-right of the button's icon. Tell Claude if it is missing, hidden under the gold ring, far too big, or a box.
+2. **The Crew panel's title** says **TwizCrew v…** in small grey after the name. Check it does not run into the
+   "x of y online" text on the right, in the **Full** and **Compact** row styles (in **Tiny** the version is left
+   out on purpose, the panel is too narrow).
+3. **The gold line.** Under the title, a gold **Update available: v…** line. The tabs (Crew / Hall of Shame) and
+   the rows must sit below it, not on top of it. Hover it: "Click for how to update". Click it: the small window
+   opens.
+4. **The pop-up**, about 30 seconds after your friend is heard: "Update available: v…", then "<friend> has it." and
+   what to do. Check all the words fit inside the window (none cut off at the bottom or right).
+   - With **Reload now**: "Open WowUp and click Update, then press Reload now". Click **Reload now**: the game
+     reloads. If it shows "action blocked", tell Claude.
+   - Without it: "Close WoW, open WowUp and click Update, then start WoW again", and an **OK** button. (Friends on
+     v0.1.1 do not say whether a reload is enough, so you get this one.)
+5. **Only once.** `/reload` while still on the older version: no pop-up this time (chat may say "Still on v…" once),
+   but the gold **!** and the gold line are still there.
+6. **Minimap tooltip.** Hover the button: the first line says **TwizCrew v…**, and the last line, in gold,
+   "Update available: v… (<friend> has it)".
+7. **Turned off.** In `/tc` → **Modules**, turn off **Update reminders**: the **!** and the gold line go away, the
+   version number stays.
+8. **Tell crew to update still works.** When your friend is the older one and you press **Tell crew to update**
+   within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
+9. **After updating for real:** no **!**, no gold line, no pop-up.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

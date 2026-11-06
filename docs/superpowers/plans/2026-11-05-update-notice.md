@@ -85,4 +85,21 @@ tests/                         updatelogic, version, crew, updates, panel, minim
 
 ## Changes during build
 
-(filled in while building)
+- **The notice's wait starts again with each news** (a newer version heard, or its `rs` learned), instead of one
+  timer: a test showed that the timer started when the module turned on at login could cut the 30 s short.
+- **`rs` lives in the roster** (`member.restartSince`) and Crew passes the roster's `ver` and `rs` to
+  `Version.seen(name, ver, rs)`, because a long STATE can bring them in two pieces. A HELLO without `rs` (an older
+  copy) clears it. The longest possible STATE was checked: every piece stays within 255 bytes.
+- **Tell crew windows keep their old words** ("If nothing changed, open WowUp and click Update first" / "Close and
+  restart the game to load it"); only the notice uses the new how-to words. Why: "works as before", and its
+  existing tests stay as they were. Cost if wrong: two slightly different wordings for the same advice.
+- **The window is 8 px taller** (112) so the notice's two-line text fits above the buttons.
+- **The panel line** is a thin button with a faint gold background; hover says "Click for how to update". It also
+  sits above the Hall of Shame tabs when stats are on.
+- **`/tc report`'s `Update:` line** ends with `newest heard: v… from … (restart since v… / unknown), pop-up shown
+  for: v…` (its test was updated).
+- **Two earlier minimap tests changed:** the tooltip title is now "TwizCrew v0.1.0" instead of "TwizCrew".
+- **Release note for Claude:** no files were added or removed and the `.toc` did not change, so this work alone does
+  not need a game restart. The next release still needs `RESTART_SINCE` set to its version because of the
+  unreleased minimap button (two new files, new `.toc` lines). Friends on v0.1.1 send no `rs`, so their copies
+  count as "unknown" and the notice says restart, which matches.

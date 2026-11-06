@@ -25,6 +25,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Minimap button built (2026-11-05, owner asked):** left-click settings, right-click panel, drag around the edge,
   `/tc minimap`, also in the minimap's AddOns list. Not tested in game, not published; its release needs a game
   restart. Plan and Claude's calls: `docs/superpowers/plans/2026-11-05-minimap-button.md`; checks: `docs/TESTING.md`.
+- **Update notice and version number built (2026-11-05, owner asked):** version in the panel title and minimap
+  tooltip; when a friend is newer: gold "!" on the minimap button, gold "Update available" line on the panel, and a
+  how-to-update pop-up once per version (HELLO and STATE now carry `rs`); README tells friends to let WowUp
+  auto-update and start with the computer. Not tested in game, not published. Plan and Claude's calls:
+  `docs/superpowers/plans/2026-11-05-update-notice.md`; checks: `docs/TESTING.md`.
 - **Published (2026-11-05, owner said yes to "keep the name TwizCrew and publish now"):** public repository
   https://github.com/YaBoyTwiz/TwizCrew, release v0.1.0. Friends install it with WowUp (README.md). Still not
   tested in game. Before going public, the owner's WoW account folder name was removed from every file and from

@@ -79,6 +79,13 @@ function ns.maxLevel()
   return ns.Config.MAX_LEVEL_FALLBACK
 end
 
+-- Test tools ("Try it out"): every fake crew member's name ends in " (test)". A real character name has no space or
+-- bracket, and every real sender goes through shortName (which keeps what comes before the first space), so a fake
+-- name can never be a real friend's. Fakes are never sent or saved (see Roster and UI/Report.lua).
+function ns.isTestName(name)
+  return type(name) == "string" and #name > 7 and name:sub(-7) == " (test)"
+end
+
 function ns.playerName()
   return ns.shortName(UnitName("player") or "Unknown")
 end

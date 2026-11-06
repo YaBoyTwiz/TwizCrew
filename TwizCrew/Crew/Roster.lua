@@ -79,7 +79,7 @@ end
 function Roster.new(saved)
   local r = setmetatable({ byName = {}, saved = saved or {} }, Roster)
   for name, row in pairs(r.saved) do
-    if type(name) == "string" and name ~= "" and type(row) == "table" then
+    if type(name) == "string" and name ~= "" and type(row) == "table" and not ns.isTestName(name) then
       r.byName[name] = {
         name = name, class = str(row.class), level = num(row.level),
         zone = str(row.zone), subzone = str(row.subzone),
@@ -136,10 +136,12 @@ function Roster:apply(name, fields, now, wall)
   if levelBefore and m.level == levelBefore + 1 then events[#events + 1] = "levelup" end
   if num(fields.lv) ~= nil then m.levelSeen = true end
 
-  self.saved[name] = {
-    name = name, class = m.class, level = m.level,
-    zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen,
-  }
+  if not ns.isTestName(name) then -- a fake (test tools) is never saved
+    self.saved[name] = {
+      name = name, class = m.class, level = m.level,
+      zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen,
+    }
+  end
   return m, changes, events
 end
 
@@ -191,17 +193,41 @@ function Roster:tick(now)
   return gone
 end
 
-function Roster:names()
+-- names() and members() leave out fakes (test tools) unless withTest: every path that sends, saves, counts stats
+-- or lists versions uses them as they are. Only the panel (sorted, onlineCount) and the layer tracker show fakes.
+function Roster:names(withTest)
   local list = {}
-  for name in pairs(self.byName) do list[#list + 1] = name end
+  for name in pairs(self.byName) do
+    if withTest or not ns.isTestName(name) then list[#list + 1] = name end
+  end
   table.sort(list)
   return list
 end
 
-function Roster:members()
+function Roster:members(withTest)
   local list = {}
-  for _, m in pairs(self.byName) do list[#list + 1] = m end
+  for name, m in pairs(self.byName) do
+    if withTest or not ns.isTestName(name) then list[#list + 1] = m end
+  end
   return list
+end
+
+-- The fakes only, A-Z.
+function Roster:testNames()
+  local list = {}
+  for name in pairs(self.byName) do
+    if ns.isTestName(name) then list[#list + 1] = name end
+  end
+  table.sort(list)
+  return list
+end
+
+-- Takes a fake out of the roster (test tools). Real friends are never removed: returns false for them.
+function Roster:remove(name)
+  if not ns.isTestName(name) or not self.byName[name] then return false end
+  self.byName[name] = nil
+  if self.saved[name] ~= nil then self.saved[name] = nil end
+  return true
 end
 
 function Roster:onlineCount()
@@ -216,7 +242,7 @@ end
 local function lower(m) return string.lower(m.name) end
 
 function Roster:sorted(mode, relationOf)
-  local list = self:members()
+  local list = self:members(true)
   local function byName(a, b)
     local la, lb = lower(a), lower(b)
     if la ~= lb then return la < lb end

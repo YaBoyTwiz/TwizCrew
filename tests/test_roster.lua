@@ -185,5 +185,46 @@ return {
       local rel = function(n) return n == "Zed" and "same" or "other" end
       A.eq(names(r:sorted("layer", rel)), { "Zed", "amy", "Bob", "Cat" })
     end,
+    -- test tools: fake names end in " (test)"; they are never saved and only shown when asked for
+    fake_names_are_never_real_names = function(ns, A)
+      A.ok(ns.isTestName("Testbuddy (test)"))
+      A.no(ns.isTestName("Testbuddy"))
+      A.no(ns.isTestName("Testbuddy-Realm"))
+      A.no(ns.isTestName(nil))
+      A.eq(ns.shortName("Testbuddy (test)"), "Testbuddy", "a real sender name can never keep the mark")
+    end,
+    fakes_are_never_saved = function(ns, A)
+      local saved = {}
+      local r = ns.Roster.new(saved)
+      local m, _, ev = r:apply("Testbuddy (test)", { cl = "PALADIN", lv = "12" }, 1, 1)
+      A.eq(m.level, 12); A.eq(ev, { "new", "online" })
+      A.eq(saved, {}, "nothing saved")
+      r:heard("Testbuddy (test)", 2, 2)
+      A.eq(saved, {})
+      local r2 = ns.Roster.new({ ["Old (test)"] = { level = 3 }, Real = { level = 4 } })
+      A.eq(r2:names(true), { "Real" }, "a fake in old saved data is never loaded")
+    end,
+    fakes_left_out_unless_asked = function(ns, A)
+      local r = ns.Roster.new({})
+      r:apply("Ginkan", { lv = "14" }, 1, 1)
+      r:apply("Testbuddy (test)", { lv = "12" }, 1, 1)
+      A.eq(r:names(), { "Ginkan" })
+      A.eq(#r:members(), 1)
+      A.eq(r:names(true), { "Ginkan", "Testbuddy (test)" })
+      A.eq(#r:members(true), 2)
+      A.eq(#r:sorted("online"), 2, "the panel shows fakes")
+      local on, total = r:onlineCount(); A.eq(on, 2); A.eq(total, 2)
+      A.eq(r:testNames(), { "Testbuddy (test)" })
+      A.ok(r:get("Testbuddy (test)"))
+    end,
+    only_fakes_can_be_removed = function(ns, A)
+      local saved = {}
+      local r = ns.Roster.new(saved)
+      r:apply("Ginkan", { lv = "14" }, 1, 1)
+      r:apply("Testbuddy (test)", { lv = "12" }, 1, 1)
+      A.no(r:remove("Ginkan")); A.ok(r:get("Ginkan")); A.ok(saved.Ginkan)
+      A.ok(r:remove("Testbuddy (test)")); A.eq(r:get("Testbuddy (test)"), nil)
+      A.eq(r:names(true), { "Ginkan" })
+    end,
   },
 }

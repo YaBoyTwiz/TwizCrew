@@ -29,6 +29,12 @@ local function logHas(ns, text)
   return false
 end
 
+-- A group member at `dist` yards (default 10); visible = the game shows them (same layer).
+local function grouped(W, slot, name, visible, dist)
+  W.state.pos = { x = 0, y = 0, instance = 1 }
+  W.state.units[slot] = { name = name, player = true, visible = visible, pos = { x = dist or 10, y = 0, instance = 1 } }
+end
+
 local function seeMouseover(W, guid, times)
   W.state.guids.mouseover = guid
   for _ = 1, times or 2 do W:fire("UPDATE_MOUSEOVER_UNIT") end
@@ -61,20 +67,42 @@ return {
       A.eq(tr:current(605), "2")
       tr:reset(); A.no(tr:current(6))
     end,
-    relation_rules = function(ns, A)
-      local r = ns.LayerKey.relation
-      local me = { lk = "1", zn = "Elwynn Forest", ins = false, online = true }
-      local function them(t) local x = { lk = "1", zn = "Elwynn Forest", ins = false, online = true }
+    comparable_rules = function(ns, A)
+      local c = ns.LayerKey.comparable
+      local me = { zn = "Elwynn Forest", ins = false, online = true }
+      local function them(t) local x = { zn = "Elwynn Forest", ins = false, online = true }
         for k, v in pairs(t) do x[k] = v end return x end
-      A.eq(r(me, them({})), "same")
-      A.eq(r(me, them({ lk = "2" })), "different")
-      A.eq(r(me, them({ lk = "2", online = false })), "unknown")
-      A.eq(r(me, them({ lk = "2", zn = "Westfall" })), "unknown")
-      A.eq(r(me, them({ lk = "2", zn = false })), "unknown")
-      A.eq(r({ lk = nil, zn = "Elwynn Forest", online = true }, them({ lk = "2" })), "unknown")
-      A.eq(r(me, them({ lk = "" })), "unknown")
-      A.eq(r(me, them({ lk = "2", ins = true })), "unknown")
-      A.eq(r({ lk = "1", zn = "Elwynn Forest", ins = true, online = true }, them({ lk = "2" })), "unknown")
+      A.eq(c(me, them({})), true)
+      A.eq(c(me, them({ online = false })), false)
+      A.eq(c(me, them({ zn = "Westfall" })), false)
+      A.eq(c(me, them({ zn = false })), false)
+      A.eq(c(me, them({ ins = true })), false)
+      A.eq(c({ zn = "Elwynn Forest", ins = true, online = true }, them({})), false)
+    end,
+    judge_rules = function(ns, A)
+      local j = ns.LayerKey.judge
+      local mem = {}
+      A.eq(j(mem, { comparable = true }, 0, 40, 8), "unknown", "never seen")
+      A.eq(j(mem, { comparable = true, visible = true }, 1, 40, 8), "same")
+      A.eq(j(mem, { comparable = true, visible = false, dist = 500 }, 2, 40, 8), "same", "far away: last verdict stands")
+      A.eq(j(mem, { comparable = true, visible = false, dist = 10 }, 3, 40, 8), "same", "hidden, not long enough")
+      A.eq(j(mem, { comparable = true, visible = false, dist = 10 }, 10, 40, 8), "same")
+      A.eq(j(mem, { comparable = true, visible = false, dist = 10 }, 11, 40, 8), "different", "hidden nearby for 8 s")
+      A.eq(j(mem, { comparable = true, visible = false, dist = 500 }, 12, 40, 8), "different", "stays while far")
+      A.eq(j(mem, { comparable = true, visible = true }, 13, 40, 8), "same")
+      A.eq(j(mem, { comparable = false }, 14, 40, 8), "unknown")
+      A.eq(j(mem, { comparable = true }, 15, 40, 8), "unknown", "zone change forgets")
+      local m2 = {}
+      j(m2, { comparable = true, visible = false, dist = 10 }, 0, 40, 8)
+      j(m2, { comparable = true, visible = false, dist = 100 }, 5, 40, 8) -- moved away: the wait starts over
+      A.eq(j(m2, { comparable = true, visible = false, dist = 10 }, 9, 40, 8), "unknown")
+      local m3 = {}
+      j(m3, { comparable = true, visible = false, dist = 10, connected = false }, 0, 40, 8)
+      A.eq(j(m3, { comparable = true, visible = false, dist = 10, connected = false }, 20, 40, 8), "unknown",
+        "offline or ghost proves nothing")
+      local m4 = {}
+      j(m4, { comparable = true, visible = false }, 0, 40, 8)
+      A.eq(j(m4, { comparable = true, visible = false }, 20, 40, 8), "unknown", "no distance proves nothing")
     end,
     sensor_reads_mouseover_and_skips_secret = function(ns, A, W)
       start(ns, W)
@@ -103,10 +131,11 @@ return {
       start(ns, W)
       seeMouseover(W, "Creature-0-1-0-111-299-01")
       A.ok(logHas(ns, "INFO layer key 111 confirmed in Elwynn Forest (mouseover)"))
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
-      A.ok(logHas(ns, "INFO layer Frostie: unknown -> different (mine 111 in Elwynn Forest, theirs 222 in Elwynn Forest)"))
       W:fire("ZONE_CHANGED_NEW_AREA")
       A.ok(logHas(ns, "INFO layer key reset in Elwynn Forest (zone change)"))
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.ok(logHas(ns, "INFO layer Frostie: unknown -> same (party1, visible, 10 yd; zones Elwynn Forest / Elwynn Forest)"))
     end,
     sensor_tolerates_missing_api = function(ns, A, W)
       start(ns, W)
@@ -159,54 +188,106 @@ return {
       W:advance(2)
       A.eq(ns.Self.lastSent().lk, "")
     end,
-    friend_on_other_layer_fires_relation = function(ns, A, W)
+    same_layer_with_different_keys_is_same = function(ns, A, W)
+      -- seen in game 2026-11-07: Twiz read key 1, Chaos read key 11, together in Darkshore
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
+      seeMouseover(W, "Creature-0-1-0-1-299-01")
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { lk = "11", zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
+    end,
+    far_away_friend_is_never_different = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie", false, 900)
+      receive(ns, W, "Frostie", "STATE", { lk = "11", zn = "Elwynn Forest" })
+      W:advance(60)
+      A.eq(ns.Layer.relationOf("Frostie"), "unknown")
+    end,
+    seen_then_far_away_stays_same = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
+      W.state.units.party1.visible = false
+      W.state.units.party1.pos = { x = 900, y = 0, instance = 1 }
+      W:advance(60)
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
+    end,
+    hidden_nearby_for_a_while_is_different = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest" })
       local rel = record(ns, "LAYER_RELATION")
-      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lk = "222", zn = "Elwynn Forest" })
-      A.eq(#rel, 1); A.eq(rel[1], { "Frostie", "unknown", "different" })
+      W.state.units.party1.visible = false
+      W:advance(ns.Config.LAYER_HIDDEN_FOR - ns.Config.LAYER_LOOK_TICK)
+      A.eq(ns.Layer.relationOf("Frostie"), "same", "not yet")
+      W:advance(ns.Config.LAYER_LOOK_TICK * 2 + 0.1)
       A.eq(ns.Layer.relationOf("Frostie"), "different")
-      receive(ns, W, "Frostie", "UPDATE", { lk = "111" })
-      A.eq(#rel, 2); A.eq(rel[2], { "Frostie", "different", "same" })
-      A.eq(ns.Layer.relationOf("Nobody"), "unknown")
+      A.eq(rel, { { "Frostie", "same", "different" } })
+      W.state.units.party1.visible = true
+      W:advance(ns.Config.LAYER_LOOK_TICK + 0.1)
+      A.eq(rel[2], { "Frostie", "different", "same" })
       A.eq(ns.Log.errors(10), {})
     end,
-    my_key_change_updates_relations = function(ns, A, W)
+    ghost_is_not_another_layer = function(ns, A, W)
       start(ns, W)
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
+      grouped(W, "party1", "Frostie", false)
+      W.state.units.party1.ghost = true
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      W:advance(30)
       A.eq(ns.Layer.relationOf("Frostie"), "unknown")
-      local rel = record(ns, "LAYER_RELATION")
-      seeMouseover(W, "Creature-0-1-0-222-299-01")
-      W:advance(2)
-      A.eq(rel, { { "Frostie", "unknown", "same" } })
+    end,
+    nameplate_counts_as_visible = function(ns, A, W)
+      start(ns, W)
+      W.state.units.nameplate3 = { name = "Frostie", player = true }
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same", "not grouped, but their nameplate is up")
+    end,
+    surname_in_unit_name_still_matches = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie Coldsnap", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
     end,
     unknown_never_becomes_different = function(ns, A, W)
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Westfall" })
+      grouped(W, "party1", "Frostie", false)
+      receive(ns, W, "Frostie", "STATE", { zn = "Westfall" })
+      W:advance(30)
       A.eq(ns.Layer.relationOf("Frostie"), "unknown")
       receive(ns, W, "Frostie", "UPDATE", { zn = "Elwynn Forest", ins = "1" })
+      W:advance(30)
       A.eq(ns.Layer.relationOf("Frostie"), "unknown")
     end,
     offline_friend_becomes_unknown = function(ns, A, W)
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
-      A.eq(ns.Layer.relationOf("Frostie"), "different")
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
       local rel = record(ns, "LAYER_RELATION")
       W:advance(ns.Config.OFFLINE_AFTER + ns.Config.OFFLINE_TICK + 1)
-      A.eq(rel, { { "Frostie", "different", "unknown" } })
+      A.eq(rel, { { "Frostie", "same", "unknown" } })
       A.eq(ns.Layer.relationOf("Frostie"), "unknown")
+    end,
+    loading_screen_forgets = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      W.state.units.party1.visible = false
+      W.state.units.party1.pos = { x = 900, y = 0, instance = 1 }
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.eq(ns.Layer.relationOf("Frostie"), "unknown")
+      A.ok(logHas(ns, "layer memory cleared (loading screen)"))
     end,
     layer_module_off_means_unknown = function(ns, A, W)
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
-      A.eq(ns.Layer.relationOf("Frostie"), "different")
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
       ns.Modules.setEnabled("layer", false)
       A.eq(ns.Layer.relationOf("Frostie"), "unknown")
       local rel = record(ns, "LAYER_RELATION")
-      receive(ns, W, "Frostie", "UPDATE", { lk = "111" })
+      W:advance(10)
       A.eq(#rel, 0)
       ns.Modules.setEnabled("layer", true)
       A.eq(rel, { { "Frostie", "unknown", "same" } })

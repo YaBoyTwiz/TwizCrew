@@ -183,6 +183,15 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   copy to the channel in case the game delivers it again. Copies of v0.1.4 or older can hear a newer copy but not
   be heard. `/tc report` shows "Crew in the channel" and "Channel echoes heard" (0 = the channel still does not
   deliver).
+- **NPC layer keys don't identify a layer on WoW Forever (seen in game 2026-11-07):** the owner and Chaos stood
+  together in Darkshore on one layer, and TwizCrew read key "1" for the owner and "11" for Chaos from the zone part
+  of NPC GUIDs. Forever Layer Hop's code says the same: since build 70450 two clients on one layer can get
+  different zoneUIDs, and equal ones aren't proof either. So since v0.1.6 keys are still shared (for `/tc report`)
+  but never decide anything. A friend counts as **same layer** when the game shows them (party unit
+  `UnitIsVisible`, or their nameplate is up), and **different** when they are in our group, within 40 yards by
+  `UnitPosition`, and hidden for 8 s. Otherwise the last verdict stands while both stay in the zone; never seen
+  = unknown (no tag). Ghosts are skipped (the living can't see them on any layer). Not yet checked in game:
+  that `UnitPosition` works on party members in Forever.
 - **Boss fights:** addon messages are reported to be **blocked during a boss fight** inside dungeons and raids. Plan:
   queue them and send after `ENCOUNTER_END`. The rest of the dungeon (trash, between pulls) is reported to work.
   Your own screen can still show things during a boss fight.

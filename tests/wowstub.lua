@@ -235,8 +235,24 @@ local function build(W)
     IsSwimming = function() return st.swimming and true or false end,
     IsFalling = function() return st.falling and true or false end,
     UnitPosition = function(u)
-      if u ~= "player" or type(st.pos) ~= "table" then return nil end
-      return st.pos.y, st.pos.x, 0, st.pos.instance
+      local p = st.pos
+      if u ~= "player" then p = unit(u) and unit(u).pos end
+      if type(p) ~= "table" then return nil end
+      return p.y, p.x, 0, p.instance
+    end,
+    -- layer compare: st.units[u].visible / .connected (nil = true) / .ghost / .pos; st.ghost for the player
+    UnitIsVisible = function(u)
+      local x = unit(u)
+      return (x and x.visible) and true or false
+    end,
+    UnitIsConnected = function(u)
+      local x = unit(u)
+      return (x and x.connected ~= false) and true or false
+    end,
+    UnitIsGhost = function(u)
+      if u == "player" then return st.ghost and true or false end
+      local x = unit(u)
+      return (x and x.ghost) and true or false
     end,
     UnitExists = function(u) return u == "player" or unit(u) ~= nil end,
     UnitCanAttack = function(_, u)

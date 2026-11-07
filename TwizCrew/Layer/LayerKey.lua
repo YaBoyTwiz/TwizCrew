@@ -55,11 +55,36 @@ function Tracker:info(now)
   return { key = key, age = key and (now - self.seenAt) or nil, pending = self.pending }
 end
 
--- me / them: { lk, zn, ins, online }. Anything doubtful is "unknown", never "different".
-function LayerKey.relation(me, them)
-  if not me or not them or them.online == false then return "unknown" end
-  if not me.lk or me.lk == "" or not them.lk or them.lk == "" then return "unknown" end
-  if me.ins or them.ins then return "unknown" end
-  if not me.zn or me.zn == "" or not them.zn or them.zn == "" or me.zn ~= them.zn then return "unknown" end
-  return me.lk == them.lk and "same" or "different"
+-- Can two friends be compared at all? me / them: { zn, ins, online }. Same zone, both outside instances, online.
+function LayerKey.comparable(me, them)
+  if not me or not them or them.online == false then return false end
+  if me.ins or them.ins then return false end
+  if not me.zn or me.zn == "" or not them.zn or them.zn == "" then return false end
+  return me.zn == them.zn
+end
+
+-- Same / different from what the game shows us, not from layer keys. On WoW Forever two clients on the SAME layer
+-- can read different keys from NPCs (seen in game 2026-11-07: "1" vs "11" while together in Darkshore), so keys
+-- never decide anything. What does decide:
+--   * the friend is visible to us (party unit or nameplate)              -> "same"
+--   * the friend is close by map position but the game hides them, for
+--     `hiddenFor` seconds in a row                                         -> "different"
+--   * otherwise the last verdict stands while both stay in the same zone; never seen -> "unknown".
+-- mem: per-friend table kept by the caller. ev: { comparable, visible, dist, connected }.
+function LayerKey.judge(mem, ev, now, near, hiddenFor)
+  if not ev.comparable then
+    mem.verdict, mem.hiddenSince = nil, nil
+    return "unknown"
+  end
+  if ev.visible then
+    mem.verdict, mem.hiddenSince = "same", nil
+    return "same"
+  end
+  if ev.visible == false and ev.connected ~= false and type(ev.dist) == "number" and ev.dist <= near then
+    mem.hiddenSince = mem.hiddenSince or now
+    if now - mem.hiddenSince >= hiddenFor then mem.verdict = "different" end
+  else
+    mem.hiddenSince = nil
+  end
+  return mem.verdict or "unknown"
 end

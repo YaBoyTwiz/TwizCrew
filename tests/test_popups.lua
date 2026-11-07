@@ -25,16 +25,33 @@ local function seeMouseover(W, guid)
   for _ = 1, 2 do W:fire("UPDATE_MOUSEOVER_UNIT") end
 end
 
--- Past the login quiet period, standing on layer 111, with Frostie online on the same layer.
+-- A friend in our group standing 10 yards away; visible = on our layer. These tests check pop-up timing, so a
+-- hidden friend counts as "different" at once (the 8 s wait is tested in test_layer).
+local SLOTS = { Frostie = "party1", Ginkan = "party2" }
+local function nearby(ns, W, name, visible)
+  ns.Config.LAYER_HIDDEN_FOR = 0
+  W.state.pos = { x = 0, y = 0, instance = 1 }
+  W.state.units[SLOTS[name]] = { name = name, player = true, visible = visible, pos = { x = 10, y = 0, instance = 1 } }
+end
+
+local function look(W) W:fire("NAME_PLATE_UNIT_ADDED", "nameplate40") end -- makes the layer module look now
+
+-- Past the login quiet period, with Frostie online in our group, next to us and visible (same layer).
 local function ready(ns, W)
   start(ns, W)
-  seeMouseover(W, "Creature-0-1-0-111-299-01")
-  receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lk = "111", zn = "Elwynn Forest" })
+  nearby(ns, W, "Frostie", true)
+  receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest" })
   W:advance(31)
 end
 
 local function frostieMoves(ns, W)
-  receive(ns, W, "Frostie", "UPDATE", { lk = "222" })
+  W.state.units.party1.visible = false
+  look(W)
+end
+
+local function frostieBack(ns, W)
+  W.state.units.party1.visible = true
+  look(W)
 end
 
 -- Texts of the layer pop-ups shown so far, in order.
@@ -120,7 +137,7 @@ return {
       ready(ns, W)
       frostieMoves(ns, W); W:advance(4)
       ns.Popups.clickForTest(1)
-      receive(ns, W, "Frostie", "UPDATE", { lk = "111" }); W:advance(4)
+      frostieBack(ns, W); W:advance(4)
       A.eq(ns.Popups.textsForTest()[1].text, "Frostie is back on your layer")
       A.no(ns.Popups.textsForTest()[1].subtext)
     end,
@@ -128,7 +145,7 @@ return {
       ready(ns, W)
       frostieMoves(ns, W)
       W:advance(1)
-      receive(ns, W, "Frostie", "UPDATE", { lk = "" })   -- their key is gone: unknown, not "back"
+      receive(ns, W, "Frostie", "UPDATE", { zn = "Westfall" })   -- can't compare any more: unknown, not "back"
       W:advance(4)
       A.eq(ns.Popups.visibleCount(), 0)
       A.eq(layerShows(ns), {})
@@ -144,15 +161,15 @@ return {
     different_same_different_shows_each = function(ns, A, W)
       ready(ns, W)
       frostieMoves(ns, W); W:advance(4)
-      receive(ns, W, "Frostie", "UPDATE", { lk = "111" }); W:advance(4)
+      frostieBack(ns, W); W:advance(4)
       frostieMoves(ns, W); W:advance(4)
       A.eq(layerShows(ns), { "Frostie is on a different layer", "Frostie is back on your layer",
         "Frostie is on a different layer" })
     end,
     summary_counts_as_announced = function(ns, A, W)
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
+      nearby(ns, W, "Frostie", false)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
       W:advance(25)
       A.eq(layerShows(ns), { "Frostie is on a different layer" })
       receive(ns, W, "Frostie", "UPDATE", { zn = "Westfall" }); W:advance(1)
@@ -164,7 +181,7 @@ return {
       frostieMoves(ns, W); W:advance(4)
       receive(ns, W, "Frostie", "BYE", {}); W:advance(1)
       receive(ns, W, "Frostie", "HELLO", { ver = "0.1.0" })
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" }); W:advance(4)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" }); W:advance(4)
       A.eq(layerShows(ns), { "Frostie is on a different layer", "Frostie is on a different layer" })
     end,
     invite_skips_people_already_in_group = function(ns, A, W)
@@ -267,9 +284,10 @@ return {
     end,
     quiet_period_then_one_summary = function(ns, A, W)
       start(ns, W)
-      seeMouseover(W, "Creature-0-1-0-111-299-01")
-      receive(ns, W, "Frostie", "STATE", { lk = "222", zn = "Elwynn Forest" })
-      receive(ns, W, "Ginkan", "STATE", { lk = "333", zn = "Elwynn Forest" })
+      nearby(ns, W, "Frostie", false)
+      nearby(ns, W, "Ginkan", false)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      receive(ns, W, "Ginkan", "STATE", { zn = "Elwynn Forest" })
       ns.Bus.fire("MEMBER_DIED", "Holyboi", "Westfall", "")
       W:advance(10)
       A.eq(ns.Popups.visibleCount(), 0)

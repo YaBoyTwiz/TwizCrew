@@ -11,12 +11,6 @@ end
 
 local function tc(W, msg) W.env.SlashCmdList.TWIZCREW(msg) end
 
-local function seeNpc(W, guid)
-  W.state.guids.mouseover = guid
-  W:fire("UPDATE_MOUSEOVER_UNIT")
-  W:fire("UPDATE_MOUSEOVER_UNIT")
-end
-
 local function rowOf(ns, name)
   for _, r in ipairs(ns.Panel.models()) do if r.name == name then return r end end
 end
@@ -40,6 +34,12 @@ local function noErrors(A, ...)
 end
 
 -- Twiz (warrior 10) and Frostie (mage 12) in Elwynn Forest, linked and logged in for 10 s.
+-- Twiz sees Frostie as party1, 10 yards away; visible = the game shows her (same layer).
+local function frostieNear(c, visible)
+  c.tw.state.pos = { x = 0, y = 0, instance = 1 }
+  c.tw.state.units.party1 = { name = "Frostie", player = true, visible = visible, pos = { x = 10, y = 0, instance = 1 } }
+end
+
 local function twoFriends(H, opts)
   opts = opts or {}
   local tw, twNs = H.client("Twiz", opts.state)
@@ -79,13 +79,12 @@ local function zoneChange(H, A, c)
 end
 
 local function otherLayer(H, A, c)
-  seeNpc(c.tw, "Creature-0-1-0-111-299-0000ABCDEF")
-  seeNpc(c.fr, "Creature-0-1-0-222-299-0000ABCDEF")
+  frostieNear(c, false) -- next to Twiz on the map, but the game hides her
   local seen = advanceWatching(H, c.twNs, 35)
   A.eq(c.twNs.Layer.relationOf("Frostie"), "different")
   A.ok(seen["Frostie is on a different layer"], "a layer pop-up was shown")
   A.ok(has(rowOf(c.twNs, "Frostie").tags, "LAYER"), "OTHER LAYER tag on the panel")
-  seeNpc(c.fr, "Creature-0-1-0-111-299-0000ABCDEF")
+  c.tw.state.units.party1.visible = true
   local back = advanceWatching(H, c.twNs, 5)
   A.eq(c.twNs.Layer.relationOf("Frostie"), "same")
   A.ok(back["Frostie is back on your layer"], "back on your layer pop-up")
@@ -465,15 +464,14 @@ return {
 
     friend_logging_back_in_shows_no_old_layer = function(_, A, _, H)
       local c = twoFriends(H, { wait = 31 })
-      seeNpc(c.tw, "Creature-0-1-0-111-299-0000ABCDEF")
-      seeNpc(c.fr, "Creature-0-1-0-111-299-0000ABCDEF")
+      frostieNear(c, true)
       H.advance(3)
       A.eq(c.twNs.Layer.relationOf("Frostie"), "same")
       c.fr:fire("PLAYER_LOGOUT")           -- Frostie logs out (sends BYE)
       H.advance(1)
       for i, L in ipairs(H.linked) do if L == c.fr then table.remove(H.linked, i) end end
       A.no(c.twNs.roster:get("Frostie").online)
-      seeNpc(c.tw, "Creature-0-1-0-333-299-0000ABCDEF") -- meanwhile Twiz ends up on another layer
+      c.tw.state.units.party1 = nil       -- she left the group when she logged out
       H.advance(3)
       local fr2, fr2Ns = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
       H.link(fr2)

@@ -291,6 +291,8 @@ return {
       end
       seeNpc(tw, "Creature-0-1-0-111-299-0000ABCDEF")
       seeNpc(fr, "Creature-0-1-0-222-299-0000ABCDEF")
+      tw.state.pos = { x = 0, y = 0, instance = 1 }  -- Frostie next to Twiz on the map, hidden by the game
+      tw.state.units.party1 = { name = "Frostie", player = true, visible = false, pos = { x = 10, y = 0, instance = 1 } }
       H.advance(35)
       A.eq(c.twNs.Layer.relationOf("Frostie"), "different")
       fr.state.zone, fr.state.subzone = "Westfall", "Sentinel Hill"

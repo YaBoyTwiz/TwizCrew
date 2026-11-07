@@ -13,6 +13,7 @@ local HELP = {
   "/tc hide - hide the crew panel",
   "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
+  "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
   "/tc debug - turn technical chat messages on or off",
@@ -165,6 +166,7 @@ local ACTIONS = {
   hide = function() setPanel(false) end,
   minimap = toggleMinimap,
   status = setStatus,
+  afk = function() ns.Panel.toggleAway() end,
   reset = function()
     ns.Settings.open()
     ns.Settings.confirmReset()

@@ -22,9 +22,11 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
   BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
-  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN" }
+  "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
+  "AWAY_CHANGED" }
 
 local root, countText, noteText
+local afkButton -- the "zzz" button in the header: go AFK / come back
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local tabBar, crewTab, shameTab
@@ -198,6 +200,12 @@ local function createRow()
   r.fill:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", -1, 1)
   r.gloss = T.gloss(r, nil, 0.06, "BORDER")
   r.icon = r:CreateTexture(nil, "ARTWORK")
+  r.afk = r:CreateTexture(nil, "OVERLAY", nil, 2) -- "zzz" on the portrait while they're away
+  r.afk:SetTexture(ns.Tags.ICON.AFK)
+  r.afk:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  r.afk:SetSize(12, 12)
+  r.afk:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 4, -4)
+  r.afk:Hide()
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
@@ -360,7 +368,10 @@ local function layoutRow(r, m, style, s, width)
   end
   local height = y + 4
   r:SetHeight(height)
-  r:SetAlpha(m.offline and 0.4 or 1)
+  local away = false
+  for _, id in ipairs(m.tags or {}) do if id == "AFK" then away = true end end
+  if away and not m.offline then r.afk:Show() else r.afk:Hide() end
+  r:SetAlpha(m.offline and 0.4 or (away and 0.75 or 1))
   layoutPills(r, m.tags)
   return height
 end
@@ -409,7 +420,16 @@ local function updateText()
 end
 
 -- Title version and the update line; returns how far down the content starts.
+local function drawAfkButton()
+  if not afkButton then return end
+  local away = ns.Away and ns.Away.isAway()
+  if afkButton.icon.SetDesaturated then afkButton.icon:SetDesaturated(not away) end
+  afkButton.icon:SetAlpha(away and 1 or 0.55)
+  if away then afkButton.glow:Show() else afkButton.glow:Hide() end
+end
+
 local function drawHeader(s)
+  drawAfkButton()
   titleVersion = Logic.titleVersion(s.rowStyle, ns.VERSION)
   versionText:SetText(titleVersion)
   updateLine = updateText()
@@ -585,6 +605,7 @@ function Panel.menuItems()
       onClick = function() set("rowStyle", NEXT_STYLE[setting("rowStyle")] or "full") end },
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
     { label = "Set my status", onClick = function() Panel.openStatusBox() end },
+    { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK", onClick = function() Panel.toggleAway() end },
     { label = "Open settings", onClick = function()
       if ns.Settings and ns.Settings.open then ns.Settings.open() end
     end },
@@ -647,6 +668,18 @@ local function buildStatusBox()
   return f
 end
 
+function Panel.toggleAway()
+  if not ns.Away then return end
+  local before = ns.Away.isAway()
+  local away = ns.Away.toggle()
+  if before and away then
+    print("TwizCrew: the game itself still has you AFK. Move or type /afk to clear it.")
+  else
+    print("TwizCrew: " .. (away and "your crew sees you as AFK." or "welcome back!"))
+  end
+  drawAfkButton()
+end
+
 function Panel.openStatusBox()
   if not statusBox then statusBox = buildStatusBox() end
   statusBox.edit:SetText(tostring(ns.db and ns.db.myStatus or ""))
@@ -685,6 +718,32 @@ local function build()
   versionText:SetPoint("LEFT", title, "RIGHT", 4, 0)
   countText = T.text(head, T.FONT.small, C.muted)
   countText:SetPoint("RIGHT", head, "RIGHT", -PAD, -2)
+  afkButton = CreateFrame("Button", nil, head)
+  afkButton:SetSize(16, 16)
+  afkButton:SetPoint("RIGHT", countText, "LEFT", -6, 0)
+  afkButton.glow = afkButton:CreateTexture(nil, "BACKGROUND")
+  afkButton.glow:SetPoint("TOPLEFT", afkButton, "TOPLEFT", -3, 3)
+  afkButton.glow:SetPoint("BOTTOMRIGHT", afkButton, "BOTTOMRIGHT", 3, -3)
+  T.color(afkButton.glow, C.title, 0.35)
+  afkButton.icon = afkButton:CreateTexture(nil, "ARTWORK")
+  afkButton.icon:SetAllPoints(afkButton)
+  afkButton.icon:SetTexture(ns.Tags.ICON.AFK)
+  afkButton.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local afkHl = afkButton:CreateTexture(nil, "HIGHLIGHT")
+  afkHl:SetAllPoints(afkButton)
+  T.color(afkHl, C.white, 0.2)
+  script(afkButton, "OnClick", function() Panel.toggleAway() end)
+  script(afkButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    local away = ns.Away and ns.Away.isAway()
+    GameTooltip:SetText(away and "I'm back" or "Go AFK")
+    GameTooltip:AddLine(away and "Click to show your crew you're back." or
+      "Click to tell your crew you're away (only TwizCrew friends see it). Moving or casting brings you back.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(afkButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  drawAfkButton()
 
   updateBar = CreateFrame("Button", nil, root)
   updateBar:SetPoint("TOPLEFT", root, "TOPLEFT", 2, -(HEADER_HEIGHT - 2))
@@ -830,7 +889,7 @@ ns.Modules.register({
     { key = "showStatus", label = "Show typed status", kind = "toggle",
       info = "Shows the short note a friend typed with /tc status, like \"LF Deadmines\"." },
     { key = "showXP", label = "Show XP bar", kind = "toggle",
-      info = "Shows a purple bar with how close each friend is to their next level." },
+      info = "Shows a gold bar with how close each friend is to their next level. It gets brighter as it fills." },
     { key = "xpText", label = "Show level and XP numbers", kind = "toggle",
       info = "Shows each friend's level and how far into it they are, like \"Lv 12 \194\183 63%\". Full rows show it "
         .. "next to the XP bar, Compact rows in the top-right corner, Tiny rows just the percent." },

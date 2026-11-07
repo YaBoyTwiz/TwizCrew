@@ -396,6 +396,75 @@ return {
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
       A.eq(ns.Panel.isShown(), true)
     end,
+    version_line_in_tooltip = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.versionLine(nil), nil)
+      A.eq(L.versionLine(""), nil)
+      A.eq(L.versionLine(ns.VERSION), "TwizCrew v" .. ns.VERSION)
+      A.eq(L.versionLine("0.0.1"), "TwizCrew v0.0.1 (older than yours)")
+      A.eq(L.versionLine("99.0.0"), "TwizCrew v99.0.0 (newer than yours)")
+      A.eq(L.versionLine("junk"), "TwizCrew vjunk")
+      local rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50, ver = "0.0.1" } },
+        { xpTooltip = false }, nil, true, 0, 0)
+      A.eq(rows[1].tip, { "TwizCrew v0.0.1 (older than yours)" }, "shown even with XP details off")
+      rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50 } }, { xpTooltip = false }, nil, true, 0, 0)
+      A.eq(rows[1].tip, nil, "no version, no tooltip")
+    end,
+    away_after_idle_minutes = function(ns, A, W)
+      start(ns, W)
+      ns.Away.start()
+      A.eq(ns.Away.isAway(), false)
+      W:advance(ns.Modules.setting("tags", "awayMinutes") * 60 - 10)
+      A.eq(ns.Away.isAway(), false, "not yet")
+      W:advance(15)
+      A.eq(ns.Away.isAway(), true, "idle for the whole time")
+      W:advance(2)
+      A.eq(ns.Self.lastSent().tg, "AFK", "friends get the AFK tag")
+      W:fire("PLAYER_STARTED_MOVING")
+      A.eq(ns.Away.isAway(), false, "moving brings you back")
+      W:advance(2)
+      A.eq(ns.Self.lastSent().tg, "")
+    end,
+    mouse_movement_counts_as_here = function(ns, A, W)
+      start(ns, W)
+      ns.Away.start()
+      for _ = 1, 10 do
+        W:advance(30)
+        W.state.cursor.x = W.state.cursor.x + 5
+      end
+      A.eq(ns.Away.isAway(), false, "the mouse kept moving")
+    end,
+    auto_away_can_be_turned_off = function(ns, A, W)
+      start(ns, W)
+      ns.Away.start()
+      ns.Modules.set("tags", "autoAway", false)
+      W:advance(20 * 60)
+      A.eq(ns.Away.isAway(), false)
+    end,
+    afk_button_stays_until_you_play = function(ns, A, W)
+      start(ns, W)
+      ns.Away.start()
+      A.eq(ns.Away.toggle(), true)
+      W.state.cursor.x = W.state.cursor.x + 50 -- clicking the button moved the mouse
+      W:advance(4)
+      A.eq(ns.Away.isAway(), true, "the mouse alone doesn't end a chosen AFK")
+      W:fire("UNIT_SPELLCAST_SENT", "party1")
+      A.eq(ns.Away.isAway(), true, "someone else casting doesn't count")
+      W:fire("UNIT_SPELLCAST_SENT", "player")
+      A.eq(ns.Away.isAway(), false, "casting does")
+      ns.Away.toggle()
+      W.env.SlashCmdList.TWIZCREW("afk")
+      A.eq(ns.Away.isAway(), false, "/tc afk toggles back")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    away_friend_gets_zzz_on_portrait = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12", tg = "AFK" })
+      W:advance(1)
+      local rows = ns.Panel.rowModelsForTest and ns.Panel.rowModelsForTest() or nil
+      if rows then A.eq(rows[1].tags, { "AFK" }) end
+      A.eq(ns.Log.errors(10), {})
+    end,
     panel_menu_items_work = function(ns, A, W)
       start(ns, W)
       feedTwelve(ns, W)
@@ -404,15 +473,18 @@ return {
       local labels = {}
       for i, item in ipairs(items) do labels[i] = item.label end
       A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Set my status",
-        "Open settings", "Hide panel" })
+        "Go AFK", "Open settings", "Hide panel" })
       A.eq(items[1].checked(), true)
       items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), false)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
       items[3].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
       items[4].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)
       items[5].onClick()
-      items[6].onClick()
-      items[7].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
+      items[6].onClick(); A.eq(ns.Away.isAway(), true, "Go AFK")
+      A.eq(ns.Panel.menuItems()[6].label, "I'm back")
+      items[6].onClick(); A.eq(ns.Away.isAway(), false, "and back")
+      items[7].onClick()
+      items[8].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
       W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       ns.Modules.setEnabled("panel", true); W:advance(1)

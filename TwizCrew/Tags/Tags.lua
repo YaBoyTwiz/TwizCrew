@@ -41,6 +41,97 @@ local function try(fn, ...)
   return nil
 end
 
+------------------------------------------------------------------------------------------------------------- away
+-- You count as away (the AFK tag and a "zzz" on your portrait in friends' panels) when the game says so (/afk, or its own idle
+-- timer), when you have done nothing for a few minutes (setting "awayMinutes"), or after the AFK button / "/tc afk"
+-- until you play again. TwizCrew never sets the game's own AFK flag: the button only tells the crew.
+local Away = {}
+ns.Away = Away
+
+-- Things that mean "I'm playing". "soft" ones (mouse moved, camera turned) end idle time but not a chosen AFK:
+-- clicking the AFK button moves the mouse too.
+local HARD_EVENTS = { "PLAYER_STARTED_MOVING", "UNIT_SPELLCAST_SENT", "PLAYER_TARGET_CHANGED",
+  "PLAYER_REGEN_DISABLED", "LOOT_OPENED", "GOSSIP_SHOW", "MERCHANT_SHOW", "QUEST_DETAIL" }
+local lastActive, chosen, idle = nil, false, false
+local lastCursor, lastFacing
+local started = false
+
+local function readable(v)
+  if v == nil then return false end
+  if type(issecretvalue) == "function" then
+    local ok, secret = pcall(issecretvalue, v)
+    if not ok or secret then return false end
+  end
+  return true
+end
+
+local function changed(reason)
+  if ns.Self then ns.Self.refresh(reason) end
+  ns.Bus.fire("AWAY_CHANGED", Away.isAway())
+end
+
+function Away.active(soft)
+  lastActive = ns.now()
+  local was = Away.isAway()
+  if not soft then chosen = false end
+  idle = false
+  if was ~= Away.isAway() then changed("back") end
+end
+
+function Away.isAway()
+  return chosen or idle or (try(UnitIsAFK, "player") and true or false)
+end
+
+-- The AFK button and "/tc afk": go away, or come back. Returns true when you are away afterwards (the game's own
+-- /afk keeps you away until the game clears it).
+function Away.toggle()
+  if Away.isAway() then
+    chosen, idle, lastActive = false, false, ns.now()
+    changed("back")
+    return Away.isAway()
+  end
+  chosen = true
+  changed("away")
+  return true
+end
+
+function Away.gameAFK() return try(UnitIsAFK, "player") and true or false end
+
+local function look()
+  -- the mouse moving or the camera turning counts as being here
+  local x, y = try(GetCursorPosition)
+  if readable(x) and readable(y) then
+    local key = math.floor(x) .. "," .. math.floor(y)
+    if lastCursor and key ~= lastCursor then Away.active(true) end
+    lastCursor = key
+  end
+  local facing = try(GetPlayerFacing)
+  if readable(facing) and type(facing) == "number" then
+    if lastFacing and math.abs(facing - lastFacing) > 0.01 then Away.active(true) end
+    lastFacing = facing
+  end
+  local minutes = tonumber(ns.Modules.setting("tags", "awayMinutes")) or 3
+  if ns.Modules.setting("tags", "autoAway") ~= false and not idle and lastActive
+    and ns.now() - lastActive >= minutes * 60 then
+    idle = true
+    changed("idle")
+  end
+end
+
+function Away.start()
+  if started then return end
+  started = true
+  lastActive = ns.now()
+  for _, event in ipairs(HARD_EVENTS) do
+    ns.Events.on("comm", event, function(unit)
+      if event == "UNIT_SPELLCAST_SENT" and unit ~= "player" then return end
+      Away.active(false)
+    end)
+  end
+  ns.Events.on("comm", "PLAYER_FLAGS_CHANGED", function() ns.Bus.fire("AWAY_CHANGED", Away.isAway()) end)
+  C_Timer.NewTicker(2, function() ns.Log.safe("comm", look) end)
+end
+
 -- Your own tags as a set. Never includes LAYER: that one is worked out per friend by the layer module.
 function Tags.detectSelf()
   local set = {}
@@ -49,7 +140,7 @@ function Tags.detectSelf()
   local _, kind = try(IsInInstance)
   if kind == "party" or kind == "raid" then set.DUNGEON = true end
   if try(UnitOnTaxi, "player") then set.TAXI = true end
-  if try(UnitIsAFK, "player") then set.AFK = true end
+  if Away.isAway() then set.AFK = true end
   return set
 end
 
@@ -78,4 +169,13 @@ end
 ns.Modules.register({
   id = "tags", name = "Activity tags", tier = "module",
   info = "Shows small colored labels next to your friends: dead, fighting, in a dungeon, flying, away, or on another layer.",
+  defaults = { autoAway = true, awayMinutes = 3 },
+  settings = {
+    { key = "autoAway", label = "Show me as away when idle", kind = "toggle",
+      info = "Your friends see AFK next to your name when you haven't moved, cast, targeted or touched the mouse "
+        .. "for a few minutes. It goes away as soon as you do something." },
+    { key = "awayMinutes", label = "Minutes before away", kind = "slider", min = 1, max = 15, step = 1,
+      parent = "autoAway", fmt = function(v) return tostring(math.floor(v + 0.5)) .. " min" end,
+      info = "How long you can do nothing before you show as away." },
+  },
 })

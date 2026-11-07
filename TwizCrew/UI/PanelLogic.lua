@@ -107,6 +107,17 @@ function PanelLogic.timeToLevel(track, left, now)
   return seconds
 end
 
+-- "TwizCrew v0.1.5 (older than yours)" for the row tooltip; nil when we don't know their version.
+function PanelLogic.versionLine(ver)
+  if type(ver) ~= "string" or ver == "" then return nil end
+  local line = "TwizCrew v" .. text(ver)
+  if ns.Util.isVersion(ver) and ns.VERSION then
+    local c = ns.Util.compareVersions(ver, ns.VERSION)
+    if c < 0 then line = line .. " (older than yours)" elseif c > 0 then line = line .. " (newer than yours)" end
+  end
+  return line
+end
+
 -- The lines under the name in a row's tooltip.
 function PanelLogic.tooltipLines(m, now, maxLevel)
   local lv, xp = level(m.level), percent(m.xp)
@@ -145,7 +156,10 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
         if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end
       end
-      if settings.xpTooltip ~= false then row.tip = PanelLogic.tooltipLines(m, now, maxLevel) end
+      local tip = settings.xpTooltip ~= false and PanelLogic.tooltipLines(m, now, maxLevel) or {}
+      local ver = PanelLogic.versionLine(m.ver)
+      if ver then tip[#tip + 1] = ver end
+      if #tip > 0 then row.tip = tip end
       if offline then
         if type(m.lastSeen) == "number" and type(wall) == "number" then
           row.offlineText = "Offline, last seen " .. ns.Util.ago(wall - m.lastSeen)

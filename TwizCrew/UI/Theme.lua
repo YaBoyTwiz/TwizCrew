@@ -71,6 +71,20 @@ function Theme.gloss(frame, anchor, strength, layer)
   return t
 end
 
+-- Text that stays readable on colored rows: the same font with a black outline and a drop shadow.
+-- grow: points added to the size (0 = same size).
+function Theme.readable(fs, grow)
+  if fs.GetFont and fs.SetFont then
+    local path, size = fs:GetFont()
+    if type(path) == "string" and type(size) == "number" and size > 0 then
+      pcall(fs.SetFont, fs, path, size + (grow or 0), "OUTLINE")
+    end
+  end
+  if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 1) end
+  if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
+  return fs
+end
+
 function Theme.textColor(fontString, hex)
   local r, g, b = Theme.rgb(hex)
   fontString:SetTextColor(r, g, b)

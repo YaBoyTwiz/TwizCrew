@@ -12,7 +12,7 @@ local T, Widgets, Logic = ns.Theme, ns.Widgets, ns.PanelLogic
 local C = T.COLOR
 
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
-local ICON_SIZE = { full = 18, compact = 16, tiny = 14 }
+local ICON_SIZE = { full = 22, compact = 20, tiny = 16 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
 local UPDATE_HEIGHT = 15 -- the gold "Update available: vX" line under the header
@@ -203,7 +203,7 @@ local function createRow()
   r.afk = r:CreateTexture(nil, "OVERLAY", nil, 2) -- "zzz" on the portrait while they're away
   r.afk:SetTexture(ns.Tags.ICON.AFK)
   r.afk:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  r.afk:SetSize(12, 12)
+  r.afk:SetSize(14, 14)
   r.afk:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 4, -4)
   r.afk:Hide()
   r.name = T.text(r, T.FONT.normal)
@@ -215,8 +215,12 @@ local function createRow()
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
   end
+  -- readable on the class-colored row: black outline and shadow, the name a size bigger
+  T.readable(r.name, 1)
+  for _, fs in ipairs({ r.level, r.zone, r.status, r.title }) do T.readable(fs) end
   r.xpText = T.text(r, T.FONT.small, C.zone) -- "Lv 12 · 63%" next to the bar (full style)
   r.xpText:SetJustifyH("RIGHT")
+  T.readable(r.xpText)
   r.xpBack = r:CreateTexture(nil, "ARTWORK")
   T.gradient(r.xpBack, "VERTICAL", "080808", C.xpBackTop, 0.9, 0.9)
   r.xpFill = r:CreateTexture(nil, "OVERLAY", nil, 1) -- colored in layoutRow (brighter the fuller it is)

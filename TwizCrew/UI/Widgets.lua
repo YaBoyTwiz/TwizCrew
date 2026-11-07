@@ -390,7 +390,7 @@ local function setTag(pill, tagId)
     if icon:find("Interface\\Icons\\", 1, true) then pill.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     else pill.icon:SetTexCoord(0, 1, 0, 1) end
     pill.icon:Show()
-    iconRoom = 13
+    iconRoom = 17
   else
     pill.icon:Hide()
   end
@@ -402,13 +402,13 @@ end
 
 function Widgets.tagPill(parent)
   local pill = T.frame("Frame", nil, parent)
-  pill:SetHeight(14)
+  pill:SetHeight(18)
   T.paint(pill, C.button, 1, C.pillBorder, 1)
   pill.icon = pill:CreateTexture(nil, "ARTWORK")
-  pill.icon:SetSize(12, 12)
+  pill.icon:SetSize(16, 16)
   pill.icon:SetPoint("LEFT", pill, "LEFT", 2, 0)
   pill.shine = T.gloss(pill, nil, 0.25, "ARTWORK") -- under the label, so the text stays crisp
-  pill.text = T.text(pill, T.FONT.small, C.white)
+  pill.text = T.readable(T.text(pill, T.FONT.small, C.white))
   pill.text:SetPoint("CENTER", pill, "CENTER", 0, 0)
   pill:EnableMouse(true)
   pill.SetTag = setTag

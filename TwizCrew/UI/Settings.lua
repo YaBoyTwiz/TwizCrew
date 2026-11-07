@@ -11,7 +11,7 @@ local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local WIDTH, PAD = 400, 14
 local CONTENT_WIDTH = WIDTH - 2 * PAD
-local HEADER = 54
+local HEADER = 84 -- title, version line and the Basics / Advanced tabs
 local FOOTER, CONFIRM = 40, 58
 local ROW, MODULE_ROW, BROKEN_ROW, SECTION_ROW = 24, 26, 38, 26
 local INDENT = { setting = 14, child = 32 }
@@ -22,10 +22,30 @@ local SECTIONS = {
   { tier = "extra", title = "Extras", note = "fun stuff, added over time" },
   { tier = "tools", title = "Try it out", note = "pretend friends and pop-ups, only on your screen" },
 }
+-- The Basics tab: a few everyday options. Everything (these too) is on the Advanced tab.
+-- { module = id } is that module's on/off switch; { id, key } one of its settings.
+local BASICS = {
+  { title = "Look", note = "how the crew panel looks" },
+  { id = "panel", key = "bgAlpha" },
+  { id = "panel", key = "scale" },
+  { id = "panel", key = "rowStyle" },
+  { title = "Handy", note = "the things people change most" },
+  { module = "panel" },
+  { id = "panel", key = "showOffline" },
+  { id = "panel", key = "locked" },
+  { id = "panel", key = "hideInCombat" },
+  { module = "popups" },
+  { id = "tags", key = "autoAway" },
+  { id = "tags", key = "awayMinutes" },
+  { id = "minimap", key = "show" },
+}
+local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"
 local RESET_QUESTION = "Reset all TwizCrew settings and the panel position?"
 
 local frame, scroll, content, subtitle, confirmBox, closeButton, resetButton
+local tab = "basic"   -- the tab shown: "basic" or "advanced"
+local tabButtons = {}
 local isOpen, dirty, confirming = false, true, false
 local rows = {}       -- cache key -> row frame
 local placed = {}     -- rows placed by the last layout, in order
@@ -217,6 +237,38 @@ local function layout()
     described[#described + 1] = what
     y = y + height
   end
+  if tab == "basic" then
+    local first = true
+    for _, item in ipairs(BASICS) do
+      if item.title then
+        if not first then y = y + 10 end
+        first = false
+        place(sectionRow({ tier = "basic:" .. item.title, title = item.title, note = item.note }), 0, SECTION_ROW + 4,
+          "section:" .. item.title)
+      elseif item.module then
+        local def = ns.Modules.get(item.module)
+        if def then
+          local r, state, height = moduleRow(def, broken[def.id])
+          place(r, 0, height, "module:" .. def.id .. ":" .. state)
+        end
+      else
+        local def, sdef = ns.Modules.get(item.id), settingDef(item.id, item.key)
+        if def and sdef then
+          local sr = settingRow(def, sdef)
+          sr.tcModule, sr.tcParent = def.id, sdef.parent or false
+          place(sr, sdef.parent and INDENT.child or 0, ROW, (sdef.parent and "child:" or "setting:") .. def.id .. ":"
+            .. sdef.key)
+        end
+      end
+    end
+    y = y + 12
+    place(sectionRow({ tier = "basic:more", title = "", note = "More options are on the Advanced tab." }), 0,
+      SECTION_ROW, "note:advanced")
+    contentHeight = y
+    content:SetSize(CONTENT_WIDTH, math.max(1, y))
+    fit()
+    return
+  end
   for i, sec in ipairs(SECTIONS) do
     if i > 1 then y = y + 10 end
     place(sectionRow(sec), 0, SECTION_ROW + 4, "section:" .. sec.title)
@@ -251,6 +303,27 @@ function Win.refresh()
   end
 end
 
+---------------------------------------------------------------------------------------------------- tabs
+local function drawTabs()
+  for id, b in pairs(tabButtons) do
+    local on = id == tab
+    T.textColor(b.text, on and C.title or C.muted)
+    if on then b.line:Show() else b.line:Hide() end
+  end
+end
+
+-- Shows the "basic" or "advanced" tab (anything else counts as basic).
+function Win.setTab(id)
+  local want = id == "advanced" and "advanced" or "basic"
+  if want == tab then return end
+  tab = want
+  drawTabs()
+  scrollOffset = 0
+  Win.rebuild()
+end
+
+function Win.tab() return tab end
+
 ---------------------------------------------------------------------------------------------------- frame
 local function showConfirm(on)
   confirming = on and true or false
@@ -284,6 +357,33 @@ local function build()
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
   subtitle:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
   subtitle:SetJustifyH("LEFT")
+
+  local x = PAD
+  for _, t in ipairs(TABS) do
+    local b = CreateFrame("Button", nil, frame)
+    b:SetSize(90, 22)
+    b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -52)
+    b.text = T.text(b, T.FONT.normal, C.muted)
+    b.text:SetPoint("CENTER", b, "CENTER", 0, 1)
+    b.text:SetText(t.label)
+    b.line = b:CreateTexture(nil, "ARTWORK")
+    b.line:SetHeight(2)
+    b.line:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
+    b.line:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
+    T.color(b.line, C.title, 1)
+    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(b)
+    T.color(hl, C.white, 0.06)
+    script(b, "OnClick", function() Win.setTab(t.id) end)
+    tabButtons[t.id] = b
+    x = x + 94
+  end
+  local under = frame:CreateTexture(nil, "ARTWORK")
+  under:SetHeight(1)
+  under:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -74)
+  under:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -74)
+  T.color(under, C.line, 1)
+  drawTabs()
 
   scroll = CreateFrame("ScrollFrame", nil, frame)
   content = CreateFrame("Frame", nil, scroll)

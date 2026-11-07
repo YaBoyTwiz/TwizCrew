@@ -189,7 +189,7 @@ return {
         return f
       end
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       A.eq(hidden, { true }, "only the crew code box hides what is typed")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -217,7 +217,7 @@ return {
 
     settings_builds_and_resets_without_errors = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       A.ok(ns.Settings.isOpen())
       ns.Modules.set("panel", "scale", 1.5)
       ns.Settings.confirmReset()
@@ -228,9 +228,33 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    settings_layout_follows_registry = function(ns, A, W)
+    settings_opens_on_a_short_basics_tab = function(ns, A, W)
       boot(W)
       ns.Settings.open()
+      A.eq(ns.Settings.tab(), "basic")
+      local d = ns.Settings.describeForTest()
+      A.ok(has(d, "setting:panel:bgAlpha"), "transparency")
+      A.ok(has(d, "setting:panel:scale"))
+      A.ok(has(d, "module:panel:switch"))
+      A.ok(has(d, "module:popups:switch"))
+      A.ok(has(d, "setting:tags:autoAway"))
+      A.ok(has(d, "child:tags:awayMinutes"))
+      A.ok(has(d, "setting:minimap:show"))
+      A.ok(has(d, "note:advanced"))
+      A.no(has(d, "setting:comm:channel"), "no crew channel setup on Basics")
+      A.no(has(d, "section:Essentials"))
+      A.ok(#d <= 18, "short: " .. #d .. " rows")
+      ns.Settings.setTab("advanced")
+      d = ns.Settings.describeForTest()
+      A.ok(has(d, "setting:comm:channel"), "Advanced has everything")
+      ns.Settings.setTab("basic")
+      A.no(has(ns.Settings.describeForTest(), "setting:comm:channel"))
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    settings_layout_follows_registry = function(ns, A, W)
+      boot(W)
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       local d = ns.Settings.describeForTest()
       local ess, mods, ext = indexOf(d, "section:Essentials"), indexOf(d, "section:Modules"), indexOf(d, "section:Extras")
       A.ok(ess and mods and ext and ess < mods and mods < ext, "sections in order")
@@ -250,7 +274,7 @@ return {
 
     settings_shows_broken_module = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       ns.Modules.markBroken("popups")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "module:popups:broken"), "rebuilt while open")
@@ -260,14 +284,14 @@ return {
 
     settings_rebuilds_lazily_when_closed = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       ns.Settings.close()
       local before = ns.Settings.layoutCountForTest()
       ns.Modules.setEnabled("panel", false)
       ns.Modules.setEnabled("panel", true)
       ns.Modules.resetAll()
       A.eq(ns.Settings.layoutCountForTest(), before, "no rebuild while closed")
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "one rebuild on the next open")
     end,
 

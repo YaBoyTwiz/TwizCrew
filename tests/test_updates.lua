@@ -95,7 +95,7 @@ return {
     button_works_from_the_settings_row = function(ns, A, W)
       boot(W)
       W.sent = {}
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       local b = ns.Settings.rowForTest("version", "tellCrew").button
       click(b)
       W:advance(1)
@@ -279,7 +279,7 @@ return {
       boot(W)
       friend(W, ns, "Frostie", "0.2.0")
       friend(W, ns, "Ginkan", "0.1.0")
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "setting:version:tellCrew"))
       A.ok(has(d, "setting:version:versions"))
@@ -301,12 +301,12 @@ return {
 
     versions_list_relaid_after_reopening = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       ns.Settings.close()
       local before = ns.Settings.layoutCountForTest()
       friend(W, ns, "Frostie", "0.1.0")
       friend(W, ns, "Ginkan", "0.0.9")
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "laid out again: the list grew while closed")
       A.eq(#ns.Settings.rowForTest("version", "versions").shownLines, 3)
     end,

@@ -120,6 +120,13 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Modular:** players can turn parts on and off.
 - **Two tiers:** the parts that must be there (essentials) are kept apart from the nice-to-have extras.
 - **One button sets everything back to defaults.**
+- **Settings: Basics and Advanced tabs (2026-11-07):** "too many advanced features... not so daunting". The window
+  opens on Basics (transparency, size, row style, panel on/off, offline friends, lock, hide in fights, pop-ups,
+  auto-away, minimap button); Advanced lists everything.
+- **AFK lives in the panel only (2026-11-07):** the AFK button and `/tc afk` tell the crew, never set the game's own
+  AFK flag ("i dont need the game to set the afk flag"); the game's `/afk` shows the same way. No AFK pop-ups ("just
+  do it within the panel"): the AFK tag, a "zzz" on the portrait and a faded row. Auto-away after 3 idle minutes
+  (setting). Look (2026-11-07): rows in the class color, gold XP bar that brightens as it fills, icons on tags.
 
 ## Ideas so far (not decided)
 

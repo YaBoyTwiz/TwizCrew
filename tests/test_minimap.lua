@@ -116,7 +116,7 @@ return {
 
     settings_window_lists_it_under_essentials = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced")
       local d = ns.Settings.describeForTest()
       local i, j
       for k, v in ipairs(d) do

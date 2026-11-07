@@ -209,7 +209,9 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   Lore Forever 1.1.0 (CurseForge project 1715510, addon + male English narrator packs, no quest-dialogue packs
   because Spoken voices quests, by hand 2026-11-05),
   DialogueUI 1.0.7 b (Peterodox, CurseForge project 989270, by hand 2026-11-05),
-  DialogKey - Numy Edition v1.2.62 (https://github.com/NumyAddon/DialogKey_Numy, by hand 2026-11-05), and **TwizTracker** (a small starter addon Claude wrote:
+  DialogKey - Numy Edition v1.2.62 (https://github.com/NumyAddon/DialogKey_Numy, by hand 2026-11-05),
+  Basic Action Update 0.0.2 (TxRx, CurseForge project 1779962, `/bau`, puts the highest rank of each spell on your
+  bars, waits until a fight ends; by hand 2026-11-06), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
   `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote

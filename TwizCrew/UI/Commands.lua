@@ -13,6 +13,8 @@ local HELP = {
   "/tc hide - hide the crew panel",
   "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
+  "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
+  "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
@@ -119,6 +121,31 @@ local function setStatus(rest)
   end
 end
 
+-- "/tc mock add <text>", "/tc mock list", "/tc mock remove <n>", "/tc mock <name>" (mock a dead friend by name).
+local function mock(rest)
+  local what, more = rest:match("^(%S*)%s*(.-)$")
+  what = (what or ""):lower()
+  if what == "add" then
+    if ns.Roasts.addMock(more) then say("roast added. It's in the rotation now.")
+    else say("type your roast after /tc mock add, like: /tc mock add {name} tripped over a flower.") end
+  elseif what == "list" then
+    local mine = ns.Roasts.myMocks()
+    if #mine == 0 then say("you have no roasts of your own yet. Add one with /tc mock add <text>.") return end
+    say("your roasts:")
+    for i, l in ipairs(mine) do print("  " .. i .. ". " .. ns.Util.safeText(l)) end
+  elseif what == "remove" then
+    local gone = ns.Roasts.removeMock(more)
+    if gone then say('removed "' .. ns.Util.safeText(gone) .. '".')
+    else say("type the number from /tc mock list, like: /tc mock remove 2") end
+  elseif what ~= "" then
+    local name = ns.shortName(Commands.normalizeName(rest))
+    if ns.Roasts.mock(name) then return end
+    say("can't mock " .. ns.Util.safeText(name) .. " right now (wait a few seconds between mocks).")
+  else
+    say("/tc mock add <text>, /tc mock list, /tc mock remove <number>. When a friend dies, click Mock on their row.")
+  end
+end
+
 local function toggleDebug()
   local on = not ns.Modules.setting("comm", "debug")
   ns.Modules.set("comm", "debug", on)
@@ -166,6 +193,7 @@ local ACTIONS = {
   hide = function() setPanel(false) end,
   minimap = toggleMinimap,
   status = setStatus,
+  mock = mock,
   afk = function() ns.Panel.toggleAway() end,
   reset = function()
     ns.Settings.open()

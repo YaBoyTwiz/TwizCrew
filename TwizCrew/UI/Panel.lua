@@ -27,6 +27,8 @@ local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_U
 
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
+local titleText, headerShort = nil, nil -- "TwizCrew" in the header; the short count ("1/3") when room is tight
+local grip -- the move-arrows handle at the left of the header (dim while the panel is locked)
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local tabBar, crewTab, shameTab
@@ -206,6 +208,34 @@ local function createRow()
   r.afk:SetSize(14, 14)
   r.afk:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 4, -4)
   r.afk:Hide()
+  -- the Mock button: only on a dead friend's row
+  r.mock = T.frame("Button", nil, r)
+  r.mock:SetSize(54, 18)
+  r.mock:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
+  T.paint(r.mock, "8a1c1c", 1, "000000", 1)
+  T.gloss(r.mock, nil, 0.25, "ARTWORK")
+  r.mock.icon = r.mock:CreateTexture(nil, "OVERLAY")
+  r.mock.icon:SetSize(14, 14)
+  r.mock.icon:SetPoint("LEFT", r.mock, "LEFT", 3, 0)
+  r.mock.icon:SetTexture(ns.Tags.ICON.DEAD)
+  r.mock.text = T.readable(T.text(r.mock, T.FONT.small, C.white))
+  r.mock.text:SetPoint("LEFT", r.mock.icon, "RIGHT", 2, 0)
+  r.mock.text:SetText("Mock")
+  local mockHl = r.mock:CreateTexture(nil, "HIGHLIGHT")
+  mockHl:SetAllPoints(r.mock)
+  T.color(mockHl, C.white, 0.15)
+  script(r.mock, "OnClick", function(self) Panel.mock(self:GetParent()) end)
+  script(r.mock, "OnEnter", function(self)
+    local m = self:GetParent().tcModel
+    if not GameTooltip or not m then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Mock " .. tostring(m.name))
+    GameTooltip:AddLine("Sends a random roast the whole crew sees. Add your own with /tc mock add <text>.", 1, 1, 1,
+      true)
+    GameTooltip:Show()
+  end)
+  script(r.mock, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  r.mock:Hide()
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
@@ -275,6 +305,11 @@ local function layoutRow(r, m, style, s, width)
   r.icon:ClearAllPoints()
   r.icon:SetSize(icon, icon)
   r.icon:SetPoint("TOPLEFT", r, "TOPLEFT", 6, -5)
+  -- the "zzz" badge stays in proportion: about 60% of the portrait, tucked on its bottom-right corner
+  local badge = math.floor(icon * 0.6 + 0.5)
+  r.afk:SetSize(badge, badge)
+  r.afk:ClearAllPoints()
+  r.afk:SetPoint("CENTER", r.icon, "BOTTOMRIGHT", -math.floor(badge / 6), math.floor(badge / 6))
   ns.ClassIcon.apply(r.icon, m.class)
   -- class color, a bit darker so white text stays readable; the top is slightly lighter than the bottom
   local cr, cg, cb = T.classColor(m.class)
@@ -375,6 +410,15 @@ local function layoutRow(r, m, style, s, width)
   local away = false
   for _, id in ipairs(m.tags or {}) do if id == "AFK" then away = true end end
   if away and not m.offline then r.afk:Show() else r.afk:Hide() end
+  local dead = false
+  for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
+  if dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.name) then
+    r.mock:ClearAllPoints()
+    r.mock:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)
+    r.mock:Show()
+  else
+    r.mock:Hide()
+  end
   r:SetAlpha(m.offline and 0.4 or (away and 0.75 or 1))
   layoutPills(r, m.tags)
   return height
@@ -434,8 +478,28 @@ end
 
 local function drawHeader(s)
   drawAfkButton()
+  if grip then grip:SetAlpha(setting("locked") and 0.3 or 0.9) end
   titleVersion = Logic.titleVersion(s.rowStyle, ns.VERSION)
   versionText:SetText(titleVersion)
+  -- Narrow rows (compact, tiny): make the header fit so the AFK button never sits on the title. First the version
+  -- goes, then "2 of 3 online" becomes "2/3".
+  local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
+  local width = ROW_WIDTH[style] + 2 * PAD
+  local right = (PAD - 2) + 16 + 6 + 6 + 16 + 6 -- gear, gaps, AFK button, gap before the title side
+  local left = (PAD - 2) + 16 + 4 + textWidth(titleText, "TwizCrew")
+  local function fits(count, withVersion)
+    local used = left + right + textWidth(countText, count)
+    if withVersion and titleVersion ~= "" then used = used + 4 + textWidth(versionText, titleVersion) end
+    return used <= width
+  end
+  local count = header
+  if fits(header, true) then
+    versionText:Show()
+  else
+    versionText:Hide()
+    if not fits(header, false) and headerShort then count = headerShort end
+  end
+  countText:SetText(count)
   updateLine = updateText()
   local top = HEADER_HEIGHT
   if updateLine then
@@ -484,6 +548,7 @@ local function redraw()
   models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(), titleOf(),
     ns.maxLevel())
   header = Logic.headerText(online, total)
+  headerShort = (online or 0) .. "/" .. (total or 0)
   countText:SetText(header)
 
   local top = drawHeader(s)
@@ -672,6 +737,12 @@ local function buildStatusBox()
   return f
 end
 
+function Panel.mock(r)
+  local m = r and r.tcModel
+  if not m or not ns.Roasts then return end
+  if not ns.Roasts.mock(m.name) then print("TwizCrew: give it a few seconds before mocking " .. m.name .. " again.") end
+end
+
 function Panel.toggleAway()
   if not ns.Away then return end
   local before = ns.Away.isAway()
@@ -715,13 +786,52 @@ local function build()
   script(head, "OnMouseUp", function(self, button)
     if button == "RightButton" then Widgets.menu(self, Panel.menuItems()) end
   end)
+  -- a move handle so it's obvious the panel can be dragged; hovering the header shows the move cursor and a tip
+  grip = head:CreateTexture(nil, "ARTWORK")
+  grip:SetTexture("Interface\\CURSOR\\UI-Cursor-Move")
+  grip:SetSize(16, 16)
+  grip:SetPoint("LEFT", head, "LEFT", PAD - 2, -2)
+  script(head, "OnEnter", function(self)
+    local locked = setting("locked")
+    if not locked and type(SetCursor) == "function" then pcall(SetCursor, "Interface\\CURSOR\\UI-Cursor-Move") end
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("TwizCrew")
+    GameTooltip:AddLine(locked and "Locked in place (unlock it with the right-click menu)" or "Drag to move", 1, 1, 1)
+    GameTooltip:AddLine("Right-click for options", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  script(head, "OnLeave", function()
+    if type(ResetCursor) == "function" then pcall(ResetCursor) end
+    if GameTooltip then GameTooltip:Hide() end
+  end)
   local title = T.text(head, T.FONT.normal, C.title)
-  title:SetPoint("LEFT", head, "LEFT", PAD, -2)
+  titleText = title
+  title:SetPoint("LEFT", grip, "RIGHT", 4, 0)
   title:SetText("TwizCrew")
   versionText = T.text(head, T.FONT.small, C.muted)
   versionText:SetPoint("LEFT", title, "RIGHT", 4, 0)
+  local gear = CreateFrame("Button", nil, head)
+  gear:SetSize(16, 16)
+  gear:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
+  local gearIcon = gear:CreateTexture(nil, "ARTWORK")
+  gearIcon:SetAllPoints(gear)
+  gearIcon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+  local gearHl = gear:CreateTexture(nil, "HIGHLIGHT")
+  gearHl:SetAllPoints(gear)
+  gearHl:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+  if gearHl.SetBlendMode then gearHl:SetBlendMode("ADD") end
+  script(gear, "OnClick", function() if ns.Settings then ns.Settings.toggle() end end)
+  script(gear, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Settings")
+    GameTooltip:AddLine("Click to open the TwizCrew settings (or type /tc)", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  script(gear, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   countText = T.text(head, T.FONT.small, C.muted)
-  countText:SetPoint("RIGHT", head, "RIGHT", -PAD, -2)
+  countText:SetPoint("RIGHT", gear, "LEFT", -6, 0)
   afkButton = CreateFrame("Button", nil, head)
   afkButton:SetSize(16, 16)
   afkButton:SetPoint("RIGHT", countText, "LEFT", -6, 0)

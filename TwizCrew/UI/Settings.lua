@@ -192,6 +192,13 @@ local function settingRow(def, s)
     elseif s.kind == "choice" then
       r = Widgets.choice(content, s.label or key, s.info, s.choices or {}, get, set)
     else
+      if s.onSave then -- an "add" box: hands the text over, then empties itself
+        get = function() return "" end
+        set = function(v)
+          if ns.Util.trim(tostring(v or "")) ~= "" then s.onSave(v) end
+          if isOpen then Win.refresh() end
+        end
+      end
       r = Widgets.text(content, s.label or key, s.info, get, set, s.password)
     end
     r.tcList = s.kind == "list"

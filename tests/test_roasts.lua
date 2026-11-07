@@ -49,6 +49,78 @@ end
 return {
   files = "toc",
   tests = {
+    mock_sends_a_roast_everyone_sees = function(ns, A, W)
+      start(ns, W)
+      local text = ns.Roasts.mock("Frostie")
+      A.ok(text, "a roast was picked")
+      A.no(text:find("{", 1, true), "placeholders filled in: " .. text)
+      W:advance(1) -- the send queue goes out on its next pump
+      local sent
+      for _, m in ipairs(W.sent) do
+        local msg = ns.Codec.decode(m.text)
+        if msg and msg.type == "MOCK" then sent = msg.fields end
+      end
+      A.ok(sent, "a MOCK message went out")
+      A.eq(sent.t, "Frostie"); A.eq(sent.x, text)
+      local s = shown(ns)
+      A.eq(s[#s], "Twiz: " .. text, "shown here too, with who sent it")
+      A.no(ns.Roasts.mock("Frostie"), "not again right away")
+      W:advance(11)
+      A.ok(ns.Roasts.mock("Frostie"), "fine after the gap")
+      A.no(ns.Roasts.mock("Twiz"), "never yourself")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    mock_from_a_friend_shows = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Ginkan", "MOCK", { t = "Frostie", x = "Rest in pieces, Frostie." })
+      local s = shown(ns)
+      A.eq(s[#s], "Ginkan: Rest in pieces, Frostie.")
+      ns.Modules.set("roasts", "mocks", false)
+      receive(ns, W, "Pewpew", "MOCK", { t = "Frostie", x = "another" })
+      A.eq(shown(ns)[#shown(ns)], "Ginkan: Rest in pieces, Frostie.", "switch off: not shown")
+      A.no(ns.Roasts.canMock("Frostie"), "and no button")
+    end,
+    my_own_roasts_join_the_rotation = function(ns, A, W)
+      start(ns, W)
+      A.eq(ns.Roasts.addMock("  "), false, "blank is refused")
+      A.ok(ns.Roasts.addMock("{name} tripped over a flower while {me} watched."))
+      A.eq(ns.Roasts.myMocks(), { "{name} tripped over a flower while {me} watched." })
+      A.eq(#ns.Roasts.rotation(), #ns.Roasts.MOCK_LINES + 1)
+      ns.Modules.set("roasts", "ownOnly", true)
+      A.eq(ns.Roasts.rotation(), { "{name} tripped over a flower while {me} watched." })
+      A.eq(ns.Roasts.mock("Frostie"), "Frostie tripped over a flower while Twiz watched.")
+      A.eq(ns.Roasts.removeMock(1), "{name} tripped over a flower while {me} watched.")
+      A.eq(ns.Roasts.removeMock(1), nil)
+      A.eq(#ns.Roasts.rotation(), #ns.Roasts.MOCK_LINES, "only-mine with none falls back to the built-in ones")
+    end,
+    rotation_has_no_repeats_until_all_used = function(ns, A, W)
+      start(ns, W)
+      local seen, n = {}, #ns.Roasts.MOCK_LINES
+      for i = 1, n do
+        local text = ns.Roasts.mock("Friend" .. i)
+        A.ok(text and not seen[text], "line " .. i .. " is new")
+        seen[text:gsub("Friend%d+", "X")] = true
+      end
+    end,
+    mock_commands = function(ns, A, W)
+      start(ns, W)
+      W.env.SlashCmdList.TWIZCREW("mock add {name} forgot how to jump")
+      A.eq(ns.Roasts.myMocks(), { "{name} forgot how to jump" })
+      W.env.SlashCmdList.TWIZCREW("mock list")
+      A.ok(W.printed[#W.printed]:find("1. {name} forgot how to jump", 1, true))
+      W.env.SlashCmdList.TWIZCREW("mock remove 1")
+      A.eq(ns.Roasts.myMocks(), {})
+      W.env.SlashCmdList.TWIZCREW("mock frostie")
+      local s = shown(ns)
+      A.ok(s[#s] and s[#s]:find("Frostie", 1, true), "mocked by name")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    my_roasts_survive_a_settings_reset = function(ns, A, W)
+      start(ns, W)
+      ns.Roasts.addMock("keep me")
+      ns.Modules.resetAll()
+      A.eq(ns.Roasts.myMocks(), { "keep me" })
+    end,
     roast_text_is_safe = function(ns, A, W)
       start(ns, W)
       local R = ns.Roasts

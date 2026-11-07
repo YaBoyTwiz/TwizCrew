@@ -180,6 +180,132 @@ end
 
 ns.Comm.on("ROAST", function(sender, fields) ns.Log.safe(FEATURE, handle, sender, fields, false) end)
 
+------------------------------------------------------------------------------------------------------------- mocks
+-- The Mock button on a dead friend's row: one click sends a roast from the rotation (built-in lines plus your own)
+-- as a MOCK message (t = who it's about, x = the finished text). Every crew copy, yours too, shows it as a roast
+-- pop-up "Twiz: <text>". At most one mock about the same friend every MOCK_GAP s.
+local MOCK_GAP = 10
+local MOCK_MAX = 120  -- letters of a roast line
+Roasts.MOCK_LINES = {
+  "{name}, the spirit healer has you on speed dial.",
+  "Rest in pieces, {name}.",
+  "{name} has left the chat. And the land of the living.",
+  "Press F to pay respects to {name}. Or don't.",
+  "{name} died. In other news, water is wet.",
+  "Somebody get {name} a map. The graveyard is that way.",
+  "{name} took a little nap. On the floor. Forever.",
+  "{name}, that was not the plan, was it?",
+  "Don't worry {name}, your gear needed the durability loss.",
+  "{name} is now a ghost. Spooky and useless.",
+  "Great job {name}, the mobs are proud of you.",
+  "{name} is speedrunning the run back.",
+  "Breaking news: {name} is still bad at this.",
+  "{me} saw that, {name}. Everyone saw that.",
+  "{name}, have you tried not dying?",
+}
+local mockLimit = ns.StatsLogic.newLimiter(MOCK_GAP)
+local mockShowLimit = ns.StatsLogic.newLimiter(3)
+local bag = {} -- line numbers not used yet this round (no repeats until every line had a turn)
+
+local function cleanLine(text)
+  if type(text) ~= "string" then return nil end
+  text = ns.Util.trim((text:gsub("[%z\1-\31]", "")))
+  if text == "" then return nil end
+  return ns.Util.truncateUTF8(text, MOCK_MAX)
+end
+
+-- Your own roasts (saved on this account).
+function Roasts.myMocks()
+  if not ns.db then return {} end
+  if type(ns.db.myMocks) ~= "table" then ns.db.myMocks = {} end
+  return ns.db.myMocks
+end
+
+function Roasts.addMock(text)
+  local line = cleanLine(text)
+  if not line then return false end
+  local mine = Roasts.myMocks()
+  mine[#mine + 1] = line
+  bag = {}
+  if ns.Settings and ns.Settings.rebuild then ns.Settings.rebuild() end
+  return true
+end
+
+function Roasts.removeMock(n)
+  local mine = Roasts.myMocks()
+  n = tonumber(n)
+  if not n or not mine[n] then return nil end
+  local gone = table.remove(mine, n)
+  bag = {}
+  if ns.Settings and ns.Settings.rebuild then ns.Settings.rebuild() end
+  return gone
+end
+
+-- Every line in the rotation: built-in first, then yours ("only my own" leaves out the built-in ones once you
+-- have some).
+function Roasts.rotation()
+  local list = {}
+  local mine = Roasts.myMocks()
+  if not (setting("ownOnly") and #mine > 0) then
+    for _, l in ipairs(Roasts.MOCK_LINES) do list[#list + 1] = l end
+  end
+  for _, l in ipairs(mine) do list[#list + 1] = l end
+  return list
+end
+
+-- The finished text of a line (pure): {name} the dead friend, {me} you.
+function Roasts.mockText(line, target, me)
+  local subs = { name = ns.Util.safeText(tostring(target or "")), me = ns.Util.safeText(tostring(me or "")) }
+  return (tostring(line):gsub("{(%a+)}", function(key) return subs[key] or ("{" .. key .. "}") end))
+end
+
+local function nextLine()
+  local list = Roasts.rotation()
+  if #list == 0 then return nil end
+  if #bag == 0 or bag.size ~= #list then
+    bag = { size = #list }
+    for i = 1, #list do bag[#bag + 1] = i end
+  end
+  local pick = table.remove(bag, math.random(#bag))
+  return list[pick]
+end
+
+local function showMock(sender, f)
+  if type(sender) ~= "string" or type(f) ~= "table" then return end
+  local text = cleanLine(f.x)
+  if not text then return end
+  if not ns.Modules.isEnabled(FEATURE) or not setting("mocks") then return end
+  if not mockShowLimit:allow(sender, ns.now()) then return end
+  text = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
+  shown[#shown + 1] = text
+  if #shown > SHOWN_MAX then table.remove(shown, 1) end
+  if ns.Popups and ns.Popups.showRoast then ns.Popups.showRoast(text, ns.Config.ROAST_SECONDS) end
+  if setting("sound") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
+  ns.Log.add("info", "mock shown from %s", sender)
+end
+
+-- May the Mock button show for this friend? (the panel also checks they're dead)
+function Roasts.canMock(target)
+  return ns.Modules.isEnabled(FEATURE) and setting("mocks") and type(target) == "string" and target ~= ""
+    and target ~= ns.playerName() and true or false
+end
+
+-- The Mock button: returns the text sent, or nil (too soon, nothing in the rotation, or not allowed).
+function Roasts.mock(target)
+  if not Roasts.canMock(target) then return nil end
+  if not mockLimit:allow(target, ns.now()) then return nil end
+  local line = nextLine()
+  if not line then return nil end
+  local text = cleanLine(Roasts.mockText(line, target, ns.playerName()))
+  if not text then return nil end
+  local fields = { t = target, x = text }
+  ns.Comm.send("MOCK", fields)
+  showMock(ns.playerName(), fields)
+  return text
+end
+
+ns.Comm.on("MOCK", function(sender, fields) ns.Log.safe(FEATURE, showMock, sender, fields) end)
+
 local KIND_SETTINGS = {
   { "weak", "Died to a weak mob", "Shows a roast when someone dies to a mob far below their level." },
   { "fall", "Fall deaths", "Shows a roast when someone falls to their death." },
@@ -192,7 +318,7 @@ local KIND_SETTINGS = {
   { "quit", "Quests given up", "Shows a roast when someone gives up their third quest in a session." },
 }
 
-local defaults = { aboutMe = true, sound = false }
+local defaults = { aboutMe = true, sound = false, mocks = true, ownOnly = false, addMock = "" }
 local settings = {}
 for _, s in ipairs(KIND_SETTINGS) do
   defaults[s[1]] = true
@@ -203,6 +329,25 @@ settings[#settings + 1] = { key = "aboutMe", label = "Roasts about me", kind = "
     .. "still see roasts about your friends." }
 settings[#settings + 1] = { key = "sound", label = "Play a sound", kind = "toggle",
   info = "Plays a short sound when a roast appears. Off by default so streams stay quiet." }
+settings[#settings + 1] = { key = "mocks", label = "Mock button roasts", kind = "toggle",
+  info = "When a friend dies, a Mock button shows on their row. Click it to roast them in front of the crew. "
+    .. "This switch also decides whether you see the mocks your friends send." }
+settings[#settings + 1] = { key = "ownOnly", label = "Only use my own roasts", kind = "toggle", parent = "mocks",
+  info = "The Mock button picks only from the roasts you added below (once you have at least one)." }
+settings[#settings + 1] = { key = "addMock", label = "Add a roast", kind = "text", parent = "mocks",
+  onSave = function(v)
+    if Roasts.addMock(v) then print("TwizCrew: roast added. It's in the rotation now.") end
+  end,
+  info = "Type a roast and press Enter to add it to the Mock button's rotation. Write {name} for the dead "
+    .. "friend and {me} for you, like \"{name} tripped over a flower.\" Also: /tc mock add <text>." }
+settings[#settings + 1] = { key = "myMocks", label = "My roasts", kind = "list", parent = "mocks",
+  lines = function()
+    local out = {}
+    for i, l in ipairs(Roasts.myMocks()) do out[#out + 1] = i .. ". " .. l end
+    if #out == 0 then out[1] = "None yet. Add one above." end
+    return out
+  end,
+  info = "The roasts you added. Remove one with /tc mock remove <number>." }
 
 ns.Modules.register({
   id = FEATURE, name = "Live roasts", tier = "module",

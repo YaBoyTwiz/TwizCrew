@@ -18,6 +18,7 @@ function DB.init(saved, defs)
     roster = {},
     log = {},
     myStatus = "",
+    myMocks = {}, -- your own roasts for the Mock button (kept by Reset everything)
     stats = { chars = {}, crew = {}, session = {} },
     update = {}, -- the newest version a friend told us about (Update reminders); not a setting
     updateNotice = {}, -- { shown = newest version an update pop-up was shown for }: once per version; not a setting

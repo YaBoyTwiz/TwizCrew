@@ -192,6 +192,11 @@ end
 local function createRow()
   local r = T.frame("Frame", nil, root)
   T.paint(r, C.row, clamp(setting("bgAlpha"), 0, 1, 0.8), C.rowBorder, 1)
+  -- looks: the whole row in the player's class color with a very light fade (colored in layoutRow)
+  r.fill = r:CreateTexture(nil, "BORDER", nil, 1)
+  r.fill:SetPoint("TOPLEFT", r, "TOPLEFT", 1, -1)
+  r.fill:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", -1, 1)
+  r.gloss = T.gloss(r, nil, 0.06, "BORDER")
   r.icon = r:CreateTexture(nil, "ARTWORK")
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
@@ -205,9 +210,13 @@ local function createRow()
   r.xpText = T.text(r, T.FONT.small, C.zone) -- "Lv 12 · 63%" next to the bar (full style)
   r.xpText:SetJustifyH("RIGHT")
   r.xpBack = r:CreateTexture(nil, "ARTWORK")
-  T.color(r.xpBack, C.xpBack, 1)
-  r.xpFill = r:CreateTexture(nil, "OVERLAY")
-  T.color(r.xpFill, C.xp, 1)
+  T.gradient(r.xpBack, "VERTICAL", "080808", C.xpBackTop, 0.9, 0.9)
+  r.xpFill = r:CreateTexture(nil, "OVERLAY", nil, 1) -- colored in layoutRow (brighter the fuller it is)
+  r.xpGloss = T.gloss(r, r.xpFill, 0.35, "OVERLAY")
+  r.xpSpark = r:CreateTexture(nil, "OVERLAY", nil, 6)
+  r.xpSpark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+  if r.xpSpark.SetBlendMode then r.xpSpark:SetBlendMode("ADD") end
+  r.xpSpark:SetSize(10, 18)
   r.pills = {}
   draggable(r)
   script(r, "OnEnter", function(self) Panel.showRowTip(self) end)
@@ -255,6 +264,15 @@ local function layoutRow(r, m, style, s, width)
   r.icon:SetSize(icon, icon)
   r.icon:SetPoint("TOPLEFT", r, "TOPLEFT", 6, -5)
   ns.ClassIcon.apply(r.icon, m.class)
+  -- class color, a bit darker so white text stays readable; the top is slightly lighter than the bottom
+  local cr, cg, cb = T.classColor(m.class)
+  local function hex(k)
+    return string.format("%02x%02x%02x", math.floor(cr * k * 255 + 0.5), math.floor(cg * k * 255 + 0.5),
+      math.floor(cb * k * 255 + 0.5))
+  end
+  T.gradient(r.fill, "VERTICAL", hex(0.50), hex(0.62), 1, 1)
+  local bgAlpha = clamp(setting("bgAlpha"), 0, 1, 0.8)
+  r.fill:SetAlpha(bgAlpha); r.gloss:SetAlpha(bgAlpha)
 
   r.tcModel = m
   -- Top-right corner: the level and XP text in compact and tiny (when on), else the level number in full and
@@ -277,7 +295,7 @@ local function layoutRow(r, m, style, s, width)
   r.name:SetPoint("LEFT", r.icon, "RIGHT", 5, 0)
   r.name:SetWidth(math.max(20, width - 6 - icon - 5 - roomRight))
   r.name:SetText(m.name)
-  r.name:SetTextColor(T.classColor(m.class))
+  r.name:SetTextColor(1, 1, 1) -- the row itself carries the class color now
 
   local y = 5 + icon + 2
   if m.title then -- award title: a small muted line under the name, in every row style
@@ -292,6 +310,7 @@ local function layoutRow(r, m, style, s, width)
     r.title:Hide()
   end
   r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide(); r.xpText:Hide()
+  r.xpGloss:Hide(); r.xpSpark:Hide()
   r.tcBarText = nil
   if style == "full" then
     local line = m.offline and m.offlineText or (s.showZone and m.zoneText ~= "" and m.zoneText)
@@ -327,7 +346,14 @@ local function layoutRow(r, m, style, s, width)
         r.xpFill:ClearAllPoints()
         r.xpFill:SetPoint("TOPLEFT", r.xpBack, "TOPLEFT", 0, 0)
         r.xpFill:SetSize(math.max(1, barWidth * xp / 100), 6)
+        T.gradient(r.xpFill, "HORIZONTAL", C.xpDark, T.mix(C.xpLow, C.xpHigh, xp / 100), 1, 1)
         r.xpFill:Show()
+        r.xpGloss:Show()
+        if xp < 100 then
+          r.xpSpark:ClearAllPoints()
+          r.xpSpark:SetPoint("CENTER", r.xpFill, "RIGHT", 0, 0)
+          r.xpSpark:Show()
+        end
       end
     end
     if label then y = y + LINE elseif bar then y = y + 10 end

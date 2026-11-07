@@ -7,6 +7,8 @@ ns.Theme = Theme
 Theme.COLOR = {
   backdrop = "0d0d12", border = "6b5a33", title = "ffd100", muted = "9a8f70", text = "f0e6c8", xp = "8a3fd1",
   row = "15151b", rowBorder = "444444", zone = "b8ad8c", status = "dddddd", xpBack = "222222",
+  -- XP bar: gold that brightens as it fills (the bar's tip goes from xpLow at 0% to xpHigh at 100%)
+  xpDark = "4a2c05", xpLow = "9a6212", xpHigh = "ffe680", xpBackTop = "1c1c1c",
   switchOn = "2a5a2a", knobOn = "ccffcc", switchOff = "3a3a3a", knobOff = "999999", button = "2a2a30",
   buttonBorder = "666666", pillBorder = "000000", white = "ffffff",
   danger = "5a1010", dangerBorder = "aa3333", line = "3a3322", confirm = "1a0d0d",
@@ -30,6 +32,43 @@ function Theme.color(tex, hex, alpha)
     tex:SetTexture(Theme.WHITE)
     tex:SetVertexColor(r, g, b, alpha or 1)
   end
+end
+
+-- A two-color fade on a texture. orientation "HORIZONTAL" goes left (a) -> right (b), "VERTICAL" bottom (a) -> top
+-- (b). Uses the modern SetGradient(ColorMixin) when there is one, the older forms otherwise, else plain color b.
+function Theme.gradient(tex, orientation, hexA, hexB, alphaA, alphaB)
+  local r1, g1, b1 = Theme.rgb(hexA)
+  local r2, g2, b2 = Theme.rgb(hexB)
+  alphaA, alphaB = alphaA or 1, alphaB or 1
+  if tex.SetColorTexture then tex:SetColorTexture(1, 1, 1, 1) else tex:SetTexture(Theme.WHITE) end
+  if type(CreateColor) == "function" and tex.SetGradient then
+    local ok = pcall(tex.SetGradient, tex, orientation, CreateColor(r1, g1, b1, alphaA), CreateColor(r2, g2, b2, alphaB))
+    if ok then return end
+  end
+  if tex.SetGradientAlpha then
+    local ok = pcall(tex.SetGradientAlpha, tex, orientation, r1, g1, b1, alphaA, r2, g2, b2, alphaB)
+    if ok then return end
+  end
+  Theme.color(tex, hexB, alphaB)
+end
+
+-- The color part way (t = 0..1) from hex a to hex b, as hex.
+function Theme.mix(a, b, t)
+  local r1, g1, b1 = Theme.rgb(a)
+  local r2, g2, b2 = Theme.rgb(b)
+  t = math.max(0, math.min(1, t or 0))
+  local function c(x, y) return math.floor((x + (y - x) * t) * 255 + 0.5) end
+  return string.format("%02x%02x%02x", c(r1, r2), c(g1, g2), c(b1, b2))
+end
+
+-- A soft shine over the top half of a frame or texture (white fading to nothing toward the middle).
+function Theme.gloss(frame, anchor, strength, layer)
+  anchor = anchor or frame
+  local t = frame:CreateTexture(nil, layer or "OVERLAY", nil, 7)
+  t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+  t:SetPoint("BOTTOMRIGHT", anchor, "RIGHT", 0, 0)
+  Theme.gradient(t, "VERTICAL", "ffffff", "ffffff", 0, strength or 0.18)
+  return t
 end
 
 function Theme.textColor(fontString, hex)

@@ -382,14 +382,32 @@ local function setTag(pill, tagId)
   if p then p.bg = ns.Tags.COLOR[tagId] or C.button end
   T.setBackgroundAlpha(pill, 1)
   T.textColor(pill.text, tagId == "AFK" and "cccccc" or C.white)
+  local icon = ns.Tags.ICON and ns.Tags.ICON[tagId]
+  local iconRoom = 0
+  if icon then
+    pill.icon:SetTexture(icon)
+    -- square game icons have a dark frame: trim it (the skull is a plain picture, keep it whole)
+    if icon:find("Interface\\Icons\\", 1, true) then pill.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    else pill.icon:SetTexCoord(0, 1, 0, 1) end
+    pill.icon:Show()
+    iconRoom = 13
+  else
+    pill.icon:Hide()
+  end
+  pill.text:ClearAllPoints()
+  pill.text:SetPoint("CENTER", pill, "CENTER", iconRoom / 2, 0)
   local w = pill.text:GetStringWidth()
-  pill:SetWidth((type(w) == "number" and w > 0 and w or #label * 6) + 10)
+  pill:SetWidth((type(w) == "number" and w > 0 and w or #label * 6) + 10 + iconRoom)
 end
 
 function Widgets.tagPill(parent)
   local pill = T.frame("Frame", nil, parent)
   pill:SetHeight(14)
   T.paint(pill, C.button, 1, C.pillBorder, 1)
+  pill.icon = pill:CreateTexture(nil, "ARTWORK")
+  pill.icon:SetSize(12, 12)
+  pill.icon:SetPoint("LEFT", pill, "LEFT", 2, 0)
+  pill.shine = T.gloss(pill, nil, 0.25, "ARTWORK") -- under the label, so the text stays crisp
   pill.text = T.text(pill, T.FONT.small, C.white)
   pill.text:SetPoint("CENTER", pill, "CENTER", 0, 0)
   pill:EnableMouse(true)

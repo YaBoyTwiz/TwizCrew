@@ -15,6 +15,16 @@ Tags.COLOR = {
   LAYER = "b3261e", COMBAT = "c46a00", DEAD = "555555", DUNGEON = "2a4fc9", TAXI = "1f7a6a", AFK = "333333",
 }
 
+-- Game icons shown on each pill (built into the client, nothing to download).
+Tags.ICON = {
+  DEAD = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull",
+  LAYER = "Interface\\Icons\\Spell_Arcane_PortalStormWind",
+  COMBAT = "Interface\\Icons\\Ability_DualWield",
+  DUNGEON = "Interface\\Icons\\INV_Misc_Key_03",
+  TAXI = "Interface\\Icons\\Ability_Mount_Wyvern_01",
+  AFK = "Interface\\Icons\\Spell_Nature_Sleep",
+}
+
 Tags.INFO = {
   DEAD = "This player is dead or a ghost.",
   LAYER = "This player is on a different copy of the world than you, so you cannot see each other.",

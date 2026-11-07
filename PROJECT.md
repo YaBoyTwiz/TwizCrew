@@ -222,7 +222,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **Where the game is on this PC:** Lutris (Flatpak) → Battle.net (on GE-Proton11-12) → WoW Forever.
   AddOns folder:
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/`
-- **Already installed there:** Questie, QuestieDB, QuestMaster, OpenMap (v0.7.5-beta from
+- **Already installed there:** Questie 12.6.3 + QuestieDB 1.0.12 (GitHub Questie/Questie bundle release),
+  QuestMaster 2.74.0 (CurseForge project 1427310 "Quest Master - Forever"; both updated by hand 2026-11-07), OpenMap (v0.7.5-beta from
   https://github.com/openmap-world/openmap, installed by hand 2026-11-05; conflicts with Leatrix Maps, Mapster and
   Magnify), What's Training? Forever (v1.1.1 from CurseForge project 1701676, by hand 2026-11-05),
   DungeonJournal (ForeverDungeonJournal v1.6.7, CurseForge project 1707971, by hand 2026-11-05),

@@ -158,8 +158,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - Add chat commands (`/twiz`).
 - **Send hidden messages to other copies of the addon** with `C_ChatInfo.SendAddonMessage(prefix, text, channel,
   target)` after `C_ChatInfo.RegisterAddonMessagePrefix(prefix)`, received with the `CHAT_MSG_ADDON` event.
-  Channels: `PARTY`, `RAID`, `GUILD`, `WHISPER` (one person), `CHANNEL` (a custom chat channel only the friends
-  join, which works without being in a group).
+  Channels: `PARTY`, `RAID`, `GUILD`, `WHISPER` (one person), `CHANNEL` (a custom chat channel; on WoW Forever
+  these are never delivered, see below).
 - Save its data between sessions (SavedVariables, written at logout or `/reload`).
 
 **Cannot / limits:**
@@ -173,10 +173,16 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **Sender names come in two forms (seen in game, 2026-11-05):** channel senders and `UnitName("player")` are
   just the name ("Yaboytwiz"); party and whisper senders came as "Yaboytwiz Noodledog" (the WTF character folder
   is `91/Yaboytwiz-Noodledog`). TwizCrew now uses the name before the first space or hyphen everywhere.
-- **Two grouped friends on the channel heard nothing from each other (seen in game, 2026-11-05):** both copies
-  joined `TwizCrewHQ` and sent fine, but the owner's copy never received the friend's messages. Cause not known
-  yet. Since then, in auto mode a group always gets each message too (the receiver drops the second copy), and
-  `/tc report` lines are also saved into the log for Claude to read.
+- **WoW Forever never delivers addon messages sent to a custom channel (seen in game 2026-11-06, and reported by
+  other addon makers: [Blizzard forum](https://us.forums.blizzard.com/en/wow/t/add-on-messages-are-blocked-in-chat-channels/2403369),
+  [BFF addon fix](https://github.com/Shtian/bff-wow/pull/133)):** the send says it worked, but nobody gets it,
+  not even the sender. That is why friends saw each other as offline (v0.1.4 and older). Joining the channel, its
+  member list (`ListChannelByName` → `CHAT_MSG_CHANNEL_LIST`) and join / leave notices still work, and addon
+  whispers arrive. So since v0.1.5 the channel is used to see who is in it; automatic mode whispers each member
+  (the full name the game gives, e.g. "Yaboytwiz Noodledog"), sends to the group when grouped, and still sends one
+  copy to the channel in case the game delivers it again. Copies of v0.1.4 or older can hear a newer copy but not
+  be heard. `/tc report` shows "Crew in the channel" and "Channel echoes heard" (0 = the channel still does not
+  deliver).
 - **Boss fights:** addon messages are reported to be **blocked during a boss fight** inside dungeons and raids. Plan:
   queue them and send after `ENCOUNTER_END`. The rest of the dungeon (trash, between pulls) is reported to work.
   Your own screen can still show things during a boss fight.

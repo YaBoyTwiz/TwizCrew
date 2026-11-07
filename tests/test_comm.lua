@@ -47,10 +47,134 @@ local function recordJoinTimes(W)
   return times
 end
 
+-- WoW Forever: the game can list a channel's members. Returns the list of ListChannelByName calls.
+local function withList(W)
+  local calls = {}
+  W.env.ListChannelByName = function(name) calls[#calls + 1] = name end
+  return calls
+end
+
+local function list(W, text)
+  W:fire("CHAT_MSG_CHANNEL_LIST", text, "", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
+end
+
+local function whisperTargets(dests)
+  local out = {}
+  for _, d in ipairs(dests) do if d.chatType == "WHISPER" then out[#out + 1] = d.target end end
+  return out
+end
+
 return {
   files = { "Core/Init.lua", "Core/Util.lua", "Core/Log.lua", "Core/Events.lua", "Core/Modules.lua", "Core/DB.lua",
     "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
   tests = {
+    member_list_is_read_with_marks_colours_and_links = function(ns, A)
+      A.eq(ns.Transport.parseList("*Frostie Snow, @Ginkan Pebble, Twiz"), { "Frostie Snow", "Ginkan Pebble", "Twiz" })
+      A.eq(ns.Transport.parseList("[|cffff0000Frostie|r, |Hplayer:Ginkan|h[Ginkan]|h]"), { "Frostie", "Ginkan" })
+      A.eq(ns.Transport.parseList(""), {})
+      A.eq(ns.Transport.parseList(nil), {})
+    end,
+    -- Seen in game and reported by other addon makers: on WoW Forever a channel addon message is taken but never
+    -- delivered. Automatic mode whispers everyone in the channel's member list.
+    auto_mode_whispers_each_channel_member_after_the_first_list = function(ns, A, W)
+      local calls = withList(W)
+      boot(ns, W)
+      W:advance(6)
+      A.eq(calls, { "TwizCrewHQ" }, "asked for the member list right after joining")
+      A.ok(ns.Transport.isPending(), "sends wait for the list")
+      ns.Comm.send("PING", {})
+      W:advance(1)
+      A.eq(#W.sent, 0)
+      list(W, "*Twiz Noodle, Frostie Snow, @Ginkan Pebble")
+      A.no(ns.Transport.isPending())
+      A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Frostie Snow" },
+        { chatType = "WHISPER", target = "Ginkan Pebble" }, { chatType = "CHANNEL", target = 5 } })
+      W:advance(2)
+      A.eq(#W.sent, 3, "the kept PING went to both, and one copy to the channel")
+      A.eq(W.sent[1].target, "Frostie Snow")
+      A.ok(logHas(ns, "crew channel: Frostie Snow is here"))
+      noErrors(ns, A)
+    end,
+    sends_go_out_when_no_member_list_comes = function(ns, A, W)
+      withList(W)
+      local db = boot(ns, W)
+      db.crew.extra = { "Ginkan" }
+      W:advance(6)
+      A.ok(ns.Transport.isPending())
+      W:advance(5)
+      A.no(ns.Transport.isPending(), "stopped waiting after 5 s")
+      A.ok(logHas(ns, "no member list from channel TwizCrewHQ yet"))
+      A.eq(whisperTargets(ns.Transport.destinations()), { "Ginkan" })
+    end,
+    member_list_is_asked_every_minute_and_missing_members_are_forgotten = function(ns, A, W)
+      local calls = withList(W)
+      boot(ns, W)
+      W:advance(6)
+      list(W, "Twiz, Frostie Snow")
+      W:advance(60)
+      A.eq(#calls, 2)
+      for _ = 1, 3 do list(W, "Twiz"); W:advance(60) end
+      A.eq(ns.Transport.members(), {}, "Frostie was missing from three lists")
+      A.ok(logHas(ns, "crew channel: Frostie Snow left (not in the member list any more)"))
+    end,
+    join_and_leave_notices_and_not_playing_update_the_members = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      W:advance(6)
+      list(W, "Twiz")
+      local found = {}
+      ns.Bus.on("test", "CREW_FOUND", function(name) found[#found + 1] = name end)
+      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
+      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Ginkan Pebble", "", "5. TwizCrewHQ", "", "", 0, 5, "")
+      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Stranger Danger", "", "General", "", "", 0, 1, "General")
+      A.eq(ns.Transport.members(), { "Frostie Snow", "Ginkan Pebble" })
+      A.eq(found, { "Frostie", "Ginkan" }, "CREW_FOUND for people who came after the first list")
+      W:fire("CHAT_MSG_CHANNEL_LEAVE", "", "Ginkan Pebble", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
+      A.eq(ns.Transport.members(), { "Frostie Snow" })
+      W:fire("CHAT_MSG_SYSTEM", "No player named 'Frostie Snow' is currently playing.")
+      A.eq(ns.Transport.members(), {})
+      noErrors(ns, A)
+    end,
+    a_whisper_from_a_crew_copy_makes_them_someone_we_whisper = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      W:advance(6)
+      list(W, "Twiz")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Frostie Snow")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan Pebble")
+      A.eq(ns.Transport.members(), { "Frostie Snow" }, "a party message alone does not")
+      A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })
+      A.eq(ns.Transport.destinationFor("Twiz"), nil, "never ourselves")
+      ns.Modules.set("comm", "transport", "group")
+      A.eq(ns.Transport.destinationFor("Frostie"), nil, "group mode does not whisper")
+    end,
+    grouped_members_get_the_group_copy_instead_of_a_whisper = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      W:advance(6)
+      list(W, "Twiz, Frostie, Ginkan Pebble")
+      W.state.inGroup = true
+      W.state.groupMembers = { "Frostie" }
+      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" }, { chatType = "WHISPER", target = "Ginkan Pebble" },
+        { chatType = "CHANNEL", target = 5 } })
+    end,
+    member_list_lines_are_hidden_from_chat = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      W:advance(6)
+      local filter = filterFor(W, "CHAT_MSG_CHANNEL_LIST")
+      A.ok(filter, "a filter for member lists")
+      A.ok(filter(nil, "CHAT_MSG_CHANNEL_LIST", "Twiz, Frostie", "", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ"))
+      A.no(filter(nil, "CHAT_MSG_CHANNEL_LIST", "Bob", "", "", "General", "", "", 0, 1, "General"))
+    end,
+    changing_the_channel_forgets_the_members = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      W:advance(6)
+      list(W, "Twiz, Frostie")
+      ns.Modules.set("comm", "channel", "OtherCrew")
+      A.eq(ns.Transport.members(), {})
+    end,
     joins_channel_after_delay_and_hides_it = function(ns, A, W)
       boot(ns, W)
       W:advance(4)
@@ -217,7 +341,8 @@ return {
       A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
       W.state.inGuild = false
       ns.Modules.set("comm", "transport", "guild")
-      A.eq(ns.Transport.destinations()[1], { chatType = "CHANNEL", target = 5 })
+      local dests = ns.Transport.destinations() -- not in a guild: automatic (group first, the channel copy last)
+      A.eq(dests[#dests], { chatType = "CHANNEL", target = 5 })
     end,
     -- Found in game: grouped with a friend, both copies on the channel, yet neither heard the other. In auto mode a
     -- group always gets the message too (the receiver drops the second copy), so grouped friends always connect.
@@ -226,9 +351,9 @@ return {
       W:advance(6)
       A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 } })
       W.state.inGroup = true
-      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 }, { chatType = "PARTY" } })
+      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" }, { chatType = "CHANNEL", target = 5 } })
       W.state.inRaid = true
-      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 }, { chatType = "RAID" } })
+      A.eq(ns.Transport.destinations(), { { chatType = "RAID" }, { chatType = "CHANNEL", target = 5 } })
     end,
     group_copy_of_a_channel_message_is_dropped = function(ns, A, W)
       boot(ns, W)
@@ -599,7 +724,7 @@ return {
       W:advance(16)
       W.state.channelSendResult = 7
       for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(2)
+      W:advance(3) -- the whisper copies to Ginkan go in between, so the third refusal comes about a second later
       A.ok(ns.Transport.status().failed)
       A.ok(logHas(ns, "using the fallback, trying the channel again in 60 s"))
       W.state.channelSendResult = nil -- the game takes channel messages again

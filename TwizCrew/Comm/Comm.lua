@@ -46,6 +46,17 @@ function Comm.send(msgType, fields, opts)
   end
 end
 
+-- Only to this crew member, as a whisper (automatic and whisper mode). Returns false, sending nothing, when this
+-- mode cannot reach one person: the caller sends to everyone instead.
+function Comm.sendTo(name, msgType, fields, opts)
+  local dest = ns.Transport.destinationFor(name)
+  if not dest then return false end
+  for _, text in ipairs(ns.Codec.encode(msgType, fields or {}, opts)) do
+    queue:push({ text = text, dest = dest })
+  end
+  return true
+end
+
 function Comm.on(msgType, fn)
   local list = handlers[msgType]
   if not list then list = {}; handlers[msgType] = list end
@@ -97,6 +108,7 @@ local function onAddon(prefix, text, chatType, sender)
     return
   end
   ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType))
+  ns.Log.safe(FEATURE, ns.Transport.heardFrom, raw, chatType)
   dispatch(sender, msg)
 end
 

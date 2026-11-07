@@ -311,7 +311,9 @@ return {
       for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
       A.eq(states, 1)
     end,
-    hellos_from_many_friends_get_one_state = function(ns, A, W)
+    -- Channel messages never arrive on Forever, so each hello gets our state back as a whisper to that friend only
+    -- (one reply each, all sent together after one short wait), never a copy to everyone per hello.
+    hellos_from_many_friends_get_one_state_each = function(ns, A, W)
       start(ns, W)
       local n = #W.sent
       for _, name in ipairs({ "A1", "B2", "C3", "D4", "E5" }) do
@@ -319,10 +321,66 @@ return {
         W:advance(0.2)
       end
       W:advance(8)
-      local states = 0
-      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
-      A.eq(states, 1)
+      local to = {}
+      for i = n + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "STATE" then
+          A.eq(W.sent[i].chatType, "WHISPER")
+          to[W.sent[i].target] = (to[W.sent[i].target] or 0) + 1
+        end
+      end
+      A.eq(to, { A1 = 1, B2 = 1, C3 = 1, D4 = 1, E5 = 1 })
       A.ok(ns.roster:get("E5"))
+    end,
+    someone_new_in_the_channel_gets_hello_and_state_by_whisper = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
+      W:advance(2)
+      A.eq(#sentSince(ns, W, n), 0, "waits a moment first")
+      W:advance(3)
+      local types = {}
+      for i = n + 1, #W.sent do
+        A.eq(W.sent[i].chatType, "WHISPER"); A.eq(W.sent[i].target, "Frostie Snow")
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg then types[msg.type] = true end
+      end
+      A.ok(types.HELLO and types.STATE, "hello and state, to Frostie only")
+    end,
+    someone_new_who_already_said_hello_gets_nothing_extra = function(ns, A, W)
+      start(ns, W)
+      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
+      W:advance(1)
+      for _, text in ipairs(ns.Codec.encode("HELLO", { ver = "0.1.0" })) do
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", "Frostie Snow")
+      end
+      local n = #W.sent
+      W:advance(8)
+      local hellos, states = 0, 0
+      for _, m in ipairs(sentSince(ns, W, n)) do
+        if m.type == "HELLO" then hellos = hellos + 1 elseif m.type == "STATE" then states = states + 1 end
+      end
+      A.eq(hellos, 0, "no extra hello")
+      A.ok(states >= 1, "the reply to their hello")
+    end,
+    hello_reply_goes_to_everyone_in_group_mode = function(ns, A, W)
+      start(ns, W)
+      W.state.inGroup = true
+      ns.Modules.set("comm", "transport", "group")
+      local n = #W.sent
+      receive(ns, W, "A1", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "B2", "HELLO", { ver = "0.1.0" })
+      W:advance(8)
+      local states = 0
+      for i = n + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "STATE" then
+          states = states + 1
+          A.eq(W.sent[i].chatType, "PARTY")
+        end
+      end
+      A.ok(states >= 1, "a state went out")
+      A.ok(states <= 3, "one state (in pieces at most), not one per hello: " .. states)
     end,
     pings_from_many_strangers_get_one_hello = function(ns, A, W)
       start(ns, W)

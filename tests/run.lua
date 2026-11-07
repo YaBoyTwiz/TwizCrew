@@ -83,11 +83,13 @@ local function channelNameOf(W, index)
 end
 
 -- Would this addon message (as recorded in from.sent) reach `to` in the real game?
--- A message the game refused (a result other than success) reaches nobody.
-local function reaches(from, to, m)
+-- A message the game refused (a result other than success) reaches nobody. Like WoW Forever, an addon message to a
+-- custom channel reaches nobody either (the game takes it and never delivers it), unless H.channelDelivers is set.
+local function reaches(from, to, m, channelDelivers)
   if m.result ~= nil and m.result ~= 0 and m.result ~= true then return false end
   local t = m.chatType
   if t == "CHANNEL" then
+    if not channelDelivers then return false end
     local name = channelNameOf(from, m.target)
     return name ~= nil and to.state.channels[name] ~= nil
   elseif t == "PARTY" or t == "RAID" then
@@ -107,8 +109,52 @@ local SIM_STEP = 0.1 -- seconds per simulation step
 --   H.client(name, state) -> W, ns   a full TOC load in its own fake game (state: W.state overrides, set first)
 --   H.link(W, ...)                   these clients hear each other's addon messages from now on
 --   H.advance(seconds, onStep)       all clients' clocks move together; messages are delivered every step
+-- The channel member list (ListChannelByName -> CHAT_MSG_CHANNEL_LIST) and join / leave notices work between linked
+-- clients, as in the game.
 local function newHarness()
-  local H = { clients = {}, linked = {}, elapsed = 0 }
+  local H = { clients = {}, linked = {}, elapsed = 0, channelDelivers = false, events = {} }
+
+  local function isLinked(W)
+    for _, L in ipairs(H.linked) do if L == W then return true end end
+    return false
+  end
+
+  -- Channel events are fired at the next delivery, not inside the call that caused them.
+  local function later(W, ...)
+    H.events[#H.events + 1] = { W = W, args = { ... } }
+  end
+
+  local function noticeOthers(W, event, name)
+    if not isLinked(W) then return end
+    for _, other in ipairs(H.linked) do
+      local idx = other.state.channels[name]
+      if other ~= W and idx then later(other, event, "", W.state.player, "", name, "", "", 0, idx, name) end
+    end
+  end
+
+  local function setupChannels(W)
+    W.env.ListChannelByName = function(name)
+      local idx = W.state.channels[name]
+      if not idx then return end
+      local names = {}
+      for _, other in ipairs(H.linked) do
+        if other.state.channels[name] then names[#names + 1] = other.state.player end
+      end
+      if not isLinked(W) then names = { W.state.player } end
+      later(W, "CHAT_MSG_CHANNEL_LIST", table.concat(names, ", "), "", "", name, "", "", 0, idx, name)
+    end
+    local join, leave = W.env.JoinChannelByName, W.env.LeaveChannelByName
+    W.env.JoinChannelByName = function(name, ...)
+      local was = W.state.channels[name]
+      join(name, ...)
+      if not was and W.state.channels[name] then noticeOthers(W, "CHAT_MSG_CHANNEL_JOIN", name) end
+    end
+    W.env.LeaveChannelByName = function(name, ...)
+      local was = W.state.channels[name]
+      leave(name, ...)
+      if was then noticeOthers(W, "CHAT_MSG_CHANNEL_LEAVE", name) end
+    end
+  end
 
   function H.client(name, state)
     local W = Stub.new()
@@ -116,6 +162,7 @@ local function newHarness()
     for k, v in pairs(state or {}) do W.state[k] = v end
     W.clock = W.clock + H.elapsed
     W.env.math = clientMath(name)
+    setupChannels(W)
     W.cursor = 0
     local ns = {}
     loadFiles(W, ns, tocFiles())
@@ -136,13 +183,18 @@ local function newHarness()
 
   -- Every message a linked client sent since the last delivery arrives as CHAT_MSG_ADDON at the others.
   function H.deliver()
+    while #H.events > 0 do
+      local list = H.events
+      H.events = {}
+      for _, e in ipairs(list) do e.W:fire(unpack(e.args)) end
+    end
     for _, from in ipairs(H.linked) do
       while from.cursor < #from.sent do
         from.cursor = from.cursor + 1
         local m = from.sent[from.cursor]
         local sender = from.state.player .. "-" .. from.state.realm
         for _, to in ipairs(H.linked) do
-          if to ~= from and reaches(from, to, m) then
+          if to ~= from and reaches(from, to, m, H.channelDelivers) then
             to:fire("CHAT_MSG_ADDON", m.prefix, m.text, m.chatType, sender)
           end
         end

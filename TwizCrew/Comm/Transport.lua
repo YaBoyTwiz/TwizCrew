@@ -5,6 +5,11 @@
 -- CHANNEL_JOIN_GRACE seconds are kept and tried again, like throttled ones. A failure because sends were refused
 -- never lasts the session: the channel is tried again after CHANNEL_RETRY_FIRST seconds (doubling up to
 -- CHANNEL_RETRY_MAX) while the fallback carries the messages; when it is back, CHANNEL_BACK fires (Crew says HELLO).
+-- WoW Forever takes addon messages sent to a custom channel but never delivers them (seen in game and reported by
+-- other addon makers, November 2026). So the channel is mainly used to see who is in it: its member list
+-- (ListChannelByName, every CHANNEL_LIST_INTERVAL seconds) and join / leave notices. Automatic mode whispers each
+-- member, sends to the group when grouped, and still sends one copy to the channel in case the game starts
+-- delivering it again. Right after joining, sends wait (up to CHANNEL_LIST_WAIT seconds) for the first member list.
 local _, ns = ...
 
 local Transport = {}
@@ -16,7 +21,7 @@ local REJOIN_DELAY = 2      -- seconds between leaving the channel and joining i
 local AUTO_REJOIN_GAP = 10  -- a rejoin because the channel was lost happens at most this often
 local OWN_LEAVE_GRACE = 5   -- a "you left" notice this soon after we left on purpose is about that leave
 local CHANNEL_EVENTS = { "CHAT_MSG_CHANNEL_NOTICE", "CHAT_MSG_CHANNEL_NOTICE_USER", "CHAT_MSG_CHANNEL",
-  "CHAT_MSG_CHANNEL_JOIN", "CHAT_MSG_CHANNEL_LEAVE" }
+  "CHAT_MSG_CHANNEL_JOIN", "CHAT_MSG_CHANNEL_LEAVE", "CHAT_MSG_CHANNEL_LIST" }
 
 local state = {
   started = false,
@@ -37,7 +42,13 @@ local state = {
   graceNoted = false, -- the "refused right after joining" line was logged for this join
   retries = 0,        -- tries since the channel last failed because sends were refused (0 = not retrying)
   nextRetryAt = nil,  -- when the next try is due (nil = no try planned)
+  listed = false,     -- the first member list since the last join arrived (or we stopped waiting for it)
+  listGen = 0,        -- bumped by every join, so an old member-list timer stops
+  listsHeard = 0,     -- member lists heard this session (for /tc report)
 }
+-- Crew copies we can whisper: lower-case short name -> { name = the name as the game gave it, seenAt = time }.
+-- On Forever that name is "First Last", which is what a whisper needs.
+local members = {}
 local ourNames = {}   -- lower-case names of every channel we joined this session (their chat lines are hidden)
 
 local function crew() return ns.db and ns.db.crew or {} end
@@ -50,7 +61,10 @@ end
 local function usesChannel(m) return m == "auto" or m == "channel" end
 
 function Transport.isPending()
-  return usesChannel(mode()) and not state.joined and not state.failed
+  local m = mode()
+  if not usesChannel(m) then return false end
+  if not state.joined and not state.failed then return true end
+  return m == "auto" and state.joined and not state.failed and not state.listed
 end
 
 local function resolved()
@@ -171,6 +185,120 @@ local function lookupIndex()
   return ok and tonumber(index) or 0
 end
 
+-- A name from the game's member list or a notice: colours, links and the owner / moderator marks taken off.
+local function cleanName(s)
+  if type(s) ~= "string" or (issecretvalue and issecretvalue(s)) then return nil end
+  s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
+  s = s:gsub("^[%s%*@%+]+", ""):gsub("%s+$", "")
+  if s == "" or s:find("[%[%]|,]") then return nil end
+  return s
+end
+
+-- "[*Frostie Snow, @Ginkan Pebble, Twiz]" (the text of CHAT_MSG_CHANNEL_LIST) -> { "Frostie Snow", ... }
+function Transport.parseList(text)
+  local out = {}
+  if type(text) ~= "string" or (issecretvalue and issecretvalue(text)) then return out end
+  text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
+  for piece in (text .. ","):gmatch("(.-),") do
+    local name = cleanName((piece:gsub("^%s*%[", ""):gsub("%]%s*$", "")))
+    if name then out[#out + 1] = name end
+  end
+  return out
+end
+
+local function memberKey(name)
+  local short = ns.shortName(name)
+  if type(short) ~= "string" or short == "" or ns.isMe(short) then return nil end
+  return short:lower(), short
+end
+
+-- found: true when this is someone we did not know (logged; CREW_FOUND fires once the first list is in).
+local function addMember(raw)
+  local name = cleanName(raw)
+  if not name then return end
+  local key, short = memberKey(name)
+  if not key then return end
+  local m = members[key]
+  if m then
+    if #name > #m.name then m.name = name end -- "First Last" beats "First"
+    m.seenAt = ns.now()
+    return
+  end
+  members[key] = { name = name, seenAt = ns.now() }
+  ns.Log.add("info", "crew channel: %s is here", ns.Util.safeText(name))
+  if state.listed then ns.Bus.fire("CREW_FOUND", short) end
+end
+
+local function removeMember(raw, why)
+  local name = cleanName(raw)
+  local key = name and memberKey(name)
+  if not key or not members[key] then return end
+  members[key] = nil
+  ns.Log.add("info", "crew channel: %s left (%s)", ns.Util.safeText(name), why)
+end
+
+local function memberKeys()
+  local keys = {}
+  for key in pairs(members) do keys[#keys + 1] = key end
+  table.sort(keys)
+  return keys
+end
+
+-- Members missing from three lists in a row are forgotten (they left without a notice).
+local function pruneMembers()
+  local limit = ns.Config.CHANNEL_LIST_INTERVAL * 3 + 10
+  local now = ns.now()
+  for _, key in ipairs(memberKeys()) do
+    local m = members[key]
+    if now - m.seenAt > limit then removeMember(m.name, "not in the member list any more") end
+  end
+end
+
+local function markListed()
+  if state.listed then return end
+  state.listed = true
+  resolved()
+end
+
+local function requestList()
+  if type(ListChannelByName) ~= "function" or not state.channelName then return false end
+  return (pcall(ListChannelByName, state.channelName))
+end
+
+-- After a join: ask for the member list now and every CHANNEL_LIST_INTERVAL seconds while joined. Sends wait for the
+-- first list, at most CHANNEL_LIST_WAIT seconds.
+local function startListing()
+  state.listGen = state.listGen + 1
+  state.listed = false
+  local gen = state.listGen
+  local c = ns.Config
+  local function tick()
+    if gen ~= state.listGen or not state.joined then return end
+    pruneMembers()
+    requestList()
+    C_Timer.After(c.CHANNEL_LIST_INTERVAL, function() ns.Log.safe(FEATURE, tick) end)
+  end
+  if type(ListChannelByName) ~= "function" then
+    if not state.noListNoted then
+      state.noListNoted = true
+      ns.Log.add("warn", "this game version cannot list channel members; whispering known names only")
+    end
+    markListed()
+    return
+  end
+  tick()
+  C_Timer.After(c.CHANNEL_LIST_WAIT, function()
+    ns.Log.safe(FEATURE, function()
+      if gen ~= state.listGen or state.listed then return end
+      if not state.noListNoted then
+        state.noListNoted = true
+        ns.Log.add("info", "no member list from channel %s yet; sending to who we know", tostring(state.channelName))
+      end
+      markListed()
+    end)
+  end)
+end
+
 -- quiet: log nothing about this join (not even a refusal right after it); the caller logs what it wants.
 local function markJoined(index, quiet)
   if state.joined or state.failed then return end
@@ -181,6 +309,7 @@ local function markJoined(index, quiet)
   state.graceNoted = quiet and true or false
   hideChannel()
   if not quiet then ns.Log.add("info", "channel %s joined as %d", tostring(state.channelName), index) end
+  startListing()
   resolved()
 end
 
@@ -322,6 +451,54 @@ local function hideNotFoundLine(_, _, message)
   return ok and hide == true
 end
 
+local function isOurChannelEvent(channelName, channelIndex, baseName)
+  if isCurrentChannel(channelName, baseName) then return true end
+  return state.joined and tonumber(channelIndex) ~= nil and tonumber(channelIndex) == state.index and state.index > 0
+end
+
+local function onList(text, _, _, channelName, _, _, _, channelIndex, baseName)
+  if not isOurChannelEvent(channelName, channelIndex, baseName) then return end
+  state.listsHeard = state.listsHeard + 1
+  for _, name in ipairs(Transport.parseList(text)) do addMember(name) end
+  markListed()
+end
+
+local function onJoinNotice(_, playerName, _, channelName, _, _, _, channelIndex, baseName)
+  if isOurChannelEvent(channelName, channelIndex, baseName) then addMember(playerName) end
+end
+
+local function onLeaveNotice(_, playerName, _, channelName, _, _, _, channelIndex, baseName)
+  if isOurChannelEvent(channelName, channelIndex, baseName) then removeMember(playerName, "left the channel") end
+end
+
+-- "No player named 'X' is currently playing." after a whisper to a member: they are gone.
+local function onSystem(message)
+  if type(message) ~= "string" or (issecretvalue and issecretvalue(message)) then return end
+  local pattern = ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."
+  for _, key in ipairs(memberKeys()) do
+    local m = members[key]
+    if message == string.format(pattern, m.name) then removeMember(m.name, "not playing") end
+  end
+end
+
+-- Comm heard a TwizCrew message from this sender (raw name, as the game gave it). A whisper means their copy knows
+-- us, so they become someone we whisper back; party and raid only fill in the full name of a known member.
+function Transport.heardFrom(rawSender, chatType)
+  if chatType == "WHISPER" then
+    addMember(rawSender)
+  elseif chatType == "PARTY" or chatType == "RAID" then
+    local name = cleanName(rawSender)
+    local key = name and memberKey(name)
+    if key and members[key] then addMember(name) end
+  end
+end
+
+function Transport.members()
+  local out = {}
+  for _, key in ipairs(memberKeys()) do out[#out + 1] = members[key].name end
+  return out
+end
+
 function Transport.start()
   if state.started then return end
   state.started = true
@@ -332,6 +509,10 @@ function Transport.start()
     end
   end
   ns.Events.on(FEATURE, "CHAT_MSG_CHANNEL_NOTICE", onNotice)
+  ns.Events.on(FEATURE, "CHAT_MSG_CHANNEL_LIST", onList)
+  ns.Events.on(FEATURE, "CHAT_MSG_CHANNEL_JOIN", onJoinNotice)
+  ns.Events.on(FEATURE, "CHAT_MSG_CHANNEL_LEAVE", onLeaveNotice)
+  ns.Events.on(FEATURE, "CHAT_MSG_SYSTEM", onSystem)
   joinLater(ns.Config.CHANNEL_JOIN_DELAY)
 end
 
@@ -340,6 +521,7 @@ end
 function Transport.rejoin()
   local old = state.channelName
   resetConnection()
+  for _, key in ipairs(memberKeys()) do members[key] = nil end -- another channel: other people
   state.warnedPassword = false
   if old and type(LeaveChannelByName) == "function" then
     state.leftAt = ns.now()
@@ -349,23 +531,34 @@ function Transport.rejoin()
   if state.started then joinLater(REJOIN_DELAY) end
 end
 
--- Names we may whisper: roster names and the extra names from the settings, never ourselves.
-local function whisperNames(skipGroup)
-  local out, seen = {}, {}
-  local me = ns.playerName()
-  local function add(name)
-    if type(name) ~= "string" or name == "" then return end
-    name = ns.shortName(name)
-    if ns.isMe(name) or seen[name] then return end
-    if skipGroup and UnitInParty(name) then return end
-    seen[name] = true
-    out[#out + 1] = { chatType = "WHISPER", target = name }
-  end
-  if ns.roster and ns.roster.names then
+local function inGroup(a, b)
+  local ok, yes = pcall(UnitInParty, a)
+  if ok and yes then return true end
+  if b and b ~= a then ok, yes = pcall(UnitInParty, b); return ok and yes and true or false end
+  return false
+end
+
+-- One whisper destination per person: a channel member's full name when we know it, never ourselves.
+local function addWhisper(out, seen, name, skipGroup)
+  if type(name) ~= "string" or name == "" then return end
+  local key, short = memberKey(name)
+  if not key or seen[key] then return end
+  local target = members[key] and members[key].name or short
+  if skipGroup and inGroup(short, target) then return end
+  seen[key] = true
+  out[#out + 1] = { chatType = "WHISPER", target = target }
+end
+
+-- Names we may whisper: channel members, then (rosterToo) roster names, and the extra names from the settings.
+local function whisperNames(skipGroup, rosterToo, out)
+  out = out or {}
+  local seen = {}
+  for _, key in ipairs(memberKeys()) do addWhisper(out, seen, members[key].name, skipGroup) end
+  if rosterToo ~= false and ns.roster and ns.roster.names then
     local ok, names = ns.Log.safe(FEATURE, function() return ns.roster:names() end)
-    if ok and type(names) == "table" then for _, n in ipairs(names) do add(n) end end
+    if ok and type(names) == "table" then for _, n in ipairs(names) do addWhisper(out, seen, n, skipGroup) end end
   end
-  for _, n in ipairs(crew().extra or {}) do add(n) end
+  for _, n in ipairs(crew().extra or {}) do addWhisper(out, seen, n, skipGroup) end
   return out
 end
 
@@ -378,8 +571,16 @@ local function fallback()
   local out = {}
   local g = groupDestination()
   if g then out[1] = g end
-  for _, w in ipairs(whisperNames(g ~= nil)) do out[#out + 1] = w end
-  return out
+  return whisperNames(g ~= nil, true, out)
+end
+
+-- A whisper to one crew member (nil when this mode does not whisper, or the name is ours).
+function Transport.destinationFor(name)
+  local m = mode()
+  if m ~= "auto" and m ~= "whisper" then return nil end
+  local out = {}
+  addWhisper(out, {}, name, false)
+  return out[1]
 end
 
 function Transport.destinations()
@@ -397,11 +598,13 @@ function Transport.destinations()
     if IsInGuild() then return { { chatType = "GUILD" } } end
   end
   if state.joined and not state.failed then
-    -- Grouped friends also get it through the group: seen in game, two grouped copies on the channel never heard
-    -- each other. The receiver drops the second copy of the same message.
-    local out = { { chatType = "CHANNEL", target = state.index } }
+    -- The group (when grouped), a whisper to each channel member outside it, and one copy to the channel in case
+    -- the game delivers it again. The receiver drops the second copy of the same message.
+    local out = {}
     local g = groupDestination()
-    if g then out[2] = g end
+    if g then out[1] = g end
+    whisperNames(g ~= nil, false, out)
+    out[#out + 1] = { chatType = "CHANNEL", target = state.index }
     return out
   end
   return fallback()
@@ -468,5 +671,6 @@ function Transport.status()
     downFor = state.failed and state.failedAt and math.max(0, now - state.failedAt) or nil,
     nextRetryIn = state.failed and state.nextRetryAt and math.max(0, state.nextRetryAt - now) or nil,
     retries = state.retries,
+    members = Transport.members(), listed = state.listed, listsHeard = state.listsHeard,
   }
 end

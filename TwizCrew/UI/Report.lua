@@ -155,6 +155,10 @@ function Report.lines()
   if ns.Transport.status().hideFailed then
     add("Warning: the crew channel could not be taken out of the chat windows")
   end
+  local st = ns.Transport.status()
+  local names = st.members or {}
+  add("Crew in the channel: " .. (#names == 0 and "nobody seen" or table.concat(names, ", "))
+    .. " (member lists heard: " .. tostring(st.listsHeard or 0) .. ")")
   add("Channel echoes heard: " .. tostring(ns.Comm.echoCount and ns.Comm.echoCount() or 0))
   return out
 end

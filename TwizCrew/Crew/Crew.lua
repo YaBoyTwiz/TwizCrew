@@ -40,10 +40,15 @@ local function onState(sender, fields, cleared)
   announce(sender, m, changes, events)
 end
 
+local helloFrom = {} -- who said hello since the last reply
+
 local function onHello(sender, fields)
   -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
   -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
   onState(sender, { ver = fields.ver, rs = fields.rs or "" }, ns.roster:clearSession(sender))
+  local listed = false
+  for _, n in ipairs(helloFrom) do if n == sender then listed = true end end
+  if not listed then helloFrom[#helloFrom + 1] = sender end
   if replyPending then return end
   replyPending = true
   local c = ns.Config
@@ -51,7 +56,15 @@ local function onHello(sender, fields)
   C_Timer.After(delay, function()
     ns.Log.safe(FEATURE, function()
       replyPending = false
-      ns.Comm.send("STATE", ns.Self.fullState())
+      -- Only to whoever said hello: everyone else already has our state. Several hellos at once get one reply each.
+      local to = helloFrom
+      helloFrom = {}
+      local state = ns.Self.fullState()
+      local all = #to == 0
+      for _, name in ipairs(to) do
+        if not ns.Comm.sendTo(name, "STATE", state) then all = true end
+      end
+      if all then ns.Comm.send("STATE", state) end
     end)
   end)
 end
@@ -128,6 +141,18 @@ function Crew.start()
   ns.Bus.on(FEATURE, "CHANNEL_BACK", function()
     ns.Comm.send("HELLO", hello())
     ns.Comm.send("STATE", ns.Self.fullState())
+  end)
+  -- Someone new turned up in the crew channel after we logged in: hello and our state, to them only. Skipped when
+  -- we heard from them meanwhile (their own hello got our reply already).
+  ns.Bus.on(FEATURE, "CREW_FOUND", function(name)
+    local foundAt = ns.now()
+    C_Timer.After(ns.Config.CREW_FOUND_DELAY, function()
+      ns.Log.safe(FEATURE, function()
+        local m = ns.roster:get(name)
+        if m and m.lastHeard and m.lastHeard >= foundAt then return end
+        if ns.Comm.sendTo(name, "HELLO", hello()) then ns.Comm.sendTo(name, "STATE", ns.Self.fullState()) end
+      end)
+    end)
   end)
   C_Timer.NewTicker(ns.Config.PING_INTERVAL, function()
     ns.Log.safe(FEATURE, ns.Comm.send, "PING", {})

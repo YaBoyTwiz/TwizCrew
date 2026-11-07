@@ -393,16 +393,22 @@ return {
       H.link(tw)
       login(tw)
       H.advance(20)
-      local refused, firstGood = 0, nil
+      -- (the whisper copies to Frostie go out first and are not refused; only the channel copies are)
+      local refused, firstChannel, firstGood = 0, nil, nil
       for i, m in ipairs(tw.sent) do
-        if m.chatType == "CHANNEL" and m.result == 7 then refused = refused + 1 end
-        if not firstGood and m.result == 0 then firstGood = i end
+        if m.chatType == "CHANNEL" then
+          if m.result == 7 then refused = refused + 1 end
+          firstChannel = firstChannel or i
+          if not firstGood and m.result == 0 then firstGood = i end
+        end
       end
       A.ok(refused >= 1, "the first channel sends were refused, like in the game")
-      A.eq(tw.sent[1].result, 7)
-      A.ok(firstGood, "something got through")
+      A.eq(tw.sent[firstChannel].result, 7)
+      A.ok(firstGood, "the channel took a message later")
       A.contains(tw.sent[firstGood].text, "HELLO", "the refused HELLO was kept and sent again")
-      A.eq(tw.sent[firstGood].chatType, "CHANNEL")
+      A.eq(tw.sent[1].chatType, "WHISPER")
+      A.eq(tw.sent[1].target, "Frostie")
+      A.contains(tw.sent[1].text, "HELLO", "the first thing Frostie gets is the HELLO, by whisper")
       local st = twNs.Transport.status()
       A.ok(st.joined, "on the channel"); A.no(st.failed, "never gave up on it")
       A.eq(hellos, { "Twiz" }, "Frostie heard Twiz's HELLO")
@@ -485,6 +491,25 @@ return {
       noErrors(A, c.twNs, c.frNs, pwNs)
     end,
 
+    -- WoW Forever: channel addon messages never arrive (the harness drops them, like the game). A third friend who
+    -- logs in later finds the others in the channel's member list, and they find them by the join notice.
+    a_friend_who_logs_in_later_sees_everyone_and_everyone_sees_them = function(_, A, _, H)
+      local c = twoFriends(H)
+      local gi, giNs = H.client("Ginkan", { class = "PRIEST", level = 8 })
+      H.link(gi)
+      login(gi)
+      H.advance(15)
+      for _, pair in ipairs({ { c.twNs, "Frostie" }, { c.twNs, "Ginkan" }, { c.frNs, "Twiz" }, { c.frNs, "Ginkan" },
+          { giNs, "Twiz" }, { giNs, "Frostie" } }) do
+        local m = pair[1].roster:get(pair[2])
+        A.ok(m and m.online, pair[1].playerName() .. " sees " .. pair[2])
+      end
+      A.eq(giNs.Panel.headerText(), "2 of 2 online")
+      local channelOnly = true
+      for _, m in ipairs(gi.sent) do if m.chatType ~= "CHANNEL" then channelOnly = false end end
+      A.no(channelOnly, "Ginkan whispered")
+      noErrors(A, c.twNs, c.frNs, giNs)
+    end,
     level_progress_reaches_a_friend = function(_, A, _, H)
       local c = levelingFriends(H)
       local row = rowOf(c.twNs, "Frostie")
@@ -499,9 +524,9 @@ return {
       local updates = 0
       for i = sentBefore + 1, #c.fr.sent do
         local msg = c.frNs.Codec.decode(c.fr.sent[i].text)
-        if msg and msg.type == "UPDATE" then updates = updates + 1 end
+        if msg and msg.type == "UPDATE" and c.fr.sent[i].chatType == "WHISPER" then updates = updates + 1 end
       end
-      A.eq(updates, 6 * 2)
+      A.eq(updates, 6 * 2, "counted once: the whisper to Twiz (the channel copy goes out too)")
       row = rowOf(c.twNs, "Frostie")
       A.eq(row.xpText, "Lv 12 " .. DOT .. " 49%")
       A.eq(row.tip[2], "951 XP to level 13")

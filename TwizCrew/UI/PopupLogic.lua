@@ -25,7 +25,7 @@ local function indexOf(list, name)
 end
 
 -- Shown right away, one per friend (never combined): deaths, level-ups and meet-ups.
-local INSTANT = { death = true, levelup = true, meet = true }
+local INSTANT = { death = true, levelup = true, meet = true, runaway = true }
 
 -- kind: "layer_diff" | "layer_same" | "death" | "levelup" | "meet"; extra: { zone, subzone } (deaths; a meet-up's
 -- place is its zone), { level, maxLevel } (level-ups). force: shown even in the quiet period (test tools' pop-ups
@@ -131,6 +131,10 @@ function PopupLogic.text(kind, names, extra, colorName)
       return string.format("%s and %s are online", colorName(names[1]), colorName(names[2])), nil
     end
     return string.format("%d friends are online", n), detail
+  end
+  if kind == "runaway" then
+    return string.format("%s is running off!", colorName(names[1])),
+      ((type(extra.zone) == "string" and extra.zone ~= "") and (extra.zone .. " away: ") or "") .. "click for the big arrow"
   end
   if kind == "meet" then
     local place = (type(extra.zone) == "string" and extra.zone ~= "") and extra.zone or nil

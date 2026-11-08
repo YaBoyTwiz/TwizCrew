@@ -117,6 +117,64 @@ return {
       A.eq(a.text, nil, "no distance in tiny rows")
     end,
 
+    ---------------------------------------------------------------------------------------------- running off
+    running_off_rules = function(ns, A)
+      local L = ns.FindLogic
+      local opts = { near = 40, far = 100, window = 20 }
+      local me = { c = 0, x = 0, y = 0 }
+      local tr, alarm = L.runaway(nil, me, { c = 0, x = 10, y = 0 }, 100, opts)
+      A.no(alarm, "close")
+      tr, alarm = L.runaway(tr, me, { c = 0, x = 60, y = 0 }, 105, opts)
+      A.no(alarm, "not far yet")
+      tr, alarm = L.runaway(tr, me, { c = 0, x = 130, y = 0 }, 112, opts)
+      A.ok(alarm, "close to far within 20 s: running off")
+      tr, alarm = L.runaway(tr, me, { c = 0, x = 200, y = 0 }, 113, opts)
+      A.no(alarm, "only once until they come back")
+      -- slow drift: too long since they were close
+      tr = L.runaway(nil, me, { c = 0, x = 10, y = 0 }, 0, opts)
+      tr, alarm = L.runaway(tr, me, { c = 0, x = 130, y = 0 }, 60, opts)
+      A.no(alarm, "drifted off over a minute: no alarm")
+      -- I ran off, they stood still
+      tr = L.runaway(nil, me, { c = 0, x = 10, y = 0 }, 0, opts)
+      tr, alarm = L.runaway(tr, { c = 0, x = -130, y = 0 }, { c = 0, x = 10, y = 0 }, 10, opts)
+      A.no(alarm, "you walked away, not them")
+    end,
+    a_party_member_running_off_sets_off_the_alarm = function(ns, A, W)
+      boot(W)
+      group(W)
+      friend(ns, W, "Frostie")
+      W.state.missing.UnitPosition = nil
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
+      W:advance(1.1)
+      local played = {}
+      W.env.PlaySound = function(k) played[#played + 1] = k end
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" }) -- 140 yards away a few seconds later
+      W:advance(3)
+      A.ok(ns.Find.isRunningOff("Frostie"), "running off")
+      A.ok(#played >= 1, "a sound")
+      local t = ns.Popups.textsForTest()
+      A.eq(t[#t].text, "Frostie is running off!")
+      A.eq(t[#t].subtext, "140 yd away: click for the big arrow")
+      A.ok(ns.Panel.rowAlarmForTest(rowIndex(ns, "Frostie")), "the row arrow flashes")
+      ns.BigArrow.point({ kind = "member", name = "Frostie" })
+      A.eq(ns.BigArrow.stateForTest().label, "Frostie is running off!", "the big arrow says so too")
+      W:advance(12)
+      A.no(ns.Find.isRunningOff("Frostie"), "the alarm runs out")
+      A.no(ns.Panel.rowAlarmForTest(rowIndex(ns, "Frostie")))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    the_running_off_warning_can_be_switched_off = function(ns, A, W)
+      boot(W)
+      group(W)
+      friend(ns, W, "Frostie")
+      ns.Modules.set("find", "runaway", false)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(1.1)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" })
+      W:advance(3)
+      A.no(ns.Find.isRunningOff("Frostie"))
+    end,
+
     ---------------------------------------------------------------------------------------------- big arrow
     clicking_a_row_arrow_opens_the_big_arrow_and_it_stays = function(ns, A, W)
       frostieNorth(ns, W)

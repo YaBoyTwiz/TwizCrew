@@ -27,7 +27,7 @@ local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_U
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
   "AWAY_CHANGED", "FIND_CHANGED" }
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
-local ARROW_SIZE = 16
+local ARROW_SIZE = 22 -- a little bigger, easier to read at a glance
 
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
@@ -466,6 +466,17 @@ end
 local function paintArrow(r, a, m, withDist)
   local cr, cg, cb = T.classColor(m.class)
   r.arrow.tex:SetVertexColor(math.min(1, cr + 0.25), math.min(1, cg + 0.25), math.min(1, cb + 0.25))
+  -- running off: flashing red and yellow, pulsing bigger, until the alarm runs out
+  local alarm = ns.Find and ns.Find.isRunningOff and ns.Find.isRunningOff(m.name)
+  r.tcAlarm = alarm or nil
+  if alarm then
+    local t = ns.now()
+    if math.floor(t * 4) % 2 == 0 then r.arrow.tex:SetVertexColor(1, 0.15, 0.15) else r.arrow.tex:SetVertexColor(1, 0.85, 0.1) end
+    local size = ARROW_SIZE * (1.35 + 0.25 * math.sin(t * 10))
+    r.arrow:SetSize(size, size)
+  else
+    r.arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
+  end
   if a.still then
     r.arrow.tex:SetRotation(0)
     r.arrow.tex:SetAlpha(0.6)
@@ -1615,6 +1626,7 @@ function Panel.rowArrowForTest(i)
   return { still = a.still and true or false, angle = rawget(r, "tcArrowAngle"), text = rawget(r, "tcArrowText") }
 end
 function Panel.arrowTickerForTest() return arrowTicker ~= nil end
+function Panel.rowAlarmForTest(i) local r = rowFrames[i]; return r ~= nil and rawget(r, "tcAlarm") == true end
 
 local function onEnable()
   enabled = true

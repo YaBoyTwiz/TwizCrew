@@ -65,6 +65,28 @@ function FindLogic.rowArrow(me, them, now, facing, opts)
     compass = not finite(facing) }
 end
 
+-- "Running off": track = what we remember about one group member ({ nearAt, me, them, armed }), me / them = the
+-- two positions now. They count as close within opts.near yards; when, within opts.window seconds of being close,
+-- they are opts.far yards away and they moved more than you did (so walking off yourself doesn't count), the
+-- answer is true once (it arms again only after they were close again). Returns track, alarm, distance.
+function FindLogic.runaway(track, me, them, now, opts)
+  track = track or {}
+  local dist = FindLogic.vector(me, them)
+  if not dist or not finite(now) then return track, false end
+  local function copy(p) return { c = p.c, x = p.x, y = p.y } end
+  if dist <= opts.near then
+    track.nearAt, track.me, track.them, track.armed = now, copy(me), copy(them), true
+    return track, false, dist
+  end
+  if track.armed and dist >= opts.far and track.nearAt and now - track.nearAt <= opts.window then
+    track.armed = false
+    local mine = FindLogic.vector(track.me, me) or 0
+    local theirs = FindLogic.vector(track.them, them) or math.huge
+    if theirs > mine then return track, true, dist end
+  end
+  return track, false, dist
+end
+
 -- What the big arrow shows toward a target position: { angle, text, distance, arrived, compass }, or nil when there
 -- is no direction (unknown, other continent).
 function FindLogic.bigArrow(me, target, facing, arriveWithin)

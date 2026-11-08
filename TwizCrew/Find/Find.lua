@@ -291,9 +291,47 @@ local function onOnline(name)
   end)
 end
 
+-------------------------------------------------------------------------------------------------- running off
+-- A group member who was right next to you and suddenly isn't: their arrow flashes red, a pop-up and a sound.
+local runTracks, runUntil = {}, {}
+
+function Find.isRunningOff(name)
+  return type(name) == "string" and runUntil[name] ~= nil and ns.now() < runUntil[name]
+end
+
+-- For tests and the test tools: start the alarm for a name.
+function Find.alarmForTest(name, dist) runUntil[name] = ns.now() + cfg().FIND_RUN_ALARM; ns.Bus.fire("RUNNING_OFF", name, dist) end
+
+local function checkRunaways()
+  if setting("runaway") == false or not ns.roster then return end
+  local me = Where.me()
+  if not me then return end
+  local c = cfg()
+  local opts = { near = c.FIND_RUN_NEAR, far = c.FIND_RUN_FAR, window = c.FIND_RUN_WINDOW }
+  for _, name in ipairs(ns.roster:names()) do
+    local them = Find.positionOf(name)
+    if them then
+      local track, alarm, dist = Logic.runaway(runTracks[name], me, them, ns.now(), opts)
+      runTracks[name] = track
+      if alarm then
+        runUntil[name] = ns.now() + c.FIND_RUN_ALARM
+        ns.Log.add("info", "find: %s is running off (%d yd)", name, math.floor(dist or 0))
+        ns.Bus.fire("RUNNING_OFF", name, dist)
+        if setting("runawaySound") ~= false and type(PlaySound) == "function" and type(SOUNDKIT) == "table" then
+          pcall(PlaySound, SOUNDKIT.RAID_WARNING or 8959, "Master")
+        end
+        if ns.Popups and ns.Popups.runaway then ns.Popups.runaway(name, Logic.distanceText(dist or 0)) end
+      end
+    else
+      runTracks[name] = nil
+    end
+  end
+end
+
 local function tick()
   if not enabled then return end
   sendPosition()
+  ns.Log.safe(FEATURE, checkRunaways)
   if meet and Logic.meetLeft(meet, ns.now()) <= 0 then
     meet = nil
     closeMeetArrow()
@@ -363,12 +401,19 @@ ns.Modules.register({
     .. "to tell your party (or everyone) to meet there. Your position only goes to your group.",
   defaults = {
     rowArrows = true, meetups = true, sharePosition = true, meetPopup = true, meetArrow = true, meetMinimap = true,
+    runaway = true, runawaySound = true,
     arrowScale = 1.0, arrowPos = { point = "TOP", x = 230, y = -150 },
   },
   settings = {
     { key = "rowArrows", label = "Arrows on the Crew panel", kind = "toggle",
       info = "A small arrow next to each friend in your group that points to them as you turn, with how far away "
         .. "they are. Click it for a big arrow that leads you there. Friends outside your group get no arrow." },
+    { key = "runaway", label = "Warn me when someone runs off", kind = "toggle",
+      info = "When a group member who was right next to you is suddenly far away (about 100 yards within 20 "
+        .. "seconds, and they moved, not you), their arrow on the panel flashes red and grows, a pop-up says so (click "
+        .. "it for the big arrow), and the big arrow flashes too if it points at them." },
+    { key = "runawaySound", label = "With a sound", kind = "toggle", parent = "runaway",
+      info = "Plays the raid warning sound with the running-off warning, so you notice even when you're busy." },
     { key = "meetups", label = "Meet-ups", kind = "toggle",
       info = "Ctrl + right-click a spot on the world map to ask your party (or everyone) to meet there. They get a "
         .. "pop-up, an arrow and an icon on their map. Off: you can't send them and you don't get them." },

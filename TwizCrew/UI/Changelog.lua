@@ -23,6 +23,9 @@ Changelog.HISTORY = {
     "Quick statuses: one click for LF group, Questing, Farming, Dungeon soon or Back in 5.",
     "Hover a friend: \"Also on it\" lists who else (you too) is on the same quest, so you know who to group with.",
     "Today's recap: when you log out (or /tc recap): time played, levels, quests, deaths, gold and who was on.",
+    "Running off: when a group member who was right next to you is suddenly far away, their arrow flashes red,",
+    "  with a pop-up (click it for the big arrow) and a sound. Switches under Find the crew.",
+    "The arrows on the panel are a little bigger.",
   } },
   { ver = "0.1.17", date = "2026-11-08", lines = {
     "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",

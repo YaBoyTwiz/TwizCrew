@@ -13,7 +13,7 @@ local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
 local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
-  meet = "3fa9f5", online = "33cc66", qshare = "f0c040" }
+  meet = "3fa9f5", online = "33cc66", qshare = "f0c040", runaway = "ff3030" }
 local QSHARE_SECONDS = 20 -- a quest share request stays this long (it needs a click)
 local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
 local KIND_ICON = {
@@ -21,6 +21,7 @@ local KIND_ICON = {
   death = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", roast = "Interface\\Icons\\Spell_Fire_Fire",
   levelup = "Interface\\Icons\\Spell_Holy_PowerInfusion", meet = "Interface\\Icons\\INV_Misc_Map_01",
   online = "Interface\\Icons\\Ability_Warrior_BattleShout", qshare = "Interface\\Icons\\Spell_ChargePositive",
+  runaway = "Interface\\Icons\\Ability_Rogue_Sprint",
 }
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
@@ -94,6 +95,8 @@ local function click(f)
     for _, name in ipairs(p.invite) do
       if not inGroup(name) and not ns.isTestName(name) then invite(name) end -- a fake (test tools) is never invited
     end
+  elseif p.kind == "runaway" and ns.BigArrow and not ns.isTestName(p.names[1]) then
+    ns.BigArrow.point({ kind = "member", name = p.names[1] })
   elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
     ns.Find.pointToMeet()
   elseif p.kind == "qshare" and ns.Quest and ns.Quest.shareFor then
@@ -447,6 +450,13 @@ function Popups.questRequest(name, title)
   if type(PlaySound) == "function" and type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_OPEN then
     pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN)
   end
+end
+
+-- A group member ran off (Find the crew): "<Name> is running off!", how far, click = the big arrow. Shown at the
+-- next tick even in the login quiet time; needs this module on.
+function Popups.runaway(name, distText)
+  if not logic or type(name) ~= "string" then return end
+  logic:push("runaway", name, ns.now(), { zone = distText }, true)
 end
 
 -- A friend's meet-up (Find the crew): "<Name> wants to meet up", the place, click = the big arrow. Shown at the next

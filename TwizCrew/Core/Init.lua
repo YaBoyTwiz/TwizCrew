@@ -64,6 +64,9 @@ ns.Config = {
   -- of a meet-up. A meet-up lives MEET_LIFE s.
   FIND_TICK = 1, FIND_MOVE = 10, FIND_GAP = 3, FIND_KEEPALIVE = 30, FIND_STALE = 60, FIND_NEAR = 15,
   FIND_ARRIVE_MEET = 20, MEET_LIFE = 900, FIND_ARROW_TICK = 0.1,
+  -- "running off": a group member who was within FIND_RUN_NEAR yards and is FIND_RUN_FAR yards away within
+  -- FIND_RUN_WINDOW seconds (and moved more than you did); their arrow flashes for FIND_RUN_ALARM seconds
+  FIND_RUN_NEAR = 40, FIND_RUN_FAR = 100, FIND_RUN_WINDOW = 20, FIND_RUN_ALARM = 10,
 }
 
 function ns.now() return GetTime() end

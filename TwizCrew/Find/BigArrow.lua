@@ -167,6 +167,10 @@ local function update()
     if m and type(m.zone) == "string" and m.zone ~= "" and me and me.zone ~= m.zone then zone = m.zone end
   end
   local r, g, b = color(hex, classFile)
+  if target.kind == "member" and ns.Find.isRunningOff and ns.Find.isRunningOff(target.name) then
+    if math.floor(now * 4) % 2 == 0 then r, g, b = 1, 0.15, 0.15 else r, g, b = 1, 0.85, 0.1 end
+    label = label .. " is running off!"
+  end
   local s = (pos and me) and ns.FindLogic.bigArrow(me, pos, facing, arrive) or nil
   if not s then
     show(label, "position unknown", nil, false, r, g, b)

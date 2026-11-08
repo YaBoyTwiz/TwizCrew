@@ -48,6 +48,7 @@ UI\Board.lua
 UI\AwardsShow.lua
 UI\Updates.lua
 Find\FindLogic.lua
+Find\Where.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

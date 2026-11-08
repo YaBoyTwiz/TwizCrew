@@ -335,6 +335,77 @@ local function build(W)
   fakes.GetMinimapShape = function() return st.minimapShape or "ROUND" end
   -- level progress: rested XP (st.rested, nil = none, like the game) and the max level (st.maxLevel), both
   -- hideable through st.missing ("GetXPExhaustion", "GetMaxPlayerLevel"). Level-up sounds land in W.sounds.
+  -- find the crew: maps and positions, all hideable through st.missing ("C_Map.GetPlayerMapPosition",
+  -- "GetPlayerFacing", ...). st.maps[id] = { c = continent, x0, y0 = world yards at map (0, 0), x1, y1 = at (1, 1),
+  -- name } (a straight line between them; map x runs along world y, map y along world x, as in the game).
+  -- st.map = { id, x, y } = the player on a map (nil = no position); st.facing (radians); st.indoors; st.cvars;
+  -- st.ctrl (Ctrl held). WorldMapFrame: st.worldMap = { shown, mapID }, its click handlers in W.mapClickHandlers.
+  st.maps = {
+    [1429] = { c = 0, x0 = -8000, y0 = 0, x1 = -10000, y1 = -2000, name = "Elwynn Forest" },
+    [1436] = { c = 0, x0 = -10000, y0 = 0, x1 = -12000, y1 = -2000, name = "Westfall" },
+    [1438] = { c = 1, x0 = 11000, y0 = 2000, x1 = 9000, y1 = 0, name = "Teldrassil" },
+    [947] = { name = "Azeroth" }, -- the whole world: no world coordinates
+  }
+  st.map = { id = 1429, x = 0.5, y = 0.5 }
+  st.facing, st.indoors, st.cvars, st.ctrl = 0, false, {}, false
+  st.worldMap = { shown = false, mapID = 1429 }
+  local function vec(x, y)
+    return { x = x, y = y, GetXY = function(self) return self.x, self.y end }
+  end
+  fakes.CreateVector2D = vec
+  fakes.C_Map = hideable("C_Map.", {
+    GetBestMapForUnit = function(u)
+      if u ~= "player" or type(st.map) ~= "table" then return nil end
+      return st.map.id
+    end,
+    GetPlayerMapPosition = function(mapID, u)
+      if u ~= "player" or type(st.map) ~= "table" or st.map.id ~= mapID then return nil end
+      return vec(st.map.x, st.map.y)
+    end,
+    GetWorldPosFromMapPos = function(mapID, pos)
+      local m = st.maps[mapID]
+      if not m or m.c == nil or type(pos) ~= "table" then return nil end
+      local mx, my = pos.x, pos.y
+      return m.c, vec(m.x0 + (m.x1 - m.x0) * my, m.y0 + (m.y1 - m.y0) * mx)
+    end,
+    GetMapPosFromWorldPos = function(c, pos, mapID)
+      local m = st.maps[mapID]
+      if not m or m.c ~= c or type(pos) ~= "table" then return nil end
+      return mapID, vec((pos.y - m.y0) / (m.y1 - m.y0), (pos.x - m.x0) / (m.x1 - m.x0))
+    end,
+    GetMapInfo = function(mapID)
+      local m = st.maps[mapID]
+      return m and { mapID = mapID, name = m.name } or nil
+    end,
+  })
+  fakes.GetPlayerFacing = function() return st.facing end
+  fakes.IsIndoors = function() return st.indoors and true or false end
+  fakes.GetCVar = function(name) return st.cvars[name] end
+  fakes.IsControlKeyDown = function() return st.ctrl and true or false end
+  W.mapClickHandlers = {}
+  local worldMap = permissive(W)
+  local canvas = permissive(W)
+  rawset(canvas, "GetWidth", function() return 1000 end)
+  rawset(canvas, "GetHeight", function() return 667 end)
+  rawset(worldMap, "IsShown", function() return st.worldMap.shown and true or false end)
+  rawset(worldMap, "IsVisible", function() return st.worldMap.shown and true or false end)
+  rawset(worldMap, "GetMapID", function() return st.worldMap.mapID end)
+  rawset(worldMap, "GetCanvas", function() return canvas end)
+  rawset(worldMap, "GetCanvasScale", function() return 1 end)
+  rawset(worldMap, "AddCanvasClickHandler", function(_, fn, priority)
+    W.mapClickHandlers[#W.mapClickHandlers + 1] = { fn = fn, priority = priority }
+  end)
+  rawset(worldMap, "HookScript", function(self, name, fn) self._scripts["hook:" .. name] = fn end)
+  fakes.WorldMapFrame = worldMap
+  -- A click on the world map at (x, y) on the shown map, through the handlers (highest priority first, like the
+  -- game). Returns whether a handler took it.
+  function W:clickMap(button, x, y)
+    table.sort(self.mapClickHandlers, function(a, b) return (a.priority or 0) > (b.priority or 0) end)
+    for _, h in ipairs(self.mapClickHandlers) do
+      if h.fn(worldMap, button, x, y) then return true end
+    end
+    return false
+  end
   st.maxLevel = 60
   fakes.GetXPExhaustion = function() return st.rested end
   fakes.GetMaxPlayerLevel = function() return st.maxLevel end

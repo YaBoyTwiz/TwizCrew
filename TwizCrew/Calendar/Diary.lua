@@ -54,6 +54,17 @@ local function store()
 end
 
 local function today() return math.floor(now() / L.DAY) end
+
+-- Seconds to add to UTC for this computer's local time, and today's local day number.
+function Diary.offset()
+  local t = now()
+  local ok1, loc = pcall(date, "*t", t)
+  local ok2, utc = pcall(date, "!*t", t)
+  if ok1 and ok2 then return L.offsetFrom(loc, utc) end
+  return 0
+end
+
+function Diary.localToday() return math.floor((now() + Diary.offset()) / L.DAY) end
 local function oldest() return today() - KEEP_DAYS + 1 end
 
 local function person(id)
@@ -135,6 +146,8 @@ local function digestFields()
     local n = L.total(Diary.people()[id].days, from)
     if n > 0 then f["p" .. id] = tostring(n) end
   end
+  local nh = ns.Notes and ns.Notes.hash()
+  if nh then f.nh = nh end
   return f
 end
 
@@ -192,6 +205,13 @@ local function onDigest(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
   local from = oldest()
   local people = Diary.people()
+  -- notes: a different checksum means they have notes (or deletions) we don't: ask for theirs
+  if ns.Notes and type(f.nh) == "string" and f.nh ~= ns.Notes.hash() then
+    if not askedAt["notes"] or ns.now() - askedAt["notes"] >= ASK_GAP then
+      askedAt["notes"] = ns.now()
+      sendTo(sender, "CALQ", { n = "1" })
+    end
+  end
   for k, v in pairs(f) do
     local id = type(k) == "string" and k:match("^p(%w+)$")
     local theirs = tonumber(v)
@@ -210,8 +230,9 @@ local function onDigest(sender, f)
 end
 
 local function onAsk(sender, f)
-  if not enabled or not known(sender) or type(f) ~= "table" or type(f.i) ~= "string" then return end
-  if Diary.people()[f.i] then Diary.sendPerson(f.i, sender) end
+  if not enabled or not known(sender) or type(f) ~= "table" then return end
+  if f.n == "1" and ns.Notes then ns.Notes.sendAll(sender) end
+  if type(f.i) == "string" and Diary.people()[f.i] then Diary.sendPerson(f.i, sender) end
 end
 
 local function onPerson(sender, f)
@@ -247,6 +268,11 @@ end
 ns.Comm.on("CALD", function(s, f) ns.Log.safe(FEATURE, onDigest, s, f) end)
 ns.Comm.on("CALQ", function(s, f) ns.Log.safe(FEATURE, onAsk, s, f) end)
 ns.Comm.on("CALP", function(s, f) ns.Log.safe(FEATURE, onPerson, s, f) end)
+ns.Comm.on("CALN", function(s, f)
+  ns.Log.safe(FEATURE, function()
+    if enabled and known(s) and ns.Notes then ns.Notes.receive(s, f) end
+  end)
+end)
 
 ------------------------------------------------------------------------------------------------- module
 local function tick()
@@ -258,6 +284,7 @@ local function onEnable()
   enabled = true
   store()
   Diary.prune()
+  if ns.Notes then ns.Notes.prune(Diary.localToday()) end
   Diary.mark()
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)

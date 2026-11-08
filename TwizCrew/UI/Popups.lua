@@ -16,6 +16,12 @@ local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", r
   meet = "3fa9f5", online = "33cc66", qshare = "f0c040" }
 local QSHARE_SECONDS = 20 -- a quest share request stays this long (it needs a click)
 local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
+local KIND_ICON = {
+  layer_diff = "Interface\\Icons\\Spell_Arcane_Blink", layer_same = "Interface\\Icons\\Spell_Arcane_Blink",
+  death = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", roast = "Interface\\Icons\\Spell_Fire_Fire",
+  levelup = "Interface\\Icons\\Spell_Holy_PowerInfusion", meet = "Interface\\Icons\\INV_Misc_Map_01",
+  online = "Interface\\Icons\\Ability_Warrior_BattleShout", qshare = "Interface\\Icons\\Spell_ChargePositive",
+}
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
 local logic          -- PopupLogic instance (nil while the module is off)
@@ -114,8 +120,12 @@ local function newFrame()
   f.edge:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
   f.edge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
   f.edge:SetWidth(4)
+  f.icon = f:CreateTexture(nil, "ARTWORK")
+  f.icon:SetSize(28, 28)
+  f.icon:SetPoint("LEFT", f, "LEFT", 10, 0)
+  f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   f.title = T.text(f, T.FONT.normal, C.text)
-  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -7)
+  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 46, -7)
   f.title:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.title:SetJustifyH("LEFT")
   f.sub = T.text(f, T.FONT.small, C.muted)
@@ -193,6 +203,7 @@ local function show(p)
   f.tcText, f.tcSub = text, sub or false
   f.tcExpires = ns.now() + (tonumber(setting("seconds")) or 5) + FADE
   T.color(f.edge, EDGE[p.kind] or EDGE.death, 1)
+  f.icon:SetTexture(KIND_ICON[p.kind] or KIND_ICON.death)
   f.title:SetText(text)
   f.sub:SetText(sub or "")
   f:SetAlpha(1)
@@ -406,6 +417,7 @@ function Popups.showRoast(text, seconds)
   f.tcExpires = ns.now() + (tonumber(seconds) or ns.Config.ROAST_SECONDS) + FADE
   f:SetWidth(ROAST_WIDTH)
   T.color(f.edge, EDGE.roast, 1)
+  f.icon:SetTexture(KIND_ICON.roast)
   f.title:SetText(text)
   f.sub:SetText("")
   f:SetAlpha(1)
@@ -426,6 +438,7 @@ function Popups.questRequest(name, title)
   f.tcExpires = ns.now() + QSHARE_SECONDS + FADE
   f:SetWidth(ROAST_WIDTH)
   T.color(f.edge, EDGE.qshare, 1)
+  f.icon:SetTexture(KIND_ICON.qshare)
   f.title:SetText(f.tcText)
   f.sub:SetText(f.tcSub)
   f:SetAlpha(1)

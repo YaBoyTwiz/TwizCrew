@@ -166,6 +166,10 @@ Other players never see any of it. The messages are hidden addon messages, not c
   your own diary. Views: Month, a day's timeline (AFK lighter), Usual times (weekday x hour grid over 4 weeks, best
   time to play together, habits). Open: wrench menu, /tc cal. Switch: Share my play times. Step 2 (next): events
   (dungeon runs) with sign-ups, roles, reminders and "invite everyone going", stored and swapped the same way.
+  Notes (v0.1.17, Calendar/Notes.lua): click a day, type a note, pick one of 16 icons; shared via CALN (sent to
+  everyone on add/delete; the CALD digest carries nh, a checksum, and a different one pulls all notes with CALQ n=1).
+  Key = author id + created time; only the author deletes (a deletion marker spreads); kept 90 days. Icons were also
+  added to the menus, pop-ups and settings rows ("use icons where it makes sense").
 
 ## Ideas so far (not decided)
 

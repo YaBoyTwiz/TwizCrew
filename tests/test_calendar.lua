@@ -195,6 +195,53 @@ return {
       A.eq(p.name, "Twiz")
       A.ok(twNs.Diary.people()[frId], "and Twiz has Frostie's")
     end,
+    ------------------------------------------------------------------------------------------------ notes
+    notes_add_delete_and_swap = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N = ns.Notes
+      local before = #W.sent
+      local key = N.add("2026-11-14", "Deadmines at 8, bring potions", 2)
+      A.ok(key, "added")
+      A.eq(N.forDate("2026-11-14")[1].t, "Deadmines at 8, bring potions")
+      A.eq(N.forDate("2026-11-14")[1].i, 2)
+      W:advance(2)
+      local sentNote = sent(ns, W, "CALN", before)
+      A.eq(#sentNote, 1, "the crew hears about it at once")
+      A.eq(sentNote[1].fields.t, "Deadmines at 8, bring potions")
+      A.eq(N.add("2026-11-14", "   ", 1), nil, "no empty notes")
+      A.eq(N.add("someday", "x", 1), nil, "a real date only")
+      -- a friend's note arrives; I can't delete it
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = "2026-11-14", t = "I'll tank", i = "4", b = "Frostie",
+        c = "MAGE", u = "1000" })
+      A.eq(#N.forDate("2026-11-14"), 2)
+      A.no(N.remove("frost123-1000"), "not mine")
+      -- an older copy of it changes nothing; their deletion does
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = "2026-11-14", t = "old", i = "1", u = "900" })
+      A.eq(N.forDate("2026-11-14")[1].t ~= "old" and N.forDate("2026-11-14")[2].t ~= "old", true)
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = "2026-11-14", t = "", i = "4", u = "1001", x = "1" })
+      A.eq(#N.forDate("2026-11-14"), 1, "deleted by its author")
+      A.ok(N.remove(key), "my own one")
+      A.eq(#N.forDate("2026-11-14"), 0)
+      -- a stranger's note is ignored
+      receive(ns, W, "Stranger", "CALN", { k = "zz-1", d = "2026-11-14", t = "spam", i = "1", u = "5" })
+      A.eq(#N.forDate("2026-11-14"), 0)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    notes_checksums_trigger_a_swap = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      ns.Notes.add("2026-11-20", "Raid night", 3)
+      local before = #W.sent
+      receive(ns, W, "Frostie", "CALD", { nh = "12345" })
+      W:advance(1)
+      local asks = sent(ns, W, "CALQ", before)
+      A.eq(#asks, 1); A.eq(asks[1].fields.n, "1", "different notes: ask for theirs")
+      before = #W.sent
+      receive(ns, W, "Frostie", "CALQ", { n = "1" })
+      W:advance(3)
+      A.eq(#sent(ns, W, "CALN", before), 1, "they asked: all my notes go to them")
+    end,
     ------------------------------------------------------------------------------------------------ the window
     calendar_window = function(ns, A, W)
       start(ns, W)
@@ -222,6 +269,19 @@ return {
       A.ok(b, "a calendar button in the panel's header")
       b._scripts.OnClick(b, "LeftButton")
       A.ok(ns.Calendar.isShown(), "it opens the calendar")
+      -- a note from the day view, with a picked icon
+      ns.Calendar.openDay(day)
+      ns.Calendar.pickIcon(5)
+      ns.Calendar.typeNoteForTest("Healer needed tonight")
+      A.eq(#ns.Calendar.lastNotes, 1)
+      A.eq(ns.Calendar.lastNotes[1].i, 5)
+      A.eq(ns.Calendar.lastNotes[1].t, "Healer needed tonight")
+      -- icons on the menus
+      for _, it in ipairs(ns.Panel.menuItems()) do A.eq(type(it.icon), "string", "menu icon: " .. it.label) end
+      for _, it in ipairs(ns.Panel.rowMenu({ name = "Frostie", tags = {} })) do
+        A.eq(type(it.icon), "string", "row menu icon: " .. it.label)
+      end
+      A.eq(ns.Log.errors(10), {})
       A.eq(ns.Log.errors(10), {})
     end,
   },

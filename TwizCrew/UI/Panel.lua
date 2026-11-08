@@ -69,10 +69,47 @@ end
 
 local function round(v) return math.floor(v * 10 + 0.5) / 10 end
 
--- A list without its holes (menu entries that are nil when their feature is off).
+-- Menu pictures by the start of an entry's words (entries that bring their own icon keep it).
+local MENU_ICONS = {
+  { "^Whisper", "Interface\\Icons\\INV_Misc_Note_02" },
+  { "^Invite", "Interface\\Icons\\Spell_Holy_PrayerOfFortitude" },
+  { "^Inspect", "Interface\\Icons\\Spell_Holy_MindVision" },
+  { "^Point the arrow", "Interface\\Icons\\Ability_Hunter_Pathfinding" },
+  { "^Ask to share", "Interface\\Icons\\Spell_ChargePositive" },
+  { "^Can't share", "Interface\\RaidFrame\\ReadyCheck-NotReady" },
+  { "^Congratulate", "Interface\\Icons\\INV_Misc_Gift_01" },
+  { "^Mock", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01" },
+  { "^Add to friends", "Interface\\Icons\\Spell_Holy_GreaterHeal" },
+  { "set my status", "Interface\\Icons\\INV_Misc_Note_01" },
+  { "^Set my status", "Interface\\Icons\\INV_Misc_Note_01" },
+  { "AFK", "AFK_TAG" },
+  { "I'm back", "AFK_TAG" },
+  { "spell ranks", "Interface\\Icons\\Spell_Holy_SealOfWisdom" },
+  { "^Show offline", "Interface\\Icons\\Ability_Stealth" },
+  { "^Lock position", "Interface\\Icons\\INV_Misc_Key_03" },
+  { "^Row style", "Interface\\Icons\\INV_Fabric_Linen_01" },
+  { "^Hide during fights", "Interface\\Icons\\Ability_Warrior_DefensiveStance" },
+  { "^Open settings", "Interface\\Icons\\Trade_Engineering" },
+  { "^Hide panel", "Interface\\Icons\\Spell_Nature_Invisibilty" },
+}
+
+-- A list without its holes (menu entries that are nil when their feature is off), each with its picture.
 local function compact(t)
   local out = {}
-  for i = 1, table.maxn(t) do if t[i] ~= nil then out[#out + 1] = t[i] end end
+  for i = 1, table.maxn(t) do
+    local it = t[i]
+    if it ~= nil then
+      if type(it) == "table" and it.icon == nil and type(it.label) == "string" then
+        for _, m in ipairs(MENU_ICONS) do
+          if it.label:find(m[1]) then
+            it.icon = m[2] == "AFK_TAG" and ns.Tags.ICON.AFK or m[2]
+            break
+          end
+        end
+      end
+      out[#out + 1] = it
+    end
+  end
   return out
 end
 
@@ -1137,7 +1174,7 @@ function Panel.rowMenu(m)
     items[#items + 1] = { label = "Set my status", onClick = function() Panel.openStatusBox() end }
     items[#items + 1] = { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK",
       onClick = function() Panel.toggleAway() end }
-    return items
+    return compact(items)
   end
   local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name
   if not m.offline then
@@ -1180,7 +1217,7 @@ function Panel.rowMenu(m)
   items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
   -- my own things, on every row (my own row is off by default); later features for me go here too
   for _, it in ipairs(Panel.myItems()) do items[#items + 1] = it end
-  return items
+  return compact(items)
 end
 
 -- What I can do for myself from any row's menu (and my own row's).

@@ -8,7 +8,7 @@ ns.ADDON = ADDON
 -- other way (the game reads those only when it starts): older copies are then told to restart the game, not reload.
 -- The version is kept here and not read from the .toc, because the game may keep the old .toc after a /reload.
 local ADDON_VERSION = "0.1.17"
-local RESTART_SINCE = "0.1.16"
+local RESTART_SINCE = "0.1.17"
 
 ns.VERSION = ADDON_VERSION
 ns.RESTART_SINCE = RESTART_SINCE

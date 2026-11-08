@@ -50,6 +50,53 @@ local BASICS = {
   { id = "find", key = "sharePosition" },
 }
 local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
+
+-- Pictures next to module names and common options (where a picture says it faster than words).
+local MODULE_ICONS = {
+  panel = "Interface\\Icons\\Ability_Warrior_BattleShout", popups = "Interface\\Icons\\Spell_Holy_PowerInfusion",
+  roasts = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", stats = "Interface\\Icons\\INV_Misc_Note_02",
+  find = "Interface\\Icons\\Ability_Hunter_Pathfinding", calendar = "Interface\\Icons\\INV_Scroll_03",
+  rankup = "Interface\\Icons\\Spell_Holy_SealOfWisdom", tags = "Interface\\Icons\\INV_Misc_Note_01",
+  layer = "Interface\\Icons\\Spell_Arcane_Blink", comm = "Interface\\Icons\\Spell_Holy_PrayerOfFortitude",
+  version = "Interface\\Icons\\INV_Misc_Book_09", updates = "Interface\\Icons\\INV_Misc_Book_09",
+  minimap = "Interface\\Icons\\INV_Misc_Map_01", testtools = "Interface\\Icons\\Trade_Engineering",
+  pokes = "Interface\\Icons\\INV_Misc_Gift_01", races = "Interface\\Icons\\Ability_Mount_RidingHorse",
+}
+local SETTING_ICONS = {
+  ["panel:bgAlpha"] = "Interface\\Icons\\Spell_Shadow_Twilight", ["panel:scale"] = "Interface\\Icons\\INV_Misc_Spyglass_03",
+  ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:fadeOut"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
+  ["panel:showOffline"] = "Interface\\Icons\\Ability_Stealth", ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",
+  ["panel:hideInCombat"] = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
+  ["panel:showQuest"] = "Interface\\Icons\\INV_Misc_Note_02", ["panel:questRequests"] = "Interface\\Icons\\Spell_ChargePositive",
+  ["panel:showXP"] = "Interface\\Icons\\Spell_Holy_PowerInfusion", ["panel:whatsNew"] = "Interface\\Icons\\INV_Misc_Book_09",
+  ["tags:autoAway"] = "AFK_TAG", ["roasts:editMocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
+  ["roasts:cheers"] = "Interface\\Icons\\INV_Misc_Gift_01", ["roasts:mocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
+  ["popups:online"] = "Interface\\Icons\\Ability_Warrior_BattleShout", ["popups:death"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
+  ["popups:levelUp"] = "Interface\\Icons\\Spell_Holy_PowerInfusion", ["popups:layerDiff"] = "Interface\\Icons\\Spell_Arcane_Blink",
+  ["minimap:show"] = "Interface\\Icons\\INV_Misc_Map_01", ["find:rowArrows"] = "Interface\\Icons\\Ability_Hunter_Pathfinding",
+  ["find:meetups"] = "Interface\\Icons\\INV_Misc_Map_01", ["find:sharePosition"] = "Interface\\Icons\\Spell_Holy_MindVision",
+  ["calendar:open"] = "Interface\\Icons\\INV_Scroll_03", ["calendar:share"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+  ["rankup:update"] = "Interface\\Icons\\Spell_Holy_SealOfWisdom", ["rankup:auto"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+  ["rankup:showButton"] = "Interface\\Icons\\INV_Misc_Rune_01",
+}
+
+-- Puts a small picture before a row's words (or its button). Done once per row.
+local function decorate(r, tex)
+  if not r or not tex or rawget(r, "tcIcon") then return end
+  if tex == "AFK_TAG" then tex = ns.Tags.ICON.AFK end
+  local target = rawget(r, "label") or rawget(r, "button")
+  if not target then return end
+  local ok, point, rel, relPoint, x, y = pcall(target.GetPoint, target, 1)
+  if not ok or type(point) ~= "string" then point, rel, relPoint, x, y = "LEFT", r, "LEFT", 0, 0 end
+  target:ClearAllPoints()
+  target:SetPoint(point, rel or r, relPoint or point, (tonumber(x) or 0) + 20, tonumber(y) or 0)
+  local ic = r:CreateTexture(nil, "ARTWORK")
+  ic:SetSize(16, 16)
+  ic:SetPoint("RIGHT", target, "LEFT", -4, 0)
+  ic:SetTexture(tex)
+  ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  r.tcIcon = ic
+end
 -- The Advanced tab's sub-tabs: which modules each shows, in that order. A module not listed lands on Crew.
 -- "all" is the old single page with every section.
 local SUBTABS = {
@@ -192,6 +239,7 @@ local function moduleRow(def, broken)
       function() return ns.Modules.isEnabled(def.id) end,
       function(on) ns.Modules.setEnabled(def.id, on) end)
     r.label:SetFontObject(T.FONT.normal)
+    decorate(r, MODULE_ICONS[def.id])
     return r
   end), "switch", MODULE_ROW
 end
@@ -227,6 +275,7 @@ local function settingRow(def, s)
       r = Widgets.text(content, s.label or key, s.info, get, set, s.password)
     end
     r.tcList = s.kind == "list"
+    if s.kind ~= "list" then decorate(r, s.icon or SETTING_ICONS[id .. ":" .. key]) end
     return r
   end)
 end

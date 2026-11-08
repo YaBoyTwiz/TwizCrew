@@ -58,6 +58,7 @@ Find\BigArrow.lua
 Find\MeetMap.lua
 Tools\RankUp.lua
 Calendar\CalendarLogic.lua
+Calendar\Notes.lua
 Calendar\Diary.lua
 Calendar\CalendarUI.lua
 UI\Extras.lua

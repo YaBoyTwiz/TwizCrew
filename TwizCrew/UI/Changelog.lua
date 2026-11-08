@@ -20,6 +20,9 @@ Changelog.HISTORY = {
     "After a friend's quest: green + they can share it with you (click to ask), red X they can't (hover for why).",
     "A green check after a friend's quest when you're on it too.",
     "Congrats got sassier: 45 new lines that cheer for your friend while poking fun at them.",
+    "Calendar notes: click a day, type a note and pick an icon. The whole crew sees it on that day.",
+    "The calendar looks better: class icons for who played, note icons on the days, icons on the tabs.",
+    "Icons all over: on the right-click menus, on every pop-up, and next to options in the settings.",
   } },
   { ver = "0.1.16", date = "2026-11-08", lines = {
     "Crew calendar (the scroll button next to the wrench, or /tc cal): who played each day, and for how long.",

@@ -251,6 +251,10 @@ function MeetMap.start()
   ns.Bus.on(FEATURE, "FIND_CHANGED", onChanged)
   ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) if id == FEATURE then refresh() end end)
   ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", function() hookMap(); refresh() end)
+  -- The world map may load only when it is first opened: hook it then.
+  ns.Events.on(FEATURE, "ADDON_LOADED", function(name)
+    if name == "Blizzard_WorldMap" or name == "OpenMap" then hookMap() end
+  end)
   onChanged()
 end
 

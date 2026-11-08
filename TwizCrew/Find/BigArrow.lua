@@ -31,9 +31,10 @@ end
 
 local function savePosition()
   if not frame or not frame.GetPoint then return end
-  local ok, point, _, _, x, y = pcall(frame.GetPoint, frame, 1)
+  local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
   if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
-    ns.Modules.set(FEATURE, "arrowPos", { point = point, x = math.floor(x + 0.5), y = math.floor(y + 0.5) })
+    ns.Modules.set(FEATURE, "arrowPos", { point = point, rel = type(rel) == "string" and rel or point,
+      x = math.floor(x + 0.5), y = math.floor(y + 0.5) })
   end
 end
 
@@ -41,7 +42,8 @@ local function applyPosition()
   local p = setting("arrowPos")
   if type(p) ~= "table" or type(p.point) ~= "string" then p = { point = "TOP", x = 230, y = -150 } end
   frame:ClearAllPoints()
-  frame:SetPoint(p.point, UIParent, p.point, tonumber(p.x) or 0, tonumber(p.y) or 0)
+  frame:SetPoint(p.point, UIParent, type(p.rel) == "string" and p.rel or p.point, tonumber(p.x) or 0,
+    tonumber(p.y) or 0)
 end
 
 function BigArrow.applyLook()

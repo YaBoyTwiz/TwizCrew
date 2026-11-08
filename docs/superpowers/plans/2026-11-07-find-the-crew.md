@@ -217,3 +217,8 @@ when not in a group; opts.replace = key).
   `SetSuperTracked`.
 - **Walking buddy:** `ns.TestTools.inGroup(name)` makes only Walkbuddy count as a group member; its POS and MEET go
   through `Comm.inject`, so nothing fake is ever sent.
+- **Whole-branch review fixes:** (1) unit lookups by name are cached for 0.5 s and dropped on every group change
+  (a raid meant 40 name reads per arrow, ten times a second); (2) the world map is hooked again when
+  `Blizzard_WorldMap` or OpenMap loads later than TwizCrew; (3) the big arrow's saved spot keeps the relative anchor
+  the game gives after a drag; (4) a friend's last POS older than 60 s is unknown everywhere (the big arrow said a
+  stale distance before). Tests added for each.

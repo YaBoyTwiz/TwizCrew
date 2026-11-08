@@ -119,24 +119,34 @@ local function unitName(unit)
   return ns.shortName(n)
 end
 
+-- lower-case short name -> unit token, read from the game at most every UNIT_MAP_AGE seconds (the arrows ask many
+-- times a second; a raid would mean 40 name reads per question otherwise). Where.forget() drops it (group changes).
+local UNIT_MAP_AGE = 0.5
+local unitMap, unitMapAt
+
+local function buildUnitMap()
+  local map = {}
+  local raid = call(IsInRaid)
+  if raid or call(IsInGroup) then
+    for i = 1, raid and 40 or 4 do
+      local u = (raid and "raid" or "party") .. i
+      local n = unitName(u)
+      if n and not ns.isMe(n) then map[n:lower()] = u end
+    end
+  end
+  return map
+end
+
+function Where.forget() unitMap = nil end
+
 -- The party / raid unit token of a group member by short name, or nil.
 function Where.unitFor(name)
   if type(name) ~= "string" then return nil end
-  local want = name:lower()
-  if call(IsInRaid) then
-    for i = 1, 40 do
-      local u = "raid" .. i
-      local n = unitName(u)
-      if n and n:lower() == want and not ns.isMe(n) then return u end
-    end
-  elseif call(IsInGroup) then
-    for i = 1, 4 do
-      local u = "party" .. i
-      local n = unitName(u)
-      if n and n:lower() == want and not ns.isMe(n) then return u end
-    end
+  local now = ns.now()
+  if not unitMap or not unitMapAt or now - unitMapAt >= UNIT_MAP_AGE or now < unitMapAt then
+    unitMap, unitMapAt = buildUnitMap(), now
   end
-  return nil
+  return unitMap[name:lower()]
 end
 
 -- A unit's live position { c, x, y }, or nil (the game often hides it: secret, instance, too far).

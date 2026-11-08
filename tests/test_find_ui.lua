@@ -293,6 +293,38 @@ return {
       near(A, v.worldY, 0.6)
     end,
 
+    the_world_map_is_hooked_when_it_loads_later = function(ns, A, W)
+      W.state.missing.WorldMapFrame = true
+      boot(W)
+      A.no(ns.MeetMap.hookedForTest(), "no world map yet")
+      W.state.missing.WorldMapFrame = false
+      W:fire("ADDON_LOADED", "Blizzard_WorldMap")
+      A.ok(ns.MeetMap.hookedForTest(), "hooked once it loaded")
+      W:fire("ADDON_LOADED", "Blizzard_WorldMap")
+      A.eq(#W.mapClickHandlers, 1, "only once")
+    end,
+
+    big_arrow_loses_a_friend_who_goes_quiet = function(ns, A, W)
+      frostieNorth(ns, W)
+      ns.BigArrow.point({ kind = "member", name = "Frostie" })
+      A.eq(ns.BigArrow.stateForTest().text, "100 yd")
+      W:advance(61)
+      A.eq(ns.BigArrow.stateForTest().text, "position unknown")
+    end,
+
+    raid_members_are_found_too = function(ns, A, W)
+      boot(W)
+      W.state.inGroup, W.state.inRaid = true, true
+      W.state.groupMembers = {}
+      W.state.units.raid1 = { name = "Twiz", player = true }
+      W.state.units.raid7 = { name = "Frostie", player = true, pos = { y = -8900, x = -1000, instance = 0 } }
+      W:fire("GROUP_ROSTER_UPDATE")
+      friend(ns, W, "Frostie")
+      A.eq(ns.Where.unitFor("Frostie"), "raid7")
+      A.eq(ns.Where.unitFor("Twiz"), nil, "never ourselves")
+      A.eq(ns.Find.arrowFor("Frostie").text, "100 yd", "live raid position")
+    end,
+
     ---------------------------------------------------------------------------------------------- try it out
     walking_buddy_shows_arrows_and_a_meetup_through_the_real_code = function(ns, A, W)
       boot(W)

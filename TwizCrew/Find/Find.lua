@@ -73,7 +73,8 @@ local function onPos(sender, fields)
   positions[sender] = p
 end
 
--- Where a group member is: live from the game when it tells us, else their last POS. nil = unknown.
+-- Where a group member is: live from the game when it tells us, else their last POS (unless older than
+-- FIND_STALE). nil = unknown.
 function Find.positionOf(name)
   if type(name) ~= "string" or not Where.isGroupMember(name) then return nil end
   local live = Where.unit(Where.unitFor(name))
@@ -81,7 +82,9 @@ function Find.positionOf(name)
     live.at = ns.now()
     return live
   end
-  return positions[name]
+  local p = positions[name]
+  if p and ns.now() - p.at > cfg().FIND_STALE then return nil end
+  return p
 end
 
 local function zoneOf(name)
@@ -236,6 +239,7 @@ local function currentGroup()
 end
 
 local function onGroupChanged()
+  Where.forget()
   local now = currentGroup()
   local grew = false
   for name in pairs(now) do if not groupNames[name] then grew = true end end

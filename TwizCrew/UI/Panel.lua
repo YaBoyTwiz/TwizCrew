@@ -332,9 +332,9 @@ local DIST_WIDTH = 44 -- room for "999 yd" / "1.2k yd", so a changing distance n
 
 -- The row arrow for a model (Find the crew), worked out in that module's own guard: an error there means "no
 -- arrow", never a broken panel.
-local function rowArrow(m)
+local function rowArrow(m, me, facing)
   if type(m) ~= "table" or m.offline or not ns.Find or not ns.Find.arrowFor then return nil end
-  local ok, a = ns.Log.safe("find", ns.Find.arrowFor, m.name)
+  local ok, a = ns.Log.safe("find", ns.Find.arrowFor, m.name, me, facing)
   if ok and type(a) == "table" then return a end
   return nil
 end
@@ -741,12 +741,18 @@ end
 local function turnArrows()
   if not shown then return stopArrowTicker() end
   local s = setting("rowStyle")
+  -- where we are and which way we face, read once for all rows (ten times a second)
+  local me, facing
+  if ns.Where then
+    local ok, p, f = ns.Log.safe("find", function() return ns.Where.me(), ns.Where.facing() end)
+    if ok then me, facing = p, f end
+  end
   for i = 1, visibleRows do
     local r = rowFrames[i]
     local old = r and rawget(r, "tcArrow")
     local m = r and r.tcModel
     if m then
-      local a = rowArrow(m)
+      local a = rowArrow(m, me, facing)
       if (a == nil) ~= (old == nil) or (a and old and (a.still and true or false) ~= (old.still and true or false)) then
         requestRedraw()
         return

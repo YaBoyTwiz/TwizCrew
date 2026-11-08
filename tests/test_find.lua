@@ -190,7 +190,7 @@ return {
       W:advance(2)
       local pos = sentOf(ns, W, "POS")
       A.eq(#pos, 2)
-      A.eq(pos[2].fields, { u = "1" })
+      A.eq(pos[2].fields, { u = "1", off = "1" })
       W.state.map.x = 0.6
       W:advance(60)
       A.eq(#sentOf(ns, W, "POS"), 2)
@@ -394,6 +394,107 @@ return {
       ns.Find.placeMeet(1429, 0.25, 0.25, "all")
       for _, l in ipairs(ns.Report.lines()) do if l:find("^Find the crew") then line = l end end
       A.contains(line, "meet-up: Twiz (everyone) in Elwynn Forest, 15 min left")
+    end,
+
+    ---------------------------------------------------------------------------------------------- review fixes
+    -- The game may answer GetMapPosFromWorldPos for a map on another continent: we never ask it to.
+    where_never_places_a_spot_on_another_continents_map = function(ns, A, W)
+      local real = W.env.C_Map
+      W.env.C_Map = setmetatable({
+        GetMapPosFromWorldPos = function(_, _, mapID)
+          return mapID, { x = 0.5, y = 0.5, GetXY = function(self) return self.x, self.y end }
+        end,
+      }, { __index = function(_, k) return real[k] end })
+      A.eq(ns.Where.toMap(1438, 0, -9000, -1000), nil, "Teldrassil's map never shows an Elwynn spot")
+      local mx = ns.Where.toMap(1429, 0, -9000, -1000)
+      near(A, mx, 0.5, "Elwynn's map does")
+    end,
+
+    -- A meet-up clicked on the continent map (or a cave's map) is named after its zone, as GetRealZoneText says it.
+    a_meetup_is_named_after_its_zone = function(ns, A, W)
+      A.eq(ns.Where.placeName(1415, 0.5, 0.5), "Elwynn Forest", "continent map: the zone under the point")
+      A.eq(ns.Where.placeName(1415, 0.01, 0.01), "Eastern Kingdoms", "over no zone: the map's own name")
+      A.eq(ns.Where.placeName(1430, 0.5, 0.5), "Elwynn Forest", "a mine's map: the zone around it")
+      A.eq(ns.Where.placeName(1436, 0.5, 0.5), "Westfall")
+      boot(W)
+      ns.Find.placeMeet(1415, 0.5, 0.5, "all")
+      A.eq(ns.Find.meet().place, "Elwynn Forest")
+    end,
+
+    -- A secret answer is never tested for true / false: secret "in a group" counts as not in a group.
+    secret_group_answers_count_as_unknown = function(ns, A, W)
+      local secret = {}
+      W.state.secret[secret] = true
+      W.state.inGroup = secret
+      A.no(ns.Where.inGroup(), "secret: not known to be in a group")
+      W.state.inGroup = true
+      W.state.units.party1 = { name = secret, player = true }
+      A.eq(ns.Where.unitFor("Frostie"), nil)
+      boot(W)
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    -- An old meet-up sent again (its sender resends it to newcomers) never replaces the newest one, and a cleared one
+    -- never comes back.
+    an_old_meetup_sent_again_stays_gone = function(ns, A, W)
+      boot(W)
+      local function meetFrom(name, id)
+        hear(ns, W, name, "MEET", { id = id, c = "0", x = "-8500", y = "-500", p = "Elwynn Forest", a = "all",
+          l = "900" }, "WHISPER")
+      end
+      meetFrom("Frostie", "Frostie-1")
+      meetFrom("Ginkan", "Ginkan-1")
+      W:advance(10)
+      meetFrom("Frostie", "Frostie-1")
+      A.eq(ns.Find.meet().id, "Ginkan-1", "the newest stays")
+      hear(ns, W, "Ginkan", "MEET", { id = "Ginkan-1", clr = "1", a = "all" }, "WHISPER")
+      A.eq(ns.Find.meet(), nil)
+      W:advance(10)
+      meetFrom("Ginkan", "Ginkan-1")
+      A.eq(ns.Find.meet(), nil, "cleared stays cleared")
+      meetFrom("Ginkan", "Ginkan-2")
+      A.eq(ns.Find.meet().id, "Ginkan-2", "a new one is fine")
+    end,
+
+    -- "Share my position" off hides us from friends' arrows even where the game gives them our party position.
+    not_sharing_hides_the_games_own_party_position_too = function(ns, A, W)
+      boot(W)
+      group(W)
+      frostie(ns, W)
+      W.state.units.party1.pos = { y = -8900, x = -1000, instance = 0 } -- the game: 100 yards north
+      A.eq(ns.Find.arrowFor("Frostie").text, "100 yd", "live party position")
+      hear(ns, W, "Frostie", "POS", { u = "1", off = "1" })
+      A.eq(ns.Find.arrowFor("Frostie"), nil, "Frostie doesn't share")
+      hear(ns, W, "Frostie", "POS", { u = "1" })
+      A.eq(ns.Find.arrowFor("Frostie").text, "100 yd", "plain unknown (an instance, an older copy): live is fine")
+      hear(ns, W, "Frostie", "POS", { u = "1", off = "1" })
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8800", y = "-1000" })
+      A.ok(ns.Find.arrowFor("Frostie"), "sharing again")
+    end,
+
+    not_sharing_is_told_to_whoever_joins = function(ns, A, W)
+      boot(W)
+      ns.Modules.set("find", "sharePosition", false)
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "POS"), 0, "alone: nothing")
+      group(W)
+      W:advance(2)
+      local pos = sentOf(ns, W, "POS")
+      A.eq(#pos, 1)
+      A.eq(pos[1].fields, { u = "1", off = "1" })
+      W:advance(60)
+      A.eq(#sentOf(ns, W, "POS"), 1, "once")
+      group(W, { "Frostie", "Ginkan" })
+      W:advance(2)
+      pos = sentOf(ns, W, "POS")
+      A.eq(#pos, 2, "again for the newcomer")
+      A.eq(pos[2].fields, { u = "1", off = "1" })
+      ns.Modules.set("find", "sharePosition", true)
+      W:advance(2)
+      pos = sentOf(ns, W, "POS")
+      A.eq(pos[#pos].fields, { c = "0", x = "-9000", y = "-1000" }, "sharing again: a position right away")
     end,
   },
 }

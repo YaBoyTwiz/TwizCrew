@@ -111,12 +111,17 @@ end
 -- Where a point dist yards away at bearing sits on the minimap, from its centre: x, y (pixels, y up), onEdge.
 -- rotate: the minimap turns with the player (facing up). zoom: Minimap:GetZoom(). width: the minimap's width in
 -- pixels. shape: GetMinimapShape() (round and square parts; far points sit on the edge, just inside the rim).
-function FindLogic.minimapOffset(dist, bearing, facing, rotate, zoom, indoors, width, shape)
-  local yards = (indoors and MINIMAP_YARDS.indoor or MINIMAP_YARDS.outdoor)[tonumber(zoom) or 0]
+-- across: the yards the minimap shows edge to edge when the game says (C_Minimap.GetViewRadius * 2), else the zoom
+-- table. nil when the minimap turns but our facing is unknown (no way to know where the point is on it).
+function FindLogic.minimapOffset(dist, bearing, facing, rotate, zoom, indoors, width, shape, across)
+  if not finite(dist) or not finite(bearing) then return nil end
+  if rotate and not finite(facing) then return nil end
+  local yards = finite(across) and across > 0 and across
+    or (indoors and MINIMAP_YARDS.indoor or MINIMAP_YARDS.outdoor)[tonumber(zoom) or 0]
     or MINIMAP_YARDS.outdoor[0]
   width = finite(width) and width > 0 and width or 140
   local angle = bearing
-  if rotate and finite(facing) then angle = bearing - facing end
+  if rotate then angle = bearing - facing end
   local px = dist * width / yards
   local x, y = -math.sin(angle) * px, math.cos(angle) * px
   local radius = width / 2 - RIM

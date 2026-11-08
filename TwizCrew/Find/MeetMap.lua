@@ -179,6 +179,25 @@ local function hideMini()
   view.minimap, view.miniX, view.miniY, view.edge = false, nil, nil, nil
 end
 
+-- The frame level our world map icon needs: above the map's art, its explored-area overlays and the usual icons
+-- (Blizzard's pins get their levels from the map's frame level manager; a plain child of the canvas would sit under
+-- them all), and above OpenMap's stitched art while it shows.
+local LEVEL_TYPES = { "PIN_FRAME_LEVEL_WAYPOINT_LOCATION", "PIN_FRAME_LEVEL_AREA_POI", "PIN_FRAME_LEVEL_MAP_HIGHLIGHT",
+  "PIN_FRAME_LEVEL_OPENMAP_ICONS" }
+local function worldLevel(map, canvas, api)
+  local best = (call(canvas.GetFrameLevel, canvas) or 0) + 100
+  local levels = call(map.GetPinFrameLevelsManager, map)
+  if type(levels) == "table" and type(levels.GetValidFrameLevel) == "function" then
+    for _, kind in ipairs(LEVEL_TYPES) do
+      local level = call(levels.GetValidFrameLevel, levels, kind)
+      if type(level) == "number" and level + 1 > best then best = level + 1 end
+    end
+  end
+  local art = api and call(api.ArtTopLevel)
+  if type(art) == "number" and art + 20 > best then best = art + 20 end
+  return best
+end
+
 local function placeWorld(m)
   local map = rawget(_G, "WorldMapFrame") or WorldMapFrame
   if type(map) ~= "table" or not call(map.IsVisible, map) then return hideWorld() end
@@ -200,11 +219,10 @@ local function placeWorld(m)
   if type(scale) == "number" and scale > 0 then worldPin:SetScale(1 / scale) else scale = 1 end
   worldPin:ClearAllPoints()
   worldPin:SetPoint("CENTER", canvas, "TOPLEFT", x * w * scale, -y * h * scale)
-  local level = api and call(api.ArtTopLevel)
-  if type(level) == "number" then worldPin:SetFrameLevel(level + 20) end
+  worldPin:SetFrameLevel(worldLevel(map, canvas, api))
   tint(worldPin, m)
   worldPin:Show()
-  view.world, view.worldX, view.worldY = true, x, y
+  view.world, view.worldX, view.worldY, view.worldLevel = true, x, y, worldLevel(map, canvas, api)
 end
 
 local function placeMini(m)
@@ -217,15 +235,22 @@ local function placeMini(m)
   local zoom = call(mm.GetZoom, mm)
   local width = call(mm.GetWidth, mm)
   local shape = call(GetMinimapShape)
+  local radius = type(C_Minimap) == "table" and call(C_Minimap.GetViewRadius)
+  local across = type(radius) == "number" and radius > 0 and radius * 2 or nil
   local x, y, edge = ns.FindLogic.minimapOffset(dist, bearing, ns.Where.facing(), rotate, zoom,
-    call(IsIndoors) and true or false, width, shape)
+    call(IsIndoors) and true or false, width, shape, across)
+  if not x then return hideMini() end
   if not miniPin then miniPin = newPin(mm, 14) end
+  -- over the minimap's own art and the game's dots (a plain child would share the minimap's level)
+  local level = (call(mm.GetFrameLevel, mm) or 0) + 5
+  miniPin:SetFrameLevel(level)
   miniPin:ClearAllPoints()
   miniPin:SetPoint("CENTER", mm, "CENTER", x, y)
   miniPin:SetAlpha(edge and 0.75 or 1)
   tint(miniPin, m)
   miniPin:Show()
   view.minimap, view.miniX, view.miniY, view.edge = true, x, y, edge
+  view.miniLevel = level
 end
 
 local function refresh()

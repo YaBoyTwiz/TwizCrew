@@ -222,3 +222,20 @@ when not in a group; opts.replace = key).
   `Blizzard_WorldMap` or OpenMap loads later than TwizCrew; (3) the big arrow's saved spot keeps the relative anchor
   the game gives after a drag; (4) a friend's last POS older than 60 s is unknown everywhere (the big arrow said a
   stale distance before). Tests added for each.
+- **Independent review fixes (a second agent, after the build):** (1) the world map icon gets its frame level from
+  the map's own frame level manager (above the area POIs, the explored-area overlays and the waypoint level; above
+  OpenMap's art while stitched): a plain child of the canvas sat under Blizzard's overlays. (2) A meet-up is never
+  placed on a map of another continent, whatever `GetMapPosFromWorldPos` answers (the map's continent is checked
+  first, once per map). (3) The minimap icon hides on a turning minimap when our facing is unknown (it was drawn
+  north-up there, i.e. in the wrong spot), uses `C_Minimap.GetViewRadius` when the game has it (the zoom table
+  otherwise), and sits 5 levels above the minimap. (4) A meet-up clicked on a continent map (or a cave's or a floor's
+  map) is named after its zone (`C_Map.GetMapInfoAtPosition`, then up to the zone), so the pop-up and the big arrow
+  say "Elwynn Forest", not "Eastern Kingdoms" (and the big arrow no longer adds a zone when you are in it). (5) An
+  old meet-up id never comes back: its sender resends it to newcomers, and a copy that already had it (replaced by a
+  newer one, or cleared) now ignores it instead of letting it replace the newest. Walkbuddy's pretend meet-up gets a
+  new id on every press for the same reason. (6) "Share my position" off now also hides the game's own party
+  position of us: the "unknown" POS says `off=1` (older copies just read unknown), it goes out once and again when
+  someone joins, and friends' copies show no arrow to us until a real POS comes. (7) Secret values are asked about
+  before anything else is done with them (no comparing with nil or "", no true / false test): `Where`'s reads and
+  the group roster look. (8) The Crew panel reads our position and facing once per arrow tick, not once per row.
+  Tests added for each.

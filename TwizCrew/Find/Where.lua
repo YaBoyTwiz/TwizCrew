@@ -14,15 +14,18 @@ local function call(fn, ...)
   return nil
 end
 
+-- Asked before anything else is done with a value: a secret one can't even be compared (not with nil either) or
+-- tested for true / false.
 local function secret(v)
-  if v == nil or type(issecretvalue) ~= "function" then return false end
+  if type(issecretvalue) ~= "function" then return false end
   local ok, s = pcall(issecretvalue, v)
-  return not ok or s and true or false
+  if not ok then return true end
+  return s == true
 end
 
 -- A number we may do math on, else nil.
 local function num(v)
-  if v == nil or secret(v) then return nil end
+  if secret(v) or v == nil then return nil end
   if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then return nil end
   return v
 end
@@ -41,7 +44,7 @@ local function vector(x, y)
 end
 
 local function xy(v)
-  if type(v) ~= "table" or secret(v) then return nil end
+  if secret(v) or type(v) ~= "table" then return nil end
   local x, y
   if type(v.GetXY) == "function" then x, y = call(v.GetXY, v) else x, y = v.x, v.y end
   return num(x), num(y)
@@ -49,7 +52,8 @@ end
 
 local function inInstance()
   local inside = call(IsInInstance)
-  return inside and not secret(inside) and true or false
+  if secret(inside) then return false end
+  return inside and true or false
 end
 
 -- World position of a point on a map (map x, y from 0 to 1): c, x, y, or nil when the game can't place it
@@ -64,20 +68,60 @@ function Where.toWorld(mapID, mx, my)
   return c, x, y
 end
 
--- Where a world position sits on a map (0..1 inside it), or nil.
+-- Which continent (instance id) a map is on, or nil. Asked once per map: it never changes.
+local continentOf = {}
+local function mapContinent(mapID)
+  local c = continentOf[mapID]
+  if c == nil then
+    c = Where.toWorld(mapID, 0.5, 0.5)
+    if c ~= nil then continentOf[mapID] = c end
+  end
+  return c
+end
+
+-- Where a world position sits on a map (0..1 inside it), or nil. nil too when the map is on another continent:
+-- the game is not asked to place a Kalimdor spot on an Eastern Kingdoms map.
 function Where.toMap(mapID, c, x, y)
   mapID, c, x, y = num(mapID), num(c), num(x), num(y)
   if not mapID or c == nil or not x or not y then return nil end
+  if mapContinent(mapID) ~= c then return nil end
   local _, pos = call(mapApi("GetMapPosFromWorldPos"), c, vector(x, y), mapID)
   local mx, my = xy(pos)
   if not mx or not my then return nil end
   return mx, my
 end
 
-function Where.mapName(mapID)
-  local info = call(mapApi("GetMapInfo"), mapID)
-  if type(info) ~= "table" or type(info.name) ~= "string" or secret(info.name) or info.name == "" then return nil end
+local function infoName(info)
+  if type(info) ~= "table" or secret(info.name) or type(info.name) ~= "string" or info.name == "" then return nil end
   return info.name
+end
+
+function Where.mapName(mapID)
+  return infoName((call(mapApi("GetMapInfo"), mapID)))
+end
+
+-- Map types (Enum.UIMapType): world and continent maps are below ZONE, dungeon and micro maps (a cave, a city's
+-- floor) above it.
+local ZONE, DUNGEON, MICRO = 3, 4, 5
+
+-- The zone a map point is in, by name (as GetRealZoneText says it): on a continent map the zone under the point,
+-- on a cave's or a floor's map the zone around it. Falls back to the map's own name.
+function Where.placeName(mapID, mx, my)
+  local getInfo = mapApi("GetMapInfo")
+  local info = call(getInfo, mapID)
+  local own = infoName(info)
+  if type(info) == "table" and type(info.mapType) == "number" and info.mapType < ZONE then
+    local at = call(mapApi("GetMapInfoAtPosition"), mapID, mx, my)
+    if type(at) == "table" then info = at end
+  end
+  for _ = 1, 5 do
+    if type(info) ~= "table" or (info.mapType ~= DUNGEON and info.mapType ~= MICRO)
+      or type(info.parentMapID) ~= "number" then break end
+    local up = call(getInfo, info.parentMapID)
+    if type(up) ~= "table" then break end
+    info = up
+  end
+  return infoName(info) or own
 end
 
 local function zone()
@@ -109,13 +153,15 @@ function Where.facing()
   return num((call(GetPlayerFacing)))
 end
 
+local function yes(v) return not secret(v) and v and true or false end
+
 function Where.inGroup()
-  return (call(IsInGroup) or call(IsInRaid)) and true or false
+  return yes(call(IsInGroup)) or yes(call(IsInRaid))
 end
 
 local function unitName(unit)
   local n = call(UnitName, unit)
-  if type(n) ~= "string" or secret(n) or n == "" then return nil end
+  if secret(n) or type(n) ~= "string" or n == "" then return nil end
   return ns.shortName(n)
 end
 
@@ -126,8 +172,8 @@ local unitMap, unitMapAt
 
 local function buildUnitMap()
   local map = {}
-  local raid = call(IsInRaid)
-  if raid or call(IsInGroup) then
+  local raid = yes(call(IsInRaid))
+  if raid or yes(call(IsInGroup)) then
     for i = 1, raid and 40 or 4 do
       local u = (raid and "raid" or "party") .. i
       local n = unitName(u)
@@ -138,6 +184,7 @@ local function buildUnitMap()
 end
 
 function Where.forget() unitMap = nil end
+Where.isSecret = secret
 
 -- The party / raid unit token of a group member by short name, or nil.
 function Where.unitFor(name)
@@ -166,7 +213,7 @@ function Where.isGroupMember(name)
   end
   for _, fn in ipairs({ UnitInParty, UnitInRaid }) do
     local yes = call(fn, name)
-    if yes and not secret(yes) then return true end
+    if not secret(yes) and yes then return true end
   end
   return Where.unitFor(name) ~= nil
 end

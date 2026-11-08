@@ -340,11 +340,15 @@ local function build(W)
   -- name } (a straight line between them; map x runs along world y, map y along world x, as in the game).
   -- st.map = { id, x, y } = the player on a map (nil = no position); st.facing (radians); st.indoors; st.cvars;
   -- st.ctrl (Ctrl held). WorldMapFrame: st.worldMap = { shown, mapID }, its click handlers in W.mapClickHandlers.
+  -- mapType as Enum.UIMapType (1 world, 2 continent, 3 zone, 5 micro); parent = parentMapID.
   st.maps = {
-    [1429] = { c = 0, x0 = -8000, y0 = 0, x1 = -10000, y1 = -2000, name = "Elwynn Forest" },
-    [1436] = { c = 0, x0 = -10000, y0 = 0, x1 = -12000, y1 = -2000, name = "Westfall" },
-    [1438] = { c = 1, x0 = 11000, y0 = 2000, x1 = 9000, y1 = 0, name = "Teldrassil" },
-    [947] = { name = "Azeroth" }, -- the whole world: no world coordinates
+    [1429] = { c = 0, x0 = -8000, y0 = 0, x1 = -10000, y1 = -2000, name = "Elwynn Forest", mapType = 3 },
+    [1436] = { c = 0, x0 = -10000, y0 = 0, x1 = -12000, y1 = -2000, name = "Westfall", mapType = 3 },
+    [1438] = { c = 1, x0 = 11000, y0 = 2000, x1 = 9000, y1 = 0, name = "Teldrassil", mapType = 3 },
+    [1415] = { c = 0, x0 = -6000, y0 = 1000, x1 = -12000, y1 = -3000, name = "Eastern Kingdoms", mapType = 2 },
+    [1430] = { c = 0, x0 = -9400, y0 = -1400, x1 = -9600, y1 = -1600, name = "Fargodeep Mine", mapType = 5,
+      parent = 1429 },
+    [947] = { name = "Azeroth", mapType = 1 }, -- the whole world: no world coordinates
   }
   st.map = { id = 1429, x = 0.5, y = 0.5 }
   st.facing, st.indoors, st.cvars, st.ctrl = 0, false, {}, false
@@ -375,7 +379,19 @@ local function build(W)
     end,
     GetMapInfo = function(mapID)
       local m = st.maps[mapID]
-      return m and { mapID = mapID, name = m.name } or nil
+      return m and { mapID = mapID, name = m.name, mapType = m.mapType, parentMapID = m.parent } or nil
+    end,
+    -- the zone map under a point of a bigger map (nil over nothing)
+    GetMapInfoAtPosition = function(mapID, mx, my)
+      local m = st.maps[mapID]
+      if not m or m.c == nil then return nil end
+      local wx, wy = m.x0 + (m.x1 - m.x0) * my, m.y0 + (m.y1 - m.y0) * mx
+      for id, z in pairs(st.maps) do
+        if z.mapType == 3 and z.c == m.c and wx <= z.x0 and wx >= z.x1 and wy <= z.y0 and wy >= z.y1 then
+          return { mapID = id, name = z.name, mapType = z.mapType, parentMapID = z.parent }
+        end
+      end
+      return nil
     end,
   })
   fakes.GetPlayerFacing = function() return st.facing end

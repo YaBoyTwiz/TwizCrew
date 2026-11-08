@@ -355,6 +355,7 @@ return {
       A.eq(rowIndex(ns, "Walkbuddy (test)"), nil, "gone")
       A.eq(ns.Find.meet(), nil, "its meet-up too")
       W.env.SlashCmdList.TWIZCREW("test walk")
+      A.ok(ns.Find.meet(), "a second Walkbuddy brings a meet-up again (a new id)")
       W.env.SlashCmdList.TWIZCREW("test clear")
       A.eq(ns.roster:get("Walkbuddy (test)"), nil, "clear removes it")
       A.eq(ns.Find.meet(), nil)
@@ -402,6 +403,49 @@ return {
         a = "all", l = "900" }, "WHISPER")
       W:advance(0.3)
       A.ok(ns.MeetMap.stateForTest().edge, "far away: on the edge")
+    end,
+
+    ---------------------------------------------------------------------------------------------- review fixes
+    -- On Blizzard's map the icon sits above the map's own pins and explored-area overlays (their levels come from the
+    -- map's frame level manager), not at the canvas's level under them.
+    the_world_map_icon_sits_above_the_maps_own_pins = function(ns, A, W)
+      rawset(W.env.WorldMapFrame, "GetPinFrameLevelsManager", function()
+        return { GetValidFrameLevel = function(_, kind)
+          if kind == "PIN_FRAME_LEVEL_AREA_POI" then return 500 end
+          if kind == "PIN_FRAME_LEVEL_MAP_HIGHLIGHT" then return 300 end
+          error("unknown frame level type " .. tostring(kind))
+        end }
+      end)
+      boot(W)
+      W.state.worldMap.shown = true
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8500", y = "-500", p = "Elwynn Forest",
+        a = "all", l = "900" }, "WHISPER")
+      W:advance(0.3)
+      local v = ns.MeetMap.stateForTest()
+      A.ok(v.world)
+      A.eq(v.worldLevel, 501)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    -- A turning minimap with no facing can't place the icon (it would be off by the turn): hidden. The game's own
+    -- view radius sets the scale when it has one.
+    the_minimap_icon_needs_facing_on_a_turning_minimap = function(ns, A, W)
+      rawset(W.env.Minimap, "GetFrameLevel", function() return 7 end)
+      boot(W)
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8900", y = "-1000", p = "Elwynn Forest",
+        a = "all", l = "900" }, "WHISPER") -- 100 yards north
+      W.state.cvars.rotateMinimap = "1"
+      W.state.facing = nil
+      W:advance(0.3)
+      A.no(ns.MeetMap.stateForTest().minimap, "turning, facing unknown: hidden")
+      W.state.facing = 0
+      W.env.C_Minimap = { GetViewRadius = function() return 200 end }
+      W:advance(0.3)
+      local v = ns.MeetMap.stateForTest()
+      A.ok(v.minimap)
+      near(A, v.miniY, 100 * 140 / 400, "400 yards across")
+      A.eq(v.miniLevel, 12, "above the minimap's own level")
+      A.eq(ns.Log.errors(10), {})
     end,
   },
 }

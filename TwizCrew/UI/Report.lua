@@ -262,9 +262,10 @@ local ROASTS = {                  -- the Roast pop-up button goes through these,
 
 local WALKER = "Walkbuddy (test)" -- Find the crew: a pretend group member who walks around you
 local WALK_TICK, WALK_RADIUS, WALK_STEP = 1, 80, 0.12 -- seconds, yards, radians per tick
-local WALK_MEET_ID = "Walkbuddy-test"
+local walkMeets = 0     -- Walkbuddy's meet-ups so far: each press gets a new id (an old id never comes back)
 local ticker            -- Testbuddy's XP ticker
 local walkTicker        -- Walkbuddy's steps
+local walkMeetId        -- Walkbuddy's current meet-up id
 local walkAngle = 0
 local copyOn = false    -- "My copy" follows our own updates
 local layerOf = {}      -- fake name -> "same" | "different" (the Layer pop-up button)
@@ -486,8 +487,8 @@ end
 
 local function removeWalker()
   stopWalk()
-  if ns.Find and ns.Find.meet() and ns.Find.meet().id == WALK_MEET_ID then
-    inject(WALKER, "MEET", { id = WALK_MEET_ID, clr = "1", a = "party" })
+  if walkMeetId and ns.Find and ns.Find.meet() and ns.Find.meet().id == walkMeetId then
+    inject(WALKER, "MEET", { id = walkMeetId, clr = "1", a = "party" })
   end
   return removeFake(WALKER)
 end
@@ -515,7 +516,9 @@ function ACTIONS.walk()
   if C_Timer and C_Timer.NewTicker then
     walkTicker = C_Timer.NewTicker(WALK_TICK, function() ns.Log.safe(TOOLS, walkStep) end)
   end
-  inject(WALKER, "MEET", { id = WALK_MEET_ID, c = tostring(me.c), x = tostring(math.floor(me.x + 120 + 0.5)),
+  walkMeets = walkMeets + 1
+  walkMeetId = "Walkbuddy-test-" .. walkMeets
+  inject(WALKER, "MEET", { id = walkMeetId, c = tostring(me.c), x = tostring(math.floor(me.x + 120 + 0.5)),
     y = tostring(math.floor(me.y + 0.5)), p = zone, a = "party", l = tostring(ns.Config.MEET_LIFE) })
   panelHint()
   say("added Walkbuddy: a pretend member of your group walking around you, with an arrow on its row (click it for "

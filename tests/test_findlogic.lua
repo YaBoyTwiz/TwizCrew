@@ -150,5 +150,41 @@ return {
       near(A, x, 64, "square corner x", 0.01)
       near(A, y, -64, "square corner y", 0.01)
     end,
+
+    -- review: the arrow on screen, end to end. A texture turned by SetRotation(a) (counter-clockwise) that points up
+    -- at rest points at screen (-sin a, cos a). Facing is the game's: 0 = north, counter-clockwise (pi / 2 = west).
+    arrow_points_the_right_way_on_screen = function(ns, A)
+      local L = ns.FindLogic
+      local me = { c = 0, x = 0, y = 0 }
+      local function screen(target, facing)
+        local _, bearing = L.vector(me, target)
+        local a = L.relative(bearing, facing)
+        return -math.sin(a), math.cos(a)
+      end
+      local north, east, west = { c = 0, x = 100, y = 0 }, { c = 0, x = 0, y = -100 }, { c = 0, x = 0, y = 100 }
+      local x, y = screen(east, 0)
+      A.ok(x > 0.99 and math.abs(y) < 0.01, "facing north, a friend to the east: arrow to the right")
+      x, y = screen(west, 0)
+      A.ok(x < -0.99, "facing north, west: to the left")
+      x, y = screen(north, -PI / 2)
+      A.ok(x < -0.99, "facing east, north: to the left")
+      x, y = screen(east, PI)
+      A.ok(x < -0.99, "facing south, east: to the left")
+      x, y = screen(north, PI)
+      A.ok(y < -0.99, "facing south, north: behind (down)")
+      x, y = screen(west, PI / 2)
+      A.ok(y > 0.99, "facing west, west: straight ahead")
+    end,
+
+    -- review: a turning minimap with no facing can't place anything; the game's own view radius wins over the table
+    minimap_needs_facing_when_it_turns_and_uses_the_games_radius = function(ns, A)
+      local L = ns.FindLogic
+      A.eq(L.minimapOffset(100, 0, nil, true, 0, false, 140, "ROUND"), nil, "turning, facing unknown: nowhere")
+      local x, y = L.minimapOffset(100, 0, nil, false, 0, false, 140, "ROUND")
+      A.ok(math.abs(x) < 0.01 and y > 0, "not turning: facing isn't needed")
+      x, y = L.minimapOffset(100, 0, 0, false, 0, false, 140, "ROUND", 400)
+      near(A, y, 100 * 140 / 400, "400 yards across, as the game says", 0.01)
+      A.eq(L.minimapOffset(nil, 0, 0, false, 0, false, 140, "ROUND"), nil, "no distance: nowhere")
+    end,
   },
 }

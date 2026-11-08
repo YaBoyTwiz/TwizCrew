@@ -15,9 +15,12 @@ local Logic = ns.FindLogic
 local Where = ns.Where
 
 local positions = {}  -- name -> { c, x, y, at } from POS messages (group members only)
-local lastSent        -- { c, x, y, at } of our last POS; { unknown = true, at } after an "unknown" one
+local private = {}    -- name -> true: they turned "Share my position" off (no arrow, not even from the game's own)
+local lastSent        -- { c, x, y, at } of our last POS; { unknown = true, at } after an "unknown" one (off = true:
+                      -- the one that says we don't share)
 local forceSend = false
 local meet            -- { id, by, c, x, y, place, audience, expires, mine }
+local meetIds = {}    -- every meet-up id this copy has had or seen cleared: an old one sent again never comes back
 local seq = 0
 local groupNames = {} -- lower-case names in our group at the last roster look (to notice someone joining)
 local arrowKey = ""   -- who has a row arrow now, to tell the panel when that changes
@@ -35,15 +38,25 @@ local function sendCfg()
   return { move = c.FIND_MOVE, gap = c.FIND_GAP, keepAlive = c.FIND_KEEPALIVE }
 end
 
-local function sendUnknown()
-  ns.Comm.sendGroup("POS", Logic.posFields(nil), { replace = "POS" })
-  lastSent = { unknown = true, at = ns.now() }
+-- "Unknown" (instance, no position). off: because "Share my position" is off; friends' copies then also hide the
+-- game's own party position of us (older copies just read it as unknown).
+local function sendUnknown(off)
+  local fields = Logic.posFields(nil)
+  if off then fields.off = "1" end
+  ns.Comm.sendGroup("POS", fields, { replace = "POS" })
+  lastSent = { unknown = true, off = off or nil, at = ns.now() }
 end
 
 local function sendPosition()
-  if not setting("sharePosition") then return end
   if not Where.inGroup() then
     lastSent, forceSend = nil, false
+    return
+  end
+  if not setting("sharePosition") then
+    -- once, and again when someone joins, so every group member's copy knows to show no arrow to us
+    if forceSend or not (lastSent and lastSent.off) then
+      if not lastSent or ns.now() - lastSent.at >= 1 then sendUnknown(true); forceSend = false end
+    end
     return
   end
   local now = ns.now()
@@ -71,12 +84,13 @@ local function onPos(sender, fields)
   local p = Logic.readPos(fields)
   if p then p.at = ns.now() end
   positions[sender] = p
+  private[sender] = (not p and fields.off == "1") or nil
 end
 
 -- Where a group member is: live from the game when it tells us, else their last POS (unless older than
 -- FIND_STALE). nil = unknown.
 function Find.positionOf(name)
-  if type(name) ~= "string" or not Where.isGroupMember(name) then return nil end
+  if type(name) ~= "string" or private[name] or not Where.isGroupMember(name) then return nil end
   local live = Where.unit(Where.unitFor(name))
   if live then
     live.at = ns.now()
@@ -168,9 +182,10 @@ function Find.placeMeet(mapID, mx, my, audience)
   seq = seq + 1
   meet = {
     id = ns.playerName() .. "-" .. tostring(math.floor(ns.wallclock())) .. "-" .. seq,
-    by = ns.playerName(), c = c, x = x, y = y, place = Where.mapName(mapID) or "", audience = audience,
+    by = ns.playerName(), c = c, x = x, y = y, place = Where.placeName(mapID, mx, my) or "", audience = audience,
     expires = ns.now() + cfg().MEET_LIFE, mine = true,
   }
+  meetIds[meet.id] = true
   sendMeet(meet)
   changed()
   return true
@@ -197,6 +212,7 @@ local function onMeet(sender, fields)
   end
   if type(fields.id) ~= "string" or fields.id == "" then return end
   if fields.clr == "1" then
+    meetIds[fields.id] = true
     if meet and meet.id == fields.id then
       meet = nil
       closeMeetArrow()
@@ -213,6 +229,10 @@ local function onMeet(sender, fields)
     meet.expires = now + left
     return
   end
+  -- one we had before (replaced by a newer one, cleared, or over): its sender may still send it to newcomers, but
+  -- it never takes the newest one's place here
+  if meetIds[fields.id] then return end
+  meetIds[fields.id] = true
   meet = {
     id = fields.id, by = sender, c = p.c, x = p.x, y = p.y, place = ns.Util.safeText(fields.p or ""),
     audience = audience, expires = now + left,
@@ -228,10 +248,11 @@ end
 local function currentGroup()
   local out = {}
   if not Where.inGroup() then return out end
-  local raid = IsInRaid and IsInRaid()
+  local okRaid, raid = pcall(IsInRaid)
+  raid = okRaid and not Where.isSecret(raid) and raid and true or false
   for i = 1, raid and 40 or 4 do
     local ok, n = pcall(UnitName, (raid and "raid" or "party") .. i)
-    if ok and type(n) == "string" and n ~= "" and not (issecretvalue and issecretvalue(n)) then
+    if ok and not Where.isSecret(n) and type(n) == "string" and n ~= "" then
       out[ns.shortName(n):lower()] = true
     end
   end
@@ -246,6 +267,9 @@ local function onGroupChanged()
   groupNames = now
   for name in pairs(positions) do
     if not Where.isGroupMember(name) then positions[name] = nil end
+  end
+  for name in pairs(private) do
+    if not Where.isGroupMember(name) then private[name] = nil end
   end
   if grew then
     forceSend = true
@@ -327,7 +351,7 @@ local function onDisable()
   enabled = false
   if ticker then ticker:Cancel(); ticker = nil end
   if lastSent and not lastSent.unknown and Where.inGroup() then sendUnknown() end
-  positions, lastSent, meet, arrowKey = {}, nil, nil, ""
+  positions, private, lastSent, meet, arrowKey = {}, {}, nil, nil, ""
   if ns.BigArrow and ns.BigArrow.close then ns.Log.safe(FEATURE, ns.BigArrow.close) end
   if ns.MeetMap then ns.Log.safe(FEATURE, ns.MeetMap.stop) end
   changed()
@@ -365,9 +389,9 @@ ns.Modules.register({
   onEnable = onEnable,
   onDisable = onDisable,
   onSettingChanged = function(key, value)
-    if key == "sharePosition" and value == false and enabled then
-      if lastSent and not lastSent.unknown and Where.inGroup() then sendUnknown() end
-      lastSent = nil
+    if key == "sharePosition" and enabled then
+      if value == false and Where.inGroup() then sendUnknown(true) else lastSent = nil end
+      if value ~= false then forceSend = true end
     elseif key == "rowArrows" then
       checkArrows()
     elseif key == "meetups" and value == false then

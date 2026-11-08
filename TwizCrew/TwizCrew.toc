@@ -2,7 +2,7 @@
 ## Title: TwizCrew
 ## Notes: See what your crew is doing and which layer they're on. Type /tc
 ## Author: YaBoyTwiz
-## Version: 0.1.14
+## Version: 0.1.15
 ## SavedVariables: TwizCrewDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BattleShout
 ## AddonCompartmentFunc: TwizCrew_OnAddonCompartmentClick

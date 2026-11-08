@@ -186,6 +186,51 @@ return {
       A.eq(#ns.Popups.textsForTest(), 0, "switched off")
       A.eq(ns.Log.errors(10), {})
     end,
+    my_quest_id_and_shareable_go_out = function(ns, A, W)
+      questLog(W, { { id = 7, title = "Kobold Camp Cleanup", objectives = { { text = "Vermin: 1/8" } } } }, 7)
+      rawset(W.env.C_QuestLog, "IsPushableQuest", function() return true end)
+      start(ns, W)
+      W:advance(2)
+      A.eq(ns.Self.lastSent().qi, "7")
+      A.eq(ns.Self.lastSent().qs, "1")
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves", qi = "33", qs = "0" })
+      local f = ns.roster:get("Frostie")
+      A.eq(f.questId, 33); A.eq(f.questShareable, false)
+    end,
+    can_i_get_their_quest = function(ns, A, W)
+      questLog(W, { { id = 7, title = "Kobold Camp Cleanup", objectives = {} } }, 7)
+      local done = { [40] = true }
+      rawset(W.env.C_QuestLog, "IsQuestFlaggedCompleted", function(id) return done[id] == true end)
+      start(ns, W)
+      local Q = ns.Quest
+      A.eq(Q.canGet(nil, "Wolves"), "unknown", "no ID, not mine: can't tell")
+      A.eq(Q.canGet(7, "Kobold Camp Cleanup"), "have")
+      A.eq(Q.canGet(nil, "Kobold Camp Cleanup"), "have", "by name too")
+      A.eq(Q.canGet(40, "Old one"), "done")
+      A.eq(Q.canGet(33, "Wolves", false), "unshareable")
+      A.eq(Q.canGet(33, "Wolves"), "unknown", "without Questie: can't tell")
+      -- with Questie
+      local state, text = 8, "Unavailable: Class requirement"
+      W.env.QuestieLoader = { ImportModule = function(_, name)
+        if name == "QuestieDB" then return { IsDoableVerbose = function() return text, true, state end } end
+      end }
+      local st, words = Q.canGet(33, "Wolves")
+      A.eq(st, "no"); A.eq(words, "you can't take it (class requirement)")
+      state, text = 0, "Available: Doable"
+      A.eq(Q.canGet(33, "Wolves"), "ok")
+      -- the menu and the tooltip say so
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves", qi = "33", qs = "1" })
+      W:advance(1)
+      local row = ns.Panel.models()[1]
+      local found
+      for _, l in ipairs(row.info or {}) do if l:find("You can get it", 1, true) then found = true end end
+      A.ok(found, "tooltip: you can get it")
+      done[33] = true
+      local label
+      for _, it in ipairs(ns.Panel.rowMenu(row)) do if it.label:find("share") then label = it.label end end
+      A.eq(label, "Can't share: Wolves (you already did it)")
+      A.eq(ns.Log.errors(10), {})
+    end,
     right_click_menu = function(ns, A, W)
       start(ns, W)
       local M = ns.Panel.rowMenu

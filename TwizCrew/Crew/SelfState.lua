@@ -94,6 +94,8 @@ function Self.gather()
     qn = tostring(q.qn or ""), -- the quest I'm on, its objectives, "1" = ready to turn in (Quest.wire)
     qo = tostring(q.qo or ""),
     qc = tostring(q.qc or ""),
+    qi = tostring(q.qi or ""), -- its quest ID and whether it can be shared (friends see if they can get it)
+    qs = tostring(q.qs or ""),
     lo = ns.MockShow and ns.MockShow.myLook() or "", -- race, gender and visible gear (the mock show's stand-in)
   }
 end

@@ -1103,7 +1103,14 @@ function Panel.rowMenu(m)
       local title = m.questName
       local shown = ns.Util.truncateUTF8(ns.Util.safeText(title), 28)
       if shown ~= ns.Util.safeText(title) then shown = shown .. "..." end
-      items[#items + 1] = { label = "Ask to share: " .. shown, onClick = function() ns.Quest.request(name, title) end }
+      local status, words = "unknown", nil
+      if ns.Quest.canGet then status, words = ns.Quest.canGet(m.questId, title, m.questShareable) end
+      if status == "ok" or status == "unknown" then
+        items[#items + 1] = { label = "Ask to share: " .. shown, onClick = function() ns.Quest.request(name, title) end }
+      else
+        items[#items + 1] = { label = "Can't share: " .. shown .. " (" .. tostring(words) .. ")",
+          onClick = function() print("TwizCrew: no use asking: " .. tostring(words) .. ".") end }
+      end
     end
     if m.dinged and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(name) then
       items[#items + 1] = { label = "Congratulate them", onClick = function() Panel.cheer({ tcModel = m }) end }

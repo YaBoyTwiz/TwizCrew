@@ -114,9 +114,16 @@ end
 -- The wire fields: qn (title), qo (objectives, "; " between them), qc ("1" = ready to turn in). Empty when you
 -- don't share quests or have none.
 function Quest.wire()
-  if ns.Modules.setting("panel", "shareQuest") == false then return { qn = "", qo = "", qc = "" } end
+  local none = { qn = "", qo = "", qc = "", qi = "", qs = "" }
+  if ns.Modules.setting("panel", "shareQuest") == false then return none end
   local q = Quest.look()
-  if not q then return { qn = "", qo = "", qc = "" } end
+  if not q then return none end
+  -- qi: the quest's ID (friends check if they can get it); qs: "1" can be shared, "0" can't, "" unknown
+  local qs = ""
+  if type(q.id) == "number" and QLog().IsPushableQuest then
+    local p = call(QLog().IsPushableQuest, q.id)
+    if p ~= nil and readable(p) then qs = (p and p ~= 0) and "1" or "0" end
+  end
   local objs = {}
   for i, o in ipairs(q.objectives or {}) do
     if i > OBJECTIVES then break end
@@ -126,6 +133,8 @@ function Quest.wire()
     qn = ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX),
     qo = ns.Util.truncateUTF8(table.concat(objs, "; "), OBJ_MAX),
     qc = q.complete and "1" or "",
+    qi = type(q.id) == "number" and tostring(q.id) or "",
+    qs = qs,
   }
 end
 
@@ -163,6 +172,51 @@ local askedAt, heardAt = {}, {}
 -- how names are written; so the request only needs a group, and the game itself refuses a share outside it.)
 local function inAnyGroup()
   return call(IsInGroup) and true or call(IsInRaid) and true or false
+end
+
+-- Questie's database, when Questie is installed and ready (it knows level, class, race and earlier-quest rules).
+local function questie()
+  if type(QuestieLoader) ~= "table" or type(QuestieLoader.ImportModule) ~= "function" then return nil end
+  local ok, db = pcall(QuestieLoader.ImportModule, QuestieLoader, "QuestieDB")
+  if ok and type(db) == "table" and type(db.IsDoableVerbose) == "function" then return db end
+end
+
+local QUESTIE_OK = { [0] = true, [5] = true } -- available; its parent quest is active
+local QUESTIE_DONE, QUESTIE_HAVE = 1, 2
+
+-- Can I get a friend's quest? id: its quest ID (or nil); title: its name; shareable: true / false / nil.
+-- Returns status, words: "ok" (you can get it), "have", "done", "unshareable", "no" (with Questie's reason), or
+-- "unknown" (no way to tell; asking is fine).
+function Quest.canGet(id, title, shareable)
+  id = tonumber(id)
+  if shareable == false then return "unshareable", "it can't be shared" end
+  for _, q in ipairs(entries()) do
+    if (id and q.id == id) or (type(title) == "string" and title ~= "" and
+      (q.title == title or ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX) == title)) then
+      return "have", "you already have it"
+    end
+  end
+  if not id then return "unknown", nil end
+  if QLog().IsQuestFlaggedCompleted and call(QLog().IsQuestFlaggedCompleted, id) == true then
+    return "done", "you already did it"
+  end
+  if type(IsQuestFlaggedCompleted) == "function" and call(IsQuestFlaggedCompleted, id) == true then
+    return "done", "you already did it"
+  end
+  local db = questie()
+  if db then
+    local ok, text, _, state = pcall(db.IsDoableVerbose, id, false, true, true)
+    if ok then
+      if state == QUESTIE_DONE then return "done", "you already did it" end
+      if state == QUESTIE_HAVE then return "have", "you already have it" end
+      if QUESTIE_OK[state] then return "ok", "you can get it" end
+      if state ~= nil then
+        local why = type(text) == "string" and text:match(":%s*(.+)$") or nil
+        return "no", "you can't take it" .. (why and (" (" .. why:lower() .. ")") or "")
+      end
+    end
+  end
+  return "unknown", nil
 end
 
 -- Ask `name` to share `title` (their quest, as their copy sent it). Returns true when the request went out, or

@@ -14,6 +14,10 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.15", date = "2026-11-08", lines = {
+    "Before you ask: hover a friend to see if you can get their quest (with Questie: level, class, earlier quests).",
+    "The right-click menu says Can't share (and why) when there's no use asking.",
+  } },
   { ver = "0.1.14", date = "2026-11-08", lines = {
     "Fixed: Ask to share said you weren't in a group when you were.",
     "Fixed: Invite to group showed for friends already in your party.",

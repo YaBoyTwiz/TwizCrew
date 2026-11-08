@@ -129,6 +129,15 @@ function PanelLogic.infoLines(m)
     for _, o in ipairs(ns.Quest and ns.Quest.objectiveLines(m.questObjectives) or {}) do
       lines[#lines + 1] = "   - " .. text(o)
     end
+    -- can I get it? (only when we can tell)
+    if ns.Quest and ns.Quest.canGet then
+      local shareable = (m.questShareable == true or m.questShareable == false) and m.questShareable or nil
+      local status, words = ns.Quest.canGet(m.questId, m.questName, shareable)
+      if status ~= "unknown" and words then
+        lines[#lines + 1] = "   " .. (status == "ok" and "You can get it: right-click to ask them to share it"
+          or ("You: " .. words))
+      end
+    end
   end
   if type(m.status) == "string" and m.status ~= "" then lines[#lines + 1] = 'Status: "' .. text(m.status) .. '"' end
   if #lines == 0 then return nil end
@@ -173,7 +182,11 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
       }
       if not offline then
         row.quest = ns.Quest and ns.Quest.short(m.questName, m.questObjectives, m.questComplete) or nil
-        if type(m.questName) == "string" and m.questName ~= "" then row.questName = m.questName end
+        if type(m.questName) == "string" and m.questName ~= "" then
+          row.questName = m.questName
+          row.questId = tonumber(m.questId)
+          if m.questShareable == true or m.questShareable == false then row.questShareable = m.questShareable end
+        end
         row.questDone = m.questComplete and true or false
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
         if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end

@@ -50,6 +50,10 @@ local WIRE = {
   qn  = { "questName", keepString },       -- the quest they're on
   qo  = { "questObjectives", keepString }, -- its objectives, "; " between them
   qc  = { "questComplete", function(v) if type(v) == "string" then return v == "1" end end }, -- ready to turn in
+  qi  = { "questId", num },                -- its quest ID
+  qs  = { "questShareable", function(v)    -- "1" can be shared, "0" can't, "" unknown
+    if v == "1" then return true elseif v == "0" then return false elseif type(v) == "string" then return "" end
+  end },
 }
 
 -- XP pace for one play session (m.xpTrack): XP earned and the playing time it took. Called after a message that

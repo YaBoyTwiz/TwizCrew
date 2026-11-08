@@ -163,7 +163,7 @@ Other players never see any of it. The messages are hidden addon messages, not c
   day, 30 days kept, keyed by a random id per WoW account (alts = one person). Swaps are pull-only: CALD digests
   (slots known per person) to everyone every 10 min and to a friend who comes online; whoever knows less asks once
   (CALQ) and gets CALP (one field per day, repeatKeys i). Masks merge by OR, so order never matters; nobody can write
-  your own diary. Views: Month, a day's timeline (AFK lighter), Usual times (weekday x hour grid over 4 weeks, best
+  your own diary. Views: Month, a day's timeline (AFK lighter; each stretch's times written on the row, hover = who was on at that moment, wheel scrolls past 9 people; the month tooltip lists each person's times; a class icon starts each bar; click a row = their Usual grid), Usual times (weekday x hour grid over 4 weeks, for everyone or the people picked from the list (one = their class color, several = how many of them on + their best time together; "See real weeks" = a past week, who was really on hour by hour, arrows step weeks, click a square = that day; day view has "This week as a grid"), best
   time to play together, habits). Open: wrench menu, /tc cal. Switch: Share my play times. Step 2 (next): events
   (dungeon runs) with sign-ups, roles, reminders and "invite everyone going", stored and swapped the same way.
   Notes (v0.1.17, Calendar/Notes.lua): click a day, type a note, pick one of 16 icons; shared via CALN (sent to

@@ -193,15 +193,71 @@ function L.dayView(people, day, off)
   return out
 end
 
--- "7pm-11:15pm, 11:30pm-12am" from a day view's runs (AFK and active joined).
-function L.runText(runs)
+-- A day view's runs with AFK and active joined: { { from = slot, to = slot (exclusive) } }.
+function L.spans(runs)
   local spans, cur = {}, nil
   for _, r in ipairs(runs or {}) do
     if cur and cur.to == r.from then cur.to = r.to else cur = { from = r.from, to = r.to }; spans[#spans + 1] = cur end
   end
+  return spans
+end
+
+-- "7pm-11:15pm" for one span.
+function L.spanText(s) return L.clock(s.from * 15) .. "-" .. L.clock(s.to * 15) end
+
+-- "7pm-11:15pm, 11:30pm-12am" from a day view's runs (AFK and active joined).
+function L.runText(runs)
   local out = {}
-  for i, s in ipairs(spans) do out[i] = L.clock(s.from * 15) .. "-" .. L.clock(s.to * 15) end
+  for i, s in ipairs(L.spans(runs)) do out[i] = L.spanText(s) end
   return table.concat(out, ", ")
+end
+
+-- Who was really on in the 7 local days from `first`: grid[0..6][0..23] = the sum over people of the part of that
+-- hour they were on (0..1 each, 15-minute steps), and each person's own grid, most time first:
+-- { grid, count, first, people = { { id, name, class, minutes, grid } } }.
+function L.week(people, first, off)
+  local function empty()
+    local g = {}
+    for w = 0, 6 do g[w] = {}; for h = 0, 23 do g[w][h] = 0 end end
+    return g
+  end
+  local grid, persons = empty(), {}
+  for id, p in pairs(people or {}) do
+    local mine, minutes = empty(), 0
+    for w = 0, 6 do
+      for h = 0, 23 do
+        local n = 0
+        for q = 0, 3 do if slotState(p.days, first + w, h * 4 + q, off) then n = n + 1 end end
+        if n > 0 then
+          mine[w][h] = n / 4
+          grid[w][h] = grid[w][h] + n / 4
+          minutes = minutes + n * 15
+        end
+      end
+    end
+    if minutes > 0 then
+      persons[#persons + 1] = { id = id, name = p.name, class = p.class, minutes = minutes, grid = mine }
+    end
+  end
+  table.sort(persons, function(a, b)
+    if a.minutes ~= b.minutes then return a.minutes > b.minutes end
+    return tostring(a.name) < tostring(b.name)
+  end)
+  return { grid = grid, people = persons, count = #persons, first = first }
+end
+
+-- Who was on in local slot j (0..95) of a day view, in its order: { { name, class, afk } }.
+function L.whoAt(list, j)
+  local out = {}
+  for _, e in ipairs(list or {}) do
+    for _, r in ipairs(e.runs or {}) do
+      if j >= r.from and j < r.to then
+        out[#out + 1] = { name = e.name, class = e.class, afk = r.afk }
+        break
+      end
+    end
+  end
+  return out
 end
 
 -------------------------------------------------------------------------------------------------------- month

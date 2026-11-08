@@ -14,6 +14,17 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.19", date = "2026-11-08", lines = {
+    "Calendar, a day: each bar starts with that person's class icon and has their times on it (7pm-11pm).",
+    "Hover the timeline to see who was on at that moment (\"At 8:15pm, 3 on: ...\"), AFK marked.",
+    "Calendar, the month: hover a day for each person's times, not just how long they played.",
+    "More people than fit on a day: scroll with the mouse wheel.",
+    "Usual times: click people in the list under the grid to see only them: one person in their class color,",
+    "  several = how many of them are usually on, and their best time to play together. Click again to take them off.",
+    "  Or click someone's row on a day to jump to their grid.",
+    "Real weeks: \"See real weeks\" turns the grid into a past week (arrows for others): who was really on, hour by",
+    "  hour, on those dates. Works with the people you picked. Click a square for that day; on a day, \"This week as a grid\".",
+  } },
   { ver = "0.1.18", date = "2026-11-08", lines = {
     "Create note: the dungeon list is inside the window now (click one, scroll for more): no more clicks falling through.",
     "Time has up and down arrows for the hour and the minutes (the mouse wheel works too), and an AM / PM button.",

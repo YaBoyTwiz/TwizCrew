@@ -1,5 +1,6 @@
 -- Crew calendar, the window (part of module "calendar"): Month (who played each day, with class icons and note
--- icons), a day's timeline (one bar per friend, AFK lighter) with that day's notes and a box to add one (with an
+-- icons; the tooltip has everyone's times), a day's timeline (one bar per friend, AFK lighter, their times written
+-- on it, hover for who was on at that moment) with that day's notes and a box to add one (with an
 -- icon), and Usual times (when the crew is usually on, the best time to play together, everyone's habits).
 -- Opened by the calendar button on the panel, the wrench menu, /tc cal, or the button in the settings.
 local _, ns = ...
@@ -36,6 +37,9 @@ local monthPane, dayPane, usualPane
 local cells, dayRows, noteRows, heatCells, habitLines = {}, {}, {}, {}, {}
 local markers = {}
 local zoneText
+local usualWeek = nil -- the Usual pane shows a real week (its Sunday, a local day number), or nil = usual times
+local usualPick = {} -- Usual times for the people picked (account ids, in the order picked); none = everyone
+local dayScroll = 0 -- the day view's first row (more people than rows: the mouse wheel scrolls)
 
 local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
@@ -201,7 +205,8 @@ local function buildMonth()
       end
       if #(self.tcPeople or {}) == 0 then GameTooltip:AddLine("Nobody played (that we know of).", 0.8, 0.8, 0.8) end
       for _, p in ipairs(self.tcPeople or {}) do
-        GameTooltip:AddDoubleLine(colored(p.name, p.class), L.duration(p.minutes), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine(colored(p.name, p.class), L.runText(p.runs) .. "  |cffaaaaaa(" .. L.duration(p.minutes) .. ")|r",
+          1, 1, 1, 1, 1, 1)
       end
       GameTooltip:AddLine("Click for the timeline and notes. Right-click to add a note.", 0.7, 0.7, 0.7)
       GameTooltip:Show()
@@ -233,6 +238,58 @@ function Calendar.timeMenuItems(minutes)
   }
 end
 
+-- The day view's tooltip: the person under the mouse (if any), then who was on at the mouse's time. It follows
+-- the mouse (redrawn when the time under it changes).
+local function slotUnderMouse()
+  local m = cursorMinutes()
+  if not m then return nil end
+  return math.max(0, math.min(L.SLOTS_PER_DAY - 1, math.floor(m / 15)))
+end
+
+-- "At 8:15pm: Frostie, Ginkan (AFK)" for local slot j of the day shown.
+function Calendar.whoAtText(j)
+  local who = L.whoAt(Calendar.lastDay, j)
+  if #who == 0 then return "At " .. L.clock(j * 15) .. ": nobody on" end
+  local names = {}
+  for i, w in ipairs(who) do names[i] = colored(w.name, w.class) .. (w.afk and " |cff999999(AFK)|r" or "") end
+  return "At " .. L.clock(j * 15) .. ", " .. #who .. " on: " .. table.concat(names, ", ")
+end
+
+local function dayTip(self)
+  if not GameTooltip then return end
+  local j = slotUnderMouse()
+  self.tcSlot = j
+  local e = self.tcEntry
+  GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+  if e then
+    GameTooltip:SetText(colored(e.name, e.class))
+    GameTooltip:AddLine(L.runText(e.runs), 1, 1, 1, true)
+    GameTooltip:AddLine("Played " .. L.duration(e.minutes), 0.8, 0.8, 0.8)
+    local afk = 0
+    for _, run in ipairs(e.runs) do if run.afk then afk = afk + (run.to - run.from) * 15 end end
+    if afk > 0 then GameTooltip:AddLine("Of that, AFK: " .. L.duration(afk) .. " (lighter on the bar)", 0.7, 0.7, 0.7) end
+    local alts = altsText(ns.Diary.people()[e.id])
+    if alts then GameTooltip:AddLine(alts, 0.7, 0.7, 0.7) end
+    if j then GameTooltip:AddLine(" ") end
+  else
+    GameTooltip:SetText(j and L.clock(j * 15) or "Timeline", 1, 1, 1)
+  end
+  if j then GameTooltip:AddLine(Calendar.whoAtText(j), 1, 0.85, 0.4, true) end
+  if e then GameTooltip:AddLine("Click for " .. ns.Util.safeText(e.name) .. "'s usual times", 0.6, 0.6, 0.6) end
+  GameTooltip:AddLine("Right-click to add a note at that time", 0.6, 0.6, 0.6)
+  GameTooltip:Show()
+end
+
+local function dayTipFollow(self)
+  if self.tcHover and slotUnderMouse() ~= self.tcSlot then dayTip(self) end
+end
+
+local function hoverable(f)
+  script(f, "OnEnter", function(self) self.tcHover = true; dayTip(self) end)
+  script(f, "OnLeave", function(self) self.tcHover = nil; if GameTooltip then GameTooltip:Hide() end end)
+  script(f, "OnUpdate", dayTipFollow)
+end
+
 local function timelineClick(anchor, button)
   if button ~= "RightButton" then return end
   local m = cursorMinutes()
@@ -251,6 +308,8 @@ local function buildDay()
   nxt:SetPoint("LEFT", prev, "RIGHT", 2, 0)
   dayPane.label = T.readable(T.text(dayPane, T.FONT.normal, C.title), 2)
   dayPane.label:SetPoint("LEFT", nxt, "RIGHT", 10, 0)
+  local weekGrid = Widgets.button(dayPane, "This week as a grid", function() Calendar.showWeek(shownDay) end, nil, FEATURE)
+  weekGrid:SetPoint("TOPRIGHT", dayPane, "TOPRIGHT", 0, 0)
   -- the hour axis
   for h = 0, 24, 3 do
     local x = AXIS_X + BAR_W * h / 24
@@ -268,13 +327,12 @@ local function buildDay()
   catcher:SetSize(BAR_W, DAY_ROWS * ROW_H)
   catcher:EnableMouse(true)
   script(catcher, "OnMouseUp", function(self, button) timelineClick(self, button) end)
-  script(catcher, "OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
-    GameTooltip:SetText("Right-click to add a note at that time", 1, 1, 1)
-    GameTooltip:Show()
-  end)
-  script(catcher, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  hoverable(catcher)
+  -- more people than rows: the mouse wheel scrolls them
+  dayPane:EnableMouseWheel(true)
+  script(dayPane, "OnMouseWheel", function(_, delta) Calendar.scrollDay(-delta) end)
+  dayPane.more = T.text(dayPane, T.FONT.small, C.muted)
+  dayPane.more:SetPoint("TOPRIGHT", dayPane, "TOPLEFT", AXIS_X - 6, -(50 + DAY_ROWS * ROW_H + 2))
   dayPane.nowLine = dayPane:CreateTexture(nil, "OVERLAY")
   dayPane.nowLine:SetSize(2, DAY_ROWS * ROW_H + 4)
   T.color(dayPane.nowLine, C.title, 0.9)
@@ -300,23 +358,11 @@ local function buildDay()
     r.back:SetPoint("LEFT", r, "LEFT", AXIS_X, 0)
     r.back:SetSize(BAR_W, ROW_H - 8)
     T.color(r.back, C.row, 0.7)
-    r.bars = {}
-    script(r, "OnEnter", function(self)
-      local e = self.tcEntry
-      if not GameTooltip or not e then return end
-      GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-      GameTooltip:SetText(colored(e.name, e.class))
-      GameTooltip:AddLine(L.runText(e.runs), 1, 1, 1, true)
-      GameTooltip:AddLine("Played " .. L.duration(e.minutes), 0.8, 0.8, 0.8)
-      local afk = 0
-      for _, run in ipairs(e.runs) do if run.afk then afk = afk + (run.to - run.from) * 15 end end
-      if afk > 0 then GameTooltip:AddLine("Of that, AFK: " .. L.duration(afk) .. " (lighter on the bar)", 0.7, 0.7, 0.7) end
-      local alts = altsText(ns.Diary.people()[e.id])
-      if alts then GameTooltip:AddLine(alts, 0.7, 0.7, 0.7) end
-      GameTooltip:Show()
+    r.bars, r.labels = {}, {}
+    hoverable(r)
+    script(r, "OnMouseUp", function(self, button)
+      if button == "LeftButton" and self.tcEntry then Calendar.showUsualFor(self.tcEntry.id) else timelineClick(self, button) end
     end)
-    script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-    script(r, "OnMouseUp", function(self, button) timelineClick(self, button) end)
     dayRows[i] = r
   end
 
@@ -379,6 +425,48 @@ local function buildDay()
 end
 
 -------------------------------------------------------------------------------------------------------- usual
+-- "Nov 3" for a local day number.
+local function shortDate(day)
+  local _, m, d = L.civil(day)
+  return string.sub(L.MONTHS[m], 1, 3) .. " " .. d
+end
+
+local function hourTip(self, w, h)
+  if not GameTooltip or not self.tcValue then return end
+  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  if usualWeek then
+    local day = usualWeek + w
+    GameTooltip:SetText(L.WEEKDAYS[w + 1] .. ", " .. shortDate(day) .. "  " .. L.clock(h * 60) .. "-" .. L.clock((h + 1) * 60))
+    local any = false
+    for _, pk in ipairs(self.tcWeek or {}) do
+      local v = pk.grid[w][h]
+      if v > 0 then
+        any = true
+        GameTooltip:AddLine(colored(pk.name, pk.class) .. ": " .. (v >= 1 and "the whole hour" or (math.floor(v * 60 + 0.5) .. " min")),
+          1, 1, 1)
+      end
+    end
+    if not any then GameTooltip:AddLine("Nobody on", 0.8, 0.8, 0.8) end
+    GameTooltip:AddLine("Click for that day's timeline", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+    return
+  end
+  GameTooltip:SetText(L.WEEKDAYS[w + 1] .. " " .. L.clock(h * 60) .. "-" .. L.clock((h + 1) * 60))
+  if self.tcPicks then
+    if #self.tcPicks > 1 then
+      GameTooltip:AddLine(string.format("About %.1f of these %d online", self.tcValue, #self.tcPicks), 1, 1, 1)
+    end
+    for _, pk in ipairs(self.tcPicks) do
+      local n = math.floor(pk.grid[w][h] * 4 + 0.5)
+      GameTooltip:AddLine(colored(pk.name, pk.class) .. string.format(" was on %d of the last 4 %ss", n,
+        L.WEEKDAYS[w + 1]), 1, 1, 1)
+    end
+  else
+    GameTooltip:AddLine(string.format("About %.1f of the crew online", self.tcValue), 1, 1, 1)
+  end
+  GameTooltip:Show()
+end
+
 local function buildUsual()
   usualPane = CreateFrame("Frame", nil, frame)
   usualPane:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -TOP)
@@ -391,7 +479,21 @@ local function buildUsual()
   usualPane.best:SetJustifyH("LEFT")
   usualPane.note = T.text(usualPane, T.FONT.small, C.muted)
   usualPane.note:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -28)
-  usualPane.note:SetText("The last 4 weeks, in your local time. Brighter = more of the crew online. Hover a square.")
+  usualPane.note:SetWidth(390)
+  usualPane.note:SetJustifyH("LEFT")
+  if usualPane.note.SetWordWrap then usualPane.note:SetWordWrap(false) end
+  -- usual times or a real week (arrows step through the weeks)
+  usualPane.weekBtn = Widgets.button(usualPane, "See real weeks", function() Calendar.showWeek(ns.Diary.localToday()) end, nil, FEATURE)
+  usualPane.weekBtn:SetPoint("TOPRIGHT", usualPane, "TOPRIGHT", 0, -22)
+  usualPane.usualBtn = Widgets.button(usualPane, "Usual times", function() Calendar.showWeek(nil) end, nil, FEATURE)
+  usualPane.usualBtn:SetPoint("TOPRIGHT", usualPane, "TOPRIGHT", 0, -22)
+  usualPane.nextWeek = arrowButton(usualPane, NEXT_TEX, function() Calendar.moveWeek(1) end)
+  usualPane.nextWeek:SetPoint("RIGHT", usualPane.usualBtn, "LEFT", -8, 0)
+  usualPane.weekLabel = T.readable(T.text(usualPane, T.FONT.small, C.title))
+  usualPane.weekLabel:SetPoint("RIGHT", usualPane.nextWeek, "LEFT", -4, 0)
+  usualPane.prevWeek = arrowButton(usualPane, PREV_TEX, function() Calendar.moveWeek(-1) end)
+  usualPane.prevWeek:SetPoint("RIGHT", usualPane.weekLabel, "LEFT", -4, 0)
+  usualPane.dayLabels = {}
   for h = 0, 23, 3 do
     local t = T.text(usualPane, T.FONT.small, C.muted)
     t:SetPoint("BOTTOMLEFT", usualPane, "TOPLEFT", HEAT_X + h * HEAT_W, -60)
@@ -401,6 +503,7 @@ local function buildUsual()
     local lab = T.text(usualPane, T.FONT.small, (w == 0 or w == 6) and C.title or C.muted)
     lab:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -(64 + w * HEAT_H) - 3)
     lab:SetText(L.SHORT_DAYS[w + 1])
+    usualPane.dayLabels[w] = lab
     heatCells[w] = {}
     for h = 0, 23 do
       local c = CreateFrame("Frame", nil, usualPane)
@@ -413,12 +516,9 @@ local function buildUsual()
       T.color(c.mark, C.title, 0.55)
       c.mark:Hide()
       c:EnableMouse(true)
-      script(c, "OnEnter", function(self)
-        if not GameTooltip or not self.tcValue then return end
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText(L.WEEKDAYS[w + 1] .. " " .. L.clock(h * 60) .. "-" .. L.clock((h + 1) * 60))
-        GameTooltip:AddLine(string.format("About %.1f of the crew online", self.tcValue), 1, 1, 1)
-        GameTooltip:Show()
+      script(c, "OnEnter", function(self) hourTip(self, w, h) end)
+      script(c, "OnMouseUp", function(_, button)
+        if button == "LeftButton" and usualWeek then Calendar.openDay(usualWeek + w) end
       end)
       script(c, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
       heatCells[w][h] = c
@@ -428,8 +528,13 @@ local function buildUsual()
   local who = T.text(usualPane, T.FONT.normal, C.title)
   who:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -whoTop)
   who:SetText("Everyone's usual times")
+  local hint = T.text(usualPane, T.FONT.small, C.muted)
+  hint:SetPoint("LEFT", who, "RIGHT", 10, 0)
+  hint:SetText("click people to see only them above (click again to take them off)")
+  usualPane.everyone = Widgets.button(usualPane, "Show everyone", function() Calendar.showUsualFor(nil) end, nil, FEATURE)
+  usualPane.everyone:SetPoint("TOPRIGHT", usualPane, "TOPRIGHT", 0, -(whoTop - 4))
   for i = 1, 10 do
-    local r = CreateFrame("Frame", nil, usualPane)
+    local r = CreateFrame("Button", nil, usualPane)
     r:SetSize(WIDTH - 2 * PAD, 18)
     r:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -(whoTop + 22 + (i - 1) * 19))
     r.face = r:CreateTexture(nil, "ARTWORK")
@@ -440,6 +545,17 @@ local function buildUsual()
     r.text:SetWidth(WIDTH - 2 * PAD - 24)
     r.text:SetJustifyH("LEFT")
     if r.text.SetWordWrap then r.text:SetWordWrap(false) end
+    r.sel = r:CreateTexture(nil, "BACKGROUND")
+    r.sel:SetAllPoints(r)
+    T.color(r.sel, C.title, 0.18)
+    r.sel:Hide()
+    local hl = r:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(r)
+    T.color(hl, C.white, 0.08)
+    script(r, "OnClick", function(self)
+      if not self.tcId then return end
+      Calendar.toggleUsual(self.tcId)
+    end)
     habitLines[i] = r
   end
 end
@@ -977,6 +1093,103 @@ local function bar(r, k)
   return b
 end
 
+local function label(r, k)
+  local t = r.labels[k]
+  if not t then
+    t = T.readable(T.text(r, T.FONT.small, C.white))
+    r.labels[k] = t
+  end
+  return t
+end
+
+-- How wide a time label is (the game measures it; a guess when it can't).
+local function textWidth(t, text)
+  local w = tonumber(t.GetStringWidth and t:GetStringWidth())
+  if not w or w <= 0 then w = #text * 5.5 end
+  return w
+end
+
+-- The little class icon at the start of a stretch (on a dark square, so it reads on any bar color).
+local ICON_S = ROW_H - 8
+local function badge(r, k)
+  r.tcIcons = rawget(r, "tcIcons") or {}
+  local f = r.tcIcons[k]
+  if not f then
+    f = { back = r:CreateTexture(nil, "OVERLAY", nil, 1), tex = r:CreateTexture(nil, "OVERLAY", nil, 2) }
+    f.back:SetSize(ICON_S + 2, ICON_S + 2)
+    T.color(f.back, "000000", 0.85)
+    f.tex:SetSize(ICON_S, ICON_S)
+    f.tex:SetPoint("CENTER", f.back, "CENTER", 0, 0)
+    r.tcIcons[k] = f
+  end
+  return f
+end
+
+-- Each stretch of play on the row: the person's class icon at its start, then its times (inside the bar when
+-- they fit, else just after it, or before it, else left to the tooltip). Returns how many times were written.
+local function writeTimes(r, e)
+  local spans = L.spans(e.runs)
+  local used, shown = AXIS_X, 0
+  local function x(slot) return AXIS_X + BAR_W * slot / L.SLOTS_PER_DAY end
+  for k, sp in ipairs(spans) do
+    local x1, x2 = x(sp.from), x(sp.to)
+    -- the icon: at the start of the bar (a short bar: it starts there and pokes out)
+    local ic = badge(r, k)
+    ic.back:ClearAllPoints()
+    ic.back:SetPoint("LEFT", r, "LEFT", x1, 0)
+    ns.ClassIcon.apply(ic.tex, e.class)
+    ic.back:Show(); ic.tex:Show()
+    ic.on = true
+    local afterIcon = x1 + ICON_S + 4
+    local t = label(r, k)
+    local text = L.spanText(sp)
+    t:SetText(text)
+    t.tcText = text
+    t:ClearAllPoints()
+    local w = textWidth(t, text)
+    local tail = math.max(x2, afterIcon)
+    local limit = spans[k + 1] and x(spans[k + 1].from) or (AXIS_X + BAR_W)
+    if x2 - afterIcon >= w + 4 then
+      t:SetPoint("LEFT", r, "LEFT", afterIcon, 0)
+      used = x2
+    elseif limit - tail >= w + 6 then
+      t:SetPoint("LEFT", r, "LEFT", tail + 3, 0)
+      used = tail + 3 + w
+    elseif x1 - used >= w + 6 then
+      t:SetPoint("RIGHT", r, "LEFT", x1 - 3, 0)
+      used = tail
+    else
+      t:SetText("")
+      t.tcText = nil
+      used = tail
+    end
+    t.tcOn = t.tcText ~= nil
+    if t.tcOn then shown = shown + 1 end
+    t:Show()
+  end
+  for k = #spans + 1, #r.labels do r.labels[k].tcOn = false; r.labels[k]:Hide() end
+  for k = #spans + 1, #(rawget(r, "tcIcons") or {}) do local ic = r.tcIcons[k]; ic.on = false; ic.back:Hide(); ic.tex:Hide() end
+  return shown
+end
+
+-- Scroll the day view's people by n rows (the mouse wheel).
+function Calendar.scrollDay(n)
+  local list = Calendar.lastDay or {}
+  local top = math.max(0, #list - DAY_ROWS)
+  local v = math.max(0, math.min(top, dayScroll + (tonumber(n) or 0)))
+  if v ~= dayScroll then dayScroll = v; Calendar.refresh() end
+end
+
+function Calendar.dayRowForTest(i)
+  local r = dayRows[i]
+  if not r or not r.tcEntry then return nil end
+  local texts = {}
+  for _, t in ipairs(r.labels) do if rawget(t, "tcOn") then texts[#texts + 1] = t.tcText end end
+  local icons = 0
+  for _, ic in ipairs(rawget(r, "tcIcons") or {}) do if ic.on then icons = icons + 1 end end
+  return { name = r.tcEntry.name, times = texts, icons = icons }
+end
+
 local function drawDay()
   local off = ns.Diary.offset()
   local y, m, d = L.civil(shownDay)
@@ -984,8 +1197,13 @@ local function drawDay()
   local list = L.dayView(people(), shownDay, off)
   Calendar.lastDay = list
   if #list == 0 then dayPane.empty:Show() else dayPane.empty:Hide() end
+  dayScroll = math.max(0, math.min(dayScroll, #list - DAY_ROWS))
+  local below = #list - dayScroll - DAY_ROWS
+  dayPane.more:SetText((dayScroll > 0 or below > 0)
+    and ((dayScroll > 0 and (dayScroll .. " above, ") or "") .. (below > 0 and (below .. " more, ") or "") .. "scroll")
+    or "")
   for i, r in ipairs(dayRows) do
-    local e = list[i]
+    local e = list[i + dayScroll]
     r.tcEntry = e
     for _, b in ipairs(r.bars) do b:Hide() end
     if e then
@@ -1000,6 +1218,7 @@ local function drawDay()
         T.color(b, classHex(e.class), run.afk and 0.35 or 1)
         b:Show()
       end
+      writeTimes(r, e)
       r:Show()
     else
       r:Hide()
@@ -1082,24 +1301,97 @@ local function drawDay()
 end
 
 local function drawUsual()
-  local u = L.usual(people(), ns.Diary.localToday(), ns.Diary.offset(), 4)
+  local everyone = people()
+  local today, off = ns.Diary.localToday(), ns.Diary.offset()
+  local u = L.usual(everyone, today, off, 4)
   Calendar.lastUsual = u
-  local best = L.bestTime(u)
-  usualPane.best:SetText(L.bestTimeText(best, u.count))
+  -- the people picked: only their hours (one person: in their class color; each square = how many of the last
+  -- 4 weeks they were on then; several: how many of them are usually on, and their best time together)
+  local keep, subset, picks = {}, {}, {}
+  for _, id in ipairs(usualPick) do
+    local p = everyone[id]
+    if p and not subset[id] then
+      keep[#keep + 1] = id
+      subset[id] = p
+      local one = L.usual({ [id] = p }, today, off, 4)
+      local info = one.people[1] or { id = id, name = p.name, class = p.class }
+      info.grid = one.grid
+      picks[#picks + 1] = info
+    end
+  end
+  usualPick = keep
+  local mine = #picks > 0 and L.usual(subset, today, off, 4) or nil
+  Calendar.lastUsualOne = #picks == 1 and mine or nil
+  Calendar.lastUsualPick = mine and picks or nil
+  local who = #picks == 1 and picks[1] or nil
+  local grid = (mine or u).grid
+  local best = (not who) and L.bestTime(mine or u) or nil
+  -- a real week: who was really on, hour by hour, on those dates
+  local wk = usualWeek and L.week(mine and subset or everyone, usualWeek, off) or nil
+  Calendar.lastWeek = wk
+  for w = 0, 6 do
+    usualPane.dayLabels[w]:SetText(L.SHORT_DAYS[w + 1] .. (wk and (" " .. select(3, L.civil(usualWeek + w))) or ""))
+  end
+  if wk then
+    usualPane.weekBtn:Hide(); usualPane.usualBtn:Show()
+    usualPane.prevWeek:Show(); usualPane.nextWeek:Show(); usualPane.weekLabel:Show()
+    usualPane.weekLabel:SetText(shortDate(usualWeek) .. " - " .. shortDate(usualWeek + 6))
+  else
+    usualPane.weekBtn:Show(); usualPane.usualBtn:Hide()
+    usualPane.prevWeek:Hide(); usualPane.nextWeek:Hide(); usualPane.weekLabel:Hide()
+  end
+  if wk then
+    grid, best = wk.grid, nil
+    local parts = {}
+    for i, pk in ipairs(wk.people) do
+      if i <= 4 then parts[#parts + 1] = colored(pk.name, pk.class) .. " " .. L.duration(pk.minutes) end
+    end
+    if #wk.people > 4 then parts[#parts + 1] = "+" .. (#wk.people - 4) .. " more" end
+    usualPane.best:SetText("Week of " .. shortDate(usualWeek) .. ": " .. (#parts > 0 and table.concat(parts, ", ")
+      or "nobody played (that we know of)"))
+    usualPane.note:SetText("Who was really on, your time. Hover a square; click one for that day.")
+  elseif who then
+    usualPane.best:SetText(colored(who.name, who.class) .. ": " .. (who.perWeek
+      and ("about " .. L.duration(who.perWeek) .. " a week, " .. L.habit(who)) or "no play time in the last 4 weeks"))
+    usualPane.note:SetText("The last 4 weeks, in your local time. Brighter = more weeks " .. ns.Util.safeText(who.name)
+      .. " was on at that hour. Hover a square.")
+  elseif mine then
+    local names = {}
+    for i, pk in ipairs(picks) do names[i] = colored(pk.name, pk.class) end
+    usualPane.best:SetText(best and (L.bestTimeText(best, #picks) .. " for " .. table.concat(names, ", "))
+      or ("No time yet when " .. table.concat(names, ", ") .. " play together."))
+    usualPane.note:SetText("The last 4 weeks, in your local time. Brighter = more of these " .. #picks
+      .. " online. Hover a square.")
+  else
+    usualPane.best:SetText(L.bestTimeText(best, u.count))
+    usualPane.note:SetText("The last 4 weeks, in your local time. Brighter = more of the crew online. Hover a square.")
+  end
+  if mine then usualPane.everyone:Show() else usualPane.everyone:Hide() end
   local top = 0
-  for w = 0, 6 do for h = 0, 23 do if u.grid[w][h] > top then top = u.grid[w][h] end end end
+  for w = 0, 6 do for h = 0, 23 do if grid[w][h] > top then top = grid[w][h] end end end
+  if wk then
+    top = who and 1 or 0
+    if not who then for w = 0, 6 do for h = 0, 23 do if grid[w][h] > top then top = grid[w][h] end end end end
+  elseif who then top = 1 elseif mine then top = #picks end -- every week / all of them = full brightness
+  local hue = who and classHex(who.class) or "33cc66"
   for w = 0, 6 do
     for h = 0, 23 do
-      local v = u.grid[w][h]
+      local v = grid[w][h]
       local c = heatCells[w][h]
       c.tcValue = v
-      if v > 0 and top > 0 then T.color(c.tex, "33cc66", 0.15 + 0.85 * v / top) else T.color(c.tex, C.row, 0.6) end
-      local inBest = best and best.weekday == w and h >= best.from and h < best.to
+      c.tcPicks = mine and picks or nil
+      c.tcWeek = wk and wk.people or nil
+      if v > 0 and top > 0 then T.color(c.tex, hue, 0.15 + 0.85 * v / top) else T.color(c.tex, C.row, 0.6) end
+      local inBest = (not wk) and best and best.weekday == w and h >= best.from and h < best.to
       if inBest then c.mark:Show() else c.mark:Hide() end
     end
   end
   for i, r in ipairs(habitLines) do
     local p = u.people[i]
+    r.tcId = p and p.id or nil
+    local picked = false
+    for _, id in ipairs(usualPick) do if p and id == p.id then picked = true end end
+    if picked then r.sel:Show() else r.sel:Hide() end
     if p then
       ns.ClassIcon.apply(r.face, p.class)
       r.face:Show()
@@ -1115,6 +1407,36 @@ local function drawUsual()
       r:Hide()
     end
   end
+end
+
+-- Usual times for one person (an account id), or everyone (nil).
+function Calendar.showUsualFor(id)
+  usualPick = id and { id } or {}
+  view = "usual"
+  Calendar.refresh()
+end
+
+-- The grid for the real week holding local day `day` (nil: back to usual times).
+function Calendar.showWeek(day)
+  usualWeek = day and (day - L.weekday(day)) or nil
+  view = "usual"
+  Calendar.refresh()
+end
+
+function Calendar.moveWeek(delta)
+  if not usualWeek then return end
+  usualWeek = usualWeek + 7 * (tonumber(delta) or 0)
+  Calendar.refresh()
+end
+
+-- Add a person to the Usual times grid, or take them off if they are on it.
+function Calendar.toggleUsual(id)
+  local out, found = {}, false
+  for _, v in ipairs(usualPick) do if v == id then found = true else out[#out + 1] = v end end
+  if not found then out[#out + 1] = id end
+  usualPick = out
+  view = "usual"
+  Calendar.refresh()
 end
 
 function Calendar.refresh()
@@ -1142,6 +1464,7 @@ end
 
 function Calendar.openDay(day)
   if not frame then Calendar.open() end
+  if day ~= shownDay then dayScroll = 0 end
   shownDay = day
   local y, m = L.civil(day)
   shownYear, shownMonth = y, m

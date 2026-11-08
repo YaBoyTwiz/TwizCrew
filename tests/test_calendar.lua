@@ -86,6 +86,104 @@ return {
       A.eq(L.runText(v[1].runs), "8pm-11pm")
       A.eq(#L.dayView(people, day, 0), 0, "in UTC it was Wednesday")
     end,
+    who_was_on_when = function(ns, A)
+      local L = ns.CalendarLogic
+      local runs = { { from = 80, to = 90, afk = false }, { from = 90, to = 92, afk = true }, { from = 94, to = 96, afk = false } }
+      A.eq(L.spans(runs), { { from = 80, to = 92 }, { from = 94, to = 96 } })
+      A.eq(L.spanText({ from = 80, to = 92 }), "8pm-11pm")
+      local list = {
+        { name = "Frostie", class = "MAGE", runs = runs },
+        { name = "Ginkan", class = "WARRIOR", runs = { { from = 88, to = 96, afk = false } } },
+      }
+      A.eq(L.whoAt(list, 85), { { name = "Frostie", class = "MAGE", afk = false } })
+      A.eq(L.whoAt(list, 91), { { name = "Frostie", class = "MAGE", afk = true }, { name = "Ginkan", class = "WARRIOR", afk = false } })
+      A.eq(L.whoAt(list, 93), { { name = "Ginkan", class = "WARRIOR", afk = false } })
+      A.eq(L.whoAt(list, 10), {})
+    end,
+    day_view_writes_everyones_times = function(ns, A, W)
+      start(ns, W)
+      local L = ns.CalendarLogic
+      ns.Calendar.open()
+      local _, _, _, today = ns.Calendar.viewForTest()
+      local off = ns.Diary.offset()
+      -- 12 friends on yesterday (more than the rows): friend k from hour 11 + k local for two hours (friend 1 at noon)
+      local day = today - 1
+      local people = ns.Diary.people()
+      for k = 1, 12 do
+        local days = {}
+        for j = (11 + k) * 4, (13 + k) * 4 - 1 do
+          if j < 96 then
+            local s = math.floor((day * L.DAY + j * L.SLOT - off) / L.SLOT)
+            local uday, idx = math.floor(s / L.SLOTS_PER_DAY), s % L.SLOTS_PER_DAY
+            days[uday] = days[uday] or { on = L.EMPTY }
+            days[uday].on = L.set(days[uday].on, idx)
+          end
+        end
+        people["acct" .. k] = { name = "Friend" .. string.format("%02d", k), class = "MAGE", days = days }
+      end
+      ns.Calendar.openDay(day)
+      A.eq(#ns.Calendar.lastDay, 12)
+      local row = ns.Calendar.dayRowForTest(1)
+      A.ok(row, "a row")
+      A.eq(#row.times, 1, "their time written on the row")
+      A.contains(row.times[1], "pm-")
+      A.eq(row.icons, 1, "their class icon on the bar")
+      -- who was on at 8:15pm: friends 8 (7-9pm) and 9 (8-10pm)
+      local text = ns.Calendar.whoAtText(81)
+      A.contains(text, "At 8:15pm, 2 on")
+      A.contains(text, "Friend08"); A.contains(text, "Friend09")
+      A.contains(ns.Calendar.whoAtText(20), "nobody on")
+      -- the mouse wheel scrolls the rest into view
+      local first = ns.Calendar.dayRowForTest(1).name
+      ns.Calendar.scrollDay(5)
+      A.no(ns.Calendar.dayRowForTest(1).name == first, "scrolled")
+      ns.Calendar.scrollDay(-10)
+      A.eq(ns.Calendar.dayRowForTest(1).name, first, "back to the top")
+      -- Usual times for one person: the same grid, only their hours (Friend08 played 7-9pm yesterday)
+      ns.Calendar.showUsualFor("acct8")
+      local one = ns.Calendar.lastUsualOne
+      A.ok(one, "a grid for one person")
+      local wd = L.weekday(day)
+      A.eq(one.grid[wd][19], 0.25, "1 of the last 4 weeks at 7pm")
+      A.eq(one.grid[wd][20], 0.25)
+      A.eq(one.grid[wd][21], 0, "not at 9pm")
+      A.eq(one.grid[wd][12], 0, "Friend01's noon isn't in it")
+      A.eq(one.people[1].name, "Friend08")
+      -- several people: Friend08 (7-9pm) and Friend09 (8-10pm): both at 8pm, their best time together
+      ns.Calendar.toggleUsual("acct9")
+      A.eq(ns.Calendar.lastUsualOne, nil, "not one person any more")
+      A.eq(#ns.Calendar.lastUsualPick, 2)
+      A.eq(ns.Calendar.lastUsual.grid ~= nil, true)
+      local both = ns.CalendarLogic.usual({ acct8 = ns.Diary.people().acct8, acct9 = ns.Diary.people().acct9 },
+        ns.Diary.localToday(), ns.Diary.offset(), 4)
+      A.eq(both.grid[wd][20], 0.5, "both of them at 8pm")
+      A.eq(ns.Calendar.lastUsualPick[2].grid[wd][21], 0.25, "each one's own hours for the tooltip")
+      ns.Calendar.toggleUsual("acct8")
+      A.eq(ns.Calendar.lastUsualOne.people[1].name, "Friend09", "taken off: one left")
+      ns.Calendar.toggleUsual("acct9")
+      A.eq(ns.Calendar.lastUsualPick, nil, "nobody picked: everyone")
+      ns.Calendar.showUsualFor(nil)
+      A.eq(ns.Calendar.lastUsualOne, nil, "back to everyone")
+      -- a real week: who was really on, on those dates
+      ns.Calendar.showWeek(day)
+      local wk = ns.Calendar.lastWeek
+      A.ok(wk, "the week grid")
+      A.eq(wk.first, day - L.weekday(day), "from its Sunday")
+      A.ok(wk.count >= 12, "everyone who played that week (and me, if today is in it)")
+      A.eq(wk.grid[wd][19], 2, "Friend07 (6-8pm) and Friend08 (7-9pm) at 7pm")
+      ns.Calendar.toggleUsual("acct8")
+      A.eq(ns.Calendar.lastWeek.count, 1, "only the people picked")
+      A.eq(ns.Calendar.lastWeek.people[1].grid[wd][19], 1, "the whole hour")
+      ns.Calendar.moveWeek(-1)
+      A.eq(ns.Calendar.lastWeek.count, 0, "nobody the week before")
+      ns.Calendar.moveWeek(1)
+      ns.Calendar.showUsualFor(nil)
+      ns.Calendar.showWeek(nil)
+      A.eq(ns.Calendar.lastWeek, nil, "back to usual times")
+      A.eq(ns.Log.errors(10), {})
+      A.ok(ns.Calendar.lastUsual.grid[wd][12] > 0, "everyone's grid has all of them")
+      A.eq(ns.Log.errors(10), {})
+    end,
     usual_times_and_the_best_time = function(ns, A)
       local L = ns.CalendarLogic
       local today = L.daysFrom(2026, 11, 8)

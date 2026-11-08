@@ -158,6 +158,15 @@ Other players never see any of it. The messages are hidden addon messages, not c
   Switch: Roasts, Congrats button. The standalone RankUp addon was merged in as module "rankup" (Tools/RankUp.lua,
   Settings Advanced sub-tab Tools and a Tools part on Basics, /tc rankup, panel menus, optional on-screen button).
 
+- **Crew calendar, step 1 (2026-11-08, v0.1.16):** module "calendar" (Calendar/CalendarLogic.lua pure, Diary.lua
+  data and swaps, CalendarUI.lua window). Each copy writes its own diary: 15-minute slots online (and AFK) per UTC
+  day, 30 days kept, keyed by a random id per WoW account (alts = one person). Swaps are pull-only: CALD digests
+  (slots known per person) to everyone every 10 min and to a friend who comes online; whoever knows less asks once
+  (CALQ) and gets CALP (one field per day, repeatKeys i). Masks merge by OR, so order never matters; nobody can write
+  your own diary. Views: Month, a day's timeline (AFK lighter), Usual times (weekday x hour grid over 4 weeks, best
+  time to play together, habits). Open: wrench menu, /tc cal. Switch: Share my play times. Step 2 (next): events
+  (dungeon runs) with sign-ups, roles, reminders and "invite everyone going", stored and swapped the same way.
+
 ## Ideas so far (not decided)
 
 - **Friend radar:** a small panel with each friend's level, zone and what they are doing.

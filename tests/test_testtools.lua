@@ -83,13 +83,15 @@ local function noFakeSaved(A, ns, W, when)
   A.eq(ns.db.updateNotice.shown, nil, "no pretend update marked as shown " .. when)
 end
 
--- Nothing sent since index `from` mentions a fake, whispers a fake, or is anything but the regular PING.
+-- Nothing sent since index `from` mentions a fake, whispers a fake, or is anything but the regular PING (and the
+-- crew calendar's regular swaps of play times, which never carry fakes).
+local REGULAR = { PING = true, CALD = true, CALQ = true, CALP = true }
 local function noFakeSent(A, W, from, when)
   for i = (from or 0) + 1, #W.sent do
     local m = W.sent[i]
     A.no(m.text:find("test", 1, true) or m.text:find("buddy", 1, true), "fake data sent " .. when .. ": " .. m.text)
     A.no(tostring(m.target or ""):find("test", 1, true), "whispered a fake " .. when)
-    A.eq(msgType(m), "PING", "only the regular ping goes out " .. when .. " (got " .. m.text .. ")")
+    A.ok(REGULAR[msgType(m)], "only the regular ping goes out " .. when .. " (got " .. m.text .. ")")
   end
 end
 

@@ -14,6 +14,13 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.16", date = "2026-11-08", lines = {
+    "Crew calendar (wrench button, or /tc cal): who played each day, and for how long.",
+    "Click a day for its timeline: one bar per friend, so you can see who was on together.",
+    "Usual times: when the crew is usually on, the best time to play together, and everyone's habits.",
+    "Your characters count as one person. Your copy swaps play times with the crew, so you see days you missed.",
+    "Only times are shared, never where you were. Turn it off with Share my play times.",
+  } },
   { ver = "0.1.15", date = "2026-11-08", lines = {
     "Before you ask: hover a friend to see if you can get their quest (with Questie: level, class, earlier quests).",
     "The right-click menu says Can't share (and why) when there's no use asking.",

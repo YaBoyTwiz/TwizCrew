@@ -495,72 +495,15 @@ local function zoneName()
 end
 Calendar.zoneName = zoneName
 
-local function drawMaker()
-  if not maker then return end
-  local _, m, d = L.civil(mk.day)
-  maker.dayText:SetText(L.WEEKDAYS[L.weekday(mk.day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
-  if mk.minutes then
-    maker.hour.text:SetText(L.clock(math.floor(mk.minutes / 60) * 60))
-    maker.minute.text:SetText(string.format(":%02d", mk.minutes % 60))
-    maker.minute:Show()
-    maker.noTime.text:SetText("No time")
-  else
-    maker.hour.text:SetText("Pick a time")
-    maker.minute:Hide()
-    maker.noTime.text:SetText("No time (set)")
-  end
-  maker.zone:SetText("your time (" .. zoneName() .. "); friends see it in theirs")
-  for _, k in ipairs(KINDS) do
-    local b = maker.kinds[k.id]
-    if mk.kind == k.id then T.color(b.fill, C.title, 0.35) else T.color(b.fill, C.button, 1) end
-  end
-  local wantsPlace = mk.kind ~= "note"
-  if wantsPlace then
-    local dg = mk.dungeon and ns.Notes.dungeon(mk.dungeon)
-    maker.place.text:SetText(dg and dg.name or (mk.kind == "raid" and "Pick a raid" or "Pick a dungeon"))
-    maker.place:Show()
-    if dg then
-      local fit = ns.Notes.levelFit(dg, UnitLevel and UnitLevel("player"))
-      maker.placeLine:SetText("|cff" .. FIT_COLOR[fit] .. ns.Notes.dungeonLine(dg) .. "|r")
-      maker.placeLine:Show()
-    else
-      maker.placeLine:Hide()
-    end
-    if dg then setArt(maker.preview, dg.key, ns.Notes.iconTexture(mk.icon)); maker.preview:Show() else maker.preview:Hide() end
-  else
-    maker.place:Hide()
-    maker.preview:Hide()
-    maker.placeLine:Hide()
-  end
-  for i, b in ipairs(maker.picks) do
-    if i == mk.icon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.6) end
-  end
-end
+local drawMaker -- (below)
+local LIST_ROWS = 8
+local LIST_ROW_H = 22
+local listOffset = 0
+local ARROW_UP = "Interface\\Buttons\\Arrow-Up-Up"
+local ARROW_DOWN = "Interface\\Buttons\\Arrow-Down-Up"
 
-function Calendar.hourItems()
-  local items = {}
-  for h = 0, 23 do
-    items[#items + 1] = { label = L.clock(h * 60), icon = ICON_TIME, onClick = function()
-      mk.minutes = h * 60 + ((mk.minutes or 0) % 60)
-      drawMaker()
-    end }
-  end
-  return items
-end
-
-function Calendar.minuteItems()
-  local items = {}
-  for _, q in ipairs({ 0, 15, 30, 45 }) do
-    items[#items + 1] = { label = string.format(":%02d", q), icon = ICON_TIME, onClick = function()
-      mk.minutes = math.floor((mk.minutes or 0) / 60) * 60 + q
-      drawMaker()
-    end }
-  end
-  return items
-end
-
--- The dungeon (or raid) picker: lowest levels first, each with its level range in a color for your level
--- (green: your range, grey: too easy, red: too high yet) and its icon.
+-- The dungeon (or raid) list: lowest levels first, each with its level range in a color for your level (green:
+-- your range, grey: too easy, red: too high yet), its icon, and "new" for Forever's own dungeons.
 function Calendar.placeItems()
   local list = {}
   for _, dg in ipairs(ns.Notes.DUNGEONS) do
@@ -576,10 +519,100 @@ function Calendar.placeItems()
   for _, dg in ipairs(list) do
     local fit = ns.Notes.levelFit(dg, me)
     local size = (dg.raid and ("  |cffaaaaaa" .. (dg.size or 40) .. "-man|r") or "") .. (dg.new and "  |cff3fa9f5new|r" or "")
-    items[#items + 1] = { label = "|cff" .. FIT_COLOR[fit] .. "[" .. ns.Notes.levelText(dg) .. "]|r  " .. dg.name .. size,
+    items[#items + 1] = { key = dg.key, label = "|cff" .. FIT_COLOR[fit] .. "[" .. ns.Notes.levelText(dg) .. "]|r  " .. dg.name .. size,
       icon = dungeonIcon(dg), onClick = function() mk.dungeon = dg.key; drawMaker() end }
   end
   return items
+end
+
+-- The time arrows: "hour" +-1, "minute" +-15 (stays in its hour), "ampm" flips morning and evening. With no time
+-- set yet, the first press starts at 8pm.
+function Calendar.stepTime(what, delta)
+  if not mk.minutes then mk.minutes = 20 * 60 end
+  local h, m = math.floor(mk.minutes / 60), mk.minutes % 60
+  delta = tonumber(delta) or 0
+  if what == "hour" then h = (h + delta) % 24
+  elseif what == "minute" then m = (m + 15 * delta) % 60
+  elseif what == "ampm" then h = (h + 12) % 24 end
+  mk.minutes = h * 60 + m
+  drawMaker()
+end
+
+function Calendar.scrollList(delta)
+  local items = maker and maker.items or {}
+  listOffset = math.max(0, math.min(math.max(0, #items - LIST_ROWS), listOffset + (tonumber(delta) or 0)))
+  drawMaker()
+end
+
+drawMaker = function()
+  if not maker then return end
+  local _, m, d = L.civil(mk.day)
+  maker.dayText:SetText(L.WEEKDAYS[L.weekday(mk.day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
+  -- time
+  if mk.minutes then
+    local h, mm = math.floor(mk.minutes / 60), mk.minutes % 60
+    local h12 = h % 12
+    if h12 == 0 then h12 = 12 end
+    maker.hourText:SetText(tostring(h12))
+    maker.minText:SetText(string.format("%02d", mm))
+    maker.ampm.text:SetText(h < 12 and "AM" or "PM")
+    maker.timeBox:SetAlpha(1)
+    maker.noTime.text:SetText("No time")
+    T.color(maker.noTime.fill, C.button, 1)
+  else
+    maker.hourText:SetText("--")
+    maker.minText:SetText("--")
+    maker.ampm.text:SetText("--")
+    maker.timeBox:SetAlpha(0.45)
+    maker.noTime.text:SetText("No time")
+    T.color(maker.noTime.fill, C.title, 0.35)
+  end
+  maker.zone:SetText("your time (" .. zoneName() .. "); friends see it in theirs")
+  for _, k in ipairs(KINDS) do
+    local b = maker.kinds[k.id]
+    if mk.kind == k.id then T.color(b.fill, C.title, 0.35) else T.color(b.fill, C.button, 1) end
+  end
+  -- the dungeon list (inside this window: nothing pops up over it)
+  if mk.kind ~= "note" then
+    local items = Calendar.placeItems()
+    maker.items = items
+    listOffset = math.max(0, math.min(math.max(0, #items - LIST_ROWS), listOffset))
+    for i, row in ipairs(maker.rows) do
+      local it = items[listOffset + i]
+      row.tcItem = it
+      if it then
+        row.icon:SetTexture(it.icon)
+        row.text:SetText(it.label)
+        if it.key == mk.dungeon then row.sel:Show() else row.sel:Hide() end
+        row:Show()
+      else
+        row:Hide()
+      end
+    end
+    maker.listTitle:SetText((mk.kind == "raid" and "Pick a raid" or "Pick a dungeon") .. "  |cff777777(scroll for more)|r")
+    maker.list:Show()
+    maker.plain:Hide()
+    local dg = mk.dungeon and ns.Notes.dungeon(mk.dungeon)
+    if dg then
+      setArt(maker.preview, dg.key, ns.Notes.iconTexture(mk.icon))
+      maker.preview:Show()
+      local fit = ns.Notes.levelFit(dg, UnitLevel and UnitLevel("player"))
+      maker.placeLine:SetText(dg.name .. "\n|cff" .. FIT_COLOR[fit] .. ns.Notes.dungeonLine(dg) .. "|r")
+      maker.placeLine:Show()
+    else
+      maker.preview:Hide()
+      maker.placeLine:SetText("|cff777777Nothing picked yet|r")
+      maker.placeLine:Show()
+    end
+  else
+    maker.list:Hide()
+    maker.preview:Hide()
+    maker.placeLine:Hide()
+    maker.plain:Show()
+  end
+  for i, b in ipairs(maker.picks) do
+    if i == mk.icon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.6) end
+  end
 end
 
 local function smallButton(parent, label, w, onClick)
@@ -591,14 +624,22 @@ local function smallButton(parent, label, w, onClick)
   return b
 end
 
+-- A small up or down arrow button.
+local function stepButton(parent, tex, onClick)
+  local b = arrowButton(parent, tex, onClick)
+  b:SetSize(18, 18)
+  return b
+end
+
 local function buildMaker()
-  local W, PADM = 470, 14
+  local W, PADM = 540, 14
   maker = T.frame("Frame", "TwizCrewNoteMaker", UIParent)
-  maker:SetSize(W, 330)
+  maker:SetSize(W, 480)
   maker:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
   maker:SetFrameStrata("FULLSCREEN_DIALOG")
   maker:SetMovable(true)
   maker:EnableMouse(true)
+  if maker.SetToplevel then maker:SetToplevel(true) end
   if maker.SetClampedToScreen then maker:SetClampedToScreen(true) end
   if maker.RegisterForDrag then maker:RegisterForDrag("LeftButton") end
   script(maker, "OnDragStart", function(self) self:StartMoving() end)
@@ -618,7 +659,15 @@ local function buildMaker()
     fs:SetText(text)
     return fs
   end
+  local function line(y)
+    local t = maker:CreateTexture(nil, "ARTWORK")
+    t:SetHeight(1)
+    t:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -y)
+    t:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -y)
+    T.color(t, C.line, 0.6)
+  end
   local X = PADM + 56
+
   -- day
   label("Day", 44)
   local prev = arrowButton(maker, PREV_TEX, function() mk.day = mk.day - 1; drawMaker() end)
@@ -630,58 +679,125 @@ local function buildMaker()
   nxt:SetPoint("LEFT", maker.dayText, "RIGHT", 4, 0)
   local today = smallButton(maker, "Today", 60, function() mk.day = ns.Diary.localToday(); drawMaker() end)
   today:SetPoint("LEFT", nxt, "RIGHT", 6, 0)
-  -- time
-  label("Time", 76)
-  maker.hour = smallButton(maker, "Pick a time", 100, function() Widgets.menu(maker.hour, Calendar.hourItems()) end)
-  maker.hour:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -74)
-  maker.minute = smallButton(maker, ":00", 50, function() Widgets.menu(maker.minute, Calendar.minuteItems()) end)
-  maker.minute:SetPoint("LEFT", maker.hour, "RIGHT", 4, 0)
-  maker.noTime = smallButton(maker, "No time", 100, function() mk.minutes = nil; drawMaker() end)
-  maker.noTime:SetPoint("LEFT", maker.minute, "RIGHT", 4, 0)
+  line(72)
+
+  -- time: hour and minutes, each with an up and a down arrow (the mouse wheel works on them too), AM / PM
+  label("Time", 86)
+  maker.timeBox = CreateFrame("Frame", nil, maker)
+  maker.timeBox:SetSize(230, 40)
+  maker.timeBox:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -78)
+  local function number(x, what)
+    local box = CreateFrame("Frame", nil, maker.timeBox)
+    box:SetSize(44, 34)
+    box:SetPoint("LEFT", maker.timeBox, "LEFT", x, 0)
+    T.paint(box, C.row, 1, C.rowBorder, 1)
+    local fs = T.readable(T.text(box, T.FONT.normal, C.white), 6)
+    fs:SetPoint("CENTER", box, "CENTER", 0, 0)
+    box:EnableMouse(true)
+    if box.EnableMouseWheel then box:EnableMouseWheel(true) end
+    script(box, "OnMouseWheel", function(_, delta) Calendar.stepTime(what, delta > 0 and 1 or -1) end)
+    local up = stepButton(maker.timeBox, ARROW_UP, function() Calendar.stepTime(what, 1) end)
+    up:SetPoint("BOTTOMLEFT", box, "RIGHT", 2, 1)
+    local down = stepButton(maker.timeBox, ARROW_DOWN, function() Calendar.stepTime(what, -1) end)
+    down:SetPoint("TOPLEFT", box, "RIGHT", 2, -1)
+    return fs
+  end
+  maker.hourText = number(0, "hour")
+  local colon = T.readable(T.text(maker.timeBox, T.FONT.normal, C.white), 6)
+  colon:SetPoint("LEFT", maker.timeBox, "LEFT", 66, 0)
+  colon:SetText(":")
+  maker.minText = number(78, "minute")
+  maker.ampm = smallButton(maker, "PM", 50, function() Calendar.stepTime("ampm", 0) end)
+  maker.ampm:SetPoint("LEFT", maker.timeBox, "LEFT", 150, 0)
+  maker.noTime = smallButton(maker, "No time", 80, function() mk.minutes = nil; drawMaker() end)
+  maker.noTime:SetPoint("LEFT", maker.ampm, "RIGHT", 6, 0)
   maker.zone = T.text(maker, T.FONT.small, C.muted)
-  maker.zone:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -100)
+  maker.zone:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -122)
+  line(140)
+
   -- what it is
-  label("What", 120)
+  label("What", 150)
   maker.kinds = {}
   local kx = X
   for _, k in ipairs(KINDS) do
     local b = smallButton(maker, k.label, 80, function()
       mk.kind = k.id
+      listOffset = 0
       if k.id == "note" then mk.dungeon = nil
       elseif mk.dungeon and ((ns.Notes.dungeon(mk.dungeon).raid == true) ~= (k.id == "raid")) then mk.dungeon = nil end
       drawMaker()
     end)
-    b:SetPoint("TOPLEFT", maker, "TOPLEFT", kx, -118)
+    b:SetPoint("TOPLEFT", maker, "TOPLEFT", kx, -148)
     maker.kinds[k.id] = b
     kx = kx + 84
   end
-  maker.place = smallButton(maker, "Pick a dungeon", 170, function() Widgets.menu(maker.place, Calendar.placeItems()) end)
-  maker.place:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -146)
-  maker.placeLine = T.text(maker, T.FONT.small, C.text)
-  maker.placeLine:SetPoint("LEFT", maker.place, "RIGHT", 8, 0)
-  maker.preview = maker:CreateTexture(nil, "ARTWORK")
-  maker.preview:SetSize(120, 68)
-  maker.preview:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -40)
-  -- thin lines between the parts, so it reads as a form
-  for _, y in ipairs({ 68, 112, 172, 206 }) do
-    local line = maker:CreateTexture(nil, "ARTWORK")
-    line:SetHeight(1)
-    line:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -y)
-    line:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -y)
-    T.color(line, C.line, 0.6)
+
+  -- the dungeon list: rows you click, the mouse wheel scrolls
+  local LIST_W = 300
+  maker.list = CreateFrame("Frame", nil, maker)
+  maker.list:SetSize(LIST_W, 20 + LIST_ROWS * LIST_ROW_H)
+  maker.list:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -176)
+  maker.list:EnableMouse(true)
+  if maker.list.EnableMouseWheel then maker.list:EnableMouseWheel(true) end
+  script(maker.list, "OnMouseWheel", function(_, delta) Calendar.scrollList(delta > 0 and -1 or 1) end)
+  maker.listTitle = T.text(maker.list, T.FONT.small, C.muted)
+  maker.listTitle:SetPoint("TOPLEFT", maker.list, "TOPLEFT", 0, 0)
+  local lup = stepButton(maker.list, ARROW_UP, function() Calendar.scrollList(-3) end)
+  lup:SetPoint("TOPRIGHT", maker.list, "TOPRIGHT", 0, 2)
+  local ldown = stepButton(maker.list, ARROW_DOWN, function() Calendar.scrollList(3) end)
+  ldown:SetPoint("RIGHT", lup, "LEFT", -2, 0)
+  maker.rows = {}
+  for i = 1, LIST_ROWS do
+    local r = CreateFrame("Button", nil, maker.list)
+    r:SetSize(LIST_W, LIST_ROW_H - 2)
+    r:SetPoint("TOPLEFT", maker.list, "TOPLEFT", 0, -(18 + (i - 1) * LIST_ROW_H))
+    T.paint(r, i % 2 == 0 and C.row or C.backdrop, 0.9, C.rowBorder, 1)
+    r.sel = r:CreateTexture(nil, "BORDER")
+    r.sel:SetPoint("TOPLEFT", r, "TOPLEFT", 1, -1)
+    r.sel:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", -1, 1)
+    T.color(r.sel, C.title, 0.35)
+    r.sel:Hide()
+    r.icon = iconTexture(r, nil, 18)
+    r.icon:SetPoint("LEFT", r, "LEFT", 3, 0)
+    r.text = T.text(r, T.FONT.small, C.white)
+    r.text:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
+    r.text:SetWidth(LIST_W - 32)
+    r.text:SetJustifyH("LEFT")
+    if r.text.SetWordWrap then r.text:SetWordWrap(false) end
+    local hl = r:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(r)
+    T.color(hl, C.white, 0.1)
+    script(r, "OnClick", function(self) if self.tcItem then self.tcItem.onClick() end end)
+    if r.EnableMouseWheel then r:EnableMouseWheel(true) end
+    script(r, "OnMouseWheel", function(_, delta) Calendar.scrollList(delta > 0 and -1 or 1) end)
+    maker.rows[i] = r
   end
+  maker.preview = maker:CreateTexture(nil, "ARTWORK")
+  maker.preview:SetSize(140, 80)
+  maker.preview:SetPoint("TOPLEFT", maker.list, "TOPRIGHT", 12, -18)
+  maker.placeLine = T.text(maker, T.FONT.small, C.white)
+  maker.placeLine:SetPoint("TOPLEFT", maker.preview, "BOTTOMLEFT", 0, -6)
+  maker.placeLine:SetWidth(W - X - LIST_W - 12 - PADM)
+  maker.placeLine:SetJustifyH("LEFT")
+  maker.plain = T.text(maker, T.FONT.small, C.muted)
+  maker.plain:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -184)
+  maker.plain:SetWidth(W - X - PADM)
+  maker.plain:SetJustifyH("LEFT")
+  maker.plain:SetText("A plain note. Pick Dungeon or Raid above for a run with its picture on the calendar.")
+  line(364)
+
   -- icon
-  label("Icon", 180)
+  label("Icon", 374)
   maker.picks = {}
   for i, e in ipairs(ns.Notes.ICONS) do
     local b = CreateFrame("Button", nil, maker)
-    b:SetSize(20, 20)
-    b:SetPoint("TOPLEFT", maker, "TOPLEFT", X + (i - 1) * 23, -178)
+    b:SetSize(22, 22)
+    b:SetPoint("TOPLEFT", maker, "TOPLEFT", X + (i - 1) * 26, -372)
     b.border = b:CreateTexture(nil, "BACKGROUND")
     b.border:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
     b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 2, -2)
     T.color(b.border, C.title, 1)
-    local ic = iconTexture(b, e.tex, 20)
+    local ic = iconTexture(b, e.tex, 22)
     ic:SetAllPoints(b)
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(b)
@@ -697,10 +813,10 @@ local function buildMaker()
     maker.picks[i] = b
   end
   -- words
-  label("Words", 214)
+  label("Words", 408)
   maker.box = T.frame("EditBox", nil, maker)
   maker.box:SetSize(W - X - PADM, 24)
-  maker.box:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -212)
+  maker.box:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -406)
   T.paint(maker.box, C.row, 1, C.rowBorder, 1)
   maker.box:SetAutoFocus(false)
   if maker.box.SetFontObject then maker.box:SetFontObject(T.FONT.small) end
@@ -709,10 +825,10 @@ local function buildMaker()
   script(maker.box, "OnEnterPressed", function() Calendar.saveMaker() end)
   script(maker.box, "OnEscapePressed", function(self) self:ClearFocus() end)
   local hint = T.text(maker, T.FONT.small, C.muted)
-  hint:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -242)
-  hint:SetWidth(W - X - PADM)
+  hint:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -444)
+  hint:SetWidth(W - 2 * PADM - 210)
   hint:SetJustifyH("LEFT")
-  hint:SetText("For a dungeon or raid the words can stay empty: its name is used. The whole crew sees the note.")
+  hint:SetText("For a dungeon or raid the words can stay empty. The whole crew sees the note.")
   local save = Widgets.button(maker, "Save note", function() Calendar.saveMaker() end, nil, FEATURE)
   save:SetSize(110, 26)
   save:SetPoint("BOTTOMRIGHT", maker, "BOTTOMRIGHT", -PADM, 12)
@@ -731,9 +847,11 @@ function Calendar.openMaker(opts)
   mk.kind = opts.kind or "note"
   mk.dungeon = opts.dungeon
   mk.icon = 1
+  listOffset = 0
   maker.box:SetText("")
   drawMaker()
   maker:Show()
+  if maker.Raise then maker:Raise() end
   if maker.box.SetFocus then maker.box:SetFocus() end
 end
 

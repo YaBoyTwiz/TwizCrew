@@ -14,6 +14,11 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.18", date = "2026-11-08", lines = {
+    "Create note: the dungeon list is inside the window now (click one, scroll for more): no more clicks falling through.",
+    "Time has up and down arrows for the hour and the minutes (the mouse wheel works too), and an AM / PM button.",
+    "Menus always sit on top, so a window behind them never steals your click.",
+  } },
   { ver = "0.1.17", date = "2026-11-08", lines = {
     "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",
     "Next to them it says Right here, and points again when they move away.",

@@ -310,12 +310,15 @@ local function buildMenu()
   -- A see-through frame over the whole screen: a click anywhere outside the menu closes it.
   catcher = CreateFrame("Frame", nil, UIParent)
   catcher:SetAllPoints(UIParent)
-  catcher:SetFrameStrata("FULLSCREEN")
+  catcher:SetFrameStrata("TOOLTIP") -- above every window (also TwizCrew's own dialogs), just under the menu
+  catcher:SetFrameLevel(1)
   catcher:EnableMouse(true)
   catcher:Hide()
   script(catcher, "OnMouseDown", closeMenu)
   menu = T.frame("Frame", "TwizCrewMenu", UIParent)
-  menu:SetFrameStrata("FULLSCREEN_DIALOG")
+  menu:SetFrameStrata("TOOLTIP")
+  menu:SetFrameLevel(20)
+  if menu.SetToplevel then menu:SetToplevel(true) end
   if menu.SetClampedToScreen then menu:SetClampedToScreen(true) end
   menu:EnableMouse(true)
   T.paint(menu, C.backdrop, 0.95, C.border, 2)
@@ -385,6 +388,7 @@ function Widgets.menu(anchor, items)
   menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
   catcher:Show()
   menu:Show()
+  if menu.Raise then menu:Raise() end
   return menu
 end
 

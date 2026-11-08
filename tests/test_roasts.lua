@@ -95,12 +95,50 @@ return {
     end,
     rotation_has_no_repeats_until_all_used = function(ns, A, W)
       start(ns, W)
-      local seen, n = {}, #ns.Roasts.MOCK_LINES
-      for i = 1, n do
-        local text = ns.Roasts.mock("Friend" .. i)
-        A.ok(text and not seen[text], "line " .. i .. " is new")
-        seen[text:gsub("Friend%d+", "X")] = true
+      -- strangers share nothing, so lines that need {zone}, {level} or {class} are skipped for them
+      local usable = 0
+      for _, l in ipairs(ns.Roasts.MOCK_LINES) do
+        if not l:find("{zone}", 1, true) and not l:find("{level}", 1, true) and not l:find("{class}", 1, true) then
+          usable = usable + 1
+        end
       end
+      local seen = {}
+      for i = 1, usable do
+        local text = ns.Roasts.mock("Friend" .. i)
+        A.ok(text, "mock " .. i)
+        A.no(text:find("{", 1, true), "no raw placeholder: " .. text)
+        local key = text:gsub("Friend%d+", "X")
+        A.no(seen[key], "line " .. i .. " is new: " .. key)
+        seen[key] = true
+      end
+    end,
+    placeholders_use_what_friends_share = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "23", zn = "Duskwood" })
+      A.eq(ns.Roasts.mockText("{name} ({level} {class}) died in {zone}, {me} laughed.", "Frostie", "Twiz",
+        ns.Roasts.mockInfo("Frostie")), "Frostie (23 Mage) died in Duskwood, Twiz laughed.")
+      A.eq(ns.Roasts.mockText("{name} in {zone}", "Nobody", "Twiz", ns.Roasts.mockInfo("Nobody")),
+        "Nobody in {zone}", "unknown stays a placeholder (and such a line gets skipped)")
+      ns.Roasts.addMock("{name} the {class} fell over in {zone}.")
+      ns.Modules.set("roasts", "ownOnly", true)
+      A.eq(ns.Roasts.mock("Frostie"), "Frostie the Mage fell over in Duskwood.")
+      A.eq(ns.Roasts.mock("Nobody"), nil, "only that line, and it needs a zone we don't know")
+    end,
+    my_mocks_window = function(ns, A, W)
+      start(ns, W)
+      ns.MockEditor.open()
+      ns.MockEditor.addForTest("  ")
+      A.eq(ns.Roasts.myMocks(), {}, "blank refused")
+      ns.MockEditor.addForTest("{name} slipped on a banana")
+      A.eq(ns.Roasts.myMocks(), { "{name} slipped on a banana" })
+      A.eq(ns.MockEditor.rowTextForTest(1), "{name} slipped on a banana")
+      ns.MockEditor.tryForTest("{name} slipped on a banana")
+      A.ok(ns.MockShow.isShown(), "Try shows it on me")
+      ns.MockEditor.remove(1)
+      A.eq(ns.Roasts.myMocks(), {})
+      A.no(ns.MockEditor.rowTextForTest(1))
+      W.env.SlashCmdList.TWIZCREW("mock")
+      A.eq(ns.Log.errors(10), {})
     end,
     mock_commands = function(ns, A, W)
       start(ns, W)

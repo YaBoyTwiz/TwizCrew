@@ -233,12 +233,13 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showXP", "xpText", "xpTooltip",
+      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "showXP",
+        "xpText", "xpTooltip",
         "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
-      A.eq(d.defaults.fadeAlpha, 0.3); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
+      A.eq(d.defaults.fadeAlpha, 0.35); A.eq(d.defaults.fadeOut, true); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
       local sort
       for _, s in ipairs(d.settings) do if s.key == "sort" then sort = s end end
       A.eq(sort.choices, { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
@@ -309,7 +310,10 @@ return {
       local r = ns.Panel.rowFrameForTest(1)
       r._scripts.OnEnter(r)
       A.ok(tip.shown)
-      A.eq(tip.lines, { "Ginkan", "Level 12 \194\183 63%", "1,234 XP to level 13", "Rested: 2,000 XP" })
+      A.eq({ tip.lines[1], tip.lines[2], tip.lines[3], tip.lines[4] },
+        { "Ginkan", "Level 12 \194\183 63%", "1,234 XP to level 13", "Rested: 2,000 XP" })
+      A.eq(tip.lines[#tip.lines - 1], "Where: Elwynn Forest", "then where they are")
+      A.eq(tip.lines[#tip.lines], "Right-click for options")
       -- new numbers while the mouse is on the row: the tooltip follows
       receive(ns, W, "Ginkan", "UPDATE", { xc = "871", xp = "46" })
       W:advance(1)
@@ -317,8 +321,10 @@ return {
       r._scripts.OnLeave(r)
       A.no(tip.shown)
       ns.Modules.set("panel", "xpTooltip", false); W:advance(1)
+      tip.lines = {}
       r._scripts.OnEnter(r)
-      A.no(tip.shown, "hover detail switched off")
+      for _, l in ipairs(tip.lines) do A.no(l:find("XP to level", 1, true), "XP details switched off: " .. l) end
+      A.eq(tip.lines[2], "Where: Elwynn Forest", "the rest still shows")
       A.eq(ns.Log.errors(10), {})
     end,
     panel_title_shows_the_version = function(ns, A, W)

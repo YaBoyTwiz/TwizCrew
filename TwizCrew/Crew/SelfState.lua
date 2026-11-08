@@ -9,7 +9,7 @@ local FEATURE = "comm"
 local EVENTS = {
   "PLAYER_ENTERING_WORLD", "ZONE_CHANGED", "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED_INDOORS", "PLAYER_LEVEL_UP",
   "PLAYER_XP_UPDATE", "PLAYER_FLAGS_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_DEAD",
-  "PLAYER_ALIVE", "PLAYER_UNGHOST", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
+  "PLAYER_ALIVE", "PLAYER_UNGHOST", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED", "PLAYER_EQUIPMENT_CHANGED",
 }
 
 local last = {}        -- fields as last sent
@@ -71,6 +71,7 @@ function Self.gather()
   if onTaxi then subzone = "On a flight path" end
   local tags = ns.Tags and ns.Tags.encode(ns.Tags.detectSelf()) or ""
   local layerKey = ns.LayerSensor and ns.LayerSensor.current() or ""
+  local q = ns.Quest and ns.Quest.wire() or {}
   local sid, sst = "", ""
   if ns.Session then sid, sst = ns.Session.wire() end
   return {
@@ -90,6 +91,10 @@ function Self.gather()
     sst = tostring(sst or ""),
     ver = tostring(ns.VERSION),
     rs = tostring(ns.RESTART_SINCE), -- a newer copy than a friend's tells it whether a /reload is enough
+    qn = tostring(q.qn or ""), -- the quest I'm on, its objectives, "1" = ready to turn in (Quest.wire)
+    qo = tostring(q.qo or ""),
+    qc = tostring(q.qc or ""),
+    lo = ns.MockShow and ns.MockShow.myLook() or "", -- race, gender and visible gear (the mock show's stand-in)
   }
 end
 

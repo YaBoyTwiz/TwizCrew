@@ -131,6 +131,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Settings: Basics and Advanced tabs (2026-11-07):** "too many advanced features... not so daunting". The window
   opens on Basics (transparency, size, row style, panel on/off, offline friends, lock, hide in fights, pop-ups,
   auto-away, minimap button); Advanced lists everything.
+- **Quests and the row menu (2026-11-07):** each copy shares the quest you're on (qn / qo / qc: the one whose
+  objectives moved last, else the first watched; never C_SuperTrack, see test_lint). Rows show "Quest (3/8)" with a
+  ! or ?, hover adds where, quest objectives, status and distance; right-click a row for Whisper, Invite, Inspect
+  (when near), Point the arrow, Mock (when dead), Add to friends. Switches: Show quests, Share my quest (Panel).
+- **Advanced sub-tabs (2026-11-07):** "way too much stuff and takes forever to drag to the bottom". Advanced has
+  sub-tabs: Panel, Roasts, Pop-ups, Find, Crew, Test, and All (the old single page).
 - **AFK lives in the panel only (2026-11-07):** the AFK button and `/tc afk` tell the crew, never set the game's own
   AFK flag ("i dont need the game to set the afk flag"); the game's `/afk` shows the same way. No AFK pop-ups ("just
   do it within the panel"): the AFK tag, a "zzz" on the portrait and a faded row. Auto-away after 3 idle minutes
@@ -289,6 +295,16 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - Possible use: the "come here" ping.
 
 ## 3D models (research 2026-11-05, Warcraft Wiki + forums; not tested in Forever)
+
+- **Mock show (built 2026-11-07, not yet seen in game):** a friend's mock about you shows their character laughing
+  (animation 70) in a speech bubble pop-up (UI/MockShow.lua). Picture, best first: live (`SetUnit` on a visible
+  party unit or nameplate), remembered (a model loaded with `SetUnit` while they were near, kept shown off screen for
+  the session; lost on /reload), stand-in (`SetCustomRace` + `TryOn` from the shared `lo` field: race, sex,
+  visible gear item IDs), class icon. Face, hair and skin can't be read or set by addons (owner asked; explained).
+  Check in game with Try it out: Try a mock (live / icon), which say when a mode falls back.
+  **Stand-in dropped (owner, 2026-11-07):** "the mock stand in doesn't look good, let's not use it". Forever has no
+  `SetCustomRace`; the race-model fallback (`SetDisplayInfo`) wasn't worth it. `lo` now carries race and sex only (the
+  laugh voice: `PlaySoundFile` with the race's laugh file ID from the community listfile).
 
 - Addons can show **game** models: `PlayerModel`, `DressUpModel`, `ModelScene` actors. Units (`player`, `party1`,
   `target`) only when that player is loaded nearby; far away they show blank.

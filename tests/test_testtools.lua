@@ -476,7 +476,7 @@ return {
     -------------------------------------------------------------------------------------------- settings / chat
     try_it_out_section_in_settings = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       local d = ns.Settings.describeForTest()
       local function at(what) for i, v in ipairs(d) do if v == what then return i end end end
       A.ok(at("section:Try it out") and at("section:Try it out") > at("section:Extras"), "last section")

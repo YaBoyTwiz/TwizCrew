@@ -13,6 +13,7 @@ local HELP = {
   "/tc hide - hide the crew panel",
   "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
+  "/tc mock - the My mocks window: write, try and delete your own mocks",
   "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
   "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
@@ -143,7 +144,7 @@ local function mock(rest)
     if ns.Roasts.mock(name) then return end
     say("can't mock " .. ns.Util.safeText(name) .. " right now (wait a few seconds between mocks).")
   else
-    say("/tc mock add <text>, /tc mock list, /tc mock remove <number>. When a friend dies, click Mock on their row.")
+    ns.MockEditor.open() -- /tc mock alone: the My mocks window
   end
 end
 

@@ -12,6 +12,7 @@ local C = T.COLOR
 local WIDTH, PAD = 400, 14
 local CONTENT_WIDTH = WIDTH - 2 * PAD
 local HEADER = 84 -- title, version line and the Basics / Advanced tabs
+local SUBTAB_ROW = 24 -- the Advanced tab's own row of sub-tabs
 local FOOTER, CONFIRM = 40, 58
 local ROW, MODULE_ROW, BROKEN_ROW, SECTION_ROW = 24, 26, 38, 26
 local INDENT = { setting = 14, child = 32 }
@@ -29,6 +30,8 @@ local BASICS = {
   { id = "panel", key = "bgAlpha" },
   { id = "panel", key = "scale" },
   { id = "panel", key = "rowStyle" },
+  { id = "panel", key = "fadeOut" },
+  { id = "panel", key = "fadeAlpha" },
   { title = "Handy", note = "the things people change most" },
   { module = "panel" },
   { id = "panel", key = "showOffline" },
@@ -37,6 +40,7 @@ local BASICS = {
   { module = "popups" },
   { id = "tags", key = "autoAway" },
   { id = "tags", key = "awayMinutes" },
+  { id = "roasts", key = "editMocks" },
   { id = "minimap", key = "show" },
   { title = "Find the crew", note = "arrows to your group and meet-ups" },
   { id = "find", key = "rowArrows" },
@@ -44,12 +48,26 @@ local BASICS = {
   { id = "find", key = "sharePosition" },
 }
 local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
+-- The Advanced tab's sub-tabs: which modules each shows, in that order. A module not listed lands on Crew.
+-- "all" is the old single page with every section.
+local SUBTABS = {
+  { id = "panel", label = "Panel", modules = { "panel", "tags", "layer" } },
+  { id = "roasts", label = "Roasts", modules = { "roasts", "stats" } },
+  { id = "popups", label = "Pop-ups", modules = { "popups", "updates" } },
+  { id = "find", label = "Find", modules = { "find" } },
+  { id = "crew", label = "Crew", modules = { "comm", "version", "minimap", "pokes", "races" } },
+  { id = "test", label = "Test", modules = { "testtools" } },
+  { id = "all", label = "All" },
+}
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"
 local RESET_QUESTION = "Reset all TwizCrew settings and the panel position?"
 
 local frame, scroll, content, subtitle, confirmBox, closeButton, resetButton
 local tab = "basic"   -- the tab shown: "basic" or "advanced"
-local tabButtons = {}
+local sub = "panel"   -- the Advanced sub-tab shown
+local tabButtons, subButtons = {}, {}
+
+local function headerHeight() return tab == "advanced" and HEADER + SUBTAB_ROW or HEADER end
 local isOpen, dirty, confirming = false, true, false
 local rows = {}       -- cache key -> row frame
 local placed = {}     -- rows placed by the last layout, in order
@@ -147,7 +165,7 @@ local function moduleRow(def, broken)
     return cached("module:" .. def.id .. ":always", function() return noteRow(def, "always on") end), "always on",
       MODULE_ROW
   end
-  if def.tier == "extra" or def.comingSoon then
+  if def.comingSoon then
     return cached("module:" .. def.id .. ":soon", function()
       local r = Widgets.toggle(content, def.name, def.info, function() return false end, function() end)
       r.label:SetFontObject(T.FONT.normal)
@@ -219,15 +237,16 @@ end
 -- Window height: everything, or at most 85% of the screen (then the middle part scrolls).
 local function fit()
   local footer = FOOTER + (confirming and CONFIRM or 0)
-  local want = HEADER + contentHeight + footer + 6
+  local head = headerHeight()
+  local want = head + contentHeight + footer + 6
   local screen = UIParent.GetHeight and UIParent:GetHeight()
   local height = want
   if type(screen) == "number" and screen > 0 then height = math.min(want, math.floor(screen * 0.85)) end
   frame:SetHeight(height)
   scroll:ClearAllPoints()
-  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -HEADER)
+  scroll:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -head)
   scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, footer)
-  scrollMax = math.max(0, contentHeight - (height - HEADER - footer))
+  scrollMax = math.max(0, contentHeight - (height - head - footer))
   setScroll(scrollOffset)
 end
 
@@ -280,22 +299,45 @@ local function layout()
     fit()
     return
   end
-  for i, sec in ipairs(SECTIONS) do
-    if i > 1 then y = y + 10 end
-    place(sectionRow(sec), 0, SECTION_ROW + 4, "section:" .. sec.title)
-    for _, def in ipairs(ns.Modules.list(sec.tier)) do
-      local r, state, height = moduleRow(def, broken[def.id])
-      place(r, 0, height, "module:" .. def.id .. ":" .. state)
-      if sec.tier ~= "extra" and not def.comingSoon then
-        for _, s in ipairs(def.settings) do
-          local sr = settingRow(def, s)
-          sr.tcModule, sr.tcParent = def.id, s.parent or false
-          if sr.tcList then sr.Refresh() end -- a list: its height depends on its lines
-          place(sr, s.parent and INDENT.child or INDENT.setting, sr.tcList and sr.Height() or ROW,
-            (s.parent and "child:" or "setting:") .. def.id .. ":" .. s.key)
-        end
+  local function placeModule(def)
+    local r, state, height = moduleRow(def, broken[def.id])
+    place(r, 0, height, "module:" .. def.id .. ":" .. state)
+    if not def.comingSoon then
+      for _, s in ipairs(def.settings) do
+        local sr = settingRow(def, s)
+        sr.tcModule, sr.tcParent = def.id, s.parent or false
+        if sr.tcList then sr.Refresh() end -- a list: its height depends on its lines
+        place(sr, s.parent and INDENT.child or INDENT.setting, sr.tcList and sr.Height() or ROW,
+          (s.parent and "child:" or "setting:") .. def.id .. ":" .. s.key)
       end
-      y = y + 4
+    end
+    y = y + 4
+  end
+  if sub ~= "all" then
+    local listed, chosen = {}, nil
+    for _, st in ipairs(SUBTABS) do
+      for _, id in ipairs(st.modules or {}) do listed[id] = st.id end
+      if st.id == sub then chosen = st end
+    end
+    local ids = {}
+    for _, id in ipairs(chosen and chosen.modules or {}) do ids[#ids + 1] = id end
+    if sub == "crew" then -- anything not listed anywhere
+      for _, def in ipairs(ns.Modules.list()) do
+        if not listed[def.id] then ids[#ids + 1] = def.id end
+      end
+    end
+    for i, id in ipairs(ids) do
+      local def = ns.Modules.get(id)
+      if def then
+        if i > 1 then y = y + 8 end
+        placeModule(def)
+      end
+    end
+  else
+    for i, sec in ipairs(SECTIONS) do
+      if i > 1 then y = y + 10 end
+      place(sectionRow(sec), 0, SECTION_ROW + 4, "section:" .. sec.title)
+      for _, def in ipairs(ns.Modules.list(sec.tier)) do placeModule(def) end
     end
   end
   contentHeight = y
@@ -321,19 +363,31 @@ local function drawTabs()
     T.textColor(b.text, on and C.title or C.muted)
     if on then b.line:Show() else b.line:Hide() end
   end
+  for id, b in pairs(subButtons) do
+    if tab == "advanced" then b:Show() else b:Hide() end
+    local on = id == sub
+    T.textColor(b.text, on and C.white or C.muted)
+    if on then b.fill:Show() else b.fill:Hide() end
+  end
 end
 
--- Shows the "basic" or "advanced" tab (anything else counts as basic).
-function Win.setTab(id)
+-- Shows the "basic" or "advanced" tab (anything else counts as basic); subId picks the Advanced sub-tab
+-- ("panel", "roasts", "popups", "find", "crew", "test" or "all"; nil keeps the last one).
+function Win.setTab(id, subId)
   local want = id == "advanced" and "advanced" or "basic"
-  if want == tab then return end
-  tab = want
+  local wantSub = sub
+  if want == "advanced" and subId then
+    for _, st in ipairs(SUBTABS) do if st.id == subId then wantSub = subId end end
+  end
+  if want == tab and wantSub == sub then return end
+  tab, sub = want, wantSub
   drawTabs()
   scrollOffset = 0
   Win.rebuild()
 end
 
 function Win.tab() return tab end
+function Win.subTab() return sub end
 
 ---------------------------------------------------------------------------------------------------- frame
 local function showConfirm(on)
@@ -394,6 +448,28 @@ local function build()
   under:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -74)
   under:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -74)
   T.color(under, C.line, 1)
+
+  -- the Advanced sub-tabs: small pill buttons in one row under the tabs
+  local sx = PAD
+  for _, st in ipairs(SUBTABS) do
+    local b = CreateFrame("Button", nil, frame)
+    b.text = T.text(b, T.FONT.small, C.muted)
+    b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
+    b.text:SetText(st.label)
+    local w = tonumber(b.text.GetStringWidth and b.text:GetStringWidth()) or 0
+    if w <= 0 then w = #st.label * 6 end
+    b:SetSize(math.floor(w + 14), 18)
+    b:SetPoint("TOPLEFT", frame, "TOPLEFT", sx, -80)
+    b.fill = b:CreateTexture(nil, "BACKGROUND")
+    b.fill:SetAllPoints(b)
+    T.color(b.fill, C.button, 1)
+    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(b)
+    T.color(hl, C.white, 0.08)
+    script(b, "OnClick", function() Win.setTab("advanced", st.id) end)
+    subButtons[st.id] = b
+    sx = sx + b:GetWidth() + 4
+  end
   drawTabs()
 
   scroll = CreateFrame("ScrollFrame", nil, frame)

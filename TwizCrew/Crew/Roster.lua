@@ -46,6 +46,10 @@ local WIRE = {
   xc  = { "xpCur", num },   -- level progress: current XP
   xm  = { "xpMax", num },   -- XP needed for this level (0 = max level)
   rx  = { "rested", num },  -- rested XP
+  lo  = { "look", keepString }, -- race, gender, visible gear (MockShow.decodeLook)
+  qn  = { "questName", keepString },       -- the quest they're on
+  qo  = { "questObjectives", keepString }, -- its objectives, "; " between them
+  qc  = { "questComplete", function(v) if type(v) == "string" then return v == "1" end end }, -- ready to turn in
 }
 
 -- XP pace for one play session (m.xpTrack): XP earned and the playing time it took. Called after a message that

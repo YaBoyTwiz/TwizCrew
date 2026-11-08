@@ -118,6 +118,23 @@ function PanelLogic.versionLine(ver)
   return line
 end
 
+-- The tooltip's second part (online friends): where they are, the quest they're on with its objectives, their
+-- typed status. nil when there's nothing to say.
+function PanelLogic.infoLines(m)
+  local lines = {}
+  local where = zoneText(m)
+  if where ~= "" then lines[#lines + 1] = "Where: " .. where end
+  if type(m.questName) == "string" and m.questName ~= "" then
+    lines[#lines + 1] = "Quest: " .. text(m.questName) .. (m.questComplete and " (ready to turn in)" or "")
+    for _, o in ipairs(ns.Quest and ns.Quest.objectiveLines(m.questObjectives) or {}) do
+      lines[#lines + 1] = "   - " .. text(o)
+    end
+  end
+  if type(m.status) == "string" and m.status ~= "" then lines[#lines + 1] = 'Status: "' .. text(m.status) .. '"' end
+  if #lines == 0 then return nil end
+  return lines
+end
+
 -- The lines under the name in a row's tooltip.
 function PanelLogic.tooltipLines(m, now, maxLevel)
   local lv, xp = level(m.level), percent(m.xp)
@@ -153,10 +170,13 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         offline = offline,
       }
       if not offline then
+        row.quest = ns.Quest and ns.Quest.short(m.questName, m.questObjectives, m.questComplete) or nil
+        row.questDone = m.questComplete and true or false
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
         if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end
       end
       local tip = settings.xpTooltip ~= false and PanelLogic.tooltipLines(m, now, maxLevel) or {}
+      if not offline then row.info = PanelLogic.infoLines(m) end
       local ver = PanelLogic.versionLine(m.ver)
       if ver then tip[#tip + 1] = ver end
       if #tip > 0 then row.tip = tip end

@@ -382,6 +382,23 @@ end
 ---------------------------------------------------------------------------------------------------- the buttons
 local ACTIONS = {}
 
+-- Try a mock: you laughing at yourself, the way a friend's mock about you would look.
+local function tryMock(mode)
+  local me = ns.playerName()
+  local lines = ns.Roasts.rotation()
+  local line = lines[math.random(math.max(1, #lines))] or "{name}, have you tried not dying?"
+  local text = ns.Roasts.mockText(line, me, me)
+  local _, class = UnitClass("player")
+  local used = ns.MockShow.show(me, text, { mode = mode, unit = "player",
+    look = ns.MockShow.decodeLook(ns.MockShow.myLook()), class = class })
+  if used ~= mode then
+    say("the " .. mode .. " picture didn't work on this game version; it showed the " .. used .. " instead.")
+  end
+end
+
+function ACTIONS.mockLive() tryMock("live") end
+function ACTIONS.mockIcon() tryMock("icon") end
+
 function ACTIONS.fake()
   makeFakes()
   panelHint()
@@ -605,6 +622,7 @@ end
 local COMMANDS = {
   fake = "fake", copy = "copy", ding = "ding", death = "death", layer = "layer", roast = "roast", clear = "clear",
   ["update reload"] = "updateReload", ["update restart"] = "updateRestart", walk = "walk",
+  mock = "mockLive", ["mock live"] = "mockLive", ["mock icon"] = "mockIcon",
 }
 
 TestTools.HELP = {
@@ -620,6 +638,7 @@ TestTools.HELP = {
   "/tc test update restart - pretend a friend has a newer version that needs a game restart",
   "/tc test walk - Walkbuddy: a pretend group member walking around you (row arrow, big arrow) and a pretend "
     .. "meet-up 120 yards north (again: removes them)",
+  "/tc test mock live | icon - you laughing at yourself: how a friend's mock about you looks",
   "/tc test clear - remove every pretend thing (Reset to defaults and /reload do too)",
 }
 
@@ -659,6 +678,10 @@ ns.Modules.register({
       .. "layer\", taking turns. Clicking the pop-up invites nobody."),
     button("roast", "Roast pop-up", "An orange roast about Testbuddy, a different one each press. Roasts about the "
       .. "same person wait 10 seconds between them, like the real ones."),
+    button("mockLive", "Try a mock (live)", "Your own character laughs at you with a roast, the way a friend near "
+      .. "you looks when they mock you. Checks the 3D model and the laugh."),
+    button("mockIcon", "Try a mock (icon)", "What a far-away friend you haven't been near this session gets: their "
+      .. "class icon with the speech bubble."),
     button("updateReload", "Update notice (reload)", "Pretends Testbuddy has a newer TwizCrew that a /reload loads: "
       .. "the gold ! on the minimap button, the gold line on the Crew panel and the how-to window with Reload now."),
     button("updateRestart", "Update notice (restart)", "The same, for a newer version that needs a game restart: "

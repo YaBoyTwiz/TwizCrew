@@ -202,7 +202,36 @@ Roasts.MOCK_LINES = {
   "Breaking news: {name} is still bad at this.",
   "{me} saw that, {name}. Everyone saw that.",
   "{name}, have you tried not dying?",
+  "{name} died in {zone}. {zone} wins this round.",
+  "Level {level} and still can't stay alive. Classic {name}.",
+  "Even the {class} trainer is embarrassed, {name}.",
+  "{name} just donated a corpse to {zone}.",
+  "{name}, the floor in {zone} is not a bed.",
+  "Who had {name} dying first on their bingo card? Everyone.",
+  "{name} has entered ghost mode. Achievement unlocked: nothing.",
+  "Pull more, they said. {name} did. {name} died.",
+  "{name} has been nerfed. By the ground.",
+  "Reminder: health bars go down, {name}. That's the bad direction.",
+  "{name} rolled Need on a dirt nap.",
+  "{name}'s repair bill just leveled up.",
+  "Somewhere, a murloc is laughing at {name}.",
+  "{name} found the respawn button the hard way.",
+  "{me} would have carried you, {name}. Probably.",
+  "{name} is taking the scenic route to the graveyard.",
+  "New personal best, {name}! Fastest death yet.",
+  "The spirit healer just offered {name} a loyalty card.",
+  "{name}, your armor is now mostly decorative.",
+  "Plot twist: {name} was the loot.",
+  "Dying is a {class} skill now? {name} maxed it.",
+  "{name} looked at the mob. The mob looked back. The mob won.",
+  "That wasn't a wipe, that was just {name}.",
+  "{name} pressed the wrong button. All of them.",
+  "Tell the guild {name} died bravely. We'll lie for you.",
 }
+-- Placeholders a roast can use (built-in and your own). {zone}, {level} and {class} come from what the dead friend
+-- shares; a line that needs one we don't know is skipped for that mock.
+Roasts.MOCK_HELP = "{name} = who died, {me} = you, {zone} = where they died, {level} = their level, "
+  .. "{class} = their class"
 local mockLimit = ns.StatsLogic.newLimiter(MOCK_GAP)
 local mockShowLimit = ns.StatsLogic.newLimiter(3)
 local bag = {} -- line numbers not used yet this round (no repeats until every line had a turn)
@@ -228,6 +257,7 @@ function Roasts.addMock(text)
   mine[#mine + 1] = line
   bag = {}
   if ns.Settings and ns.Settings.rebuild then ns.Settings.rebuild() end
+  if ns.MockEditor then ns.MockEditor.refresh() end
   return true
 end
 
@@ -238,6 +268,7 @@ function Roasts.removeMock(n)
   local gone = table.remove(mine, n)
   bag = {}
   if ns.Settings and ns.Settings.rebuild then ns.Settings.rebuild() end
+  if ns.MockEditor then ns.MockEditor.refresh() end
   return gone
 end
 
@@ -254,9 +285,27 @@ function Roasts.rotation()
 end
 
 -- The finished text of a line (pure): {name} the dead friend, {me} you.
-function Roasts.mockText(line, target, me)
+-- info (optional): { zone =, level =, class = } about the dead friend. Unknown placeholders stay as "{key}".
+function Roasts.mockText(line, target, me, info)
+  info = info or {}
   local subs = { name = ns.Util.safeText(tostring(target or "")), me = ns.Util.safeText(tostring(me or "")) }
+  for _, key in ipairs({ "zone", "level", "class" }) do
+    local v = info[key]
+    if v ~= nil and tostring(v) ~= "" then subs[key] = ns.Util.safeText(tostring(v)) end
+  end
   return (tostring(line):gsub("{(%a+)}", function(key) return subs[key] or ("{" .. key .. "}") end))
+end
+
+-- What the roast can say about a crew member: { zone, level, class } from what they share.
+function Roasts.mockInfo(name)
+  local m = ns.roster and ns.roster:get(name)
+  if not m then return {} end
+  local class
+  if type(m.class) == "string" and m.class ~= "" then
+    local names = type(LOCALIZED_CLASS_NAMES_MALE) == "table" and LOCALIZED_CLASS_NAMES_MALE or {}
+    class = names[m.class] or (m.class:sub(1, 1) .. m.class:sub(2):lower())
+  end
+  return { zone = m.zone ~= "" and m.zone or nil, level = tonumber(m.level), class = class }
 end
 
 local function nextLine()
@@ -276,6 +325,14 @@ local function showMock(sender, f)
   if not text then return end
   if not ns.Modules.isEnabled(FEATURE) or not setting("mocks") then return end
   if not mockShowLimit:allow(sender, ns.now()) then return end
+  -- a mock about ME from a friend: their character laughs at me (the mock show), if that's on
+  if ns.MockShow and f.t and ns.isMe(f.t) and not ns.isMe(sender) and setting("mockModel") ~= false then
+    shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
+    if #shown > SHOWN_MAX then table.remove(shown, 1) end
+    ns.MockShow.show(sender, text)
+    ns.Log.add("info", "mock shown from %s (3D)", sender)
+    return
+  end
   text = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
   shown[#shown + 1] = text
   if #shown > SHOWN_MAX then table.remove(shown, 1) end
@@ -294,9 +351,14 @@ end
 function Roasts.mock(target)
   if not Roasts.canMock(target) then return nil end
   if not mockLimit:allow(target, ns.now()) then return nil end
-  local line = nextLine()
-  if not line then return nil end
-  local text = cleanLine(Roasts.mockText(line, target, ns.playerName()))
+  local info = Roasts.mockInfo(target)
+  local text
+  for _ = 1, #Roasts.rotation() do -- skip lines that need something we don't know about them
+    local line = nextLine()
+    if not line then return nil end
+    local t = cleanLine(Roasts.mockText(line, target, ns.playerName(), info))
+    if t and not t:find("{%a+}") then text = t break end
+  end
   if not text then return nil end
   local fields = { t = target, x = text }
   ns.Comm.send("MOCK", fields)
@@ -318,7 +380,8 @@ local KIND_SETTINGS = {
   { "quit", "Quests given up", "Shows a roast when someone gives up their third quest in a session." },
 }
 
-local defaults = { aboutMe = true, sound = false, mocks = true, ownOnly = false, addMock = "" }
+local defaults = { aboutMe = true, sound = false, mocks = true, mockModel = true, mockSound = true, ownOnly = false,
+  addMock = "" }
 local settings = {}
 for _, s in ipairs(KIND_SETTINGS) do
   defaults[s[1]] = true
@@ -332,14 +395,23 @@ settings[#settings + 1] = { key = "sound", label = "Play a sound", kind = "toggl
 settings[#settings + 1] = { key = "mocks", label = "Mock button roasts", kind = "toggle",
   info = "When a friend dies, a Mock button shows on their row. Click it to roast them in front of the crew. "
     .. "This switch also decides whether you see the mocks your friends send." }
+settings[#settings + 1] = { key = "mockModel", label = "Show who mocked me (3D)", kind = "toggle", parent = "mocks",
+  info = "When a friend mocks you, their character laughs at you with the roast in a speech bubble: their real "
+    .. "character if they're near you (or were earlier this session), otherwise their class icon. Off: the plain "
+    .. "orange roast line. Try it with the Try a mock buttons on the Test tab." }
+settings[#settings + 1] = { key = "mockSound", label = "Their laugh sound", kind = "toggle", parent = "mocks",
+  info = "Plays the laugh of the mocker's race and gender with the 3D mock." }
+settings[#settings + 1] = { key = "editMocks", label = "My mocks", kind = "button", parent = "mocks",
+  onClick = function() if ns.MockEditor then ns.MockEditor.open() end end,
+  info = "Opens a window to write your own mocks, try them out and delete old ones. Also: /tc mock." }
 settings[#settings + 1] = { key = "ownOnly", label = "Only use my own roasts", kind = "toggle", parent = "mocks",
   info = "The Mock button picks only from the roasts you added below (once you have at least one)." }
 settings[#settings + 1] = { key = "addMock", label = "Add a roast", kind = "text", parent = "mocks",
   onSave = function(v)
     if Roasts.addMock(v) then print("TwizCrew: roast added. It's in the rotation now.") end
   end,
-  info = "Type a roast and press Enter to add it to the Mock button's rotation. Write {name} for the dead "
-    .. "friend and {me} for you, like \"{name} tripped over a flower.\" Also: /tc mock add <text>." }
+  info = "Type a roast and press Enter to add it to the Mock button's rotation, like \"{name} tripped over a "
+    .. "flower in {zone}.\" " .. Roasts.MOCK_HELP .. ". Also: /tc mock add <text>." }
 settings[#settings + 1] = { key = "myMocks", label = "My roasts", kind = "list", parent = "mocks",
   lines = function()
     local out = {}

@@ -25,6 +25,7 @@ Crew\Crew.lua
 Core\Version.lua
 Core\UpdateLogic.lua
 Tags\Tags.lua
+Crew\Quest.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua
 Layer\Layer.lua
@@ -43,6 +44,8 @@ Stats\StatsStore.lua
 Stats\Detectors.lua
 Stats\Stats.lua
 Stats\Roasts.lua
+UI\MockShow.lua
+UI\MockEditor.lua
 UI\BoardLogic.lua
 UI\Board.lua
 UI\AwardsShow.lua

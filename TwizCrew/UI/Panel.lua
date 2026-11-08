@@ -239,6 +239,8 @@ local function createRow()
   end)
   script(r.mock, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   r.mock:Hide()
+  -- important: stays fully visible while the panel is faded (or the row dimmed)
+  if r.mock.SetIgnoreParentAlpha then r.mock:SetIgnoreParentAlpha(true) end
   -- Find the crew: a small arrow to a group member (turns as you turn) and the distance; click = the big arrow
   r.arrow = T.frame("Button", nil, r)
   r.arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
@@ -270,13 +272,16 @@ local function createRow()
   r.zone = T.text(r, T.FONT.small, C.zone)
   r.status = T.text(r, T.FONT.small, C.status)
   r.title = T.text(r, T.FONT.small, C.muted)
-  for _, fs in ipairs({ r.name, r.zone, r.status, r.title }) do
+  r.quest = T.text(r, T.FONT.small, C.status) -- the quest they're on, with a ! (or ? when ready to turn in)
+  r.questIcon = r:CreateTexture(nil, "ARTWORK")
+  r.questIcon:SetSize(12, 12)
+  for _, fs in ipairs({ r.name, r.zone, r.status, r.title, r.quest }) do
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
   end
   -- readable on the class-colored row: black outline and shadow, the name a size bigger
   T.readable(r.name, 1)
-  for _, fs in ipairs({ r.level, r.zone, r.status, r.title }) do T.readable(fs) end
+  for _, fs in ipairs({ r.level, r.zone, r.status, r.title, r.quest }) do T.readable(fs) end
   r.xpText = T.text(r, T.FONT.small, C.zone) -- "Lv 12 · 63%" next to the bar (full style)
   r.xpText:SetJustifyH("RIGHT")
   T.readable(r.xpText)
@@ -289,6 +294,9 @@ local function createRow()
   if r.xpSpark.SetBlendMode then r.xpSpark:SetBlendMode("ADD") end
   r.xpSpark:SetSize(10, 18)
   r.pills = {}
+  script(r, "OnMouseUp", function(self, button)
+    if button == "RightButton" and self.tcModel then Widgets.menu(self, Panel.rowMenu(self.tcModel)) end
+  end)
   draggable(r)
   script(r, "OnEnter", function(self) Panel.showRowTip(self) end)
   script(r, "OnLeave", function(self) Panel.hideRowTip(self) end)
@@ -438,6 +446,7 @@ local function layoutRow(r, m, style, s, width)
     r.title:Hide()
   end
   r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide(); r.xpText:Hide()
+  r.quest:Hide(); r.questIcon:Hide()
   r.xpGloss:Hide(); r.xpSpark:Hide()
   r.tcBarText = nil
   if style == "full" then
@@ -445,6 +454,18 @@ local function layoutRow(r, m, style, s, width)
     if line then placeLine(r, r.zone, line, y, width); y = y + LINE end
     if not m.offline and s.showStatus and m.status ~= "" then
       placeLine(r, r.status, '"' .. m.status .. '"', y, width)
+      y = y + LINE
+    end
+    if not m.offline and s.showQuest ~= false and m.quest then
+      r.questIcon:ClearAllPoints()
+      r.questIcon:SetPoint("TOPLEFT", r, "TOPLEFT", 7, -y)
+      r.questIcon:SetTexture(m.questDone and "Interface\\GossipFrame\\ActiveQuestIcon"
+        or "Interface\\GossipFrame\\AvailableQuestIcon")
+      r.questIcon:Show()
+      placeLine(r, r.quest, m.quest, y, width)
+      r.quest:ClearAllPoints()
+      r.quest:SetPoint("TOPLEFT", r, "TOPLEFT", 22, -y)
+      r.quest:SetWidth(width - 30)
       y = y + LINE
     end
     -- XP line: the bar (none at max level) with "Lv 12 · 63%" on its right, or the text alone.
@@ -511,11 +532,21 @@ local tipRow -- the row whose tooltip is showing (redraws refresh it)
 -- Name in class colour, then the row model's tip lines (level, XP to level, rested, time to level).
 function Panel.showRowTip(r)
   local m = r and r.tcModel
-  if not GameTooltip or type(m) ~= "table" or type(m.tip) ~= "table" then return end
+  if not GameTooltip or type(m) ~= "table" or (type(m.tip) ~= "table" and type(m.info) ~= "table") then return end
   GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
   GameTooltip:SetText(m.name, T.classColor(m.class))
   local cr, cg, cb = T.rgb(C.text)
-  for _, line in ipairs(m.tip) do GameTooltip:AddLine(line, cr, cg, cb) end
+  for _, line in ipairs(m.tip or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
+  for _, line in ipairs(m.info or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
+  -- live: how far they are (group members, Find the crew)
+  if ns.Find and ns.Find.arrowFor and not m.offline then
+    local ok, a = pcall(ns.Find.arrowFor, m.name)
+    if ok and type(a) == "table" and type(a.text) == "string" and a.text ~= "" then
+      GameTooltip:AddLine("Distance: " .. a.text, cr, cg, cb)
+    end
+  end
+  local mr, mg, mb = T.rgb(C.muted)
+  GameTooltip:AddLine("Right-click for options", mr, mg, mb)
   GameTooltip:Show()
   tipRow = r
 end
@@ -876,6 +907,71 @@ local function buildStatusBox()
   return f
 end
 
+-------------------------------------------------------------------------------------------------------- row menu
+local function call(fn, ...)
+  if type(fn) ~= "function" then return nil end
+  local ok, a = pcall(fn, ...)
+  if ok then return a end
+end
+
+local function inMyGroup(name)
+  return (call(UnitInParty, name) or call(UnitInRaid, name)) and true or false
+end
+
+local function whisper(full)
+  if ChatFrameUtil and type(ChatFrameUtil.SendTell) == "function" then return call(ChatFrameUtil.SendTell, full) end
+  if type(ChatFrame_SendTell) == "function" then return call(ChatFrame_SendTell, full) end
+  if type(ChatFrame_OpenChat) == "function" then call(ChatFrame_OpenChat, "/w " .. full .. " ") end
+end
+
+local function inviteName(full)
+  if C_PartyInfo and C_PartyInfo.InviteUnit then call(C_PartyInfo.InviteUnit, full)
+  elseif type(InviteUnit) == "function" then call(InviteUnit, full) end
+end
+
+local function addFriend(full)
+  if C_FriendList and C_FriendList.AddFriend then call(C_FriendList.AddFriend, full)
+  elseif type(AddFriend) == "function" then call(AddFriend, full) end
+  print("TwizCrew: asked the game to add " .. full .. " to your friends list.")
+end
+
+-- The right-click menu of a row: what you can do for (or to) that friend right now.
+function Panel.rowMenu(m)
+  local items = {}
+  local name = m and m.name
+  if type(name) ~= "string" or name == "" then return items end
+  if ns.isMe(name) then
+    items[#items + 1] = { label = "Set my status", onClick = function() Panel.openStatusBox() end }
+    items[#items + 1] = { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK",
+      onClick = function() Panel.toggleAway() end }
+    return items
+  end
+  local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name
+  if not m.offline then
+    items[#items + 1] = { label = "Whisper", onClick = function() whisper(full) end }
+    if not inMyGroup(name) then
+      items[#items + 1] = { label = "Invite to group", onClick = function() inviteName(full) end }
+    end
+    local unit = ns.MockShow and ns.MockShow.liveUnit(name)
+    if unit and call(CanInspect, unit) and type(InspectUnit) == "function" then
+      items[#items + 1] = { label = "Inspect", onClick = function() call(InspectUnit, unit) end }
+    end
+    if ns.Find and ns.BigArrow and ns.Find.positionOf and call(ns.Find.positionOf, name) then
+      items[#items + 1] = { label = "Point the arrow at them",
+        onClick = function() ns.BigArrow.point({ kind = "member", name = name }) end }
+    end
+    local dead = false
+    for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
+    if dead and ns.Roasts and ns.Roasts.canMock(name) then
+      items[#items + 1] = { label = "Mock them", onClick = function()
+        if not ns.Roasts.mock(name) then print("TwizCrew: give it a few seconds before mocking " .. name .. " again.") end
+      end }
+    end
+  end
+  items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
+  return items
+end
+
 function Panel.mock(r)
   local m = r and r.tcModel
   if not m or not ns.Roasts then return end
@@ -999,6 +1095,7 @@ local function build()
   drawAfkButton()
 
   updateBar = CreateFrame("Button", nil, root)
+  if updateBar.SetIgnoreParentAlpha then updateBar:SetIgnoreParentAlpha(true) end -- important: never faded
   updateBar:SetPoint("TOPLEFT", root, "TOPLEFT", 2, -(HEADER_HEIGHT - 2))
   updateBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", -2, -(HEADER_HEIGHT - 2))
   updateBar:SetHeight(UPDATE_HEIGHT)
@@ -1093,6 +1190,11 @@ function Panel.arrowTickerForTest() return arrowTicker ~= nil end
 
 local function onEnable()
   enabled = true
+  if ns.db and not ns.db.fadeOnSince017 then -- v0.1.10: fading became the default; once, for everyone
+    ns.db.fadeOnSince017 = true
+    if ns.Modules.setting(FEATURE, "fadeOut") == false then ns.Modules.set(FEATURE, "fadeOut", true) end
+    if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.3 then ns.Modules.set(FEATURE, "fadeAlpha", 0.35) end
+  end
   if not root then build() end
   local ok, fighting = false, false
   if type(UnitAffectingCombat) == "function" then ok, fighting = pcall(UnitAffectingCombat, "player") end
@@ -1129,8 +1231,9 @@ ns.Modules.register({
     .. "Drag it to move it; right-click its title for quick options.",
   defaults = {
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
+    showQuest = true, shareQuest = true,
     xpText = true, xpTooltip = true,
-    fadeOut = false, fadeAlpha = 0.3, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
+    fadeOut = true, fadeAlpha = 0.35, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = true, sort = "online", showSelf = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
@@ -1149,6 +1252,12 @@ ns.Modules.register({
       info = "Shows where each friend is, like \"Elwynn Forest, Goldshire\"." },
     { key = "showStatus", label = "Show typed status", kind = "toggle",
       info = "Shows the short note a friend typed with /tc status, like \"LF Deadmines\"." },
+    { key = "showQuest", label = "Show quests", kind = "toggle",
+      info = "Shows the quest each friend is on, like \"Kobold Camp Cleanup (3/8)\". Hover a row for all its "
+        .. "objectives." },
+    { key = "shareQuest", label = "Share my quest", kind = "toggle",
+      info = "Tells your crew which quest you're on (the one you made progress on last, or the one you track) and "
+        .. "its objectives. Turn it off to keep it to yourself." },
     { key = "showXP", label = "Show XP bar", kind = "toggle",
       info = "Shows a gold bar with how close each friend is to their next level. It gets brighter as it fills." },
     { key = "xpText", label = "Show level and XP numbers", kind = "toggle",
@@ -1158,7 +1267,8 @@ ns.Modules.register({
       info = "Hover over a friend's row to see the exact XP they need for the next level, their rested XP, "
         .. "and about how long until they level at their pace this session (shown once there is a steady pace)." },
     { key = "fadeOut", label = "Fade when the mouse is not over it", kind = "toggle",
-      info = "Makes the panel see-through while your mouse is somewhere else, so it gets in the way less." },
+      info = "Makes the panel see-through while your mouse is somewhere else, so it gets in the way less. "
+        .. "Important things, like the Mock button and the update line, stay fully visible." },
     { key = "fadeAlpha", label = "How much to fade", kind = "slider", min = 0.1, max = 1, step = 0.05,
       fmt = Widgets.percent, parent = "fadeOut",
       info = "How visible the panel stays while it is faded. Lower means more see-through." },

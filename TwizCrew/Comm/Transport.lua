@@ -578,6 +578,14 @@ local function fallback()
 end
 
 -- A whisper to one crew member (nil when this mode does not whisper, or the name is ours).
+-- The full name the game uses for a crew member (Forever adds surnames: "Chaos Deathbringr"), for whispers and
+-- invites. The short name when we don't know better.
+function Transport.fullName(name)
+  if type(name) ~= "string" or name == "" then return name end
+  local key, short = memberKey(name)
+  return (key and members[key] and members[key].name) or short or name
+end
+
 function Transport.destinationFor(name)
   local m = mode()
   if m ~= "auto" and m ~= "whisper" then return nil end

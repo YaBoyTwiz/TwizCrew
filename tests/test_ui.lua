@@ -189,7 +189,7 @@ return {
         return f
       end
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       A.eq(hidden, { true }, "only the crew code box hides what is typed")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -217,7 +217,7 @@ return {
 
     settings_builds_and_resets_without_errors = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       A.ok(ns.Settings.isOpen())
       ns.Modules.set("panel", "scale", 1.5)
       ns.Settings.confirmReset()
@@ -246,8 +246,8 @@ return {
       A.ok(has(d, "setting:find:sharePosition"))
       A.no(has(d, "setting:comm:channel"), "no crew channel setup on Basics")
       A.no(has(d, "section:Essentials"))
-      A.ok(#d <= 20, "short: " .. #d .. " rows")
-      ns.Settings.setTab("advanced")
+      A.ok(#d <= 22, "short: " .. #d .. " rows")
+      ns.Settings.setTab("advanced", "all")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "setting:comm:channel"), "Advanced has everything")
       ns.Settings.setTab("basic")
@@ -255,9 +255,48 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    advanced_has_short_sub_tabs = function(ns, A, W)
+      boot(W)
+      ns.Settings.open()
+      ns.Settings.setTab("advanced", "panel")
+      A.eq(ns.Settings.subTab(), "panel")
+      local d = ns.Settings.describeForTest()
+      A.ok(has(d, "module:panel:switch")); A.ok(has(d, "setting:panel:scale")); A.ok(has(d, "setting:tags:autoAway"))
+      A.no(has(d, "setting:comm:channel"), "crew setup is on its own sub-tab")
+      A.no(has(d, "section:Essentials"), "no big section headers")
+      ns.Settings.setTab("advanced", "roasts")
+      d = ns.Settings.describeForTest()
+      A.ok(has(d, "setting:roasts:mocks")); A.no(has(d, "setting:panel:scale"))
+      ns.Settings.setTab("advanced", "find")
+      d = ns.Settings.describeForTest()
+      A.ok(has(d, "module:find:switch"), "Find the crew has a real switch, not 'coming later'")
+      A.ok(has(d, "setting:find:rowArrows"))
+      ns.Settings.setTab("advanced", "crew")
+      d = ns.Settings.describeForTest()
+      A.ok(has(d, "setting:comm:channel")); A.ok(has(d, "module:pokes:coming later"))
+      ns.Settings.setTab("advanced", "test")
+      A.ok(has(ns.Settings.describeForTest(), "module:testtools:tools"))
+      ns.Settings.setTab("basic")
+      ns.Settings.setTab("advanced")
+      A.eq(ns.Settings.subTab(), "test", "Advanced remembers the last sub-tab")
+      ns.Settings.setTab("advanced", "nonsense")
+      A.eq(ns.Settings.subTab(), "test", "an unknown sub-tab changes nothing")
+      -- every module is on some sub-tab
+      local seen = {}
+      for _, st in ipairs({ "panel", "roasts", "popups", "find", "crew", "test" }) do
+        ns.Settings.setTab("advanced", st)
+        for _, v in ipairs(ns.Settings.describeForTest()) do
+          local id = v:match("^module:([^:]+):")
+          if id then seen[id] = true end
+        end
+      end
+      for _, def in ipairs(ns.Modules.list()) do A.ok(seen[def.id], def.id .. " is on a sub-tab") end
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     settings_layout_follows_registry = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       local d = ns.Settings.describeForTest()
       local ess, mods, ext = indexOf(d, "section:Essentials"), indexOf(d, "section:Modules"), indexOf(d, "section:Extras")
       A.ok(ess and mods and ext and ess < mods and mods < ext, "sections in order")
@@ -277,7 +316,7 @@ return {
 
     settings_shows_broken_module = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       ns.Modules.markBroken("popups")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "module:popups:broken"), "rebuilt while open")
@@ -287,14 +326,14 @@ return {
 
     settings_rebuilds_lazily_when_closed = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       ns.Settings.close()
       local before = ns.Settings.layoutCountForTest()
       ns.Modules.setEnabled("panel", false)
       ns.Modules.setEnabled("panel", true)
       ns.Modules.resetAll()
       A.eq(ns.Settings.layoutCountForTest(), before, "no rebuild while closed")
-      ns.Settings.open(); ns.Settings.setTab("advanced")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "one rebuild on the next open")
     end,
 

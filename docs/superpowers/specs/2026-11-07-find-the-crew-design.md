@@ -97,7 +97,9 @@ without typing "where r u" in chat.
 **Goals:** find a friend in seconds; see at a glance who is near and which way; meet up with one click.
 
 **Non-goals (this round):** shared quest progress, one-click group invites, back-from-AFK alerts, in-world 3D
-markers. **Back-from-AFK alerts were suggested in chat but are left out on purpose:** the owner decided on
+markers. **In-world marker at the meet-up spot: the owner asked, then said "dont worry about the marker for now"
+(2026-11-07).** It would need the game's single super-track slot, which QuestMaster uses (see PROJECT.md, "In-world
+waypoints"), so it was left for later. **Back-from-AFK alerts were suggested in chat but are left out on purpose:** the owner decided on
 2026-11-07 that AFK shows in the panel only, with no AFK pop-ups (PROJECT.md, "AFK lives in the panel only").
 
 **Anti-goals (failure even if it "works"):**

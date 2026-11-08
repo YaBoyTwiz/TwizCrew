@@ -316,6 +316,7 @@ local function onEnable()
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(cfg().FIND_TICK, function() ns.Log.safe(FEATURE, tick) end)
   end
+  if ns.MeetMap then ns.MeetMap.start() end
 end
 
 local function onDisable()
@@ -324,6 +325,7 @@ local function onDisable()
   if lastSent and not lastSent.unknown and Where.inGroup() then sendUnknown() end
   positions, lastSent, meet, arrowKey = {}, nil, nil, ""
   if ns.BigArrow and ns.BigArrow.close then ns.Log.safe(FEATURE, ns.BigArrow.close) end
+  if ns.MeetMap then ns.Log.safe(FEATURE, ns.MeetMap.stop) end
   changed()
 end
 

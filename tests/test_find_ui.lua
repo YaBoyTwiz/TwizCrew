@@ -213,5 +213,127 @@ return {
       hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", clr = "1", a = "all" }, "WHISPER")
       A.no(ns.BigArrow.stateForTest().shown)
     end,
+
+    ---------------------------------------------------------------------------------------------- map click
+    ctrl_right_click_on_the_map_offers_party_or_everyone = function(ns, A, W)
+      boot(W)
+      A.ok(ns.MeetMap.hookedForTest(), "a click handler on the world map")
+      group(W)
+      W.state.ctrl = true
+      A.ok(W:clickMap("RightButton", 0.25, 0.25), "taken: the map does not zoom out")
+      local items = ns.MeetMap.menuForTest()
+      A.eq(#items, 3)
+      A.eq(items[1].label, "Meet here: my party")
+      A.eq(items[2].label, "Meet here: everyone")
+      A.eq(items[3].label, "Cancel")
+      items[1].onClick()
+      W:advance(1)
+      local meet = sentOf(ns, W, "MEET")
+      A.eq(#meet, 1)
+      A.eq(meet[1].chatType, "PARTY")
+      A.eq(meet[1].fields.x, "-8500")
+      A.eq(meet[1].fields.y, "-500")
+      A.eq(W.printed[#W.printed], "TwizCrew: meet-up sent to your party.")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    alone_the_map_menu_only_offers_everyone = function(ns, A, W)
+      boot(W)
+      W.state.ctrl = true
+      W:clickMap("RightButton", 0.25, 0.25)
+      local items = ns.MeetMap.menuForTest()
+      A.eq(#items, 2)
+      A.eq(items[1].label, "Meet here: everyone")
+      items[2].onClick() -- Cancel
+      W:advance(1)
+      A.eq(#sentOf(ns, W, "MEET"), 0)
+    end,
+
+    plain_right_click_is_left_to_the_map = function(ns, A, W)
+      boot(W)
+      A.no(W:clickMap("RightButton", 0.25, 0.25), "no Ctrl: the map zooms out as usual")
+      W.state.ctrl = true
+      A.no(W:clickMap("LeftButton", 0.25, 0.25), "Ctrl + left-click is not ours")
+      A.eq(ns.MeetMap.menuForTest(), nil)
+      ns.Modules.set("find", "meetups", false)
+      A.no(W:clickMap("RightButton", 0.25, 0.25), "meet-ups off")
+    end,
+
+    a_spot_the_game_cannot_place_says_so = function(ns, A, W)
+      boot(W)
+      W.state.ctrl = true
+      W.state.worldMap.mapID = 947 -- the whole world
+      A.ok(W:clickMap("RightButton", 0.5, 0.5))
+      A.eq(W.printed[#W.printed], "TwizCrew: pick a spot inside a zone for a meet-up.")
+      A.eq(ns.MeetMap.menuForTest(), nil)
+    end,
+
+    openmap_stitched_map_clicks_and_icon = function(ns, A, W)
+      rawset(W.env, "OpenMapAPI", {
+        IsStitched = function() return true end,
+        CursorPosition = function() return 0.5, 0.5 end,
+        MapAt = function() return 1429 end,
+        MapFromWorld = function(id, u, v) return 0.25, 0.25 end,
+        CanvasFromWorldPos = function(c, x, y) return 0.4, 0.6 end,
+        ArtTopLevel = function() return 100 end,
+      })
+      boot(W)
+      W.state.ctrl = true
+      W:clickMap("RightButton", 0.9, 0.9) -- the canvas point is ignored on the stitched map
+      ns.MeetMap.menuForTest()[1].onClick()
+      W:advance(1)
+      local meet = sentOf(ns, W, "MEET")
+      A.eq(meet[1].fields.x, "-8500")
+      A.eq(meet[1].fields.y, "-500")
+      W.state.worldMap.shown = true
+      W:advance(0.3)
+      local v = ns.MeetMap.stateForTest()
+      A.ok(v.world)
+      near(A, v.worldX, 0.4)
+      near(A, v.worldY, 0.6)
+    end,
+
+    ---------------------------------------------------------------------------------------------- icons
+    the_meetup_shows_on_the_world_map_it_belongs_to = function(ns, A, W)
+      boot(W)
+      W.state.worldMap.shown = true
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8500", y = "-500", p = "Elwynn Forest",
+        a = "all", l = "900" }, "WHISPER")
+      W:advance(0.3)
+      local v = ns.MeetMap.stateForTest()
+      A.ok(v.world, "on the Elwynn map")
+      near(A, v.worldX, 0.25)
+      near(A, v.worldY, 0.25)
+      W.state.worldMap.mapID = 1438
+      W:advance(0.3)
+      A.no(ns.MeetMap.stateForTest().world, "not on Teldrassil's map")
+      W.state.worldMap.mapID = 1429
+      W.state.worldMap.shown = false
+      W:advance(0.3)
+      A.no(ns.MeetMap.stateForTest().world, "map closed")
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", clr = "1", a = "all" }, "WHISPER")
+      W:advance(0.3)
+      A.no(ns.MeetMap.stateForTest().minimap, "cleared: no icon anywhere")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_meetup_shows_on_the_minimap = function(ns, A, W)
+      boot(W)
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8900", y = "-1000", p = "Elwynn Forest",
+        a = "all", l = "900" }, "WHISPER") -- 100 yards north
+      W:advance(0.3)
+      local v = ns.MeetMap.stateForTest()
+      A.ok(v.minimap)
+      A.ok(math.abs(v.miniX) < 0.01 and v.miniY > 0, "north is up")
+      A.no(v.edge)
+      ns.Modules.set("find", "meetMinimap", false)
+      W:advance(0.3)
+      A.no(ns.MeetMap.stateForTest().minimap, "switched off")
+      ns.Modules.set("find", "meetMinimap", true)
+      hear(ns, W, "Frostie", "MEET", { id = "Frostie-2", c = "0", x = "-11000", y = "-1000", p = "Westfall",
+        a = "all", l = "900" }, "WHISPER")
+      W:advance(0.3)
+      A.ok(ns.MeetMap.stateForTest().edge, "far away: on the edge")
+    end,
   },
 }

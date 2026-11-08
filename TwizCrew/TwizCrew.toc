@@ -51,6 +51,7 @@ Find\FindLogic.lua
 Find\Where.lua
 Find\Find.lua
 Find\BigArrow.lua
+Find\MeetMap.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

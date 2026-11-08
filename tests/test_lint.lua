@@ -111,5 +111,15 @@ return {
         A.no(withStrings:find('SLASH_[%w_]*%s*=%s*["\']/twiz["\']'), f .. " registers /twiz")
       end
     end,
+    -- Find the crew: the game has one waypoint and one super-tracked target, and QuestMaster, OpenMap and Questie use
+    -- them. TwizCrew draws its own arrow and icons and never touches those.
+    never_touches_the_games_waypoint = function(ns, A)
+      for _, f in ipairs(tocFiles()) do
+        local bare = strip(readFile("TwizCrew/" .. f:gsub("\\", "/")), true)
+        for _, name in ipairs({ "SetUserWaypoint", "ClearUserWaypoint", "C_SuperTrack", "SetSuperTracked" }) do
+          A.no(bare:find(name, 1, true), f .. " uses " .. name)
+        end
+      end
+    end,
   },
 }

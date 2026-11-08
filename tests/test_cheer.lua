@@ -111,6 +111,20 @@ return {
       b._scripts.OnClick(b, "LeftButton") -- opens the menu
       A.eq(ns.Log.errors(10), {})
     end,
+    texture_paths_keep_their_backslashes = function(ns, A)
+      -- a texture path written with single backslashes loses them in the game: an invisible picture
+      local p = io.popen("find TwizCrew -name '*.lua'")
+      for file in p:lines() do
+        local f = io.open(file)
+        local n = 0
+        for line in f:lines() do
+          n = n + 1
+          A.no(line:find('Interface\\%a'), file .. ":" .. n .. " has a texture path with single backslashes")
+        end
+        f:close()
+      end
+      p:close()
+    end,
     rank_plan_rules = function(ns, A)
       local R = ns.RankUp
       A.eq(R.rankOf("Rank 3"), 3); A.eq(R.rankOf(""), nil); A.eq(R.rankOf(nil), nil)

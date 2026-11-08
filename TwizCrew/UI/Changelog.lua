@@ -22,6 +22,7 @@ Changelog.HISTORY = {
     "Clicking a friend's level-up pop-up sends congrats too.",
     "New wrench button on the panel: handy tools in one place.",
     "First tool: put your highest spell ranks on your bars (also /tc rankup).",
+    "Fixed: the + / - picture on the Offline bar was missing.",
   } },
   { ver = "0.1.12", date = "2026-11-08", lines = {
     "This window! Click the version in the panel's title to see what changed.",

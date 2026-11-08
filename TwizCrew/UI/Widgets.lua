@@ -336,6 +336,11 @@ local function menuButton(i)
   b.check:SetSize(14, 14)
   b.check:SetPoint("LEFT", b, "LEFT", 4, 0)
   b.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  b.icon = b:CreateTexture(nil, "ARTWORK") -- an item's own picture (optional), right of the check
+  b.icon:SetSize(14, 14)
+  b.icon:SetPoint("LEFT", b, "LEFT", 21, 0)
+  b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  b.icon:Hide()
   b.label = T.text(b, T.FONT.small, C.text)
   b.label:SetPoint("LEFT", b, "LEFT", 22, 0)
   b.label:SetJustifyH("LEFT")
@@ -347,7 +352,7 @@ local function menuButton(i)
   return b
 end
 
--- items = { { label, checked = fn|nil, onClick = fn } }. Opens under `anchor`.
+-- items = { { label, checked = fn|nil, onClick = fn, icon = texture path|nil } }. Opens under `anchor`.
 function Widgets.menu(anchor, items)
   if not menu then buildMenu() end
   local width = 160
@@ -355,8 +360,18 @@ function Widgets.menu(anchor, items)
     local b = menuButton(i)
     b.item = item
     b.label:SetText(item.label or "")
+    local left = 22
+    if type(item.icon) == "string" then
+      b.icon:SetTexture(item.icon)
+      b.icon:Show()
+      left = 39
+    else
+      b.icon:Hide()
+    end
+    b.label:ClearAllPoints()
+    b.label:SetPoint("LEFT", b, "LEFT", left, 0)
     local w = b.label:GetStringWidth()
-    if type(w) == "number" and w + 34 > width then width = w + 34 end
+    if type(w) == "number" and w + left + 12 > width then width = w + left + 12 end
     local checked = type(item.checked) == "function" and item.checked()
     if checked then b.check:Show() else b.check:Hide() end
     b:ClearAllPoints()

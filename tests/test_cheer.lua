@@ -100,6 +100,7 @@ return {
       local labels = {}
       for i, it in ipairs(items) do labels[i] = it.label end
       A.eq(labels[1], "Update my spell ranks")
+      for _, it in ipairs(items) do A.eq(type(it.icon), "string", "an icon for " .. it.label) end
       A.eq(items[2].checked(), false)
       items[2].onClick()
       A.eq(ns.Modules.setting("rankup", "auto"), true, "auto from the wrench")

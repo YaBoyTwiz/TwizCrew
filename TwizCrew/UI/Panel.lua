@@ -948,14 +948,18 @@ function Panel.toolItems()
     end
   end
   return compact {
-    ns.RankUp and { label = "Update my spell ranks", onClick = function() ns.RankUp.run() end } or nil,
-    ns.RankUp and { label = "  ...by itself when I learn a spell", checked = function() return rank("auto") and true or false end,
-      onClick = flipRank("auto") } or nil,
-    ns.RankUp and { label = "  ...with its own button on screen",
+    ns.RankUp and { label = "Update my spell ranks", icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom",
+      onClick = function() ns.RankUp.run() end } or nil,
+    ns.RankUp and { label = "...by itself when I learn a spell", icon = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+      checked = function() return rank("auto") and true or false end, onClick = flipRank("auto") } or nil,
+    ns.RankUp and { label = "...with its own button on screen", icon = "Interface\\Icons\\INV_Misc_Rune_01",
       checked = function() return rank("showButton") and true or false end, onClick = flipRank("showButton") } or nil,
-    ns.MockEditor and { label = "My mocks", onClick = function() ns.MockEditor.open() end } or nil,
-    ns.Changelog and { label = "What's new", onClick = function() ns.Changelog.open() end } or nil,
-    { label = "Health check (to copy to Discord)", onClick = function() if ns.Report then ns.Report.show() end end },
+    ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
+      onClick = function() ns.MockEditor.open() end } or nil,
+    ns.Changelog and { label = "What's new", icon = "Interface\\Icons\\INV_Misc_Book_09",
+      onClick = function() ns.Changelog.open() end } or nil,
+    { label = "Health check (to copy to Discord)", icon = "Interface\\Icons\\INV_Misc_Note_01",
+      onClick = function() if ns.Report then ns.Report.show() end end },
   }
 end
 

@@ -61,6 +61,7 @@ Calendar\CalendarLogic.lua
 Calendar\Notes.lua
 Calendar\Diary.lua
 Calendar\CalendarUI.lua
+Calendar\NoteView.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

@@ -24,6 +24,8 @@ Changelog.HISTORY = {
     "Create note button: pick the day, the time, note / dungeon / raid, an icon and the words. It lands on its day.",
     "Right-click a day or the day's timeline to start a note there (with that time).",
     "A dungeon or raid fills its day with the dungeon's picture, the time and name on top.",
+    "The dungeon picker shows the levels (green: your range), lowest first, each with its icon.",
+    "Click a note to open it: Going / Maybe / Can't make it, who has seen it, and comments.",
     "Everyone sees a timed note in their own time (their computer's clock, not the server's), on their own date.",
     "The calendar looks better: class icons for who played, note icons on the days, icons on the tabs.",
     "Icons all over: on the right-click menus, on every pop-up, and next to options in the settings.",

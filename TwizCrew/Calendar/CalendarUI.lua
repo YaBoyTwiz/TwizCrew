@@ -349,6 +349,20 @@ local function buildDay()
     r.del = Widgets.button(r, "X", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE)
     r.del:SetSize(24, 18)
     r.del:SetPoint("RIGHT", r, "RIGHT", 0, 0)
+    r.hl = r:CreateTexture(nil, "HIGHLIGHT")
+    r.hl:SetAllPoints(r)
+    T.color(r.hl, C.title, 0.08)
+    r:EnableMouse(true)
+    script(r, "OnMouseUp", function(self, button)
+      if button == "LeftButton" and self.tcKey and ns.NoteView then ns.NoteView.open(self.tcKey) end
+    end)
+    script(r, "OnEnter", function(self)
+      if not GameTooltip or not self.tcKey then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText("Click to open: read it, say if you're going, comment", 1, 1, 1)
+      GameTooltip:Show()
+    end)
+    script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     noteRows[i] = r
   end
 
@@ -452,6 +466,25 @@ local function setArt(tex, key, fallback)
   return false
 end
 
+Calendar.setArt = setArt
+
+-- A dungeon's small icon for menus: the game's group finder icon when this game version has it, else a sword
+-- (dungeon) or a dragon head (raid).
+local iconCache, probe = {}, nil
+local function dungeonIcon(dg)
+  if iconCache[dg.key] then return iconCache[dg.key] end
+  local pick = dg.raid and (I .. "INV_Misc_Head_Dragon_01") or (I .. "INV_Sword_04")
+  if not probe then probe = UIParent:CreateTexture(nil, "BACKGROUND"); probe:Hide() end
+  for _, path in ipairs(ns.Notes.dungeonIcons(dg.key)) do
+    local ok, res = pcall(probe.SetTexture, probe, path)
+    if ok and res == true then pick = path; break end
+  end
+  iconCache[dg.key] = pick
+  return pick
+end
+
+local FIT_COLOR = { low = "9d9d9d", ok = "40ff40", high = "ff4040" }
+
 -- "UTC-5", "UTC+5:30"
 local function zoneName()
   local off = ns.Diary.offset()
@@ -486,10 +519,18 @@ local function drawMaker()
     local dg = mk.dungeon and ns.Notes.dungeon(mk.dungeon)
     maker.place.text:SetText(dg and dg.name or (mk.kind == "raid" and "Pick a raid" or "Pick a dungeon"))
     maker.place:Show()
+    if dg then
+      local fit = ns.Notes.levelFit(dg, UnitLevel and UnitLevel("player"))
+      maker.placeLine:SetText("|cff" .. FIT_COLOR[fit] .. ns.Notes.dungeonLine(dg) .. "|r")
+      maker.placeLine:Show()
+    else
+      maker.placeLine:Hide()
+    end
     if dg then setArt(maker.preview, dg.key, ns.Notes.iconTexture(mk.icon)); maker.preview:Show() else maker.preview:Hide() end
   else
     maker.place:Hide()
     maker.preview:Hide()
+    maker.placeLine:Hide()
   end
   for i, b in ipairs(maker.picks) do
     if i == mk.icon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.6) end
@@ -518,13 +559,25 @@ function Calendar.minuteItems()
   return items
 end
 
+-- The dungeon (or raid) picker: lowest levels first, each with its level range in a color for your level
+-- (green: your range, grey: too easy, red: too high yet) and its icon.
 function Calendar.placeItems()
-  local items = {}
+  local list = {}
   for _, dg in ipairs(ns.Notes.DUNGEONS) do
-    if (mk.kind == "raid") == (dg.raid == true) then
-      items[#items + 1] = { label = dg.name, icon = mk.kind == "raid" and (I .. "INV_Misc_Head_Dragon_01") or (I .. "INV_Sword_04"),
-        onClick = function() mk.dungeon = dg.key; drawMaker() end }
-    end
+    if (mk.kind == "raid") == (dg.raid == true) then list[#list + 1] = dg end
+  end
+  table.sort(list, function(a, b)
+    if a.min ~= b.min then return a.min < b.min end
+    if a.max ~= b.max then return a.max < b.max end
+    return a.name < b.name
+  end)
+  local me = UnitLevel and UnitLevel("player")
+  local items = {}
+  for _, dg in ipairs(list) do
+    local fit = ns.Notes.levelFit(dg, me)
+    local size = dg.raid and ("  |cffaaaaaa" .. (dg.size or 40) .. "-man|r") or ""
+    items[#items + 1] = { label = "|cff" .. FIT_COLOR[fit] .. "[" .. ns.Notes.levelText(dg) .. "]|r  " .. dg.name .. size,
+      icon = dungeonIcon(dg), onClick = function() mk.dungeon = dg.key; drawMaker() end }
   end
   return items
 end
@@ -551,6 +604,7 @@ local function buildMaker()
   script(maker, "OnDragStart", function(self) self:StartMoving() end)
   script(maker, "OnDragStop", function(self) self:StopMovingOrSizing() end)
   T.paint(maker, C.backdrop, 0.98, C.title, 2)
+  T.gloss(maker, nil, 0.05, "BORDER")
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewNoteMaker") end
   local logo = iconTexture(maker, ICON_NOTES, 22)
   logo:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -10)
@@ -603,9 +657,19 @@ local function buildMaker()
   end
   maker.place = smallButton(maker, "Pick a dungeon", 170, function() Widgets.menu(maker.place, Calendar.placeItems()) end)
   maker.place:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -146)
+  maker.placeLine = T.text(maker, T.FONT.small, C.text)
+  maker.placeLine:SetPoint("LEFT", maker.place, "RIGHT", 8, 0)
   maker.preview = maker:CreateTexture(nil, "ARTWORK")
-  maker.preview:SetSize(110, 62)
-  maker.preview:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -114)
+  maker.preview:SetSize(120, 68)
+  maker.preview:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -40)
+  -- thin lines between the parts, so it reads as a form
+  for _, y in ipairs({ 68, 112, 172, 206 }) do
+    local line = maker:CreateTexture(nil, "ARTWORK")
+    line:SetHeight(1)
+    line:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -y)
+    line:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -y)
+    T.color(line, C.line, 0.6)
+  end
   -- icon
   label("Icon", 180)
   maker.picks = {}
@@ -766,7 +830,9 @@ local function drawMonth()
       c.tcArt = setArt(c.art, event.g, ns.Notes.iconTexture(event.i)) and "art" or "icon"
       c.art:Show(); c.shade:Show()
       local when = ns.Notes.timeText(event, off)
-      c.artText:SetText((when and ("|cffffd100" .. when .. "|r ") or "") .. ns.Util.safeText(event.t))
+      local going = #ns.Notes.repliesFor(event.key).yes
+      c.artText:SetText((when and ("|cffffd100" .. when .. "|r ") or "") .. ns.Util.safeText(event.t)
+        .. (going > 0 and ("\n|cff40ff40" .. going .. " going|r") or ""))
       c.artText:Show()
     else
       c.art:Hide(); c.shade:Hide(); c.artText:Hide()
@@ -839,8 +905,13 @@ local function drawDay()
     if n then
       r.icon:SetTexture(ns.Notes.iconTexture(n.i))
       local when = ns.Notes.timeText(n, off)
+      local rp = ns.Notes.repliesFor(n.key)
+      local counts = ""
+      if #rp.yes > 0 then counts = counts .. "  |TInterface\\RaidFrame\\ReadyCheck-Ready:12|t" .. #rp.yes end
+      if #rp.maybe > 0 then counts = counts .. "  |TInterface\\RaidFrame\\ReadyCheck-Waiting:12|t" .. #rp.maybe end
+      if #rp.comments > 0 then counts = counts .. "  |cffaaaaaa" .. #rp.comments .. (#rp.comments == 1 and " comment" or " comments") .. "|r" end
       r.text:SetText((when and ("|cffffd100" .. when .. "|r  ") or "") .. ns.Util.safeText(n.t)
-        .. "   |cff999999- " .. colored(n.b, n.c) .. "|r")
+        .. "   |cff999999- " .. colored(n.b, n.c) .. "|r" .. counts)
       if ns.Notes.isMine(n) then r.del:Show() else r.del:Hide() end
       r:Show()
     else
@@ -872,6 +943,9 @@ local function drawDay()
           GameTooltip:Show()
         end)
         script(mk, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        script(mk, "OnMouseUp", function(self, button)
+          if button == "LeftButton" and self.tcNote and ns.NoteView then ns.NoteView.open(self.tcNote.key) end
+        end)
         markers[k] = mk
       end
       local minutes = ((n.at + off) % L.DAY) / 60

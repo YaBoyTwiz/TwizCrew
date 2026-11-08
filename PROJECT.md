@@ -175,6 +175,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   note / dungeon / raid (Notes.DUNGEONS; g on the wire), icon, words. A dungeon note fills its month cell with
   artwork: tries the Encounter Journal button, group finder icon, loading screen files in turn (SetTexture false
   = missing), else the note's icon. Not seen in game yet which of those files exist on Forever.
+  Note window (Calendar/NoteView.lua): click a note (day list or timeline icon). Going / Maybe / Can't make it,
+  "seen by" (marked when a friend opens it), comments. Replies are CALR records keyed "<note>|s|<id>",
+  "<note>|r|<id>" (one answer per person, newest wins), "<note>|c|<id>-<time>"; counted in the notes checksum so
+  they swap like notes. Dungeon picker: recommended levels (Notes.DUNGEONS min/max/size), lowest first, colored
+  for your level, group finder icon when the file exists.
 
 ## Ideas so far (not decided)
 

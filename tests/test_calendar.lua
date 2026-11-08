@@ -253,6 +253,63 @@ return {
       A.eq(#list, 2); A.eq(list[2].t, "Raid", "sorted by time")
       A.eq(N.timeText(list[2], -5 * 3600), "5:30pm")
     end,
+    open_a_note_answer_and_comment = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Ginkan", "STATE", { cl = "WARRIOR" })
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = "2026-11-14", t = "Deadmines run", i = "2", b = "Frostie",
+        c = "MAGE", u = "1000", g = "dm", a = "1790000000" })
+      local before = #W.sent
+      A.ok(ns.NoteView.open("frost123-1000"))
+      W:advance(2)
+      local seen = sent(ns, W, "CALR", before)
+      A.eq(#seen, 1, "opening it tells the crew I've seen it")
+      A.eq(seen[1].fields.v, "1")
+      local r = ns.NoteView.lastReplies
+      A.eq(#r.seen, 1); A.eq(r.seen[1].name, "Twiz")
+      -- going, then take it back, then maybe
+      ns.NoteView.answer("yes")
+      A.eq(ns.NoteView.lastReplies.mine, "yes")
+      A.eq(#ns.NoteView.lastReplies.yes, 1)
+      ns.NoteView.answer("yes")
+      A.eq(ns.NoteView.lastReplies.mine, nil, "clicking it again takes it back")
+      ns.NoteView.answer("maybe")
+      A.eq(ns.NoteView.lastReplies.mine, "maybe")
+      -- a comment, and deleting it
+      ns.NoteView.commentForTest("I'll bring the potions")
+      local cm = ns.NoteView.lastReplies.comments
+      A.eq(#cm, 1); A.eq(cm[1].text, "I'll bring the potions"); A.ok(cm[1].mine)
+      A.ok(ns.Notes.deleteComment(cm[1].key))
+      A.eq(#ns.NoteView.lastReplies.comments, 0)
+      -- Ginkan answers and comments: it arrives
+      receive(ns, W, "Ginkan", "CALR", { r = "frost123-1000|r|gink4567", n = "frost123-1000", v = "yes", b = "Ginkan",
+        c = "WARRIOR", u = "2000" })
+      receive(ns, W, "Ginkan", "CALR", { r = "frost123-1000|c|gink4567-2001", n = "frost123-1000", v = "On my way",
+        b = "Ginkan", c = "WARRIOR", u = "2001" })
+      r = ns.NoteView.lastReplies
+      A.eq(#r.yes, 1); A.eq(r.yes[1].name, "Ginkan")
+      A.eq(r.comments[1].text, "On my way")
+      A.no(ns.Notes.deleteComment("frost123-1000|c|gink4567-2001"), "not my comment")
+      -- nonsense is ignored
+      receive(ns, W, "Ginkan", "CALR", { r = "frost123-1000|r|gink4567", n = "frost123-1000", v = "sure", u = "3000" })
+      A.eq(ns.Notes.repliesFor("frost123-1000").yes[1].name, "Ginkan", "only going / maybe / no")
+      -- the checksum covers answers, so they swap too
+      local h1 = ns.Notes.hash()
+      ns.Notes.rsvp("frost123-1000", "no")
+      A.ok(ns.Notes.hash() ~= h1)
+      ns.NoteView.close()
+      A.no(ns.NoteView.isShown())
+      A.eq(ns.Log.errors(10), {})
+    end,
+    dungeon_levels = function(ns, A)
+      local N = ns.Notes
+      local dm = N.dungeon("dm")
+      A.eq(N.levelText(dm), "17-26"); A.eq(N.levelText(N.dungeon("mc")), "60")
+      A.eq(N.levelFit(dm, 20), "ok"); A.eq(N.levelFit(dm, 40), "low"); A.eq(N.levelFit(dm, 10), "high")
+      A.contains(N.dungeonLine(N.dungeon("mc")), "40 players"); A.contains(N.dungeonLine(N.dungeon("mc")), "Level 60")
+      local last = 0
+      for _, d in ipairs(N.DUNGEONS) do A.ok(d.min >= last, "lowest first: " .. d.name); last = d.min end
+    end,
     notes_checksums_trigger_a_swap = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
@@ -310,7 +367,9 @@ return {
       A.eq(ns.Calendar.saveMaker(""), nil, "a dungeon needs picking first")
       local places = ns.Calendar.placeItems()
       A.ok(#places >= 15, "the dungeons")
-      for _, it in ipairs(places) do if it.label == "The Deadmines" then it.onClick() end end
+      A.contains(places[1].label, "Ragefire Chasm", "lowest levels first")
+      A.contains(places[1].label, "[13-18]")
+      for _, it in ipairs(places) do if it.label:find("The Deadmines", 1, true) then it.onClick() end end
       A.ok(ns.Calendar.saveMaker(""))
       local timed
       for _, n in ipairs(ns.Calendar.lastNotes) do if n.g == "dm" then timed = n end end

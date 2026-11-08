@@ -10,7 +10,7 @@ local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BY
   POS = true, MEET = true, -- find the crew: a group member's position, a meet-up
   QREQ = true, -- "please share this quest with me" (t = who should share, q = the quest title)
   CALD = true, CALQ = true, CALP = true, -- crew calendar: digest, "send me this person", one person's diary
-  CALN = true } -- a calendar note
+  CALN = true, CALR = true } -- a calendar note; a reply to one (seen, going / maybe / no, a comment)
 
 local ESCAPE = { ["%"] = "%25", ["^"] = "%5E", ["~"] = "%7E", ["="] = "%3D" }
 local UNESCAPE = { ["25"] = "%", ["5E"] = "^", ["7E"] = "~", ["3D"] = "=" }

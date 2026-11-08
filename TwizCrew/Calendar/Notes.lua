@@ -42,37 +42,66 @@ Notes.ICONS = {
 -- Dungeons and raids a note can be about (its picture fills the day on the month view). ej / lfg / ls: the names
 -- the game's own artwork files use (Encounter Journal button, group finder icon, loading screen); the window tries
 -- them in that order and falls back to the note's icon when none exists in this game version.
-Notes.DUNGEONS = {
-  { key = "rfc", name = "Ragefire Chasm", ej = "RagefireChasm", lfg = "RagefireChasm" },
-  { key = "wc", name = "Wailing Caverns", ej = "WailingCaverns", lfg = "WailingCaverns" },
-  { key = "dm", name = "The Deadmines", ej = "TheDeadmines", lfg = "Deadmines" },
-  { key = "sfk", name = "Shadowfang Keep", ej = "ShadowfangKeep", lfg = "ShadowfangKeep" },
-  { key = "bfd", name = "Blackfathom Deeps", ej = "BlackfathomDeeps", lfg = "BlackfathomDeeps" },
-  { key = "stocks", name = "The Stockade", ej = "TheStockade", lfg = "StormwindStockades" },
-  { key = "gnomer", name = "Gnomeregan", ej = "Gnomeregan", lfg = "Gnomeregan" },
-  { key = "rfk", name = "Razorfen Kraul", ej = "RazorfenKraul", lfg = "RazorfenKraul" },
-  { key = "sm", name = "Scarlet Monastery", ej = "ScarletMonastery", lfg = "ScarletMonastery" },
-  { key = "rfd", name = "Razorfen Downs", ej = "RazorfenDowns", lfg = "RazorfenDowns" },
-  { key = "ulda", name = "Uldaman", ej = "Uldaman", lfg = "Uldaman" },
-  { key = "zf", name = "Zul'Farrak", ej = "ZulFarrak", lfg = "ZulFarak" },
-  { key = "mara", name = "Maraudon", ej = "Maraudon", lfg = "Maraudon" },
-  { key = "st", name = "Sunken Temple", ej = "TheTempleOfAtalHakkar", lfg = "SunkenTemple" },
-  { key = "brd", name = "Blackrock Depths", ej = "BlackrockDepths", lfg = "BlackrockDepths" },
-  { key = "lbrs", name = "Blackrock Spire", ej = "BlackrockSpire", lfg = "BlackrockSpire" },
-  { key = "dmaul", name = "Dire Maul", ej = "DireMaul", lfg = "DireMaul" },
-  { key = "strat", name = "Stratholme", ej = "Stratholme", lfg = "Stratholme" },
-  { key = "scholo", name = "Scholomance", ej = "Scholomance", lfg = "Scholomance" },
-  { key = "mc", name = "Molten Core", ej = "MoltenCore", lfg = "MoltenCore", raid = true },
-  { key = "ony", name = "Onyxia's Lair", ej = "OnyxiasLair", lfg = "OnyxiasLair", raid = true },
-  { key = "zg", name = "Zul'Gurub", ej = "ZulGurub", lfg = "ZulGurub", raid = true },
-  { key = "bwl", name = "Blackwing Lair", ej = "BlackwingLair", lfg = "BlackwingLair", raid = true },
-  { key = "aq20", name = "Ruins of Ahn'Qiraj", ej = "RuinsofAhnQiraj", lfg = "AhnQirajRuins", raid = true },
-  { key = "aq40", name = "Temple of Ahn'Qiraj", ej = "TempleofAhnQiraj", lfg = "AhnQirajTemple", raid = true },
-  { key = "naxx", name = "Naxxramas", ej = "Naxxramas", lfg = "Naxxramas", raid = true },
+Notes.DUNGEONS = { -- lowest first; min-max = the usual recommended levels; size = players
+  { key = "rfc", name = "Ragefire Chasm", min = 13, max = 18, ej = "RagefireChasm", lfg = "RagefireChasm" },
+  { key = "dm", name = "The Deadmines", min = 17, max = 26, ej = "TheDeadmines", lfg = "Deadmines" },
+  { key = "wc", name = "Wailing Caverns", min = 17, max = 24, ej = "WailingCaverns", lfg = "WailingCaverns" },
+  { key = "sfk", name = "Shadowfang Keep", min = 22, max = 30, ej = "ShadowfangKeep", lfg = "ShadowfangKeep" },
+  { key = "bfd", name = "Blackfathom Deeps", min = 24, max = 32, ej = "BlackfathomDeeps", lfg = "BlackfathomDeeps" },
+  { key = "stocks", name = "The Stockade", min = 24, max = 32, ej = "TheStockade", lfg = "StormwindStockades" },
+  { key = "sm", name = "Scarlet Monastery", min = 26, max = 45, ej = "ScarletMonastery", lfg = "ScarletMonastery" },
+  { key = "gnomer", name = "Gnomeregan", min = 29, max = 38, ej = "Gnomeregan", lfg = "Gnomeregan" },
+  { key = "rfk", name = "Razorfen Kraul", min = 29, max = 38, ej = "RazorfenKraul", lfg = "RazorfenKraul" },
+  { key = "rfd", name = "Razorfen Downs", min = 37, max = 46, ej = "RazorfenDowns", lfg = "RazorfenDowns" },
+  { key = "ulda", name = "Uldaman", min = 41, max = 51, ej = "Uldaman", lfg = "Uldaman" },
+  { key = "zf", name = "Zul'Farrak", min = 44, max = 54, ej = "ZulFarrak", lfg = "ZulFarak" },
+  { key = "mara", name = "Maraudon", min = 46, max = 55, ej = "Maraudon", lfg = "Maraudon" },
+  { key = "st", name = "Sunken Temple", min = 50, max = 56, ej = "TheTempleOfAtalHakkar", lfg = "SunkenTemple" },
+  { key = "brd", name = "Blackrock Depths", min = 52, max = 60, ej = "BlackrockDepths", lfg = "BlackrockDepths" },
+  { key = "lbrs", name = "Blackrock Spire", min = 55, max = 60, ej = "BlackrockSpire", lfg = "BlackrockSpire" },
+  { key = "dmaul", name = "Dire Maul", min = 55, max = 60, ej = "DireMaul", lfg = "DireMaul" },
+  { key = "strat", name = "Stratholme", min = 58, max = 60, ej = "Stratholme", lfg = "Stratholme" },
+  { key = "scholo", name = "Scholomance", min = 58, max = 60, ej = "Scholomance", lfg = "Scholomance" },
+  { key = "zg", name = "Zul'Gurub", min = 60, max = 60, size = 20, ej = "ZulGurub", lfg = "ZulGurub", raid = true },
+  { key = "aq20", name = "Ruins of Ahn'Qiraj", min = 60, max = 60, size = 20, ej = "RuinsofAhnQiraj", lfg = "AhnQirajRuins", raid = true },
+  { key = "mc", name = "Molten Core", min = 60, max = 60, size = 40, ej = "MoltenCore", lfg = "MoltenCore", raid = true },
+  { key = "ony", name = "Onyxia's Lair", min = 60, max = 60, size = 40, ej = "OnyxiasLair", lfg = "OnyxiasLair", raid = true },
+  { key = "bwl", name = "Blackwing Lair", min = 60, max = 60, size = 40, ej = "BlackwingLair", lfg = "BlackwingLair", raid = true },
+  { key = "aq40", name = "Temple of Ahn'Qiraj", min = 60, max = 60, size = 40, ej = "TempleofAhnQiraj", lfg = "AhnQirajTemple", raid = true },
+  { key = "naxx", name = "Naxxramas", min = 60, max = 60, size = 40, ej = "Naxxramas", lfg = "Naxxramas", raid = true },
 }
+
+-- "17-26" / "60"
+function Notes.levelText(d)
+  if not d or not d.min then return "" end
+  if d.min == d.max then return tostring(d.min) end
+  return d.min .. "-" .. d.max
+end
+
+-- How a dungeon's levels look for someone at `level`: "low" (too easy), "ok", "high" (too hard yet).
+function Notes.levelFit(d, level)
+  level = tonumber(level)
+  if not d or not d.min or not level then return "ok" end
+  if level > d.max + 2 then return "low" end
+  if level < d.min - 2 then return "high" end
+  return "ok"
+end
+
+-- "Level 17-26 · 5 players"
+function Notes.dungeonLine(d)
+  if not d then return "" end
+  return "Level " .. Notes.levelText(d) .. " \194\183 " .. (d.size or 5) .. " players"
+end
 local DUNGEON = {}
 for _, d in ipairs(Notes.DUNGEONS) do DUNGEON[d.key] = d end
 function Notes.dungeon(key) return DUNGEON[key] end
+
+-- The small square icon files to try for a dungeon (menus), best first.
+function Notes.dungeonIcons(key)
+  local d = DUNGEON[key]
+  if not d then return {} end
+  return { "Interface\\LFGFrame\\LFGIcon-" .. d.lfg }
+end
 
 -- The artwork files to try for a dungeon, best first.
 function Notes.dungeonImages(key)
@@ -153,6 +182,7 @@ end
 function Notes.hash()
   local keys = {}
   for key, n in pairs(store() or {}) do keys[#keys + 1] = key .. ":" .. tostring(n.u or 0) end
+  for key, r in pairs(Notes.replyStore() or {}) do keys[#keys + 1] = key .. ":" .. tostring(r.u or 0) end
   if #keys == 0 then return nil end
   table.sort(keys)
   local h = 0
@@ -184,6 +214,146 @@ function Notes.sendAll(to)
   if sentAllAt[to] and t - sentAllAt[to] < SEND_ALL_GAP then return end
   sentAllAt[to] = t
   for key in pairs(store() or {}) do send(key, to) end
+  for key in pairs(Notes.replyStore() or {}) do Notes.sendReply(key, to) end
+end
+
+------------------------------------------------------------------------------------------- replies to notes
+-- What people do with a note: "seen" (opened it), "rsvp" (going / maybe / no), "comment" (a reply).
+-- A reply: key = "<note key>|s|<id>" (seen), "<note key>|r|<id>" (rsvp: one per person, the newest wins),
+-- "<note key>|c|<id>-<time>" (a comment); n = note key, v = "1" / the status / the words, b = name, c = class,
+-- u = last change, x = deleted. Sent as CALR (to everyone on a change; with the notes when asked).
+local RSVP = { yes = true, maybe = true, no = true }
+local LETTER_KIND = { s = "seen", r = "rsvp", c = "comment" }
+
+function Notes.replyStore()
+  local db = ns.db
+  if not db then return nil end
+  if type(db.calendar) ~= "table" then db.calendar = {} end
+  if type(db.calendar.replies) ~= "table" then db.calendar.replies = {} end
+  return db.calendar.replies
+end
+
+local function replyFields(key, r)
+  return { r = key, n = r.n, v = r.x and "" or r.v, b = r.b, c = r.c, u = tostring(r.u or 0), x = r.x and "1" or nil }
+end
+
+function Notes.sendReply(key, to)
+  local r = (Notes.replyStore() or {})[key]
+  if not r then return end
+  local f = replyFields(key, r)
+  if to then
+    if not ns.Comm.sendTo(to, "CALR", f) then ns.Comm.send("CALR", f) end
+  else
+    ns.Comm.send("CALR", f)
+  end
+end
+
+local function myReply(noteKey, letter, suffix)
+  local s = Notes.replyStore()
+  local note = (store() or {})[noteKey]
+  if not s or not note or note.x then return nil end
+  local me = ns.Diary.myId()
+  local key = noteKey .. "|" .. letter .. "|" .. me .. (suffix or "")
+  local _, class = UnitClass("player")
+  return s, key, { n = noteKey, b = ns.playerName(), c = type(class) == "string" and class or nil, u = ns.Diary.now() }
+end
+
+local function put(s, key, r)
+  local old = s[key]
+  if old and (old.u or 0) >= r.u then r.u = old.u + 1 end
+  s[key] = r
+  Notes.sendReply(key)
+  ns.Bus.fire("CALENDAR_CHANGED")
+end
+
+-- I opened the note (once).
+function Notes.markSeen(noteKey)
+  local s, key, r = myReply(noteKey, "s")
+  if not s or s[key] then return false end
+  r.v = "1"
+  put(s, key, r)
+  return true
+end
+
+-- I'm going ("yes"), "maybe" or can't ("no"); nil takes my answer back.
+function Notes.rsvp(noteKey, status)
+  local s, key, r = myReply(noteKey, "r")
+  if not s then return false end
+  if status ~= nil and not RSVP[status] then return false end
+  if status == nil then r.x, r.v = true, "" else r.v = status end
+  put(s, key, r)
+  return true
+end
+
+function Notes.comment(noteKey, text)
+  text = clean(text)
+  if not text then return nil end
+  local s, key, r = myReply(noteKey, "c", "-" .. ns.Diary.now())
+  if not s then return nil end
+  while s[key] do key = key .. "x" end
+  r.v = text
+  put(s, key, r)
+  return key
+end
+
+function Notes.deleteComment(key)
+  local s = Notes.replyStore()
+  local r = s and s[key]
+  local me = ns.Diary.myId()
+  if not r or r.x or not key:find("|c|" .. me .. "-", 1, true) then return false end
+  r.x, r.v, r.u = true, "", math.max(ns.Diary.now(), (r.u or 0) + 1)
+  Notes.sendReply(key)
+  ns.Bus.fire("CALENDAR_CHANGED")
+  return true
+end
+
+-- Everything people did with a note: { seen = {..}, yes = {..}, maybe = {..}, no = {..}, comments = {..},
+-- mine = my rsvp or nil }. People: { name, class, me }; comments: { key, name, class, text, at, mine }.
+function Notes.repliesFor(noteKey)
+  local out = { seen = {}, yes = {}, maybe = {}, no = {}, comments = {} }
+  local me = ns.Diary and ns.Diary.myId()
+  for key, r in pairs(Notes.replyStore() or {}) do
+    if r.n == noteKey and not r.x then
+      local letter, who = key:match("|(%a)|(%w+)")
+      local mine = who ~= nil and who == me
+      local kind = LETTER_KIND[letter]
+      local entry = { name = r.b or "?", class = r.c, me = mine }
+      if kind == "seen" then
+        out.seen[#out.seen + 1] = entry
+      elseif kind == "rsvp" and out[r.v] then
+        out[r.v][#out[r.v] + 1] = entry
+        if mine then out.mine = r.v end
+      elseif kind == "comment" then
+        out.comments[#out.comments + 1] = { key = key, name = r.b or "?", class = r.c, text = r.v, at = r.u, mine = mine }
+      end
+    end
+  end
+  local function byName(a, b) return tostring(a.name) < tostring(b.name) end
+  for _, k in ipairs({ "seen", "yes", "maybe", "no" }) do table.sort(out[k], byName) end
+  table.sort(out.comments, function(a, b) return (a.at or 0) < (b.at or 0) end)
+  return out
+end
+
+function Notes.receiveReply(sender, f)
+  if type(f) ~= "table" or type(f.r) ~= "string" or #f.r > 80 then return end
+  local noteKey, letter = f.r:match("^(%w+%-%d+)|(%a)|%w+")
+  if not noteKey or noteKey ~= f.n or not LETTER_KIND[letter] then return end
+  local u = tonumber(f.u)
+  if not u then return end
+  local s = Notes.replyStore()
+  if not s then return end
+  local old = s[f.r]
+  if old and (old.u or 0) >= u then return end
+  local deleted = f.x == "1"
+  local v = deleted and "" or f.v
+  if not deleted then
+    if letter == "r" and not RSVP[v] then return end
+    if letter == "c" then v = clean(v); if not v then return end end
+    if letter == "s" then v = "1" end
+  end
+  s[f.r] = { n = noteKey, v = v, b = type(f.b) == "string" and ns.Util.truncateUTF8(ns.Util.safeText(f.b), 24) or "?",
+    c = type(f.c) == "string" and f.c:match("^%u+$") and f.c or nil, u = u, x = deleted or nil }
+  ns.Bus.fire("CALENDAR_CHANGED")
 end
 
 ---------------------------------------------------------------------------------------------------- changes
@@ -242,10 +412,11 @@ function Notes.receive(sender, f)
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
--- Old notes and old deletion markers go away; never more than MAX_NOTES.
+-- Old notes and old deletion markers go away (with their replies); never more than MAX_NOTES.
 function Notes.prune(today)
   local s = store()
   if not s then return end
+  local rs = Notes.replyStore() or {}
   local count = 0
   for key, n in pairs(s) do
     local day = type(n) == "table" and dayOfKey(n.d)
@@ -257,4 +428,5 @@ function Notes.prune(today)
     table.sort(list, function(a, b) return a.day < b.day end)
     for i = 1, count - MAX_NOTES do s[list[i].key] = nil end
   end
+  for key, r in pairs(rs) do if type(r) ~= "table" or not s[r.n] then rs[key] = nil end end
 end

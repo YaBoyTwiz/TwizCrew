@@ -273,6 +273,11 @@ ns.Comm.on("CALN", function(s, f)
     if enabled and known(s) and ns.Notes then ns.Notes.receive(s, f) end
   end)
 end)
+ns.Comm.on("CALR", function(s, f)
+  ns.Log.safe(FEATURE, function()
+    if enabled and known(s) and ns.Notes then ns.Notes.receiveReply(s, f) end
+  end)
+end)
 
 ------------------------------------------------------------------------------------------------- module
 local function tick()
@@ -296,6 +301,7 @@ local function onEnable()
   end
   ns.Bus.on(FEATURE, "CALENDAR_CHANGED", function()
     if ns.Calendar and ns.Calendar.isShown() then ns.Calendar.refresh() end
+    if ns.NoteView and ns.NoteView.isShown() then ns.NoteView.refresh() end
   end)
   -- a friend just came online: tell them what we know (a little later, so their copy is ready)
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)

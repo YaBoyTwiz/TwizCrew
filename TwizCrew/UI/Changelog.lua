@@ -25,6 +25,7 @@ Changelog.HISTORY = {
     "Right-click a day or the day's timeline to start a note there (with that time).",
     "A dungeon or raid fills its day with the dungeon's picture, the time and name on top.",
     "The dungeon picker shows the levels (green: your range), lowest first, each with its icon.",
+    "All 28 of Forever's dungeons (the 9 new ones marked new) and its raids: Barrow Deeps, Hyjal Summit, Onyxia's Lair.",
     "Click a note to open it: Going / Maybe / Can't make it, who has seen it, and comments.",
     "Everyone sees a timed note in their own time (their computer's clock, not the server's), on their own date.",
     "The calendar looks better: class icons for who played, note icons on the days, icons on the tabs.",

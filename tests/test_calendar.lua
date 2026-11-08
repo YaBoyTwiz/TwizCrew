@@ -304,9 +304,9 @@ return {
     dungeon_levels = function(ns, A)
       local N = ns.Notes
       local dm = N.dungeon("dm")
-      A.eq(N.levelText(dm), "17-26"); A.eq(N.levelText(N.dungeon("mc")), "60")
+      A.eq(N.levelText(dm), "17-20"); A.eq(N.levelText(N.dungeon("hyjal")), "60")
       A.eq(N.levelFit(dm, 20), "ok"); A.eq(N.levelFit(dm, 40), "low"); A.eq(N.levelFit(dm, 10), "high")
-      A.contains(N.dungeonLine(N.dungeon("mc")), "40 players"); A.contains(N.dungeonLine(N.dungeon("mc")), "Level 60")
+      A.contains(N.dungeonLine(N.dungeon("hyjal")), "20 players"); A.contains(N.dungeonLine(N.dungeon("barrow")), "10 players")
       local last = 0
       for _, d in ipairs(N.DUNGEONS) do A.ok(d.min >= last, "lowest first: " .. d.name); last = d.min end
     end,
@@ -367,8 +367,15 @@ return {
       A.eq(ns.Calendar.saveMaker(""), nil, "a dungeon needs picking first")
       local places = ns.Calendar.placeItems()
       A.ok(#places >= 15, "the dungeons")
-      A.contains(places[1].label, "Ragefire Chasm", "lowest levels first")
-      A.contains(places[1].label, "[13-18]")
+      A.contains(places[1].label, "[13-18]", "lowest levels first")
+      local names = {}
+      for _, it in ipairs(places) do names[#names + 1] = it.label end
+      local all = table.concat(names, "|")
+      for _, want in ipairs({ "Hall of Thanes", "Ruins of Lordaeron", "Excavation Site", "City of Dalaran",
+        "The Drowned City", "Krol'dok Stronghold", "Alcaz Prison", "Blackmaw Hold", "Shaper's Terrace" }) do
+        A.contains(all, want, "Forever's new dungeons are there")
+      end
+      A.eq(#places, 28, "all 28 of Forever's dungeons")
       for _, it in ipairs(places) do if it.label:find("The Deadmines", 1, true) then it.onClick() end end
       A.ok(ns.Calendar.saveMaker(""))
       local timed

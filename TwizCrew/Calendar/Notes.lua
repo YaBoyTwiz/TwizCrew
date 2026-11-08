@@ -39,36 +39,41 @@ Notes.ICONS = {
   { tex = B .. "Spell_Shadow_Charm", name = "Important" },
 }
 
--- Dungeons and raids a note can be about (its picture fills the day on the month view). ej / lfg / ls: the names
--- the game's own artwork files use (Encounter Journal button, group finder icon, loading screen); the window tries
--- them in that order and falls back to the note's icon when none exists in this game version.
-Notes.DUNGEONS = { -- lowest first; min-max = the usual recommended levels; size = players
+-- WoW Forever's dungeons and raids, lowest first. min-max = recommended levels (the nine new dungeons from
+-- Blizzard's own data, the classic ones as Forever guides suggest), size = players. ej / lfg = the names the game's
+-- artwork files would use (the new dungeons may have none yet: then the note's icon is used).
+Notes.DUNGEONS = {
   { key = "rfc", name = "Ragefire Chasm", min = 13, max = 18, ej = "RagefireChasm", lfg = "RagefireChasm" },
-  { key = "dm", name = "The Deadmines", min = 17, max = 26, ej = "TheDeadmines", lfg = "Deadmines" },
-  { key = "wc", name = "Wailing Caverns", min = 17, max = 24, ej = "WailingCaverns", lfg = "WailingCaverns" },
-  { key = "sfk", name = "Shadowfang Keep", min = 22, max = 30, ej = "ShadowfangKeep", lfg = "ShadowfangKeep" },
-  { key = "bfd", name = "Blackfathom Deeps", min = 24, max = 32, ej = "BlackfathomDeeps", lfg = "BlackfathomDeeps" },
-  { key = "stocks", name = "The Stockade", min = 24, max = 32, ej = "TheStockade", lfg = "StormwindStockades" },
-  { key = "sm", name = "Scarlet Monastery", min = 26, max = 45, ej = "ScarletMonastery", lfg = "ScarletMonastery" },
-  { key = "gnomer", name = "Gnomeregan", min = 29, max = 38, ej = "Gnomeregan", lfg = "Gnomeregan" },
-  { key = "rfk", name = "Razorfen Kraul", min = 29, max = 38, ej = "RazorfenKraul", lfg = "RazorfenKraul" },
-  { key = "rfd", name = "Razorfen Downs", min = 37, max = 46, ej = "RazorfenDowns", lfg = "RazorfenDowns" },
-  { key = "ulda", name = "Uldaman", min = 41, max = 51, ej = "Uldaman", lfg = "Uldaman" },
-  { key = "zf", name = "Zul'Farrak", min = 44, max = 54, ej = "ZulFarrak", lfg = "ZulFarak" },
-  { key = "mara", name = "Maraudon", min = 46, max = 55, ej = "Maraudon", lfg = "Maraudon" },
-  { key = "st", name = "Sunken Temple", min = 50, max = 56, ej = "TheTempleOfAtalHakkar", lfg = "SunkenTemple" },
+  { key = "thanes", name = "Hall of Thanes", min = 13, max = 18, ej = "HallofThanes", lfg = "HallofThanes", new = true },
+  { key = "lordaeron", name = "Ruins of Lordaeron", min = 15, max = 20, ej = "RuinsofLordaeron", lfg = "RuinsofLordaeron", new = true },
+  { key = "dm", name = "The Deadmines", min = 17, max = 20, ej = "TheDeadmines", lfg = "Deadmines" },
+  { key = "wc", name = "Wailing Caverns", min = 18, max = 24, ej = "WailingCaverns", lfg = "WailingCaverns" },
+  { key = "sfk", name = "Shadowfang Keep", min = 21, max = 26, ej = "ShadowfangKeep", lfg = "ShadowfangKeep" },
+  { key = "bfd", name = "Blackfathom Deeps", min = 23, max = 28, ej = "BlackfathomDeeps", lfg = "BlackfathomDeeps" },
+  { key = "excavation", name = "Excavation Site", min = 24, max = 29, ej = "ExcavationSite", lfg = "ExcavationSite", new = true },
+  { key = "stocks", name = "The Stockade", min = 25, max = 29, ej = "TheStockade", lfg = "StormwindStockades" },
+  { key = "dalaran", name = "City of Dalaran", min = 28, max = 33, ej = "CityofDalaran", lfg = "CityofDalaran", new = true },
+  { key = "gnomer", name = "Gnomeregan", min = 29, max = 34, ej = "Gnomeregan", lfg = "Gnomeregan" },
+  { key = "rfk", name = "Razorfen Kraul", min = 30, max = 38, ej = "RazorfenKraul", lfg = "RazorfenKraul" },
+  { key = "sm", name = "Scarlet Monastery", min = 30, max = 46, ej = "ScarletMonastery", lfg = "ScarletMonastery" },
+  { key = "drowned", name = "The Drowned City", min = 35, max = 40, ej = "TheDrownedCity", lfg = "TheDrownedCity", new = true },
+  { key = "ulda", name = "Uldaman", min = 37, max = 45, ej = "Uldaman", lfg = "Uldaman" },
+  { key = "rfd", name = "Razorfen Downs", min = 37, max = 45, ej = "RazorfenDowns", lfg = "RazorfenDowns" },
+  { key = "zf", name = "Zul'Farrak", min = 40, max = 47, ej = "ZulFarrak", lfg = "ZulFarak" },
+  { key = "kroldok", name = "Krol'dok Stronghold", min = 40, max = 45, ej = "KroldokStronghold", lfg = "KroldokStronghold", new = true },
+  { key = "mara", name = "Maraudon", min = 45, max = 51, ej = "Maraudon", lfg = "Maraudon" },
+  { key = "alcaz", name = "Alcaz Prison", min = 48, max = 53, ej = "AlcazPrison", lfg = "AlcazPrison", new = true },
+  { key = "st", name = "Sunken Temple", min = 50, max = 55, ej = "TheTempleOfAtalHakkar", lfg = "SunkenTemple" },
   { key = "brd", name = "Blackrock Depths", min = 52, max = 60, ej = "BlackrockDepths", lfg = "BlackrockDepths" },
-  { key = "lbrs", name = "Blackrock Spire", min = 55, max = 60, ej = "BlackrockSpire", lfg = "BlackrockSpire" },
-  { key = "dmaul", name = "Dire Maul", min = 55, max = 60, ej = "DireMaul", lfg = "DireMaul" },
+  { key = "blackmaw", name = "Blackmaw Hold", min = 55, max = 60, ej = "BlackmawHold", lfg = "BlackmawHold", new = true },
+  { key = "lbrs", name = "Blackrock Spire", min = 57, max = 60, ej = "BlackrockSpire", lfg = "BlackrockSpire" },
+  { key = "shaper", name = "Shaper's Terrace", min = 58, max = 60, ej = "ShapersTerrace", lfg = "ShapersTerrace", new = true },
+  { key = "dmaul", name = "Dire Maul", min = 58, max = 60, ej = "DireMaul", lfg = "DireMaul" },
   { key = "strat", name = "Stratholme", min = 58, max = 60, ej = "Stratholme", lfg = "Stratholme" },
   { key = "scholo", name = "Scholomance", min = 58, max = 60, ej = "Scholomance", lfg = "Scholomance" },
-  { key = "zg", name = "Zul'Gurub", min = 60, max = 60, size = 20, ej = "ZulGurub", lfg = "ZulGurub", raid = true },
-  { key = "aq20", name = "Ruins of Ahn'Qiraj", min = 60, max = 60, size = 20, ej = "RuinsofAhnQiraj", lfg = "AhnQirajRuins", raid = true },
-  { key = "mc", name = "Molten Core", min = 60, max = 60, size = 40, ej = "MoltenCore", lfg = "MoltenCore", raid = true },
+  { key = "barrow", name = "Barrow Deeps", min = 60, max = 60, size = 10, ej = "BarrowDeeps", lfg = "BarrowDeeps", raid = true, new = true },
+  { key = "hyjal", name = "Hyjal Summit", min = 60, max = 60, size = 20, ej = "HyjalSummit", lfg = "HyjalSummit", raid = true, new = true },
   { key = "ony", name = "Onyxia's Lair", min = 60, max = 60, size = 40, ej = "OnyxiasLair", lfg = "OnyxiasLair", raid = true },
-  { key = "bwl", name = "Blackwing Lair", min = 60, max = 60, size = 40, ej = "BlackwingLair", lfg = "BlackwingLair", raid = true },
-  { key = "aq40", name = "Temple of Ahn'Qiraj", min = 60, max = 60, size = 40, ej = "TempleofAhnQiraj", lfg = "AhnQirajTemple", raid = true },
-  { key = "naxx", name = "Naxxramas", min = 60, max = 60, size = 40, ej = "Naxxramas", lfg = "Naxxramas", raid = true },
 }
 
 -- "17-26" / "60"

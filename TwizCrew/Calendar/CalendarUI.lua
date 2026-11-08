@@ -575,7 +575,7 @@ function Calendar.placeItems()
   local items = {}
   for _, dg in ipairs(list) do
     local fit = ns.Notes.levelFit(dg, me)
-    local size = dg.raid and ("  |cffaaaaaa" .. (dg.size or 40) .. "-man|r") or ""
+    local size = (dg.raid and ("  |cffaaaaaa" .. (dg.size or 40) .. "-man|r") or "") .. (dg.new and "  |cff3fa9f5new|r" or "")
     items[#items + 1] = { label = "|cff" .. FIT_COLOR[fit] .. "[" .. ns.Notes.levelText(dg) .. "]|r  " .. dg.name .. size,
       icon = dungeonIcon(dg), onClick = function() mk.dungeon = dg.key; drawMaker() end }
   end

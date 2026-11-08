@@ -93,7 +93,8 @@ function MinimapLogic.tooltipLines(online, total, panelShown, withDrag, info)
   local lines = {
     title,
     "Left-click: open settings",
-    "Right-click: " .. (panelShown and "hide" or "show") .. " the Crew panel",
+    withDrag and "Right-click: menu (crew panel, calendar, tools)"
+      or ("Right-click: " .. (panelShown and "hide" or "show") .. " the Crew panel"),
   }
   if withDrag then lines[#lines + 1] = "Drag: move it around the minimap" end
   online, total = tonumber(online) or 0, tonumber(total) or 0

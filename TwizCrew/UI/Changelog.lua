@@ -18,6 +18,11 @@ Changelog.HISTORY = {
     "Create note: the dungeon list is inside the window now (click one, scroll for more): no more clicks falling through.",
     "Time has up and down arrows for the hour and the minutes (the mouse wheel works too), and an AM / PM button.",
     "Menus always sit on top, so a window behind them never steals your click.",
+    "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, calendar, a note, AFK, ranks, mock, recap).",
+    "Right-click the minimap button for a menu: the crew panel, a calendar note, the tools, the settings.",
+    "Quick statuses: one click for LF group, Questing, Farming, Dungeon soon or Back in 5.",
+    "Hover a friend: \"Also on it\" lists who else (you too) is on the same quest, so you know who to group with.",
+    "Today's recap: when you log out (or /tc recap): time played, levels, quests, deaths, gold and who was on.",
   } },
   { ver = "0.1.17", date = "2026-11-08", lines = {
     "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",

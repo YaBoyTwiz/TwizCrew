@@ -124,7 +124,7 @@ return {
       A.eq(L.tooltipLines(2, 5, true, true), {
         "TwizCrew",
         "Left-click: open settings",
-        "Right-click: hide the Crew panel",
+        "Right-click: menu (crew panel, calendar, tools)",
         "Drag: move it around the minimap",
         "Crew online: 2 of 5",
       })

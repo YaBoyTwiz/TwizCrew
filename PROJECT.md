@@ -181,6 +181,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
   they swap like notes. Dungeon picker: recommended levels (Notes.DUNGEONS min/max/size), lowest first, colored
   for your level, group finder icon when the file exists.
 
+- **v0.1.18 quality of life (2026-11-08):** key bindings (Bindings.xml + TwizCrew_Binding in Commands.lua, under
+  AddOns in the game's Keybindings); minimap right-click = a menu (panel, a note, the wrench's tools, settings; the
+  addon compartment's right-click still toggles the panel); quick statuses in the status box; "Also on it" in a
+  friend's tooltip (same quest ID, else name; "you" too); Today's recap (UI/Recap.lua, module "recap": own numbers
+  since login, shown on PLAYER_CAMPING / PLAYER_QUITING and with /tc recap; mocks/congrats counted via ABOUT_ME).
+
 ## Ideas so far (not decided)
 
 - **Friend radar:** a small panel with each friend's level, zone and what they are doing.

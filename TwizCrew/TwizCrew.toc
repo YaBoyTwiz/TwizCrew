@@ -63,6 +63,7 @@ Calendar\Diary.lua
 Calendar\CalendarUI.lua
 Calendar\NoteView.lua
 UI\Extras.lua
+UI\Recap.lua
 UI\Settings.lua
 UI\Report.lua
 UI\MinimapLogic.lua

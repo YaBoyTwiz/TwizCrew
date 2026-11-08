@@ -156,23 +156,30 @@ return {
       A.ok(printed(W, "TwizCrew: the settings window could not open during this fight. Try again when it ends."))
     end,
 
-    right_click_shows_and_hides_the_panel_quietly = function(ns, A, W)
+    right_click_opens_a_menu_that_shows_and_hides_the_panel = function(ns, A, W)
       local seen = record(W)
       boot(W)
       local before = #W.printed
       A.ok(ns.Modules.isEnabled("panel"))
       click(seen.button, "RightButton")
+      A.ok(ns.Modules.isEnabled("panel"), "right-click opens the menu")
+      local items = ns.MinimapButton.menuItems()
+      A.eq(items[1].label, "Hide the crew panel")
+      for _, it in ipairs(items) do A.eq(type(it.icon), "string", "an icon for " .. it.label) end
+      items[1].onClick()
       A.no(ns.Modules.isEnabled("panel"))
-      click(seen.button, "RightButton")
+      A.eq(ns.MinimapButton.menuItems()[1].label, "Show the crew panel")
+      ns.MinimapButton.menuItems()[1].onClick()
       A.ok(ns.Modules.isEnabled("panel"))
       A.eq(#W.printed, before, "no chat lines")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     right_click_on_a_broken_panel_says_so = function(ns, A, W)
       local seen = record(W)
       boot(W)
       ns.Modules.markBroken("panel")
-      click(seen.button, "RightButton")
+      ns.MinimapButton.menuItems()[1].onClick()
       A.ok(printed(W, "TwizCrew: the crew panel turned itself off after errors. Type /reload to try again."))
       A.no(ns.Modules.isEnabled("panel"))
     end,
@@ -348,7 +355,7 @@ return {
       A.eq(seen.tip.lines, {
         "TwizCrew v0.1.0",
         "Left-click: open settings",
-        "Right-click: hide the Crew panel",
+        "Right-click: menu (crew panel, calendar, tools)",
         "Drag: move it around the minimap",
         "Crew online: 1 of 1",
       })

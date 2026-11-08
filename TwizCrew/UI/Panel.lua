@@ -1048,6 +1048,8 @@ function Panel.toolItems()
       onClick = function() ns.Calendar.toggle() end } or nil,
     ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
       onClick = function() ns.MockEditor.open() end } or nil,
+    ns.Recap and { label = "Today's recap", icon = "Interface\\Icons\\INV_Misc_Book_11",
+      onClick = function() ns.Recap.show() end } or nil,
     ns.Changelog and { label = "What's new", icon = "Interface\\Icons\\INV_Misc_Book_09",
       onClick = function() ns.Changelog.open() end } or nil,
     { label = "Health check (to copy to Discord)", icon = "Interface\\Icons\\INV_Misc_Note_01",
@@ -1087,6 +1089,17 @@ local function closeStatusBox()
   statusBox:Hide()
 end
 
+-- The quick statuses in the status box.
+Panel.STATUS_PRESETS = { "LF group", "Questing", "Farming", "Dungeon soon", "Back in 5" }
+
+function Panel.setStatusPreset(text)
+  ns.Self.setStatus(text or "")
+  local now = ns.db and ns.db.myStatus or ""
+  if now == "" then print("TwizCrew: status cleared")
+  else print('TwizCrew: status set to "' .. ns.Util.safeText(now) .. '"') end
+  if statusBox then statusBox.open = false; statusBox.edit:ClearFocus(); statusBox:Hide() end
+end
+
 local function saveStatus()
   if not statusBox or not statusBox.open then return end -- one save per opening
   statusBox.open = false
@@ -1100,7 +1113,7 @@ end
 
 local function buildStatusBox()
   local f = T.frame("Frame", "TwizCrewStatus", UIParent)
-  f:SetSize(280, 76)
+  f:SetSize(300, 132)
   f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
   f:SetFrameStrata("DIALOG")
   if f.SetClampedToScreen then f:SetClampedToScreen(true) end
@@ -1110,7 +1123,7 @@ local function buildStatusBox()
   title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -10)
   title:SetText("Set my status")
   local e = T.frame("EditBox", nil, f)
-  e:SetSize(256, 22)
+  e:SetSize(276, 22)
   e:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -30)
   T.paint(e, C.row, 1, C.buttonBorder, 1)
   e:SetAutoFocus(false)
@@ -1120,6 +1133,23 @@ local function buildStatusBox()
   local hint = T.text(f, T.FONT.small, C.muted)
   hint:SetPoint("TOPLEFT", e, "BOTTOMLEFT", 0, -4)
   hint:SetText("Enter saves, Escape cancels. Leave it empty to clear it.")
+  -- one click for the usual ones
+  local presets = T.text(f, T.FONT.small, C.muted)
+  presets:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -8)
+  presets:SetText("Quick:")
+  local x, y = 0, 0
+  for i, p in ipairs(Panel.STATUS_PRESETS) do
+    local b = Widgets.button(f, p, function() Panel.setStatusPreset(p) end, nil, FEATURE)
+    b:SetHeight(20)
+    local w = b:GetWidth()
+    if type(w) ~= "number" or w <= 0 then w = 70 end
+    if x + w > 240 then x, y = 0, y + 23 end
+    b:SetPoint("TOPLEFT", presets, "TOPRIGHT", 6 + x, 3 - y)
+    x = x + w + 4
+  end
+  local clear = Widgets.button(f, "Clear", function() Panel.setStatusPreset("") end, "danger", FEATURE)
+  clear:SetHeight(20)
+  clear:SetPoint("TOPLEFT", presets, "TOPRIGHT", 6 + x, 3 - y)
   script(e, "OnEnterPressed", saveStatus)
   script(e, "OnEscapePressed", closeStatusBox)
   script(f, "OnHide", function() f.open = false end)

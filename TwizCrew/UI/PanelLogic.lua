@@ -224,6 +224,34 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
       out[#out + 1] = row
     end
   end
+  -- who else is on the same quest (online friends, and me): a line in each one's tooltip
+  local byQuest = {}
+  local function questKey(id, name)
+    if tonumber(id) then return "#" .. tonumber(id) end
+    if type(name) == "string" and name ~= "" then return "=" .. name end
+  end
+  for _, m in ipairs(members or {}) do
+    local k = m.online and questKey(m.questId, m.questName)
+    if k then byQuest[k] = byQuest[k] or {}; table.insert(byQuest[k], text(m.name)) end
+  end
+  local mine = ns.Self and ns.Self.lastSent and ns.Self.lastSent() or {}
+  local myKey = questKey(mine.qi, mine.qn)
+  for _, row in ipairs(out) do
+    local k = not row.offline and questKey(row.questId, row.questName)
+    if k then
+      local others = {}
+      for _, n in ipairs(byQuest[k] or {}) do if n ~= row.name then others[#others + 1] = n end end
+      if myKey == k and not (ns.isMe and ns.isMe(row.name)) then others[#others + 1] = "you" end
+      if #others > 0 then
+        row.questMates = others
+        row.info = row.info or {}
+        local line = "   Also on it: " .. table.concat(others, ", ")
+        local at = #row.info + 1
+        for i, l in ipairs(row.info) do if l:find("^Status:") then at = i; break end end
+        table.insert(row.info, at, line)
+      end
+    end
+  end
   return out, hidden
 end
 

@@ -20,6 +20,8 @@ local HELP = {
   "/tc new - what's new: every version and what changed",
   "/tc rankup - put the highest rank of every spell on your action bars",
   "/tc cal - the crew calendar: who played when, and the best time to play together",
+  "/tc recap - today's recap: time played, levels, quests, deaths, gold and who was on",
+  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, calendar, notes, AFK, ranks, mock, recap)",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
@@ -108,6 +110,41 @@ local function setPanel(on, quiet)
   end
 end
 Commands.setPanel = setPanel
+
+-------------------------------------------------------------------------------------------------- key bindings
+-- Bindings.xml names these (Esc > Options > Keybindings > AddOns > TwizCrew).
+BINDING_HEADER_TWIZCREW = "TwizCrew"
+BINDING_NAME_TWIZCREW_PANEL = "Show or hide the crew panel"
+BINDING_NAME_TWIZCREW_CALENDAR = "Open the crew calendar"
+BINDING_NAME_TWIZCREW_NOTE = "Create a calendar note"
+BINDING_NAME_TWIZCREW_AFK = "Go AFK / I'm back"
+BINDING_NAME_TWIZCREW_RANKUP = "Update my spell ranks"
+BINDING_NAME_TWIZCREW_MOCK = "Mock my target (a dead crew friend)"
+BINDING_NAME_TWIZCREW_RECAP = "Today's recap"
+BINDING_NAME_TWIZCREW_SETTINGS = "TwizCrew settings"
+
+function Commands.binding(what)
+  if what == "panel" then setPanel(not ns.Modules.isEnabled("panel"), true)
+  elseif what == "calendar" then ns.Calendar.toggle()
+  elseif what == "note" then ns.Calendar.openMaker({})
+  elseif what == "afk" then ns.Panel.toggleAway()
+  elseif what == "rankup" then ns.RankUp.run()
+  elseif what == "recap" then ns.Recap.show()
+  elseif what == "settings" then ns.Settings.toggle()
+  elseif what == "mock" then
+    local name = type(UnitName) == "function" and UnitName("target") or nil
+    local dead = type(UnitIsDeadOrGhost) == "function" and UnitIsDeadOrGhost("target")
+    if type(name) ~= "string" or not (ns.roster and ns.roster:get(name)) or not dead then
+      say("target a dead crew friend to mock them.")
+    elseif not ns.Roasts.canMock(name) then
+      say("mocks are switched off (Roasts, Mock button roasts).")
+    elseif not ns.Roasts.mock(name) then
+      say("give it a few seconds before mocking " .. name .. " again.")
+    end
+  end
+end
+
+function TwizCrew_Binding(what) ns.Log.safe(FEATURE, Commands.binding, what) end
 
 local function toggleMinimap()
   if ns.MinimapButton.toggleShown() then
@@ -217,6 +254,7 @@ local ACTIONS = {
   new = function() ns.Changelog.open() end,
   rankup = function() ns.RankUp.run() end,
   cal = function() ns.Calendar.toggle() end,
+  recap = function() ns.Recap.show() end,
   calendar = function() ns.Calendar.toggle() end,
   ranks = function() ns.RankUp.run() end,
   news = function() ns.Changelog.open() end,

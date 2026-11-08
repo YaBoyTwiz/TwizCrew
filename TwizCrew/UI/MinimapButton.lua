@@ -62,7 +62,30 @@ local function refreshBadge()
 end
 
 ---------------------------------------------------------------------------------------------------- clicks, tooltip
-function MinimapButton.click(mouseButton)
+-- The minimap button's right-click menu: the crew panel, a note, the wrench's tools, the settings.
+function MinimapButton.menuItems()
+  local shown = ns.Modules.isEnabled("panel")
+  local items = {
+    { label = shown and "Hide the crew panel" or "Show the crew panel", icon = "Interface\\Icons\\Ability_Warrior_BattleShout",
+      onClick = function() ns.Commands.setPanel(not ns.Modules.isEnabled("panel"), true) end },
+  }
+  if ns.Calendar then
+    items[#items + 1] = { label = "Create a calendar note", icon = "Interface\\Icons\\INV_Misc_Note_01",
+      onClick = function() ns.Calendar.openMaker({}) end }
+  end
+  for _, it in ipairs(ns.Panel and ns.Panel.toolItems and ns.Panel.toolItems() or {}) do items[#items + 1] = it end
+  items[#items + 1] = { label = "Open settings", icon = "Interface\\Icons\\Trade_Engineering",
+    onClick = function() ns.Settings.open() end }
+  return items
+end
+
+-- anchor: the minimap button (a right-click there opens the menu); the addon compartment has none (it toggles
+-- the panel, as before).
+function MinimapButton.click(mouseButton, anchor)
+  if mouseButton == "RightButton" and anchor and ns.Widgets and ns.Widgets.menu then
+    ns.Widgets.menu(anchor, MinimapButton.menuItems())
+    return
+  end
   if mouseButton == "RightButton" then
     ns.Commands.setPanel(not ns.Modules.isEnabled("panel"), true)
     return
@@ -169,7 +192,7 @@ local function build()
   badge:Hide()
   button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   button:RegisterForDrag("LeftButton")
-  script(button, "OnClick", function(_, which) MinimapButton.click(which) end)
+  script(button, "OnClick", function(self, which) MinimapButton.click(which, self) end)
   script(button, "OnEnter", function(self) showTip(self, true) end)
   script(button, "OnLeave", hideTip)
   script(button, "OnDragStart", startDrag)

@@ -336,6 +336,7 @@ local function showMock(sender, f)
     shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
     if #shown > SHOWN_MAX then table.remove(shown, 1) end
     ns.MockShow.show(sender, text, cheer and { cheer = true } or nil)
+    ns.Bus.fire("ABOUT_ME", cheer and "cheer" or "mock", sender)
     ns.Log.add("info", "mock shown from %s (3D)", sender)
     return
   end

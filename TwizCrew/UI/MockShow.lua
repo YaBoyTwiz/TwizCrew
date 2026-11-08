@@ -23,7 +23,9 @@ local MODEL_W, MODEL_H = 300, 340
 local WIDTH = 420 -- the whole show (the speech bubble); the model sits centered under it
 -- Camera: close on the face and upper body. Portrait zoom 0 shows the whole body, 1 only the face.
 local ZOOM = 0.6
-local GAP = 10 -- between the crew panel and the show
+-- Where the show appears: right of the screen's middle, a little above it (next to your character, never off
+-- screen wherever the crew panel is). The frame is clamped to the screen too.
+local SPOT_X, SPOT_Y = 260, 40
 local TEXT_GROW = 10 -- the roast's letters: this many points bigger than normal text (hard to miss)
 
 -- The game's own /laugh voice for each race (raceID -> { male, female } sound file numbers, from the community
@@ -255,6 +257,27 @@ local function build()
   iconTex:Hide()
 
   frame:SetScript("OnClick", function() ns.Log.safe(FEATURE, MockShow.hide) end)
+  -- drag it anywhere; it remembers the spot (a plain click still closes it)
+  frame:SetMovable(true)
+  if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
+  frame:SetScript("OnDragStart", function(self)
+    ns.Log.safe(FEATURE, function() self:StartMoving(); hideAt = ns.now() + SECONDS end)
+  end)
+  frame:SetScript("OnDragStop", function(self)
+    ns.Log.safe(FEATURE, function()
+      self:StopMovingOrSizing()
+      remember()
+      hideAt = ns.now() + SECONDS -- a fresh few seconds after moving it
+      self:SetAlpha(1)
+    end)
+  end)
+  frame:SetScript("OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Drag to move it, click to close", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  frame:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   frame:SetScript("OnUpdate", function(self, elapsed)
     ns.Log.safe(FEATURE, function()
       if not hideAt then return end
@@ -275,28 +298,37 @@ end
 
 -- Next to the crew panel: on its right, or on its left when there's no room on the right. Top middle of the
 -- screen when the panel is hidden.
+-- Where you dragged it last ({ point, x, y } from the screen's center), saved; nil = the default spot.
+local function saved()
+  local p = ns.db and ns.db.mockShowPos
+  if type(p) == "table" and type(p.point) == "string" and tonumber(p.x) and tonumber(p.y) then return p end
+end
+
 local function place()
   frame:ClearAllPoints()
-  local panel = TwizCrewPanel
-  local shown = panel and panel.IsShown and panel:IsShown()
-  local right = shown and panel.GetRight and panel:GetRight()
-  if type(right) ~= "number" or right <= 0 then
-    frame:SetPoint("TOP", UIParent, "TOP", 0, -120)
-    return "top"
+  local p = saved()
+  if p then
+    frame:SetPoint(p.point, UIParent, "CENTER", tonumber(p.x), tonumber(p.y))
+    return "where you put it"
   end
-  -- the panel has its own scale: compare in screen pixels
-  local ps = tonumber(panel.GetEffectiveScale and panel:GetEffectiveScale()) or 1
-  local us = tonumber(frame.GetEffectiveScale and frame:GetEffectiveScale()) or 1
-  if ps <= 0 then ps = 1 end
-  if us <= 0 then us = 1 end
-  local screen = UIParent.GetWidth and UIParent:GetWidth()
-  local roomRight = type(screen) == "number" and screen > 0 and (right * ps + (GAP + WIDTH) * us <= screen * us)
-  if roomRight or type(screen) ~= "number" or screen <= 0 then
-    frame:SetPoint("TOPLEFT", panel, "TOPRIGHT", GAP, 0)
-    return "right"
-  end
-  frame:SetPoint("TOPRIGHT", panel, "TOPLEFT", -GAP, 0)
-  return "left"
+  frame:SetPoint("LEFT", UIParent, "CENTER", SPOT_X, SPOT_Y)
+  return "beside center"
+end
+
+-- After a drag: remember the spot as an offset of the frame's center from the screen's center.
+local function remember()
+  local cx, cy = frame:GetCenter()
+  local ux, uy = UIParent:GetCenter()
+  cx, cy, ux, uy = tonumber(cx), tonumber(cy), tonumber(ux), tonumber(uy)
+  if not (cx and cy and ux and uy) then return end
+  if ns.db then ns.db.mockShowPos = { point = "CENTER", x = math.floor(cx - ux + 0.5), y = math.floor(cy - uy + 0.5) } end
+  place()
+end
+
+-- Back to the default spot (Reset everything, /tc mock spot).
+function MockShow.resetSpot()
+  if ns.db then ns.db.mockShowPos = nil end
+  if frame then place() end
 end
 MockShow.place = function() if frame then return place() end end
 
@@ -393,6 +425,7 @@ function MockShow.isShown() return frame ~= nil and hideAt ~= nil end
 function MockShow.start()
   if MockShow.started then return end
   MockShow.started = true
+  ns.Bus.on(FEATURE, "SETTINGS_RESET", MockShow.resetSpot)
   if C_Timer and C_Timer.NewTicker then
     C_Timer.NewTicker(CAPTURE_TICK, function() ns.Log.safe(FEATURE, lookAround) end)
   end

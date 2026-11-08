@@ -16,6 +16,7 @@ local HELP = {
   "/tc mock - the My mocks window: write, try and delete your own mocks",
   "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
   "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
+  "/tc mock spot - put the mock show back in its normal spot (drag it to move it)",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
@@ -135,6 +136,9 @@ local function mock(rest)
     if #mine == 0 then say("you have no roasts of your own yet. Add one with /tc mock add <text>.") return end
     say("your roasts:")
     for i, l in ipairs(mine) do print("  " .. i .. ". " .. ns.Util.safeText(l)) end
+  elseif what == "spot" then
+    ns.MockShow.resetSpot()
+    say("the mock show is back in its normal spot.")
   elseif what == "remove" then
     local gone = ns.Roasts.removeMock(more)
     if gone then say('removed "' .. ns.Util.safeText(gone) .. '".')

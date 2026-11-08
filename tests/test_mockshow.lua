@@ -115,18 +115,27 @@ return {
       receive(ns, W, "Frostie", "MOCK", { t = "Twiz", x = "Again." })
       A.eq(#played, 1, "sound off: quiet")
     end,
-    sits_next_to_the_crew_panel = function(ns, A, W)
+    sits_beside_the_middle_of_the_screen = function(ns, A, W)
+      start(ns, W)
+      W.env.TwizCrewPanel = { IsShown = function() return true end, GetRight = function() return 1900 end }
+      W.env.SlashCmdList.TWIZCREW("test mock icon")
+      A.eq(ns.MockShow.place(), "beside center", "the same spot wherever the crew panel is")
+      ns.MockShow.hide()
+    end,
+    dragging_moves_it_and_it_remembers = function(ns, A, W)
       start(ns, W)
       W.env.SlashCmdList.TWIZCREW("test mock icon")
-      A.eq(ns.MockShow.place(), "top", "no panel: top of the screen")
-      local right = 400
-      W.env.TwizCrewPanel = { IsShown = function() return true end, GetRight = function() return right end,
-        GetEffectiveScale = function() return 1 end }
-      W.env.UIParent.GetWidth = function() return 1920 end
-      A.eq(ns.MockShow.place(), "right", "room on the right")
-      right = 1800
-      A.eq(ns.MockShow.place(), "left", "panel at the right edge: on its left")
+      -- the stub's frames have no real position: pretend it was dropped 100 right, 50 down from the middle
+      ns.db.mockShowPos = { point = "CENTER", x = 100, y = -50 }
+      A.eq(ns.MockShow.place(), "where you put it")
+      W.env.SlashCmdList.TWIZCREW("mock spot")
+      A.eq(ns.db.mockShowPos, nil)
+      A.eq(ns.MockShow.place(), "beside center")
+      ns.db.mockShowPos = { point = "CENTER", x = 1, y = 2 }
+      ns.Modules.resetAll()
+      A.eq(ns.db.mockShowPos, nil, "Reset everything puts it back too")
       ns.MockShow.hide()
+      A.eq(ns.Log.errors(10), {})
     end,
     show_goes_away_by_itself = function(ns, A, W)
       start(ns, W)

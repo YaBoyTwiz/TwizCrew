@@ -10,7 +10,9 @@ as now, and nothing more.
 
 **Approved by the owner ("do it", 2026-11-07)** after this was played back in chat: arrows on each Crew panel row,
 a big arrow on click, friends on the map, a "meet here" pin, and our arrow / pins looking clearly different from
-QuestMaster's ("we can keep both, lets just make sure our arrow/waypoint looks different").
+QuestMaster's ("we can keep both, lets just make sure our arrow/waypoint looks different"). Changed after that by
+the owner: positions in the group only, no friend dots on the map (the game shows party members already), and the
+meet-up goes to the party or everyone, the sender's choice, and shows on the map.
 
 Builds on v1 (`2026-11-05-crew-panel-design.md`) and every later plan; their Global Constraints still hold.
 
@@ -37,56 +39,54 @@ without typing "where r u" in chat.
 
 ### 2b. The big arrow (owner approved as described)
 
-- Shows only when you **click a group member's row arrow** (or a meet pin, 2d). It points the way with the friend's name
+- Shows only when you **click a group member's row arrow** (or a meet-up, 2d). It points the way with the friend's name
   and the distance; **it goes away by itself when you arrive** (about 15 yards) and can be closed with a click.
 - Class-coloured, with the name under it, so it can't be mistaken for QuestMaster's gold / grey arrow. Movable;
   follows the panel's "lock" setting.
-- **Claude's call:** the big arrow also works when the group member (or pin) is in **another zone on the same
+- **Claude's call:** the big arrow also works when the group member (or meet-up spot) is in **another zone on the same
   continent** (it says "Westfall · 1.2k yd"). The row arrows stay same-zone only, as approved. Why: the big arrow
   is the "take me there" tool, and the far case is exactly when you need it. Cost if wrong: one rule to tighten.
   Since row arrows are same-zone only, a far group member's big arrow starts from a small arrow button that
   replaces the zone text's spot on their row (builder's call on the exact spot; never the dead friend's Mock button).
 
-### 2c. On the map (changed by "group only"; Claude's call)
+### 2c. On the map: only the meet-up (owner, 2026-11-07)
 
-- **No TwizCrew friend dots.** With positions shared only in the group, the game already shows every group member
-  on the world map and minimap with its own party dots, so ours would only repeat them. Cost if wrong: the dots can
-  be added later (class-coloured, name on hover) without changing anything else.
-- The map gets **only the meet pin** (2d). It must work on Blizzard's world map **and OpenMap's stitched map** (the
-  owner uses OpenMap; friends may not).
+- **No friend dots** (owner: "we dont need minimap updates if they are in the party, i just need the arrows"). The
+  game already shows every group member on the world map and minimap with its own party dots.
+- **The meet-up spot shows on the map** (owner: "it can draw on the map"): a TwizCrew icon on the **world map** and,
+  Claude's call, the **minimap** too (on the edge when it's off the minimap; handles a rotating minimap, every zoom
+  level, indoors and outdoors). The sender's name on hover. Never the game's waypoint pin.
+- Must work on Blizzard's world map **and OpenMap's stitched map** (the owner uses OpenMap; friends may not).
   OpenMap has a public `OpenMapAPI` (`AddOns/OpenMap/API.lua`, e.g. `CanvasFromWorldPos`); Questie's pins work on
-  it today, so the same method that Questie uses should too. The builder checks.
-- On the minimap the pin handles a rotating minimap, every zoom level, indoors and outdoors, and sits on the edge
-  when it is off the minimap.
+  it today, so the same method Questie uses should too. The builder checks.
+- **No map clicks** (Claude's call): a meet-up is always sent at your own spot. Cost if wrong: Ctrl + right-click
+  on the map to place one can be added later.
 
-### 2d. "Meet here" pin and "Come to me" (owner approved as an idea; details are Claude's calls)
+### 2d. Meet-up (owner: "keep the meet up but make it so we can choose between just for the party or everyone")
 
-- **Come to me:** a small button on the Crew panel header (next to the AFK button) and `/tc meet` drop a pin at your
-  spot. **On the map:** a modifier-click on the world map drops it there (Claude's call: **Ctrl + right-click**; the
-  builder checks it doesn't clash with OpenMap, Questie or the game's own map clicks, and picks another modifier if
-  it does).
-- **The pin goes to the whole crew, grouped or not** (Claude's call: it is one message when placed, not a stream of
-  positions, so "group only" doesn't apply; meeting up is how a friend gets into the group). Cost if wrong: one rule
-  to limit it to the group.
-- **One shared crew pin** at a time: the newest pin replaces the old one on everyone's screen (Claude's call:
-  simpler than one per person, and the crew meets in one place). It shows who placed it.
-- Friends get a **small pop-up** through the existing pop-up system ("Twiz wants to meet up: Goldshire"), with the
-  same sound rules as the other pop-ups (off by default), and **the big arrow turns on toward the pin** (setting, on
-  by default).
-- The pin is a **TwizCrew icon** on the world map and minimap, never the game's waypoint pin.
-- It goes away after **15 minutes**, when the placer clears it (click the button again / `/tc meet clear`), or when
-  a new pin replaces it. Arriving within ~20 yards closes **your** big arrow ("You're here") but leaves the pin for
-  the others.
+- **Come to me:** a small button on the Crew panel header (next to the AFK button) and `/tc meet` send a meet-up at
+  **your spot**. Whoever sends it **chooses who gets it: just the party, or everyone in the crew** (owner).
+  Claude's call on how: clicking the button shows two choices, "My party" and "Everyone"; `/tc meet party` and
+  `/tc meet all` do the same, and plain `/tc meet` asks the same way. Not in a group: it goes to everyone (the only
+  choice), so a friend outside the group can find you.
+- Friends who get it see a **small pop-up** through the existing pop-up system ("Twiz wants to meet up: Goldshire"),
+  with the same sound rules as the other pop-ups (off by default), and **their big arrow turns on toward the spot**
+  (setting, on by default; works anywhere on the same continent, see 2b). Plus the icon on their maps (2c).
+- **One meet-up at a time:** the newest replaces the old one for everyone who got it (Claude's call). It shows who
+  sent it.
+- It ends after **15 minutes**, when anyone it went to clears it (the button again / `/tc meet clear`), or when a new
+  one replaces it. Arriving within ~20 yards closes **your** big arrow ("You're here") but leaves the meet-up for the
+  others.
 
 ### 2e. Smaller rules (Claude's calls, from the builder check)
 
-- A meet pin **reaches friends who come online later** (it rides along with STATE while it lives).
-- **Anyone in the crew may clear the pin** (`/tc meet clear` or the button), so a stale pin never sticks around.
-- A new pin **switches an open big arrow to the pin** (it's the newest "go here").
+- A meet-up **reaches friends who come online later** if it was sent to everyone (it rides along with STATE while it
+  lives); a party-only meet-up reaches whoever joins the party while it lives.
+- A new meet-up **switches an open big arrow to the meet-up spot** (it's the newest "go here").
 - If `GetPlayerFacing` can't be read, row arrows and the big arrow **turn into a compass**: north-up arrow with
   the distance, and a small "N" mark so nobody reads it as "ahead of you". If even positions are unknown, nothing
   shows.
-- **Try it out** gets pretend group members who walk around, so the arrows and pin can be seen without the crew.
+- **Try it out** gets pretend group members who walk around, so the arrows and a meet-up can be seen without the crew.
 
 ## 3. Goals, non-goals, anti-goals
 
@@ -127,10 +127,11 @@ markers. **Back-from-AFK alerts were suggested in chat but are left out on purpo
 - Position message: map ID + x, y (enough decimals for ~1 yard), or world coordinates; builder's call. Receivers
   convert to continent + yards with `C_Map.GetWorldPosFromMapPos` for distance and direction. A position older than
   about a minute counts as unknown (arrow hidden).
-- **New files and `.toc` lines are fine** (borrowing a library is fine too, owner: "its ok if you borrow from other
-  addons"). Claude's call: **HereBeDragons-2.0 + HereBeDragons-Pins-2.0 (BSD licence)**, the copy Questie ships, is
-  allowed for map and minimap placement, because it already handles minimap zoom / rotation / indoors and works on
-  Forever. Keep its licence file. If the builder writes its own placement instead, it must cover the same cases.
+- **New files and `.toc` lines are fine** (borrowing from other addons is fine too, owner: "its ok if you borrow
+  from other addons"; respect licences: QuestMaster is GPL-3.0, learn from it, don't copy it). Claude's call:
+  **HereBeDragons-2.0 + HereBeDragons-Pins-2.0 (BSD licence)**, the copy Questie ships, is allowed for placing the
+  meet-up icon on the world map and minimap, because it already handles minimap zoom / rotation / indoors and works
+  on Forever. Keep its licence file. If the builder writes its own placement instead, it must cover the same cases.
   This overrides the minimap plan's "no libraries" call for this feature only.
 - **Release note:** new files and `.toc` changes mean the release that ships this sets `RESTART_SINCE` to its version
   and says "restart the game". No version bump and no release until the owner says "release it".
@@ -145,33 +146,33 @@ markers. **Back-from-AFK alerts were suggested in chat but are left out on purpo
 - **Big arrow:** the same arrow, larger, class-coloured, with "Frostie" and "340 yd" (or "Westfall · 1.2k yd") under
   it, and a small close button. Default spot: upper middle of the screen but **not where QuestMaster's arrow sits
   by default** (the builder checks QuestMaster's default position and picks a clear spot). Draggable.
-- **Meet pin:** a TwizCrew icon (the minimap button's
-  icon, `ns.Config.MINIMAP_ICON`, in a ring) on both maps, the placer's name on hover.
+- **Big arrow toward a meet-up:** the same arrow in the sender's class colour, with "Meet Twiz" and the distance, so
+  it's clear it points at a spot, not at a person who may have moved.
+- **Meet-up icon on the maps:** the minimap button's icon (`ns.Config.MINIMAP_ICON`) in a ring, tinted or ringed in
+  the sender's class colour, so it can't be mistaken for the game's waypoint pin or a quest icon.
 
 ## 6. Settings
 
 A new **extras** module, **"Find the crew"** (on by default), with an (i) on every switch like every other setting.
 
-- **Basics tab:** "Arrows on the Crew panel", "Meet-up pins", "Share my position with my group".
-- **Advanced tab:** pin on the minimap, meet pin pop-up, "Big arrow turns on for a meet pin", big arrow
+- **Basics tab:** "Arrows on the Crew panel", "Meet-ups", "Share my position with my group".
+- **Advanced tab:** meet-up on the minimap, meet-up pop-up, "Big arrow turns on for a meet-up", big arrow
   size (builder may add more).
-- **Share my position** off: your copy sends no position and can't place a meet pin at your spot (map placement
-  still works); friends see your row without an arrow. Reset to defaults puts everything back on.
+- **Share my position** off: your copy sends no position and can't send a meet-up (it would tell your spot); friends see your row without an arrow. Reset to defaults puts everything back on.
 
 ## 7. Report and testing
 
 - `/tc report` gets a line such as `Find the crew: position ok (map 1429), facing ok, group members with positions: 3,
-  meet pin: Twiz in Elwynn Forest, 4 min left` (placed where older report tests stay valid, as before).
+  meet-up: Twiz (party) in Elwynn Forest, 4 min left` (placed where older report tests stay valid, as before).
 - Tests outside the game (`tests/run.sh`) cover: direction and distance maths, same-zone / instance / stale /
-  secret rules, the send budget (moved / not moved, replace-unsent, group only, nothing when not grouped), the meet pin's life,
-  and a multi-copy simulation (two group members walk, the third sees arrows move; a friend outside the group gets no positions; a pin
-  reaches everyone).
+  secret rules, the send budget (moved / not moved, replace-unsent, group only, nothing when not grouped), the meet-up's life and who gets it (party / everyone),
+  and a multi-copy simulation (two group members walk, the third sees arrows move; a friend outside the group gets no positions; a party meet-up reaches only the party and an "everyone" meet-up reaches all).
 - `docs/TESTING.md` gets the in-game checks, riskiest first: whether `GetPlayerFacing` and map positions work on
-  Forever outside instances; whether party `UnitPosition` is secret; the meet pin on OpenMap's map; the minimap while it
-  rotates; no clash with QuestMaster's arrow.
+  Forever outside instances; whether party `UnitPosition` is secret; a party-only meet-up never reaching friends outside the party; the meet-up icon on OpenMap's map and on a rotating
+  minimap; no clash with QuestMaster's arrow.
 
 ## 8. Left to the builder
 
-Exact numbers (send gaps, yards, sizes), the message format, frame layout inside rows, how map pins are drawn
-(library or own code, within section 4), and anything not named here, as long as it serves section 1 and
+Exact numbers (send gaps, yards, sizes), the message format, frame layout inside rows, how the meet-up icon is
+placed on the maps (library or own code, within section 4), and anything not named here, as long as it serves section 1 and
 respects section 3's anti-goals. Write every such call in the plan's "Changes during build", as before.

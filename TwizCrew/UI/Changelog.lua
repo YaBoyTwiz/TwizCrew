@@ -18,6 +18,7 @@ Changelog.HISTORY = {
     "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",
     "Next to them it says Right here, and points again when they move away.",
     "A small share icon after a friend's quest when they can share it with you. Click it to ask.",
+    "Congrats got sassier: 45 new lines that cheer for your friend while poking fun at them.",
   } },
   { ver = "0.1.16", date = "2026-11-08", lines = {
     "Crew calendar (the scroll button next to the wrench, or /tc cal): who played each day, and for how long.",

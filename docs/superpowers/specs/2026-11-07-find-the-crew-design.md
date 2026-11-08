@@ -59,22 +59,26 @@ without typing "where r u" in chat.
 - Must work on Blizzard's world map **and OpenMap's stitched map** (the owner uses OpenMap; friends may not).
   OpenMap has a public `OpenMapAPI` (`AddOns/OpenMap/API.lua`, e.g. `CanvasFromWorldPos`); Questie's pins work on
   it today, so the same method Questie uses should too. The builder checks.
-- **No map clicks** (Claude's call): a meet-up is always sent at your own spot. Cost if wrong: Ctrl + right-click
-  on the map to place one can be added later.
+- **Placing a meet-up is a click on the world map** (2d). Clicking in the 3D world can't work: the game never tells
+  an addon where a click in the world lands (told to the owner, 2026-11-07).
 
 ### 2d. Meet-up (owner: "keep the meet up but make it so we can choose between just for the party or everyone")
 
-- **Come to me:** a small button on the Crew panel header (next to the AFK button) and `/tc meet` send a meet-up at
-  **your spot**. Whoever sends it **chooses who gets it: just the party, or everyone in the crew** (owner).
-  Claude's call on how: clicking the button shows two choices, "My party" and "Everyone"; `/tc meet party` and
-  `/tc meet all` do the same, and plain `/tc meet` asks the same way. Not in a group: it goes to everyone (the only
-  choice), so a friend outside the group can find you.
+- **Only from the world map** (owner: "we dont need a come to me, we should just be able to click a spot on the
+  world map"). No "Come to me" button and no "send my own spot" command. Claude's call: **Ctrl + right-click** a
+  spot on the world map (Blizzard's map and OpenMap's stitched map); the builder checks it doesn't clash with
+  OpenMap, Questie, QuestMaster or the game's own map clicks, and picks another modifier if it does. The spot must
+  be on a zone or continent map the game can turn into world coordinates; elsewhere (the whole-world view, an
+  instance map) the click does nothing but a short "Pick a spot inside a zone" line.
+- Whoever sends it **chooses who gets it: just the party, or everyone in the crew** (owner). Claude's call on how:
+  after the click, a small menu at the cursor asks "Meet here: My party / Everyone / Cancel". Not in a group: only
+  "Everyone" (and Cancel).
 - Friends who get it see a **small pop-up** through the existing pop-up system ("Twiz wants to meet up: Goldshire"),
   with the same sound rules as the other pop-ups (off by default), and **their big arrow turns on toward the spot**
   (setting, on by default; works anywhere on the same continent, see 2b). Plus the icon on their maps (2c).
 - **One meet-up at a time:** the newest replaces the old one for everyone who got it (Claude's call). It shows who
   sent it.
-- It ends after **15 minutes**, when anyone it went to clears it (the button again / `/tc meet clear`), or when a new
+- It ends after **15 minutes**, when anyone it went to clears it (right-click the meet-up icon on the map → "Clear", or `/tc meet clear`), or when a new
   one replaces it. Arriving within ~20 yards closes **your** big arrow ("You're here") but leaves the meet-up for the
   others.
 
@@ -158,7 +162,7 @@ A new **extras** module, **"Find the crew"** (on by default), with an (i) on eve
 - **Basics tab:** "Arrows on the Crew panel", "Meet-ups", "Share my position with my group".
 - **Advanced tab:** meet-up on the minimap, meet-up pop-up, "Big arrow turns on for a meet-up", big arrow
   size (builder may add more).
-- **Share my position** off: your copy sends no position and can't send a meet-up (it would tell your spot); friends see your row without an arrow. Reset to defaults puts everything back on.
+- **Share my position** off: your copy sends no position and friends see your row without an arrow. Reset to defaults puts everything back on.
 
 ## 7. Report and testing
 

@@ -159,10 +159,10 @@ end
 local REQUEST_GAP = 15 -- seconds between requests to (or from) the same friend
 local askedAt, heardAt = {}, {}
 
-local function inGroupWith(name)
-  if type(UnitInParty) == "function" and call(UnitInParty, name) then return true end
-  if type(UnitInRaid) == "function" and call(UnitInRaid, name) then return true end
-  return false
+-- Am I in any group? (The game's "is this name in my party" can say no on Forever even when they are, because of
+-- how names are written; so the request only needs a group, and the game itself refuses a share outside it.)
+local function inAnyGroup()
+  return call(IsInGroup) and true or call(IsInRaid) and true or false
 end
 
 -- Ask `name` to share `title` (their quest, as their copy sent it). Returns true when the request went out, or
@@ -170,7 +170,7 @@ end
 function Quest.request(name, title)
   if type(name) ~= "string" or name == "" then return false, "quest" end
   if type(title) ~= "string" or title == "" then return false, "quest" end
-  if not inGroupWith(name) and not ns.isTestName(name) then
+  if not inAnyGroup() and not ns.isTestName(name) then
     print("TwizCrew: quest sharing only works in a group. Invite " .. ns.Util.safeText(name) .. " first.")
     return false, "group"
   end

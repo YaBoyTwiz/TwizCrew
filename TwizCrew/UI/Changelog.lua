@@ -14,6 +14,10 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.14", date = "2026-11-08", lines = {
+    "Fixed: Ask to share said you weren't in a group when you were.",
+    "Fixed: Invite to group showed for friends already in your party.",
+  } },
   { ver = "0.1.13", date = "2026-11-08", lines = {
     "The What's new line always stays at the top of the panel, so it's easy to find.",
     "Your own row is off again (less clutter). Turn it on with Show myself in the list.",

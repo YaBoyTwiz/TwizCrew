@@ -1043,8 +1043,16 @@ local function call(fn, ...)
   if ok then return a end
 end
 
+-- Is this friend in my group? The game's name check, else their name in my party / raid slots (Forever's name
+-- check can miss them).
 local function inMyGroup(name)
-  return (call(UnitInParty, name) or call(UnitInRaid, name)) and true or false
+  if (call(UnitInParty, name) or call(UnitInRaid, name)) then return true end
+  if ns.Where and ns.Where.unitFor then
+    if ns.Where.unitFor(name) then return true end
+    local short = ns.shortName and ns.shortName(name)
+    if short and short ~= name and ns.Where.unitFor(short) then return true end
+  end
+  return false
 end
 
 local function whisper(full)

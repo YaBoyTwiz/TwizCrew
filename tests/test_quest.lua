@@ -138,8 +138,13 @@ return {
       W:advance(1)
       A.eq(#W.sent, before, "not in a group: nothing sent")
       A.contains(W.printed[#W.printed], "only works in a group")
-      W.state.groupMembers = { "Frostie" }
+      -- grouped, but the game's name check misses Frostie (as on Forever): still asks
+      W.state.inGroup = true
+      W.state.units.party1 = { name = "Frostie", player = true }
+      W:advance(1) -- the party list is read again after half a second
       A.ok(ns.Quest.request("Frostie", "Wolves Across the Border"))
+      A.no(ns.Panel.rowMenu(row)[2] and ns.Panel.rowMenu(row)[2].label == "Invite to group",
+        "no Invite for someone already in my party")
       W:advance(1)
       local req
       for _, m in ipairs(W.sent) do

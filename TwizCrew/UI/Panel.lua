@@ -32,6 +32,7 @@ local ARROW_SIZE = 16
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
 local toolsButton -- the wrench in the header: a menu of handy tools (spell ranks, ...)
+local calButton   -- the scroll in the header, left of the wrench: the crew calendar
 local titleText, headerShort = nil, nil -- "TwizCrew" in the header; the short count ("1/3") when room is tight
 local grip -- the move-arrows handle at the left of the header (dim while the panel is locked)
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
@@ -655,7 +656,7 @@ local function drawHeader(s)
   -- goes, then "2 of 3 online" becomes "2/3".
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style] + 2 * PAD
-  local right = (PAD - 2) + 16 + 4 + 16 + 6 + 6 + 16 + 6 -- gear, tools, gaps, AFK button, gap before the title
+  local right = (PAD - 2) + 16 + 4 + 16 + 4 + 16 + 6 + 6 + 16 + 6 -- gear, tools, calendar, gaps, AFK, gap
   local left = (PAD - 2) + 16 + 4 + textWidth(titleText, "TwizCrew")
   local function fits(count, withVersion)
     local used = left + right + textWidth(countText, count)
@@ -966,6 +967,7 @@ function Panel.toolItems()
 end
 
 function Panel.toolsButtonForTest() return toolsButton end
+function Panel.calendarButtonForTest() return calButton end
 
 function Panel.menuItems()
   return compact {
@@ -1282,7 +1284,27 @@ local function build()
     GameTooltip:Show()
   end)
   script(toolsButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  countText:SetPoint("RIGHT", toolsButton, "LEFT", -6, 0)
+  -- the calendar button: left of the wrench
+  calButton = CreateFrame("Button", nil, head)
+  calButton:SetSize(16, 16)
+  calButton:SetPoint("RIGHT", toolsButton, "LEFT", -4, 0)
+  local calIcon = calButton:CreateTexture(nil, "ARTWORK")
+  calIcon:SetAllPoints(calButton)
+  calIcon:SetTexture("Interface\\Icons\\INV_Scroll_03")
+  calIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local calHl = calButton:CreateTexture(nil, "HIGHLIGHT")
+  calHl:SetAllPoints(calButton)
+  T.color(calHl, C.white, 0.25)
+  script(calButton, "OnClick", function() if ns.Calendar then ns.Calendar.toggle() end end)
+  script(calButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Crew calendar")
+    GameTooltip:AddLine("Who played when, and the best time for the crew to play together (or /tc cal).", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(calButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  countText:SetPoint("RIGHT", calButton, "LEFT", -6, 0)
   afkButton = CreateFrame("Button", nil, head)
   afkButton:SetSize(16, 16)
   afkButton:SetPoint("RIGHT", countText, "LEFT", -6, 0)

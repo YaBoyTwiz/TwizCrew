@@ -218,6 +218,10 @@ return {
       local found
       for _, l in ipairs(labels) do if l == "Crew calendar" then found = true end end
       A.ok(found, "in the wrench menu")
+      local b = ns.Panel.calendarButtonForTest()
+      A.ok(b, "a calendar button in the panel's header")
+      b._scripts.OnClick(b, "LeftButton")
+      A.ok(ns.Calendar.isShown(), "it opens the calendar")
       A.eq(ns.Log.errors(10), {})
     end,
   },

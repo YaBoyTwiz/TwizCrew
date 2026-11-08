@@ -15,7 +15,7 @@ local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
   { ver = "0.1.16", date = "2026-11-08", lines = {
-    "Crew calendar (wrench button, or /tc cal): who played each day, and for how long.",
+    "Crew calendar (the scroll button next to the wrench, or /tc cal): who played each day, and for how long.",
     "Click a day for its timeline: one bar per friend, so you can see who was on together.",
     "Usual times: when the crew is usually on, the best time to play together, and everyone's habits.",
     "Your characters count as one person. Your copy swaps play times with the crew, so you see days you missed.",

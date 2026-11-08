@@ -42,6 +42,14 @@ Other players never see any of it. The messages are hidden addon messages, not c
   https://github.com/YaBoyTwiz/TwizCrew, release v0.1.0. Friends install it with WowUp (README.md). Still not
   tested in game. Before going public, the owner's WoW account folder name was removed from every file and from
   the history; docs use `WTF/Account/*/` instead. Never write it into the repository.
+- **Find the crew built (2026-11-07, owner: "do it"):** an arrow and the distance on each group member's row (click:
+  a big arrow in their class colour), and meet-ups: Ctrl + right-click a spot on the world map, for the party or
+  everyone (sender's choice), shown as a pop-up, the big arrow and an icon on the world map and minimap. Positions
+  go to the group only (owner: "we dont need position updates for players not in the group"); no friend dots on
+  the maps; no in-world marker for now (owner: "dont worry about the marker for now"). Never uses the game's
+  waypoint, so QuestMaster's keeps working. Not tested in game, not published; **its release adds files, so it
+  needs a game restart** (set `RESTART_SINCE`). Design: `docs/superpowers/specs/2026-11-07-find-the-crew-design.md`;
+  plan and Claude's calls: `docs/superpowers/plans/2026-11-07-find-the-crew.md`; checks: `docs/TESTING.md`.
 - The owner liked the idea of sharing information and triggering effects on each other's screens.
 - **First feature picked (owner):** show what **layer** each friend is on, and **what each friend with the addon
   is doing**. Details not designed yet.
@@ -132,7 +140,7 @@ Other players never see any of it. The messages are hidden addon messages, not c
 
 - **Friend radar:** a small panel with each friend's level, zone and what they are doing.
 - **Pokes and soundboard:** send a friend an air horn, a "LOL", a jump scare or a big emoji on their screen.
-- **"Come here" ping:** press a button and friends get an arrow on their map pointing at you.
+- ~~**"Come here" ping**~~: built as Find the crew's meet-ups (2026-11-07, see "Where we are").
 - **Quest sync:** see which quests friends still need, so you do them together.
 - **Group races:** first to level 30, most gold this week, fewest deaths, with a shared leaderboard.
 - **Mini-games:** dice duels, bets on who dies first, a fishing contest, trivia.

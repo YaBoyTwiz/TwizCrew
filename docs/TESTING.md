@@ -341,9 +341,10 @@ crew never sees them, nothing is saved, and they are gone after **Clear test stu
 defaults** or `/reload`. Pretend names always end in **(test)**. No restart needed (no new files).
 
 1. **Where they are.** `/tc`, scroll to the bottom: a section **Try it out**, a line **Test tools** "only on your
-   screen" with an (i), then nine buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
-   pop-up**, **Layer pop-up**, **Roast pop-up**, **Update notice (reload)**, **Update notice (restart)**, **Clear
-   test stuff**. `/tc test` in chat lists the same as commands (`/tc test fake`, `/tc test ding`...).
+   screen" with an (i), then ten buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
+   pop-up**, **Layer pop-up**, **Roast pop-up**, **Update notice (reload)**, **Update notice (restart)**,
+   **Walking buddy**, **Clear test stuff**. `/tc test` in chat lists the same as commands (`/tc test fake`,
+   `/tc test ding`...).
 2. **No chat spam, no invites.** While you use them, chat should never say "No player named … is currently playing",
    and nobody gets a group invite (that would mean TwizCrew tried to reach a pretend friend).
 3. **Each button once.** Press each one: a chat line or a pop-up, no red error. If chat says "that test did not
@@ -447,6 +448,57 @@ have the next version, and the real update notice shows it (nothing is saved and
 8. **Tell crew to update still works** (with a friend). When your friend is the older one and you press **Tell crew
    to update** within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
 9. **After updating for real:** no **!**, no gold line, no pop-up.
+
+## Find the crew (arrows and meet-ups)
+
+Built, every test outside the game passes. **Not tried in the game yet.** Riskiest first. **Restart the game fully
+first** (this update added files, so `/reload` is not enough). Turn on Lua errors (`/console scriptErrors 1`).
+
+### Alone
+
+1. **Does the game tell TwizCrew where you are?** Type `/tc report` outdoors. The line `Find the crew:` should say
+   `position ok (map …)` and `facing ok`. If it says `position unknown` or `facing unknown` outdoors, tell Claude:
+   arrows can't work without it (facing unknown alone = the arrows work as a north-up compass with an "N").
+2. **Walking buddy.** `/tc` → **Try it out** → **Walking buddy** (or `/tc test walk`). On the Crew panel,
+   **Walkbuddy (test)** gets a small arrow and "80 yd" next to its name.
+   - **Turn around on the spot:** the arrow should turn with you, like a compass needle that always points at
+     Walkbuddy. If it turns the wrong way (you turn left, it turns left too, away from where it should point), or
+     points backwards, tell Claude: the arrow picture or the turning direction needs flipping.
+   - Walkbuddy walks in a circle around you: the arrow keeps moving slowly.
+3. **The meet-up from the same button.** A blue-edged pop-up "Walkbuddy (test) wants to meet up", and the **big
+   arrow** (top of the screen, a bit right of the middle) labelled "Meet Walkbuddy (test)" with "120 yd". Walk
+   north: the distance goes down; at about 20 yards it says "You're here" and goes away.
+4. **QuestMaster's arrow keeps working.** With a quest tracked in QuestMaster, do step 3 again: QuestMaster's own
+   arrow and its marker in the world should stay on your quest the whole time. Our big arrow is a different colour,
+   with a name under it.
+5. **Map icon.** Open the world map while the meet-up is on: a small round TwizCrew icon sits 120 yards north of
+   you. Hover it: "Meet-up: Walkbuddy (test)", minutes left. Zoom in and out, switch to the continent: it stays on
+   the right spot (or hides on maps it isn't on). Same on **OpenMap's** stitched map.
+6. **Minimap icon.** The same icon on the minimap, north of you. Walk far away (or zoom the minimap in): it sits on
+   the minimap's edge. If you use a rotating minimap (`/console rotateMinimap 1`), it should stay pointing the right
+   way as you turn.
+7. **Ctrl + right-click on the world map.** Open the map and Ctrl + right-click a spot in your zone: a small menu
+   "Meet here: everyone / Cancel" (with "my party" too when you're in a group). The map should **not** zoom out.
+   Pick Cancel. Then check a plain right-click still zooms out as normal, and that OpenMap, Questie and QuestMaster
+   map clicks still work. On the whole-world map the click says "pick a spot inside a zone".
+8. **Big arrow.** Drag it somewhere else; `/reload`: it stays there. Lock the Crew panel: the big arrow can't be
+   dragged either. `/tc` → Extras → **Find the crew** → **Big arrow size** changes it.
+9. **Clean up.** Press **Walking buddy** again: Walkbuddy, its arrow, the meet-up and the icons all go.
+
+### With a friend (both on this version)
+
+1. **Group up** in the same zone and walk apart: each of you sees an arrow and the distance on the other's row.
+   Leave the group: the arrows go away within a second or two. Out of a group, `/tc report` on both sides says
+   `group members with positions: 0`.
+2. **Click the row arrow:** the big arrow in their class colour with their name; walk to them: "You're here".
+3. **Other zone:** one of you rides into the next zone: the row shows a still, dimmer arrow (no distance); clicking
+   it gives the big arrow with "Westfall · 1.2k yd" style text.
+4. **Party meet-up:** Ctrl + right-click your map → **Meet here: my party**: your friend gets the pop-up, the big
+   arrow and the icons. A third friend who is **not** in the party gets nothing.
+5. **Everyone meet-up:** → **Meet here: everyone**: friends outside the party get it too. A friend who logs in
+   during the next 15 minutes gets it a few seconds after logging in.
+6. **Clearing:** right-click the icon on the map (or `/tc meet clear`): it goes away for everyone.
+7. **Dungeon:** go into a dungeon together: no arrows inside, no errors.
 
 ## What to send back
 

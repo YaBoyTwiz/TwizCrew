@@ -27,6 +27,9 @@ You'll have to do that again for every update.
 
 - `/tc` opens the settings. Every setting has an (i) that says what it does.
 - `/tc awards` runs the awards show.
+- **Finding each other:** friends in your group get a small arrow and the distance on their row in the Crew panel.
+  Click it for a big arrow that leads you there. To meet up, open the world map and **Ctrl + right-click** a spot,
+  then pick your party or everyone. `/tc meet clear` takes the meet-up away. Your position only goes to your group.
 - `/tc report` prints a short report to paste to Twiz if something looks broken.
 
 ## Updating

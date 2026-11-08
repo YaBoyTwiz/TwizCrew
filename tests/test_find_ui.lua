@@ -293,6 +293,42 @@ return {
       near(A, v.worldY, 0.6)
     end,
 
+    ---------------------------------------------------------------------------------------------- try it out
+    walking_buddy_shows_arrows_and_a_meetup_through_the_real_code = function(ns, A, W)
+      boot(W)
+      W.env.SlashCmdList.TWIZCREW("test walk")
+      W:advance(1.1)
+      local i = rowIndex(ns, "Walkbuddy (test)")
+      A.ok(i, "Walkbuddy is on the panel")
+      local a = ns.Panel.rowArrowForTest(i)
+      A.ok(a and a.text == "80 yd", "a row arrow 80 yards away: " .. tostring(a and a.text))
+      local m = ns.Find.meet()
+      A.ok(m, "a pretend meet-up")
+      A.eq(m.audience, "party")
+      A.eq(ns.BigArrow.stateForTest().label, "Meet Walkbuddy (test)")
+      A.eq(ns.BigArrow.stateForTest().text, "120 yd")
+      local before = ns.Panel.rowArrowForTest(i).angle
+      W:advance(3)
+      A.ok(ns.Panel.rowArrowForTest(i).angle ~= before, "it walks")
+      W:advance(1)
+      A.eq(#W.sent > 0 and (function()
+        for _, s in ipairs(W.sent) do
+          local msg = ns.Codec.decode(s.text)
+          if msg and (msg.type == "MEET" or msg.type == "POS") then return "sent" end
+        end
+        return "nothing"
+      end)() or "nothing", "nothing", "nothing fake is ever sent")
+      W.env.SlashCmdList.TWIZCREW("test walk")
+      W:advance(0.1)
+      A.eq(rowIndex(ns, "Walkbuddy (test)"), nil, "gone")
+      A.eq(ns.Find.meet(), nil, "its meet-up too")
+      W.env.SlashCmdList.TWIZCREW("test walk")
+      W.env.SlashCmdList.TWIZCREW("test clear")
+      A.eq(ns.roster:get("Walkbuddy (test)"), nil, "clear removes it")
+      A.eq(ns.Find.meet(), nil)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     ---------------------------------------------------------------------------------------------- icons
     the_meetup_shows_on_the_world_map_it_belongs_to = function(ns, A, W)
       boot(W)

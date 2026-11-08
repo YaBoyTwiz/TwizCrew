@@ -38,6 +38,10 @@ local BASICS = {
   { id = "tags", key = "autoAway" },
   { id = "tags", key = "awayMinutes" },
   { id = "minimap", key = "show" },
+  { title = "Find the crew", note = "arrows to your group and meet-ups" },
+  { id = "find", key = "rowArrows" },
+  { id = "find", key = "meetups" },
+  { id = "find", key = "sharePosition" },
 }
 local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"

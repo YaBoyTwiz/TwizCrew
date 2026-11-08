@@ -189,4 +189,31 @@ when not in a group; opts.replace = key).
 
 ## Changes during build
 
-(filled in while building)
+- **Built by one agent, task by task with tests first**, not one fresh subagent per task: the build ran in a forked
+  agent that cannot start subagents of its own. The whole-branch review was done by the same agent at the end.
+- **No library.** With friend dots dropped from the design, only the meet-up icon is drawn on maps; our own maths
+  covers it (`FindLogic.minimapOffset`, the world map canvas, `OpenMapAPI.CanvasFromWorldPos`).
+- **Positions are checked on arrival too:** a POS or a party MEET from someone the game doesn't list in our group is
+  ignored (`Where.isGroupMember`), not just never sent to them.
+- **"Unknown" goes out once** when we enter an instance, lose our position, turn off "Share my position" or turn the
+  module off, so friends' arrows to us go away at once instead of after 60 s.
+- **Row arrow placement:** on the name's line, just left of the corner text, with a fixed 44 px for the distance, so
+  "95 yd" becoming "1.2k yd" never pushes into the name. Arrows turn on a 0.1 s ticker that only runs while a visible
+  row has an arrow; an arrow appearing, going or changing kind redraws the panel.
+- **Clicking a row arrow again closes the big arrow.** The big arrow says "position unknown" (no arrow picture)
+  while it has nothing to point at, closes when the friend leaves the group or the meet-up ends, and shows "You're
+  here" for 1.5 s on arrival.
+- **Map click:** `WorldMapFrame:AddCanvasClickHandler` at priority 2000 (OpenMap's is 1000), and it takes only
+  Ctrl + right-click, so the map doesn't zoom out on that click and every other click is left to the map and
+  other addons.
+- **Map icons:** left-click = the big arrow to the meet-up, right-click = clear it for everyone (the tooltip says so).
+  Placed every 0.2 s while a meet-up lives.
+- **Meet-up pop-up:** shown even in the login quiet time and without the test tools' gate (a meet-up is always
+  deliberate); it needs the Pop-ups module on, like every pop-up.
+- **Turning "Meet-ups" off** also drops the current meet-up on that copy.
+- **Settings test:** the Basics tab may now have up to 20 rows (was 18): it gained a "Find the crew" section with
+  three switches.
+- **Lint test:** no TwizCrew file may use `SetUserWaypoint`, `ClearUserWaypoint`, `C_SuperTrack` or
+  `SetSuperTracked`.
+- **Walking buddy:** `ns.TestTools.inGroup(name)` makes only Walkbuddy count as a group member; its POS and MEET go
+  through `Comm.inject`, so nothing fake is ever sent.

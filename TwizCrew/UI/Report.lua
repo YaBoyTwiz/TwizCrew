@@ -260,7 +260,12 @@ local ROASTS = {                  -- the Roast pop-up button goes through these,
   { k = "deaths", v = "5" },
 }
 
+local WALKER = "Walkbuddy (test)" -- Find the crew: a pretend group member who walks around you
+local WALK_TICK, WALK_RADIUS, WALK_STEP = 1, 80, 0.12 -- seconds, yards, radians per tick
+local WALK_MEET_ID = "Walkbuddy-test"
 local ticker            -- Testbuddy's XP ticker
+local walkTicker        -- Walkbuddy's steps
+local walkAngle = 0
 local copyOn = false    -- "My copy" follows our own updates
 local layerOf = {}      -- fake name -> "same" | "different" (the Layer pop-up button)
 local expected          -- { kind, name } while a button makes the pop-up it expects
@@ -294,6 +299,11 @@ end
 local function stopTicker()
   if ticker and ticker.Cancel then ticker:Cancel() end
   ticker = nil
+end
+
+local function stopWalk()
+  if walkTicker and walkTicker.Cancel then walkTicker:Cancel() end
+  walkTicker = nil
 end
 
 -- Takes a fake away the way a friend leaves (BYE: the layer tracker and pop-ups forget them), then out of the list.
@@ -464,9 +474,60 @@ end
 function ACTIONS.updateReload() pretendUpdate(false) end
 function ACTIONS.updateRestart() pretendUpdate(true) end
 
+-- Find the crew: Walkbuddy is a pretend group member who walks in a circle around you (its positions go through the
+-- real code), plus a pretend party meet-up 120 yards north of you. Press again to remove both.
+local function walkStep()
+  local me = ns.Where.me()
+  if not me or not ns.roster:get(WALKER) then return end
+  walkAngle = walkAngle + WALK_STEP
+  inject(WALKER, "POS", ns.FindLogic.posFields({ c = me.c, x = me.x + math.cos(walkAngle) * WALK_RADIUS,
+    y = me.y + math.sin(walkAngle) * WALK_RADIUS }))
+end
+
+local function removeWalker()
+  stopWalk()
+  if ns.Find and ns.Find.meet() and ns.Find.meet().id == WALK_MEET_ID then
+    inject(WALKER, "MEET", { id = WALK_MEET_ID, clr = "1", a = "party" })
+  end
+  return removeFake(WALKER)
+end
+
+function ACTIONS.walk()
+  if ns.roster:get(WALKER) then
+    removeWalker()
+    say("Walkbuddy is gone.")
+    return
+  end
+  if not ns.Modules.isEnabled("find") then
+    say("Find the crew is turned off in /tc (under Extras), so no arrows show.")
+    return
+  end
+  local me = ns.Where.me()
+  if not me then
+    say("the game doesn't tell TwizCrew where you are right now (in a dungeon?), so there is nothing to point at.")
+    return
+  end
+  local zone = ns.Util.safeText(me.zone or "")
+  inject(WALKER, "STATE", { cl = "HUNTER", lv = "11", zn = zone, sz = "", ins = "0", ver = ns.VERSION,
+    rs = ns.RESTART_SINCE, tg = "" })
+  walkAngle = 0
+  walkStep()
+  if C_Timer and C_Timer.NewTicker then
+    walkTicker = C_Timer.NewTicker(WALK_TICK, function() ns.Log.safe(TOOLS, walkStep) end)
+  end
+  inject(WALKER, "MEET", { id = WALK_MEET_ID, c = tostring(me.c), x = tostring(math.floor(me.x + 120 + 0.5)),
+    y = tostring(math.floor(me.y + 0.5)), p = zone, a = "party", l = tostring(ns.Config.MEET_LIFE) })
+  panelHint()
+  say("added Walkbuddy: a pretend member of your group walking around you, with an arrow on its row (click it for "
+    .. "the big arrow), and a pretend meet-up 120 yards north (pop-up, big arrow, icon on your maps). Press again "
+    .. "to remove them.")
+end
+
 -- Removes every fake thing. quiet: no chat line (Reset to defaults, logout).
 local function clear(quiet)
   stopTicker()
+  if ns.roster and ns.roster:get(WALKER) then ns.Log.safe(TOOLS, removeWalker) end
+  stopWalk()
   reviveTurn = reviveTurn + 1
   copyOn, expected = false, nil
   local any = false
@@ -523,6 +584,9 @@ end
 -- Layer: the layer the Layer pop-up button gave a fake (nil = work it out as usual).
 function TestTools.layerOf(name) return layerOf[name] end
 
+-- Find the crew: Walkbuddy counts as a member of your group (nobody else fake does).
+function TestTools.inGroup(name) return name == WALKER end
+
 -- /tc report line.
 function TestTools.reportLine()
   local names = ns.roster and ns.roster:testNames() or {}
@@ -537,7 +601,7 @@ end
 
 local COMMANDS = {
   fake = "fake", copy = "copy", ding = "ding", death = "death", layer = "layer", roast = "roast", clear = "clear",
-  ["update reload"] = "updateReload", ["update restart"] = "updateRestart",
+  ["update reload"] = "updateReload", ["update restart"] = "updateRestart", walk = "walk",
 }
 
 TestTools.HELP = {
@@ -551,6 +615,8 @@ TestTools.HELP = {
   "/tc test roast - a roast about Testbuddy",
   "/tc test update reload - pretend a friend has a newer version that a /reload loads",
   "/tc test update restart - pretend a friend has a newer version that needs a game restart",
+  "/tc test walk - Walkbuddy: a pretend group member walking around you (row arrow, big arrow) and a pretend "
+    .. "meet-up 120 yards north (again: removes them)",
   "/tc test clear - remove every pretend thing (Reset to defaults and /reload do too)",
 }
 
@@ -594,6 +660,10 @@ ns.Modules.register({
       .. "the gold ! on the minimap button, the gold line on the Crew panel and the how-to window with Reload now."),
     button("updateRestart", "Update notice (restart)", "The same, for a newer version that needs a game restart: "
       .. "the window says to close WoW and has an OK button instead."),
+    button("walk", "Walking buddy", "Adds Walkbuddy, a pretend member of your group walking in a circle around you: "
+      .. "an arrow on its row turns as you turn and shows how far it is; click the arrow for the big arrow. Also a "
+      .. "pretend meet-up 120 yards north of you: its pop-up, the big arrow and its icon on your world map and "
+      .. "minimap. Press again to remove them."),
     button("clear", "Clear test stuff", "Removes every pretend friend, the pretend update (gold !, gold line, "
       .. "window) and stops their timers. Reset everything to defaults and /reload do this too."),
   },

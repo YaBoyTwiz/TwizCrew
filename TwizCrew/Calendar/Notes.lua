@@ -39,6 +39,49 @@ Notes.ICONS = {
   { tex = B .. "Spell_Shadow_Charm", name = "Important" },
 }
 
+-- Dungeons and raids a note can be about (its picture fills the day on the month view). ej / lfg / ls: the names
+-- the game's own artwork files use (Encounter Journal button, group finder icon, loading screen); the window tries
+-- them in that order and falls back to the note's icon when none exists in this game version.
+Notes.DUNGEONS = {
+  { key = "rfc", name = "Ragefire Chasm", ej = "RagefireChasm", lfg = "RagefireChasm" },
+  { key = "wc", name = "Wailing Caverns", ej = "WailingCaverns", lfg = "WailingCaverns" },
+  { key = "dm", name = "The Deadmines", ej = "TheDeadmines", lfg = "Deadmines" },
+  { key = "sfk", name = "Shadowfang Keep", ej = "ShadowfangKeep", lfg = "ShadowfangKeep" },
+  { key = "bfd", name = "Blackfathom Deeps", ej = "BlackfathomDeeps", lfg = "BlackfathomDeeps" },
+  { key = "stocks", name = "The Stockade", ej = "TheStockade", lfg = "StormwindStockades" },
+  { key = "gnomer", name = "Gnomeregan", ej = "Gnomeregan", lfg = "Gnomeregan" },
+  { key = "rfk", name = "Razorfen Kraul", ej = "RazorfenKraul", lfg = "RazorfenKraul" },
+  { key = "sm", name = "Scarlet Monastery", ej = "ScarletMonastery", lfg = "ScarletMonastery" },
+  { key = "rfd", name = "Razorfen Downs", ej = "RazorfenDowns", lfg = "RazorfenDowns" },
+  { key = "ulda", name = "Uldaman", ej = "Uldaman", lfg = "Uldaman" },
+  { key = "zf", name = "Zul'Farrak", ej = "ZulFarrak", lfg = "ZulFarak" },
+  { key = "mara", name = "Maraudon", ej = "Maraudon", lfg = "Maraudon" },
+  { key = "st", name = "Sunken Temple", ej = "TheTempleOfAtalHakkar", lfg = "SunkenTemple" },
+  { key = "brd", name = "Blackrock Depths", ej = "BlackrockDepths", lfg = "BlackrockDepths" },
+  { key = "lbrs", name = "Blackrock Spire", ej = "BlackrockSpire", lfg = "BlackrockSpire" },
+  { key = "dmaul", name = "Dire Maul", ej = "DireMaul", lfg = "DireMaul" },
+  { key = "strat", name = "Stratholme", ej = "Stratholme", lfg = "Stratholme" },
+  { key = "scholo", name = "Scholomance", ej = "Scholomance", lfg = "Scholomance" },
+  { key = "mc", name = "Molten Core", ej = "MoltenCore", lfg = "MoltenCore", raid = true },
+  { key = "ony", name = "Onyxia's Lair", ej = "OnyxiasLair", lfg = "OnyxiasLair", raid = true },
+  { key = "zg", name = "Zul'Gurub", ej = "ZulGurub", lfg = "ZulGurub", raid = true },
+  { key = "bwl", name = "Blackwing Lair", ej = "BlackwingLair", lfg = "BlackwingLair", raid = true },
+  { key = "aq20", name = "Ruins of Ahn'Qiraj", ej = "RuinsofAhnQiraj", lfg = "AhnQirajRuins", raid = true },
+  { key = "aq40", name = "Temple of Ahn'Qiraj", ej = "TempleofAhnQiraj", lfg = "AhnQirajTemple", raid = true },
+  { key = "naxx", name = "Naxxramas", ej = "Naxxramas", lfg = "Naxxramas", raid = true },
+}
+local DUNGEON = {}
+for _, d in ipairs(Notes.DUNGEONS) do DUNGEON[d.key] = d end
+function Notes.dungeon(key) return DUNGEON[key] end
+
+-- The artwork files to try for a dungeon, best first.
+function Notes.dungeonImages(key)
+  local d = DUNGEON[key]
+  if not d then return {} end
+  return { "Interface\\EncounterJournal\\UI-EJ-DungeonButton-" .. d.ej, "Interface\\LFGFrame\\LFGIcon-" .. d.lfg,
+    "Interface\\Glues\\LoadingScreens\\LoadScreen" .. d.lfg }
+end
+
 local sentAllAt = {}
 
 local function store()
@@ -121,7 +164,8 @@ end
 ---------------------------------------------------------------------------------------------------- sending
 local function fields(key, n)
   return { k = key, d = n.d, t = n.x and "" or n.t, i = tostring(n.i or 1), b = n.b, c = n.c,
-    u = tostring(n.u or 0), x = n.x and "1" or nil, a = type(n.at) == "number" and tostring(n.at) or nil }
+    u = tostring(n.u or 0), x = n.x and "1" or nil, a = type(n.at) == "number" and tostring(n.at) or nil,
+    g = n.g }
 end
 
 local function send(key, to)
@@ -143,9 +187,11 @@ function Notes.sendAll(to)
 end
 
 ---------------------------------------------------------------------------------------------------- changes
--- Adds a note on a date for me (at: a time in UTC seconds, for a timed note). Returns its key, or nil.
-function Notes.add(dateKey, text, icon, at)
-  text = clean(text)
+-- Adds a note on a date for me (at: a time in UTC seconds, for a timed note; dungeon: a Notes.DUNGEONS key, its
+-- name is the text when none was typed). Returns its key, or nil.
+function Notes.add(dateKey, text, icon, at, dungeon)
+  if not DUNGEON[dungeon] then dungeon = nil end
+  text = clean(text) or (dungeon and DUNGEON[dungeon].name) or nil
   if not text or not dayOfKey(dateKey) then return nil end
   local s = store()
   if not s then return nil end
@@ -155,7 +201,7 @@ function Notes.add(dateKey, text, icon, at)
   while s[key] do now = now + 1; key = me .. "-" .. now end
   local _, class = UnitClass("player")
   s[key] = { d = dateKey, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(icon) or 1)), b = ns.playerName(),
-    c = type(class) == "string" and class or nil, u = now, at = tonumber(at) }
+    c = type(class) == "string" and class or nil, u = now, at = tonumber(at), g = dungeon }
   send(key)
   ns.Bus.fire("CALENDAR_CHANGED")
   return key
@@ -192,7 +238,7 @@ function Notes.receive(sender, f)
   if at and math.abs(at - ns.Diary.now()) > 10 * 365 * 86400 then at = nil end -- nonsense times are dropped
   s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(f.i) or 1)),
     b = type(f.b) == "string" and ns.Util.truncateUTF8(ns.Util.safeText(f.b), 24) or "?", c = class, u = u,
-    x = deleted or nil, at = at }
+    x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil }
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 

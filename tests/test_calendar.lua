@@ -294,25 +294,39 @@ return {
       A.ok(b, "a calendar button in the panel's header")
       b._scripts.OnClick(b, "LeftButton")
       A.ok(ns.Calendar.isShown(), "it opens the calendar")
-      -- a note from the day view, with a picked icon
-      ns.Calendar.openDay(day)
-      ns.Calendar.pickIcon(5)
-      ns.Calendar.typeNoteForTest("Healer needed tonight")
-      A.eq(#ns.Calendar.lastNotes, 1)
+      -- "Create a note": a plain one for today
+      ns.Calendar.openMaker({ day = day })
+      ns.Calendar.setMakerForTest("icon", 5)
+      A.ok(ns.Calendar.saveMaker("Healer needed tonight"))
+      A.eq(#ns.Calendar.lastNotes, 1, "it lands on its day (the day view opens)")
       A.eq(ns.Calendar.lastNotes[1].i, 5)
       A.eq(ns.Calendar.lastNotes[1].t, "Healer needed tonight")
-      -- right-click the timeline at 4:30pm (the menu), then a timed note
+      -- right-click the timeline at 4:30pm: the window opens with that time; a dungeon, no words needed
       local items = ns.Calendar.timeMenuItems(990)
-      A.eq(items[1].label, "Add a note at 4:30pm")
+      A.eq(items[1].label, "Create a note at 4:30pm")
       items[1].onClick()
-      ns.Calendar.typeNoteForTest("Deadmines")
+      A.eq(ns.Calendar.makerForTest().minutes, 990)
+      ns.Calendar.setMakerForTest("kind", "dungeon")
+      A.eq(ns.Calendar.saveMaker(""), nil, "a dungeon needs picking first")
+      local places = ns.Calendar.placeItems()
+      A.ok(#places >= 15, "the dungeons")
+      for _, it in ipairs(places) do if it.label == "The Deadmines" then it.onClick() end end
+      A.ok(ns.Calendar.saveMaker(""))
       local timed
-      for _, n in ipairs(ns.Calendar.lastNotes) do if n.t == "Deadmines" then timed = n end end
-      A.ok(timed and timed.at, "a timed note")
+      for _, n in ipairs(ns.Calendar.lastNotes) do if n.g == "dm" then timed = n end end
+      A.ok(timed and timed.at, "a timed dungeon note")
+      A.eq(timed.t, "The Deadmines", "its name when no words were typed")
       A.eq(ns.Notes.timeText(timed, ns.Diary.offset()), "4:30pm")
       A.eq(ns.Calendar.lastMarkers, 1, "its icon on the timeline")
-      A.eq(#ns.Calendar.timeListItems(), 19, "the Time button: no time, 6am to 11pm")
-      A.eq(ns.Calendar.dayMenuItems(day)[2].label, "Add a note at a time")
+      -- the hour and minute menus, the time zone, the month art
+      ns.Calendar.openMaker({ day = day })
+      ns.Calendar.hourItems()[21].onClick()
+      ns.Calendar.minuteItems()[3].onClick()
+      A.eq(ns.Calendar.makerForTest().minutes, 20 * 60 + 30, "8:30pm")
+      A.eq(#ns.Calendar.hourItems(), 24)
+      A.contains(ns.Calendar.zoneName(), "UTC")
+      A.eq(ns.Calendar.dayMenuItems(day)[1].label, "Create a note on this day")
+      ns.Calendar.show("month")
       -- icons on the menus
       for _, it in ipairs(ns.Panel.menuItems()) do A.eq(type(it.icon), "string", "menu icon: " .. it.label) end
       for _, it in ipairs(ns.Panel.rowMenu({ name = "Frostie", tags = {} })) do

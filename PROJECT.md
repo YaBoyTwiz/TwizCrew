@@ -170,6 +170,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   everyone on add/delete; the CALD digest carries nh, a checksum, and a different one pulls all notes with CALQ n=1).
   Key = author id + created time; only the author deletes (a deletion marker spreads); kept 90 days. Icons were also
   added to the menus, pop-ups and settings rows ("use icons where it makes sense").
+  Timed notes keep "at" (UTC seconds); each viewer sees it at their computer's local time and date (never the
+  server's: friends abroad on US realms get their real time). "+ Create note" window: day, hour/minute or no time,
+  note / dungeon / raid (Notes.DUNGEONS; g on the wire), icon, words. A dungeon note fills its month cell with
+  artwork: tries the Encounter Journal button, group finder icon, loading screen files in turn (SetTexture false
+  = missing), else the note's icon. Not seen in game yet which of those files exist on Forever.
 
 ## Ideas so far (not decided)
 

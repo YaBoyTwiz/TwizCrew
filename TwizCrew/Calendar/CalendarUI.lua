@@ -33,11 +33,9 @@ local frame, tabs
 local view = "month" -- "month" | "day" | "usual"
 local shownYear, shownMonth, shownDay
 local monthPane, dayPane, usualPane
-local cells, dayRows, noteRows, pickButtons, heatCells, habitLines = {}, {}, {}, {}, {}, {}
-local pickedIcon = 1
-local noteBox
-local pendingMinutes -- the time (minutes after midnight, your local time) for the next note, or nil
-local timeButton, markers = nil, {}
+local cells, dayRows, noteRows, heatCells, habitLines = {}, {}, {}, {}, {}
+local markers = {}
+local zoneText
 
 local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
@@ -142,6 +140,21 @@ local function buildMonth()
     c:SetPoint("TOPLEFT", monthPane, "TOPLEFT", col * CELL_W, -(44 + row * CELL_H))
     local weekend = col == 0 or col == 6
     T.paint(c, weekend and C.backdrop or C.row, 0.9, C.rowBorder, 1)
+    c.art = c:CreateTexture(nil, "BORDER")
+    c.art:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
+    c.art:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
+    c.art:Hide()
+    c.shade = c:CreateTexture(nil, "BORDER", nil, 2) -- darker toward the bottom, so the words read on any picture
+    c.shade:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
+    c.shade:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
+    T.gradient(c.shade, "VERTICAL", "000000", "000000", 0.85, 0.1)
+    c.shade:Hide()
+    c.artText = T.readable(T.text(c, T.FONT.small, C.white), 1)
+    c.artText:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 4, 4)
+    c.artText:SetWidth(CELL_W - 12)
+    c.artText:SetJustifyH("LEFT")
+    if c.artText.SetShadowOffset then c.artText:SetShadowOffset(2, -2) end
+    if c.artText.SetShadowColor then c.artText:SetShadowColor(0, 0, 0, 1) end
     c.hl = c:CreateTexture(nil, "HIGHLIGHT")
     c.hl:SetAllPoints(c)
     T.color(c.hl, C.title, 0.10)
@@ -199,20 +212,6 @@ local function buildMonth()
 end
 
 -------------------------------------------------------------------------------------------------------- day
-local function addNote()
-  if not noteBox then return end
-  local text = noteBox:GetText()
-  local at = pendingMinutes and (shownDay * L.DAY + pendingMinutes * 60 - ns.Diary.offset()) or nil
-  if ns.Notes.add(dateKeyOf(shownDay), text, pickedIcon, at) then
-    noteBox:SetText("")
-    noteBox:ClearFocus()
-    pendingMinutes = nil
-    Calendar.refresh()
-  else
-    print("TwizCrew: type a note first.")
-  end
-end
-
 -- Where the mouse is on the timeline, in minutes after midnight (snapped to 15), or nil.
 local function cursorMinutes()
   if type(GetCursorPosition) ~= "function" then return nil end
@@ -229,7 +228,8 @@ end
 function Calendar.timeMenuItems(minutes)
   if not minutes then return {} end
   return {
-    { label = "Add a note at " .. L.clock(minutes), icon = ICON_TIME, onClick = function() Calendar.setTime(minutes, true) end },
+    { label = "Create a note at " .. L.clock(minutes), icon = ICON_TIME,
+      onClick = function() Calendar.openMaker({ day = shownDay, minutes = minutes }) end },
   }
 end
 
@@ -237,15 +237,6 @@ local function timelineClick(anchor, button)
   if button ~= "RightButton" then return end
   local m = cursorMinutes()
   if m then Widgets.menu(anchor, Calendar.timeMenuItems(m)) end
-end
-
--- The Time button's menu: no time, or a time from 6am to 11pm (the timeline gives any 15 minutes).
-function Calendar.timeListItems()
-  local items = { { label = "No time", icon = ICON_NOTES, onClick = function() Calendar.setTime(nil) end } }
-  for h = 6, 23 do
-    items[#items + 1] = { label = L.clock(h * 60), icon = ICON_TIME, onClick = function() Calendar.setTime(h * 60, true) end }
-  end
-  return items
 end
 
 local function buildDay()
@@ -361,52 +352,16 @@ local function buildDay()
     noteRows[i] = r
   end
 
-  -- add a note: pick an icon, type, Add
-  local addTop = notesTop + 22 + NOTE_ROWS * 21 + 6
-  local pickLabel = T.text(dayPane, T.FONT.small, C.muted)
-  pickLabel:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(addTop + 5))
-  pickLabel:SetText("Icon:")
-  for i, e in ipairs(ns.Notes.ICONS) do
-    local b = CreateFrame("Button", nil, dayPane)
-    b:SetSize(22, 22)
-    b:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 36 + (i - 1) * 25, -addTop)
-    b.border = b:CreateTexture(nil, "BACKGROUND")
-    b.border:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
-    b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 2, -2)
-    T.color(b.border, C.title, 1)
-    b.icon = iconTexture(b, e.tex, 22)
-    b.icon:SetAllPoints(b)
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(b)
-    T.color(hl, C.white, 0.2)
-    script(b, "OnClick", function() Calendar.pickIcon(i) end)
-    script(b, "OnEnter", function(self)
-      if not GameTooltip then return end
-      GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      GameTooltip:SetText(e.name)
-      GameTooltip:Show()
-    end)
-    script(b, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-    pickButtons[i] = b
-  end
-  timeButton = Widgets.button(dayPane, "Time: none", function()
-    Widgets.menu(timeButton, Calendar.timeListItems())
+  -- one button: "Create a note" for this day (the window has the time, the icon and the rest)
+  local addTop = notesTop + 22 + NOTE_ROWS * 21 + 8
+  local create = Widgets.button(dayPane, "Create a note for this day", function()
+    Calendar.openMaker({ day = shownDay })
   end, nil, FEATURE)
-  timeButton:SetSize(120, 24)
-  timeButton:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(addTop + 30))
-  noteBox = T.frame("EditBox", nil, dayPane)
-  noteBox:SetSize(WIDTH - 2 * PAD - 110 - 126, 24)
-  noteBox:SetPoint("LEFT", timeButton, "RIGHT", 6, 0)
-  T.paint(noteBox, C.row, 1, C.rowBorder, 1)
-  noteBox:SetAutoFocus(false)
-  if noteBox.SetFontObject then noteBox:SetFontObject(T.FONT.small) end
-  if noteBox.SetTextInsets then noteBox:SetTextInsets(6, 6, 0, 0) end
-  if noteBox.SetMaxLetters then noteBox:SetMaxLetters(120) end
-  script(noteBox, "OnEnterPressed", function() addNote() end)
-  script(noteBox, "OnEscapePressed", function(self) self:ClearFocus() end)
-  local add = Widgets.button(dayPane, "Add note", function() addNote() end, nil, FEATURE)
-  add:SetSize(96, 24)
-  add:SetPoint("LEFT", noteBox, "RIGHT", 8, 0)
+  create:SetSize(200, 26)
+  create:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -addTop)
+  local tip = T.text(dayPane, T.FONT.small, C.muted)
+  tip:SetPoint("LEFT", create, "RIGHT", 10, 0)
+  tip:SetText("or right-click the timeline at a time")
 end
 
 -------------------------------------------------------------------------------------------------------- usual
@@ -475,6 +430,269 @@ local function buildUsual()
   end
 end
 
+----------------------------------------------------------------------------------------------- "Create a note"
+-- A small window: the day, a time (or none), what it is (a note, a dungeon, a raid), an icon and the words.
+-- Save puts it on its day. A timed note is stored in one shared time (UTC), so every friend sees it at their own
+-- local time and date (what their computer's clock says, not the server's).
+local maker
+local mk = { day = 0, minutes = nil, kind = "note", dungeon = nil, icon = 1 }
+local KINDS = { { id = "note", label = "Note" }, { id = "dungeon", label = "Dungeon" }, { id = "raid", label = "Raid" } }
+
+-- Puts a dungeon's artwork on a texture (the first file that exists), else the note's icon. Returns true for art.
+local function setArt(tex, key, fallback)
+  for _, path in ipairs(ns.Notes.dungeonImages(key)) do
+    local ok, res = pcall(tex.SetTexture, tex, path)
+    if ok and res ~= false then
+      tex:SetTexCoord(0, 1, 0, 1)
+      return true
+    end
+  end
+  tex:SetTexture(fallback)
+  tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  return false
+end
+
+-- "UTC-5", "UTC+5:30"
+local function zoneName()
+  local off = ns.Diary.offset()
+  local sign = off < 0 and "-" or "+"
+  off = math.abs(off)
+  local h, m = math.floor(off / 3600), math.floor((off % 3600) / 60)
+  return "UTC" .. sign .. h .. (m > 0 and string.format(":%02d", m) or "")
+end
+Calendar.zoneName = zoneName
+
+local function drawMaker()
+  if not maker then return end
+  local _, m, d = L.civil(mk.day)
+  maker.dayText:SetText(L.WEEKDAYS[L.weekday(mk.day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
+  if mk.minutes then
+    maker.hour.text:SetText(L.clock(math.floor(mk.minutes / 60) * 60))
+    maker.minute.text:SetText(string.format(":%02d", mk.minutes % 60))
+    maker.minute:Show()
+    maker.noTime.text:SetText("No time")
+  else
+    maker.hour.text:SetText("Pick a time")
+    maker.minute:Hide()
+    maker.noTime.text:SetText("No time (set)")
+  end
+  maker.zone:SetText("your time (" .. zoneName() .. "); friends see it in theirs")
+  for _, k in ipairs(KINDS) do
+    local b = maker.kinds[k.id]
+    if mk.kind == k.id then T.color(b.fill, C.title, 0.35) else T.color(b.fill, C.button, 1) end
+  end
+  local wantsPlace = mk.kind ~= "note"
+  if wantsPlace then
+    local dg = mk.dungeon and ns.Notes.dungeon(mk.dungeon)
+    maker.place.text:SetText(dg and dg.name or (mk.kind == "raid" and "Pick a raid" or "Pick a dungeon"))
+    maker.place:Show()
+    if dg then setArt(maker.preview, dg.key, ns.Notes.iconTexture(mk.icon)); maker.preview:Show() else maker.preview:Hide() end
+  else
+    maker.place:Hide()
+    maker.preview:Hide()
+  end
+  for i, b in ipairs(maker.picks) do
+    if i == mk.icon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.6) end
+  end
+end
+
+function Calendar.hourItems()
+  local items = {}
+  for h = 0, 23 do
+    items[#items + 1] = { label = L.clock(h * 60), icon = ICON_TIME, onClick = function()
+      mk.minutes = h * 60 + ((mk.minutes or 0) % 60)
+      drawMaker()
+    end }
+  end
+  return items
+end
+
+function Calendar.minuteItems()
+  local items = {}
+  for _, q in ipairs({ 0, 15, 30, 45 }) do
+    items[#items + 1] = { label = string.format(":%02d", q), icon = ICON_TIME, onClick = function()
+      mk.minutes = math.floor((mk.minutes or 0) / 60) * 60 + q
+      drawMaker()
+    end }
+  end
+  return items
+end
+
+function Calendar.placeItems()
+  local items = {}
+  for _, dg in ipairs(ns.Notes.DUNGEONS) do
+    if (mk.kind == "raid") == (dg.raid == true) then
+      items[#items + 1] = { label = dg.name, icon = mk.kind == "raid" and (I .. "INV_Misc_Head_Dragon_01") or (I .. "INV_Sword_04"),
+        onClick = function() mk.dungeon = dg.key; drawMaker() end }
+    end
+  end
+  return items
+end
+
+local function smallButton(parent, label, w, onClick)
+  local b = Widgets.button(parent, label, onClick, nil, FEATURE)
+  b:SetSize(w, 22)
+  b.fill = b:CreateTexture(nil, "BACKGROUND", nil, 1)
+  b.fill:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
+  b.fill:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
+  return b
+end
+
+local function buildMaker()
+  local W, PADM = 470, 14
+  maker = T.frame("Frame", "TwizCrewNoteMaker", UIParent)
+  maker:SetSize(W, 330)
+  maker:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
+  maker:SetFrameStrata("FULLSCREEN_DIALOG")
+  maker:SetMovable(true)
+  maker:EnableMouse(true)
+  if maker.SetClampedToScreen then maker:SetClampedToScreen(true) end
+  if maker.RegisterForDrag then maker:RegisterForDrag("LeftButton") end
+  script(maker, "OnDragStart", function(self) self:StartMoving() end)
+  script(maker, "OnDragStop", function(self) self:StopMovingOrSizing() end)
+  T.paint(maker, C.backdrop, 0.98, C.title, 2)
+  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewNoteMaker") end
+  local logo = iconTexture(maker, ICON_NOTES, 22)
+  logo:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -10)
+  local title = T.readable(T.text(maker, T.FONT.normal, C.title), 2)
+  title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
+  title:SetText("Create a note")
+
+  local function label(text, y)
+    local fs = T.text(maker, T.FONT.small, C.muted)
+    fs:SetPoint("TOPLEFT", maker, "TOPLEFT", PADM, -y - 5)
+    fs:SetText(text)
+    return fs
+  end
+  local X = PADM + 56
+  -- day
+  label("Day", 44)
+  local prev = arrowButton(maker, PREV_TEX, function() mk.day = mk.day - 1; drawMaker() end)
+  prev:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -42)
+  maker.dayText = T.readable(T.text(maker, T.FONT.normal, C.text))
+  maker.dayText:SetPoint("LEFT", prev, "RIGHT", 6, 0)
+  maker.dayText:SetWidth(210)
+  local nxt = arrowButton(maker, NEXT_TEX, function() mk.day = mk.day + 1; drawMaker() end)
+  nxt:SetPoint("LEFT", maker.dayText, "RIGHT", 4, 0)
+  local today = smallButton(maker, "Today", 60, function() mk.day = ns.Diary.localToday(); drawMaker() end)
+  today:SetPoint("LEFT", nxt, "RIGHT", 6, 0)
+  -- time
+  label("Time", 76)
+  maker.hour = smallButton(maker, "Pick a time", 100, function() Widgets.menu(maker.hour, Calendar.hourItems()) end)
+  maker.hour:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -74)
+  maker.minute = smallButton(maker, ":00", 50, function() Widgets.menu(maker.minute, Calendar.minuteItems()) end)
+  maker.minute:SetPoint("LEFT", maker.hour, "RIGHT", 4, 0)
+  maker.noTime = smallButton(maker, "No time", 100, function() mk.minutes = nil; drawMaker() end)
+  maker.noTime:SetPoint("LEFT", maker.minute, "RIGHT", 4, 0)
+  maker.zone = T.text(maker, T.FONT.small, C.muted)
+  maker.zone:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -100)
+  -- what it is
+  label("What", 120)
+  maker.kinds = {}
+  local kx = X
+  for _, k in ipairs(KINDS) do
+    local b = smallButton(maker, k.label, 80, function()
+      mk.kind = k.id
+      if k.id == "note" then mk.dungeon = nil
+      elseif mk.dungeon and ((ns.Notes.dungeon(mk.dungeon).raid == true) ~= (k.id == "raid")) then mk.dungeon = nil end
+      drawMaker()
+    end)
+    b:SetPoint("TOPLEFT", maker, "TOPLEFT", kx, -118)
+    maker.kinds[k.id] = b
+    kx = kx + 84
+  end
+  maker.place = smallButton(maker, "Pick a dungeon", 170, function() Widgets.menu(maker.place, Calendar.placeItems()) end)
+  maker.place:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -146)
+  maker.preview = maker:CreateTexture(nil, "ARTWORK")
+  maker.preview:SetSize(110, 62)
+  maker.preview:SetPoint("TOPRIGHT", maker, "TOPRIGHT", -PADM, -114)
+  -- icon
+  label("Icon", 180)
+  maker.picks = {}
+  for i, e in ipairs(ns.Notes.ICONS) do
+    local b = CreateFrame("Button", nil, maker)
+    b:SetSize(20, 20)
+    b:SetPoint("TOPLEFT", maker, "TOPLEFT", X + (i - 1) * 23, -178)
+    b.border = b:CreateTexture(nil, "BACKGROUND")
+    b.border:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
+    b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 2, -2)
+    T.color(b.border, C.title, 1)
+    local ic = iconTexture(b, e.tex, 20)
+    ic:SetAllPoints(b)
+    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(b)
+    T.color(hl, C.white, 0.2)
+    script(b, "OnClick", function() mk.icon = i; drawMaker() end)
+    script(b, "OnEnter", function(self)
+      if not GameTooltip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(e.name)
+      GameTooltip:Show()
+    end)
+    script(b, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    maker.picks[i] = b
+  end
+  -- words
+  label("Words", 214)
+  maker.box = T.frame("EditBox", nil, maker)
+  maker.box:SetSize(W - X - PADM, 24)
+  maker.box:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -212)
+  T.paint(maker.box, C.row, 1, C.rowBorder, 1)
+  maker.box:SetAutoFocus(false)
+  if maker.box.SetFontObject then maker.box:SetFontObject(T.FONT.small) end
+  if maker.box.SetTextInsets then maker.box:SetTextInsets(6, 6, 0, 0) end
+  if maker.box.SetMaxLetters then maker.box:SetMaxLetters(120) end
+  script(maker.box, "OnEnterPressed", function() Calendar.saveMaker() end)
+  script(maker.box, "OnEscapePressed", function(self) self:ClearFocus() end)
+  local hint = T.text(maker, T.FONT.small, C.muted)
+  hint:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -242)
+  hint:SetWidth(W - X - PADM)
+  hint:SetJustifyH("LEFT")
+  hint:SetText("For a dungeon or raid the words can stay empty: its name is used. The whole crew sees the note.")
+  local save = Widgets.button(maker, "Save note", function() Calendar.saveMaker() end, nil, FEATURE)
+  save:SetSize(110, 26)
+  save:SetPoint("BOTTOMRIGHT", maker, "BOTTOMRIGHT", -PADM, 12)
+  local cancel = Widgets.button(maker, "Cancel", function() maker:Hide() end, nil, FEATURE)
+  cancel:SetSize(80, 26)
+  cancel:SetPoint("RIGHT", save, "LEFT", -8, 0)
+  maker:Hide()
+end
+
+-- Opens "Create a note". opts: { day = local day number, minutes = time (local), kind =, dungeon = }.
+function Calendar.openMaker(opts)
+  opts = opts or {}
+  if not maker then buildMaker() end
+  mk.day = tonumber(opts.day) or (view == "day" and shownDay) or ns.Diary.localToday()
+  mk.minutes = tonumber(opts.minutes)
+  mk.kind = opts.kind or "note"
+  mk.dungeon = opts.dungeon
+  mk.icon = 1
+  maker.box:SetText("")
+  drawMaker()
+  maker:Show()
+  if maker.box.SetFocus then maker.box:SetFocus() end
+end
+
+-- Saves the note from "Create a note" and shows its day.
+function Calendar.saveMaker(text)
+  if not maker then return end
+  text = text or maker.box:GetText()
+  if mk.kind ~= "note" and not mk.dungeon then print("TwizCrew: pick the " .. mk.kind .. " first."); return end
+  local at = mk.minutes and (mk.day * L.DAY + mk.minutes * 60 - ns.Diary.offset()) or nil
+  local icon = mk.icon
+  if mk.kind ~= "note" and icon == 1 then icon = mk.kind == "raid" and 3 or 2 end
+  if not ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon) then
+    print("TwizCrew: type a few words for the note first.")
+    return
+  end
+  maker:Hide()
+  if Calendar.shownFlag then Calendar.openDay(mk.day) else Calendar.open(); Calendar.openDay(mk.day) end
+  return true
+end
+
+function Calendar.makerForTest() return mk end
+function Calendar.setMakerForTest(k, v) mk[k] = v; drawMaker() end
+
 local function build()
   frame = T.frame("Frame", "TwizCrewCalendar", UIParent)
   frame:SetSize(WIDTH, HEIGHT)
@@ -497,9 +715,14 @@ local function build()
   title:SetText("Crew calendar")
   local sub = T.text(frame, T.FONT.small, C.muted)
   sub:SetPoint("LEFT", title, "RIGHT", 10, 0)
-  sub:SetText("who played when, notes for the crew, in your local time")
+  sub:SetText("who played when, and notes for the crew")
   local close = Widgets.button(frame, "Close", function() Calendar.close() end, nil, FEATURE)
   close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -10)
+  local create = Widgets.button(frame, "+ Create note", function() Calendar.openMaker({}) end, nil, FEATURE)
+  create:SetSize(120, 24)
+  create:SetPoint("RIGHT", close, "LEFT", -8, 0)
+  zoneText = T.text(frame, T.FONT.small, C.muted)
+  zoneText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -52)
   tabs = { month = tabButton("Month", ICON_CAL, "month", PAD), usual = tabButton("Usual times", ICON_USUAL, "usual", PAD + 146) }
   buildMonth()
   buildDay()
@@ -535,6 +758,19 @@ local function drawMonth()
       c.note:Hide()
       c.noteCount:SetText("")
     end
+    -- a dungeon or raid that day: its artwork fills the day, its time and name on top
+    local event
+    for _, n in ipairs(notes) do if n.g then event = n; break end end
+    c.tcArt = nil
+    if event then
+      c.tcArt = setArt(c.art, event.g, ns.Notes.iconTexture(event.i)) and "art" or "icon"
+      c.art:Show(); c.shade:Show()
+      local when = ns.Notes.timeText(event, off)
+      c.artText:SetText((when and ("|cffffd100" .. when .. "|r ") or "") .. ns.Util.safeText(event.t))
+      c.artText:Show()
+    else
+      c.art:Hide(); c.shade:Hide(); c.artText:Hide()
+    end
     local minutes = 0
     for k = 1, FACES do
       local p, f = list[k], c.faces[k]
@@ -542,7 +778,7 @@ local function drawMonth()
     end
     for _, p in ipairs(list) do minutes = minutes + p.minutes end
     c.more:SetText(#list > FACES and ("+" .. (#list - FACES) .. " more") or "")
-    c.total:SetText(#list > 0 and L.duration(minutes) or "")
+    c.total:SetText((#list > 0 and not event) and L.duration(minutes) or "")
     c:SetAlpha(cell.inMonth and (cell.day <= today and 1 or 0.6) or 0.3)
     if cell.day == today then c.today:Show(); c.todayLine:Show() else c.today:Hide(); c.todayLine:Hide() end
   end
@@ -611,10 +847,6 @@ local function drawDay()
       r:Hide()
     end
   end
-  for i, b in ipairs(pickButtons) do
-    if i == pickedIcon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.65) end
-  end
-  timeButton.text:SetText(pendingMinutes and ("Time: " .. L.clock(pendingMinutes)) or "Time: none")
   -- timed notes: an icon under the timeline at their time, and a faint line up through it
   local k = 0
   for _, n in ipairs(notes) do
@@ -697,6 +929,7 @@ function Calendar.refresh()
   if not frame or not Calendar.shownFlag then return end
   monthPane:Hide(); dayPane:Hide(); usualPane:Hide()
   drawTabs()
+  zoneText:SetText("Times are in your time zone (" .. zoneName() .. ")")
   if view == "day" then dayPane:Show(); drawDay()
   elseif view == "usual" then usualPane:Show(); drawUsual()
   else monthPane:Show(); drawMonth() end
@@ -724,30 +957,13 @@ function Calendar.openDay(day)
   Calendar.refresh()
 end
 
--- The time for the next note (minutes after midnight, your local time), or nil for no time. focus: put the
--- cursor in the note box.
-function Calendar.setTime(minutes, focus)
-  pendingMinutes = tonumber(minutes)
-  Calendar.refresh()
-  if focus and noteBox and noteBox.SetFocus then noteBox:SetFocus() end
-end
-
--- The menu when you right-click a day on the month: add a note (with or without a time).
+-- The menu when you right-click a day on the month.
 function Calendar.dayMenuItems(day)
   return {
-    { label = "Add a note", icon = ICON_NOTES, onClick = function()
-      Calendar.openDay(day); Calendar.setTime(nil, true)
-    end },
-    { label = "Add a note at a time", icon = ICON_TIME, onClick = function()
-      Calendar.openDay(day)
-      if timeButton then Widgets.menu(timeButton, Calendar.timeListItems()) end
-    end },
+    { label = "Create a note on this day", icon = ICON_NOTES, onClick = function() Calendar.openMaker({ day = day }) end },
+    { label = "Create a dungeon run on this day", icon = I .. "INV_Sword_04",
+      onClick = function() Calendar.openMaker({ day = day, kind = "dungeon", minutes = 20 * 60 }) end },
   }
-end
-
-function Calendar.pickIcon(i)
-  pickedIcon = math.max(1, math.min(#ns.Notes.ICONS, tonumber(i) or 1))
-  Calendar.refresh()
 end
 
 function Calendar.open()
@@ -772,12 +988,5 @@ end
 
 function Calendar.isShown() return Calendar.shownFlag and true or false end
 function Calendar.viewForTest() return view, shownYear, shownMonth, shownDay end
-
--- Test hook: type a note in the box and press Enter.
-function Calendar.typeNoteForTest(text)
-  if not noteBox then return end
-  rawset(noteBox, "GetText", function() return text end)
-  addNote()
-end
 
 -- (Diary's onEnable listens for CALENDAR_CHANGED and calls Calendar.refresh.)

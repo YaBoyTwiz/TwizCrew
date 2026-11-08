@@ -186,6 +186,14 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
           row.questName = m.questName
           row.questId = tonumber(m.questId)
           if m.questShareable == true or m.questShareable == false then row.questShareable = m.questShareable end
+          -- can they share it with me? yes when we know I can get it (Questie), or when it can be shared and I
+          -- neither have it nor did it (without Questie we can't check level or earlier quests)
+          if ns.Quest and ns.Quest.canGet then
+            local status = ns.Quest.canGet(row.questId, m.questName, row.questShareable)
+            row.questCanGet = status
+            row.questShare = status == "ok" or (status == "unknown" and row.questShareable == true
+              and row.questId ~= nil) or nil
+          end
         end
         row.questDone = m.questComplete and true or false
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)

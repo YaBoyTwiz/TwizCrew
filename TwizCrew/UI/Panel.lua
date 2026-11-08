@@ -320,6 +320,30 @@ local function createRow()
   r.quest = T.text(r, T.FONT.small, C.status) -- the quest they're on, with a ! (or ? when ready to turn in)
   r.questIcon = r:CreateTexture(nil, "ARTWORK")
   r.questIcon:SetSize(12, 12)
+  -- "they can share this quest with you": a small icon after the !, a button (click = ask them to share it)
+  r.share = T.frame("Button", nil, r)
+  r.share:SetSize(13, 13)
+  r.share:SetFrameLevel((r:GetFrameLevel() or 1) + 4)
+  r.share.icon = r.share:CreateTexture(nil, "ARTWORK")
+  r.share.icon:SetAllPoints(r.share)
+  r.share.icon:SetTexture("Interface\\Icons\\Spell_ChargePositive")
+  r.share.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local shareHl = r.share:CreateTexture(nil, "HIGHLIGHT")
+  shareHl:SetAllPoints(r.share)
+  T.color(shareHl, C.white, 0.3)
+  script(r.share, "OnClick", function(self) Panel.askShare(self:GetParent()) end)
+  script(r.share, "OnEnter", function(self)
+    local m = self:GetParent().tcModel
+    if not GameTooltip or not m then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(tostring(m.name) .. " can share this quest with you", 0.3, 1, 0.4)
+    GameTooltip:AddLine(tostring(m.questName or ""), 1, 1, 1)
+    GameTooltip:AddLine("Click to ask them to share it (you need to be in a group).", 0.8, 0.8, 0.8, true)
+    GameTooltip:Show()
+  end)
+  script(r.share, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  r.share:Hide()
+  if r.share.SetIgnoreParentAlpha then r.share:SetIgnoreParentAlpha(true) end -- easy to spot while faded
   for _, fs in ipairs({ r.name, r.zone, r.status, r.title, r.quest }) do
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
@@ -491,7 +515,8 @@ local function layoutRow(r, m, style, s, width)
     r.title:Hide()
   end
   r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide(); r.xpText:Hide()
-  r.quest:Hide(); r.questIcon:Hide()
+  r.quest:Hide(); r.questIcon:Hide(); r.share:Hide()
+  r.tcShare = nil
   r.xpGloss:Hide(); r.xpSpark:Hide()
   r.tcBarText = nil
   if style == "full" then
@@ -508,9 +533,17 @@ local function layoutRow(r, m, style, s, width)
         or "Interface\\GossipFrame\\AvailableQuestIcon")
       r.questIcon:Show()
       placeLine(r, r.quest, m.quest, y, width)
+      local textX = 22
+      if m.questShare then
+        r.share:ClearAllPoints()
+        r.share:SetPoint("TOPLEFT", r, "TOPLEFT", 21, -y + 1)
+        r.share:Show()
+        r.tcShare = true
+        textX = 37
+      end
       r.quest:ClearAllPoints()
-      r.quest:SetPoint("TOPLEFT", r, "TOPLEFT", 22, -y)
-      r.quest:SetWidth(width - 30)
+      r.quest:SetPoint("TOPLEFT", r, "TOPLEFT", textX, -y)
+      r.quest:SetWidth(width - textX - 8)
       y = y + LINE
     end
     -- XP line: the bar (none at max level) with "Lv 12 · 63%" on its right, or the text alone.
@@ -1139,6 +1172,18 @@ function Panel.myItems()
     ns.RankUp and ns.Modules.isEnabled("rankup") and
       { label = "Me: update my spell ranks", onClick = function() ns.RankUp.run() end } or nil,
   }
+end
+
+-- The share icon on a quest line: ask them to share it.
+function Panel.askShare(r)
+  local m = r and r.tcModel
+  if not m or not m.questName or not ns.Quest or not ns.Quest.request then return end
+  ns.Quest.request(m.name, m.questName)
+end
+
+function Panel.rowShareShownForTest(i)
+  local r = rowFrames[i]
+  return r ~= nil and i <= visibleRows and rawget(r, "tcShare") == true
 end
 
 -- The Congrats button (or menu entry): congratulate them once; the button goes away.

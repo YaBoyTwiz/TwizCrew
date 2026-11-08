@@ -14,6 +14,10 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.17", date = "2026-11-08", lines = {
+    "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",
+    "Next to them it says Right here, and points again when they move away.",
+  } },
   { ver = "0.1.16", date = "2026-11-08", lines = {
     "Crew calendar (the scroll button next to the wrench, or /tc cal): who played each day, and for how long.",
     "Click a day for its timeline: one bar per friend, so you can see who was on together.",

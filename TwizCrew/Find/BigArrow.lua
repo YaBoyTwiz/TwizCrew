@@ -140,7 +140,8 @@ local function update()
   if not target then return BigArrow.close() end
   if not ns.Modules.isEnabled(FEATURE) then return BigArrow.close() end
   local now = ns.now()
-  if arrivedAt then
+  -- a meet-up's arrow is done once you're there; an arrow to a friend stays until you close it yourself
+  if arrivedAt and target.kind == "meet" then
     if now - arrivedAt >= ARRIVED_FOR then BigArrow.close() end
     return
   end
@@ -153,7 +154,13 @@ local function update()
     arrive = ns.Config.FIND_ARRIVE_MEET
     if m.place ~= "" and me and me.zone ~= m.place then zone = m.place end
   else
-    if not ns.Where.isGroupMember(target.name) then return BigArrow.close() end -- left the group
+    -- Not in my group (or the game hides who is, as it can in a fight): say so and keep waiting. The arrow to a
+    -- friend only goes away when you close it (its X, or the row arrow again).
+    if not ns.Where.isGroupMember(target.name) then
+      local r, g, b = color(C.white, classOf(target.name))
+      show(target.name, ns.Where.inGroup() and "position unknown" or "not in your group", nil, false, r, g, b)
+      return
+    end
     pos, label, classFile, hex = ns.Find.positionOf(target.name), target.name, classOf(target.name), C.white
     arrive = ns.Config.FIND_NEAR
     local m = ns.roster and ns.roster:get(target.name)
@@ -166,8 +173,12 @@ local function update()
     return
   end
   if s.arrived then
-    arrivedAt = now
-    show(label, "You're here", nil, false, r, g, b)
+    if target.kind == "meet" then
+      arrivedAt = now
+      show(label, "You're here", nil, false, r, g, b)
+    else
+      show(label, "Right here", nil, false, r, g, b) -- points again as soon as they move away
+    end
     return
   end
   show(label, (zone and (zone .. " \194\183 ") or "") .. s.text, s.angle, s.compass, r, g, b)

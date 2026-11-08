@@ -118,7 +118,7 @@ return {
     end,
 
     ---------------------------------------------------------------------------------------------- big arrow
-    clicking_a_row_arrow_opens_the_big_arrow_and_arrival_closes_it = function(ns, A, W)
+    clicking_a_row_arrow_opens_the_big_arrow_and_it_stays = function(ns, A, W)
       frostieNorth(ns, W)
       ns.Panel.arrowClicked(ns.Panel.rowFrameForTest(rowIndex(ns, "Frostie")))
       local s = ns.BigArrow.stateForTest()
@@ -130,9 +130,12 @@ return {
       A.no(s.compass)
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8995", y = "-1000" }) -- 5 yards away
       W:advance(0.2)
-      A.eq(ns.BigArrow.stateForTest().text, "You're here")
-      W:advance(2)
-      A.no(ns.BigArrow.stateForTest().shown, "gone after arriving")
+      A.eq(ns.BigArrow.stateForTest().text, "Right here")
+      W:advance(10)
+      A.ok(ns.BigArrow.stateForTest().shown, "stays while you're next to them (a fight together)")
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8900", y = "-1000" }) -- they run off: 100 yards
+      W:advance(0.2)
+      A.eq(ns.BigArrow.stateForTest().text, "100 yd", "points again")
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -161,11 +164,16 @@ return {
       A.ok(ns.BigArrow.stateForTest().compass, "north-up with an N")
     end,
 
-    big_arrow_closes_when_they_leave_the_group = function(ns, A, W)
+    big_arrow_waits_when_they_leave_the_group = function(ns, A, W)
       frostieNorth(ns, W)
       ns.BigArrow.point({ kind = "member", name = "Frostie" })
       ungroup(W)
-      W:advance(0.2)
+      W:advance(5)
+      local s = ns.BigArrow.stateForTest()
+      A.ok(s.shown, "only you close it")
+      A.eq(s.text, "not in your group")
+      A.eq(s.angle, nil)
+      ns.BigArrow.close()
       A.no(ns.BigArrow.stateForTest().shown)
     end,
 

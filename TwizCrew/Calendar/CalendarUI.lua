@@ -17,6 +17,7 @@ local ICON_CAL = I .. "INV_Scroll_03"
 local ICON_USUAL = I .. "INV_Misc_PocketWatch_01"
 local ICON_BEST = I .. "Spell_Holy_BorrowedTime"
 local ICON_NOTES = I .. "INV_Misc_Note_01"
+local ICON_TIME = I .. "INV_Misc_PocketWatch_01"
 local PREV_TEX = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up"
 local NEXT_TEX = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up"
 
@@ -35,6 +36,8 @@ local monthPane, dayPane, usualPane
 local cells, dayRows, noteRows, pickButtons, heatCells, habitLines = {}, {}, {}, {}, {}, {}
 local pickedIcon = 1
 local noteBox
+local pendingMinutes -- the time (minutes after midnight, your local time) for the next note, or nil
+local timeButton, markers = nil, {}
 
 local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
@@ -170,19 +173,24 @@ local function buildMonth()
     c.more = T.text(c, T.FONT.small, C.muted)
     c.more:SetPoint("TOPLEFT", c, "TOPLEFT", 5, -40)
     script(c, "OnClick", function(self) if self.tcDay then Calendar.openDay(self.tcDay) end end)
+    script(c, "OnMouseUp", function(self, button)
+      if button == "RightButton" and self.tcDay then Widgets.menu(self, Calendar.dayMenuItems(self.tcDay)) end
+    end)
     script(c, "OnEnter", function(self)
       if not GameTooltip or not self.tcDay then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       local _, m, d = L.civil(self.tcDay)
       GameTooltip:SetText(L.WEEKDAYS[L.weekday(self.tcDay) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
       for _, n in ipairs(self.tcNotes or {}) do
-        GameTooltip:AddLine("|T" .. ns.Notes.iconTexture(n.i) .. ":14|t " .. ns.Util.safeText(n.t), 1, 0.9, 0.5, true)
+        local when = ns.Notes.timeText(n, ns.Diary.offset())
+        GameTooltip:AddLine("|T" .. ns.Notes.iconTexture(n.i) .. ":14|t " .. (when and (when .. "  ") or "")
+          .. ns.Util.safeText(n.t), 1, 0.9, 0.5, true)
       end
       if #(self.tcPeople or {}) == 0 then GameTooltip:AddLine("Nobody played (that we know of).", 0.8, 0.8, 0.8) end
       for _, p in ipairs(self.tcPeople or {}) do
         GameTooltip:AddDoubleLine(colored(p.name, p.class), L.duration(p.minutes), 1, 1, 1, 1, 1, 1)
       end
-      GameTooltip:AddLine("Click for the timeline and notes", 0.7, 0.7, 0.7)
+      GameTooltip:AddLine("Click for the timeline and notes. Right-click to add a note.", 0.7, 0.7, 0.7)
       GameTooltip:Show()
     end)
     script(c, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -194,12 +202,50 @@ end
 local function addNote()
   if not noteBox then return end
   local text = noteBox:GetText()
-  if ns.Notes.add(dateKeyOf(shownDay), text, pickedIcon) then
+  local at = pendingMinutes and (shownDay * L.DAY + pendingMinutes * 60 - ns.Diary.offset()) or nil
+  if ns.Notes.add(dateKeyOf(shownDay), text, pickedIcon, at) then
     noteBox:SetText("")
     noteBox:ClearFocus()
+    pendingMinutes = nil
+    Calendar.refresh()
   else
     print("TwizCrew: type a note first.")
   end
+end
+
+-- Where the mouse is on the timeline, in minutes after midnight (snapped to 15), or nil.
+local function cursorMinutes()
+  if type(GetCursorPosition) ~= "function" then return nil end
+  local x = GetCursorPosition()
+  local scale = tonumber(dayPane:GetEffectiveScale())
+  local left = tonumber(dayPane:GetLeft())
+  if not tonumber(x) or not scale or scale <= 0 or not left then return nil end
+  local m = (x / scale - left - AXIS_X) / BAR_W * 1440
+  m = math.floor(m / 15 + 0.5) * 15
+  return math.max(0, math.min(1425, m))
+end
+
+-- The menu for a time on the timeline: add a note at that time.
+function Calendar.timeMenuItems(minutes)
+  if not minutes then return {} end
+  return {
+    { label = "Add a note at " .. L.clock(minutes), icon = ICON_TIME, onClick = function() Calendar.setTime(minutes, true) end },
+  }
+end
+
+local function timelineClick(anchor, button)
+  if button ~= "RightButton" then return end
+  local m = cursorMinutes()
+  if m then Widgets.menu(anchor, Calendar.timeMenuItems(m)) end
+end
+
+-- The Time button's menu: no time, or a time from 6am to 11pm (the timeline gives any 15 minutes).
+function Calendar.timeListItems()
+  local items = { { label = "No time", icon = ICON_NOTES, onClick = function() Calendar.setTime(nil) end } }
+  for h = 6, 23 do
+    items[#items + 1] = { label = L.clock(h * 60), icon = ICON_TIME, onClick = function() Calendar.setTime(h * 60, true) end }
+  end
+  return items
 end
 
 local function buildDay()
@@ -225,6 +271,19 @@ local function buildDay()
     line:SetPoint("TOP", dayPane, "TOPLEFT", x, -46)
     T.color(line, C.rowBorder, 0.8)
   end
+  -- right-click anywhere on the timeline (also where nobody played) to add a note at that time
+  local catcher = CreateFrame("Frame", nil, dayPane)
+  catcher:SetPoint("TOPLEFT", dayPane, "TOPLEFT", AXIS_X, -46)
+  catcher:SetSize(BAR_W, DAY_ROWS * ROW_H)
+  catcher:EnableMouse(true)
+  script(catcher, "OnMouseUp", function(self, button) timelineClick(self, button) end)
+  script(catcher, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+    GameTooltip:SetText("Right-click to add a note at that time", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  script(catcher, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   dayPane.nowLine = dayPane:CreateTexture(nil, "OVERLAY")
   dayPane.nowLine:SetSize(2, DAY_ROWS * ROW_H + 4)
   T.color(dayPane.nowLine, C.title, 0.9)
@@ -266,11 +325,12 @@ local function buildDay()
       GameTooltip:Show()
     end)
     script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    script(r, "OnMouseUp", function(self, button) timelineClick(self, button) end)
     dayRows[i] = r
   end
 
   -- notes for this day
-  local notesTop = 50 + DAY_ROWS * ROW_H + 12
+  local notesTop = 50 + DAY_ROWS * ROW_H + 26 -- room for the timed notes' icons under the timeline
   local sep = dayPane:CreateTexture(nil, "ARTWORK")
   sep:SetHeight(1)
   sep:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(notesTop - 4))
@@ -329,9 +389,14 @@ local function buildDay()
     script(b, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     pickButtons[i] = b
   end
+  timeButton = Widgets.button(dayPane, "Time: none", function()
+    Widgets.menu(timeButton, Calendar.timeListItems())
+  end, nil, FEATURE)
+  timeButton:SetSize(120, 24)
+  timeButton:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(addTop + 30))
   noteBox = T.frame("EditBox", nil, dayPane)
-  noteBox:SetSize(WIDTH - 2 * PAD - 110, 24)
-  noteBox:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(addTop + 30))
+  noteBox:SetSize(WIDTH - 2 * PAD - 110 - 126, 24)
+  noteBox:SetPoint("LEFT", timeButton, "RIGHT", 6, 0)
   T.paint(noteBox, C.row, 1, C.rowBorder, 1)
   noteBox:SetAutoFocus(false)
   if noteBox.SetFontObject then noteBox:SetFontObject(T.FONT.small) end
@@ -537,7 +602,9 @@ local function drawDay()
     r.tcKey = n and n.key or nil
     if n then
       r.icon:SetTexture(ns.Notes.iconTexture(n.i))
-      r.text:SetText(ns.Util.safeText(n.t) .. "   |cff999999- " .. colored(n.b, n.c) .. "|r")
+      local when = ns.Notes.timeText(n, off)
+      r.text:SetText((when and ("|cffffd100" .. when .. "|r  ") or "") .. ns.Util.safeText(n.t)
+        .. "   |cff999999- " .. colored(n.b, n.c) .. "|r")
       if ns.Notes.isMine(n) then r.del:Show() else r.del:Hide() end
       r:Show()
     else
@@ -547,6 +614,47 @@ local function drawDay()
   for i, b in ipairs(pickButtons) do
     if i == pickedIcon then b.border:Show(); b:SetAlpha(1) else b.border:Hide(); b:SetAlpha(0.65) end
   end
+  timeButton.text:SetText(pendingMinutes and ("Time: " .. L.clock(pendingMinutes)) or "Time: none")
+  -- timed notes: an icon under the timeline at their time, and a faint line up through it
+  local k = 0
+  for _, n in ipairs(notes) do
+    if type(n.at) == "number" then
+      k = k + 1
+      local mk = markers[k]
+      if not mk then
+        mk = CreateFrame("Frame", nil, dayPane)
+        mk:SetSize(16, 16)
+        mk.icon = iconTexture(mk, nil, 16)
+        mk.icon:SetAllPoints(mk)
+        mk.line = dayPane:CreateTexture(nil, "ARTWORK")
+        mk.line:SetSize(2, DAY_ROWS * ROW_H)
+        T.color(mk.line, C.title, 0.45)
+        mk:EnableMouse(true)
+        script(mk, "OnEnter", function(self)
+          local note = self.tcNote
+          if not GameTooltip or not note then return end
+          GameTooltip:SetOwner(self, "ANCHOR_TOP")
+          GameTooltip:SetText(tostring(ns.Notes.timeText(note, ns.Diary.offset())) .. " (your time)")
+          GameTooltip:AddLine(ns.Util.safeText(note.t), 1, 1, 1, true)
+          GameTooltip:AddLine("by " .. colored(note.b, note.c), 0.8, 0.8, 0.8)
+          GameTooltip:Show()
+        end)
+        script(mk, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        markers[k] = mk
+      end
+      local minutes = ((n.at + off) % L.DAY) / 60
+      local x = AXIS_X + BAR_W * minutes / 1440
+      mk.tcNote = n
+      mk.icon:SetTexture(ns.Notes.iconTexture(n.i))
+      mk:ClearAllPoints()
+      mk:SetPoint("TOP", dayPane, "TOPLEFT", x, -(48 + DAY_ROWS * ROW_H))
+      mk.line:ClearAllPoints()
+      mk.line:SetPoint("TOP", dayPane, "TOPLEFT", x, -46)
+      mk:Show(); mk.line:Show()
+    end
+  end
+  for i = k + 1, #markers do markers[i]:Hide(); markers[i].line:Hide() end
+  Calendar.lastMarkers = k
 end
 
 local function drawUsual()
@@ -614,6 +722,27 @@ function Calendar.openDay(day)
   shownYear, shownMonth = y, m
   view = "day"
   Calendar.refresh()
+end
+
+-- The time for the next note (minutes after midnight, your local time), or nil for no time. focus: put the
+-- cursor in the note box.
+function Calendar.setTime(minutes, focus)
+  pendingMinutes = tonumber(minutes)
+  Calendar.refresh()
+  if focus and noteBox and noteBox.SetFocus then noteBox:SetFocus() end
+end
+
+-- The menu when you right-click a day on the month: add a note (with or without a time).
+function Calendar.dayMenuItems(day)
+  return {
+    { label = "Add a note", icon = ICON_NOTES, onClick = function()
+      Calendar.openDay(day); Calendar.setTime(nil, true)
+    end },
+    { label = "Add a note at a time", icon = ICON_TIME, onClick = function()
+      Calendar.openDay(day)
+      if timeButton then Widgets.menu(timeButton, Calendar.timeListItems()) end
+    end },
+  }
 end
 
 function Calendar.pickIcon(i)

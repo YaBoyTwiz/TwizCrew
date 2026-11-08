@@ -21,6 +21,8 @@ Changelog.HISTORY = {
     "A green check after a friend's quest when you're on it too.",
     "Congrats got sassier: 45 new lines that cheer for your friend while poking fun at them.",
     "Calendar notes: click a day, type a note and pick an icon. The whole crew sees it on that day.",
+    "Timed notes: right-click the day's timeline (or use the Time button) for a note at, say, 4:30pm.",
+    "Everyone sees a timed note in their own time zone, on the right date for them.",
     "The calendar looks better: class icons for who played, note icons on the days, icons on the tabs.",
     "Icons all over: on the right-click menus, on every pop-up, and next to options in the settings.",
   } },

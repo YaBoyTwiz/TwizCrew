@@ -3,7 +3,9 @@
 -- a note (a deleted note stays as a small "deleted" marker for a while, so the deletion reaches everyone).
 --
 -- A note: key = "<author id>-<created>", d = "2026-11-08" (the author's local date), t = text, i = icon (1-16),
--- b = author's character name, c = class, u = last change (server time), x = true when deleted.
+-- b = author's character name, c = class, u = last change (server time), x = true when deleted,
+-- at = a time (UTC seconds) for a timed note ("4:30pm"): everyone sees it at their own local time, on their own
+-- local date (which can be a different day than the author's).
 -- Messages: CALN = one note (to everyone when you add or delete one; to one friend when asked). The CALD digest
 -- carries nh = a checksum of all notes; a different checksum means "ask for theirs" (CALQ n=1).
 local _, ns = ...
@@ -73,18 +75,35 @@ function Notes.isMine(note)
     and note.key:sub(1, #me + 1) == me .. "-"
 end
 
--- The notes on a date ("2026-11-08"), oldest first, deleted ones left out.
-function Notes.forDate(dateKey)
+-- The notes on a date ("2026-11-08") for someone whose local time is UTC + off seconds: notes without a time
+-- first (oldest first), then timed ones by time. Deleted ones are left out.
+function Notes.forDate(dateKey, off)
+  local day = dayOfKey(dateKey)
+  off = tonumber(off) or (ns.Diary and ns.Diary.offset and ns.Diary.offset()) or 0
   local out = {}
   for key, n in pairs(store() or {}) do
-    if n.d == dateKey and not n.x then
+    local on
+    if type(n.at) == "number" then on = day ~= nil and math.floor((n.at + off) / 86400) == day
+    else on = n.d == dateKey end
+    if on and not n.x then
       local copy = { key = key }
       for k, v in pairs(n) do copy[k] = v end
       out[#out + 1] = copy
     end
   end
-  table.sort(out, function(a, b) return tostring(a.key) < tostring(b.key) end)
+  table.sort(out, function(a, b)
+    local ta, tb = type(a.at) == "number", type(b.at) == "number"
+    if ta ~= tb then return not ta end
+    if ta and a.at ~= b.at then return a.at < b.at end
+    return tostring(a.key) < tostring(b.key)
+  end)
   return out
+end
+
+-- "4:30pm" for a timed note in local time (UTC + off), or nil.
+function Notes.timeText(n, off)
+  if type(n) ~= "table" or type(n.at) ~= "number" then return nil end
+  return ns.CalendarLogic.clock(((n.at + (tonumber(off) or 0)) % 86400) / 60)
 end
 
 -- A checksum of every note (and deletion), so two copies can tell whether they have the same notes.
@@ -102,7 +121,7 @@ end
 ---------------------------------------------------------------------------------------------------- sending
 local function fields(key, n)
   return { k = key, d = n.d, t = n.x and "" or n.t, i = tostring(n.i or 1), b = n.b, c = n.c,
-    u = tostring(n.u or 0), x = n.x and "1" or nil }
+    u = tostring(n.u or 0), x = n.x and "1" or nil, a = type(n.at) == "number" and tostring(n.at) or nil }
 end
 
 local function send(key, to)
@@ -124,8 +143,8 @@ function Notes.sendAll(to)
 end
 
 ---------------------------------------------------------------------------------------------------- changes
--- Adds a note on a date for me. Returns its key, or nil (no text, bad date).
-function Notes.add(dateKey, text, icon)
+-- Adds a note on a date for me (at: a time in UTC seconds, for a timed note). Returns its key, or nil.
+function Notes.add(dateKey, text, icon, at)
   text = clean(text)
   if not text or not dayOfKey(dateKey) then return nil end
   local s = store()
@@ -136,7 +155,7 @@ function Notes.add(dateKey, text, icon)
   while s[key] do now = now + 1; key = me .. "-" .. now end
   local _, class = UnitClass("player")
   s[key] = { d = dateKey, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(icon) or 1)), b = ns.playerName(),
-    c = type(class) == "string" and class or nil, u = now }
+    c = type(class) == "string" and class or nil, u = now, at = tonumber(at) }
   send(key)
   ns.Bus.fire("CALENDAR_CHANGED")
   return key
@@ -169,9 +188,11 @@ function Notes.receive(sender, f)
   local text = deleted and "" or clean(f.t)
   if not deleted and not text then return end
   local class = type(f.c) == "string" and f.c:match("^%u+$") and f.c or nil
+  local at = tonumber(f.a)
+  if at and math.abs(at - ns.Diary.now()) > 10 * 365 * 86400 then at = nil end -- nonsense times are dropped
   s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(f.i) or 1)),
     b = type(f.b) == "string" and ns.Util.truncateUTF8(ns.Util.safeText(f.b), 24) or "?", c = class, u = u,
-    x = deleted or nil }
+    x = deleted or nil, at = at }
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 

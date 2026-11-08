@@ -228,6 +228,31 @@ return {
       A.eq(#N.forDate("2026-11-14"), 0)
       A.eq(ns.Log.errors(10), {})
     end,
+    timed_notes_follow_your_time_zone = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      -- 4:30pm on Nov 14 for someone at UTC-5 = 21:30 UTC
+      local day = L.daysFrom(2026, 11, 14)
+      local at = day * 86400 + (16 * 60 + 30) * 60 + 5 * 3600
+      local key = N.add("2026-11-14", "Deadmines", 2, at)
+      A.ok(key)
+      local east = N.forDate("2026-11-14", -5 * 3600)
+      A.eq(#east, 1); A.eq(N.timeText(east[1], -5 * 3600), "4:30pm", "the author's time")
+      A.eq(N.timeText(east[1], -8 * 3600), "1:30pm", "three hours behind")
+      A.eq(#N.forDate("2026-11-14", 9 * 3600), 0, "far east of it, that's already the next day")
+      local japan = N.forDate("2026-11-15", 9 * 3600)
+      A.eq(#japan, 1); A.eq(N.timeText(japan[1], 9 * 3600), "6:30am")
+      -- the time goes out with the note and comes back from a friend
+      W:advance(2)
+      local f = sent(ns, W, "CALN")[1].fields
+      A.eq(tonumber(f.a), at)
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-2000", d = "2026-11-14", t = "Raid", i = "3", u = "2000",
+        a = tostring(at + 3600) })
+      local list = N.forDate("2026-11-14", -5 * 3600)
+      A.eq(#list, 2); A.eq(list[2].t, "Raid", "sorted by time")
+      A.eq(N.timeText(list[2], -5 * 3600), "5:30pm")
+    end,
     notes_checksums_trigger_a_swap = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
@@ -276,6 +301,18 @@ return {
       A.eq(#ns.Calendar.lastNotes, 1)
       A.eq(ns.Calendar.lastNotes[1].i, 5)
       A.eq(ns.Calendar.lastNotes[1].t, "Healer needed tonight")
+      -- right-click the timeline at 4:30pm (the menu), then a timed note
+      local items = ns.Calendar.timeMenuItems(990)
+      A.eq(items[1].label, "Add a note at 4:30pm")
+      items[1].onClick()
+      ns.Calendar.typeNoteForTest("Deadmines")
+      local timed
+      for _, n in ipairs(ns.Calendar.lastNotes) do if n.t == "Deadmines" then timed = n end end
+      A.ok(timed and timed.at, "a timed note")
+      A.eq(ns.Notes.timeText(timed, ns.Diary.offset()), "4:30pm")
+      A.eq(ns.Calendar.lastMarkers, 1, "its icon on the timeline")
+      A.eq(#ns.Calendar.timeListItems(), 19, "the Time button: no time, 6am to 11pm")
+      A.eq(ns.Calendar.dayMenuItems(day)[2].label, "Add a note at a time")
       -- icons on the menus
       for _, it in ipairs(ns.Panel.menuItems()) do A.eq(type(it.icon), "string", "menu icon: " .. it.label) end
       for _, it in ipairs(ns.Panel.rowMenu({ name = "Frostie", tags = {} })) do

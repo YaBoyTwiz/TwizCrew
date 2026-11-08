@@ -16,7 +16,7 @@ local ICON_SIZE = { full = 22, compact = 20, tiny = 16 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
 local UPDATE_HEIGHT = 15 -- the gold "Update available: vX" line under the header
-local NEWS_HEIGHT = 15   -- the "New in vX" line under it, once after an update (click = What's new)
+local NEWS_HEIGHT = 16   -- the What's new line under it, always there (bright "New in vX!" until you've read it)
 local OFF_HEIGHT = 18    -- the "Offline (N)" bar between online and offline friends
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
@@ -625,13 +625,22 @@ local function drawHeader(s)
   else
     updateBar:Hide()
   end
+  -- What's new: always there so it's easy to find; bright with "New in vX!" until the window has been opened
   newsLine = nil
-  if ns.Changelog and ns.Changelog.unseen() then
-    newsLine = "New in v" .. ns.Util.safeText(tostring(ns.VERSION)) .. "! Click to see what changed"
+  if ns.Changelog then
+    local fresh = ns.Changelog.unseen()
+    local ver = "v" .. ns.Util.safeText(tostring(ns.VERSION))
+    if fresh then
+      newsLine = s.rowStyle == "tiny" and ("New in " .. ver .. "!") or ("New in " .. ver .. "! Click to see what changed")
+    else
+      newsLine = s.rowStyle == "tiny" and "What's new" or ("What's new in " .. ver)
+    end
     newsBar:ClearAllPoints()
     newsBar:SetPoint("TOPLEFT", root, "TOPLEFT", 2, -(top - 2))
     newsBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", -2, -(top - 2))
     newsBar.text:SetText(newsLine)
+    newsBar.text:SetTextColor(T.rgb(fresh and "8fd0ff" or "c8c8c8"))
+    newsBar.glow:SetAlpha(fresh and 1 or 0.45)
     newsBar:Show()
     top = top + NEWS_HEIGHT
   else
@@ -769,6 +778,7 @@ local function redraw()
 
   note = nil
   if #entries == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
+  elseif #entries == 1 and entries[1].bar then note = "Nobody else is online right now."
   elseif #entries > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #entries .. ")" end
   if note then
     noteText:ClearAllPoints()
@@ -1002,7 +1012,17 @@ function Panel.rowMenu(m)
     end
   end
   items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
+  -- my own things, on every row (my own row is off by default); later features for me go here too
+  for _, it in ipairs(Panel.myItems()) do items[#items + 1] = it end
   return items
+end
+
+-- What I can do for myself from any row's menu (and my own row's).
+function Panel.myItems()
+  return {
+    { label = "Me: set my status", onClick = function() Panel.openStatusBox() end },
+    { label = (ns.Away and ns.Away.isAway()) and "Me: I'm back" or "Me: go AFK", onClick = function() Panel.toggleAway() end },
+  }
 end
 
 function Panel.mock(r)
@@ -1169,17 +1189,30 @@ local function build()
   newsBar = CreateFrame("Button", nil, root)
   if newsBar.SetIgnoreParentAlpha then newsBar:SetIgnoreParentAlpha(true) end -- important: never faded
   newsBar:SetHeight(NEWS_HEIGHT)
-  local newsGlow = newsBar:CreateTexture(nil, "BACKGROUND")
-  newsGlow:SetAllPoints(newsBar)
-  T.color(newsGlow, "3fa9f5", 0.15)
+  newsBar.glow = newsBar:CreateTexture(nil, "BACKGROUND")
+  newsBar.glow:SetAllPoints(newsBar)
+  T.color(newsBar.glow, "3fa9f5", 0.18)
   local newsHl = newsBar:CreateTexture(nil, "HIGHLIGHT")
   newsHl:SetAllPoints(newsBar)
-  T.color(newsHl, "3fa9f5", 0.15)
-  newsBar.text = T.text(newsBar, T.FONT.small, "8fd0ff")
-  newsBar.text:SetPoint("LEFT", newsBar, "LEFT", PAD - 2, 0)
+  T.color(newsHl, "3fa9f5", 0.25)
+  newsBar.icon = newsBar:CreateTexture(nil, "ARTWORK")
+  newsBar.icon:SetSize(13, 13)
+  newsBar.icon:SetPoint("LEFT", newsBar, "LEFT", PAD - 4, 0)
+  newsBar.icon:SetTexture("Interface\Icons\INV_Misc_Book_09")
+  newsBar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  newsBar.text = T.readable(T.text(newsBar, T.FONT.small, "8fd0ff"))
+  newsBar.text:SetPoint("LEFT", newsBar.icon, "RIGHT", 4, 0)
   newsBar.text:SetPoint("RIGHT", newsBar, "RIGHT", -(PAD - 2), 0)
   newsBar.text:SetJustifyH("LEFT")
-  script(newsBar, "OnClick", function() if ns.Changelog then ns.Changelog.open() end end)
+  script(newsBar, "OnClick", function() if ns.Changelog then ns.Changelog.toggle() end end)
+  script(newsBar, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("What's new", T.rgb("8fd0ff"))
+    GameTooltip:AddLine("Click to see every TwizCrew version and what changed (or type /tc new).", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(newsBar, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   newsBar:Hide()
 
   offBar = CreateFrame("Button", nil, root)
@@ -1289,6 +1322,10 @@ local function onEnable()
     if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.35 then ns.Modules.set(FEATURE, "fadeAlpha", 0.5) end
   end
   if ns.db then ns.db.panelSince0112 = true end
+  if ns.db and not ns.db.panelSince0113 then -- v0.1.13: my own row off again ("too much clutter"); once
+    ns.db.panelSince0113 = true
+    if ns.Modules.setting(FEATURE, "showSelf") == true then ns.Modules.set(FEATURE, "showSelf", false) end
+  end
   if ns.db and not ns.db.fadeOnSince017 then -- v0.1.10: fading became the default; once, for everyone
     ns.db.fadeOnSince017 = true
     if ns.Modules.setting(FEATURE, "fadeOut") == false then ns.Modules.set(FEATURE, "fadeOut", true) end
@@ -1333,7 +1370,7 @@ ns.Modules.register({
     showQuest = true, shareQuest = true,
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
-    hideWhenAlone = false, showOffline = false, sort = "online", showSelf = true,
+    hideWhenAlone = false, showOffline = false, sort = "online", showSelf = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
@@ -1392,7 +1429,8 @@ ns.Modules.register({
       info = "The order friends are listed in. Same layer first puts the friends you can actually see "
         .. "in the world at the top." },
     { key = "showSelf", label = "Show myself in the list", kind = "toggle",
-      info = "Adds a row for you at the top, so you can see what your friends see about you." },
+      info = "Adds a row for you at the top, so you can see what your friends see about you. Off by default: "
+        .. "your own options (status, AFK) are in the right-click menu of any row." },
     { key = "whatsNew", label = "What's new", kind = "button",
       onClick = function() if ns.Changelog then ns.Changelog.open() end end,
       info = "Shows every TwizCrew version and what changed. Also: click the panel's title, or /tc new." },

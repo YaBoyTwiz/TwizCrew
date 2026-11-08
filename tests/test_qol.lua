@@ -77,7 +77,9 @@ return {
       local db = start(ns, W)
       W:advance(1)
       A.eq(db.newsSeen, ns.VERSION)
-      A.eq(ns.Panel.newsLineForTest(), nil)
+      A.eq(ns.Panel.newsLineForTest(), "What's new in v" .. ns.VERSION, "always there, quiet")
+      ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
+      A.eq(ns.Panel.newsLineForTest(), "What's new", "short in tiny rows")
     end,
     an_update_shows_the_news_line_until_seen = function(ns, A, W)
       local db = start(ns, W, { fadeOnSince017 = true })
@@ -86,23 +88,23 @@ return {
       W.env.SlashCmdList.TWIZCREW("new")
       W:advance(1)
       A.eq(db.newsSeen, ns.VERSION)
-      A.eq(ns.Panel.newsLineForTest(), nil, "gone once the window was opened")
+      A.eq(ns.Panel.newsLineForTest(), "What's new in v" .. ns.VERSION, "quiet once the window was opened")
     end,
     ------------------------------------------------------------------------------------------- online friends only
     offline_friends_wait_behind_the_offline_bar = function(ns, A, W)
       start(ns, W)
       crew(ns, W)
-      A.eq(names(ns.Panel.entriesForTest()), { "Twiz", "Frostie", "Ginkan", "[Offline 1]" },
-        "me first, online friends, then the closed bar")
+      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1]" },
+        "online friends, then the closed bar (my own row is off)")
       A.ok(ns.Panel.offlineBarForTest(), "the bar is drawn")
       ns.Panel.toggleOffline(); W:advance(1)
       A.eq(ns.Modules.setting("panel", "showOffline"), true, "remembered")
-      A.eq(names(ns.Panel.entriesForTest()), { "Twiz", "Frostie", "Ginkan", "[Offline 1 open]", "Oldpal" })
+      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1 open]", "Oldpal" })
       local bar = ns.Panel.offlineBarForTest()
       bar._scripts.OnClick(bar, "LeftButton"); W:advance(1)
-      A.eq(names(ns.Panel.entriesForTest()), { "Twiz", "Frostie", "Ginkan", "[Offline 1]" }, "a click closes it")
+      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1]" }, "a click closes it")
       receive(ns, W, "Oldpal", "STATE", { cl = "ROGUE", lv = "9" }); W:advance(1)
-      A.eq(names(ns.Panel.entriesForTest()), { "Twiz", "Frostie", "Ginkan", "Oldpal" }, "nobody offline: no bar")
+      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "Oldpal" }, "nobody offline: no bar")
       A.eq(ns.Panel.offlineBarForTest(), nil)
       A.eq(ns.Log.errors(10), {})
     end,
@@ -122,7 +124,7 @@ return {
         modules = { panel = { enabled = true, settings = { showOffline = true, showSelf = false, fadeAlpha = 0.35 } } } }
       local db = start(ns, W, saved)
       A.eq(ns.Modules.setting("panel", "showOffline"), false)
-      A.eq(ns.Modules.setting("panel", "showSelf"), true)
+      A.eq(ns.Modules.setting("panel", "showSelf"), false, "on in v0.1.12, off again in v0.1.13")
       A.eq(ns.Modules.setting("panel", "fadeAlpha"), 0.5)
       A.eq(db.panelSince0112, true)
       -- the owner changes them back: they stay

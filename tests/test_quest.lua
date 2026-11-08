@@ -125,13 +125,19 @@ return {
     right_click_menu = function(ns, A, W)
       start(ns, W)
       local M = ns.Panel.rowMenu
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends" })
-      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends" }, "offline")
+      local ME1, ME2 = "Me: set my status", "Me: go AFK" -- my own options, on every row
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends", ME1, ME2 })
+      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", ME1, ME2 }, "offline")
       W.state.groupMembers = { "Frostie" }
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends" }, "already grouped")
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends", ME1, ME2 }, "already grouped")
       W.state.groupMembers = {}
       A.eq(labels(M({ name = "Frostie", tags = { "DEAD" } })), { "Whisper", "Invite to group", "Mock them",
-        "Add to friends" }, "dead: mock")
+        "Add to friends", ME1, ME2 }, "dead: mock")
+      local items = M({ name = "Frostie", tags = {} })
+      items[#items].onClick()
+      A.eq(ns.Away.isAway(), true, "Me: go AFK from a friend's row")
+      A.eq(labels(M({ name = "Frostie", tags = {} }))[5], "Me: I'm back")
+      items[#items].onClick()
       W.state.units.party1 = { name = "Frostie", player = true, visible = true }
       W.env.CanInspect = function() return true end
       local inspected

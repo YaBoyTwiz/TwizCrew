@@ -14,10 +14,14 @@ local LINE_H = 16
 local LINES = 22 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.13", date = "2026-11-08", lines = {
+    "The What's new line always stays at the top of the panel, so it's easy to find.",
+    "Your own row is off again (less clutter). Turn it on with Show myself in the list.",
+    "Right-click anyone's row for your own options too: set your status, go AFK.",
+  } },
   { ver = "0.1.12", date = "2026-11-08", lines = {
     "This window! Click the version in the panel's title to see what changed.",
     "The panel only lists friends who are online. Click \"Offline\" at the bottom to see the rest.",
-    "Your own row shows by default, so the panel is never empty.",
     "A pop-up when a friend comes online (not for a quick /reload). Click it to whisper them.",
     "The panel fades less when your mouse is away (50%), so it's easier to read.",
   } },

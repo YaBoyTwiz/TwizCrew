@@ -149,6 +149,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
   Fade default 50% ("its already too transparent"). Pop-up "Frostie is online" (Pop-ups: Friends coming online, on):
   not during the login quiet time, not when they were gone under 2 minutes (a /reload), several at once share one,
   click = whisper. Older saved settings were switched once (db.panelSince0112).
+  v0.1.13: the What's new line always stays (dim once read: "so people can always see it"); my own row off again
+  ("too much clutter", db.panelSince0113); my options (Me: set my status, Me: go AFK) are on every row's right-click
+  menu, the place for future "me" actions.
 
 ## Ideas so far (not decided)
 

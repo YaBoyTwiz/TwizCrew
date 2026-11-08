@@ -197,6 +197,29 @@ return {
       A.eq(W.sent[1].prefix, "TwizCrew")
       noErrors(ns, A)
     end,
+    group_send_goes_to_the_group_only = function(ns, A, W)
+      boot(ns, W)
+      W:advance(6)
+      A.no(ns.Comm.sendGroup("POS", { c = "0", x = "1", y = "2" }), "not grouped: nothing")
+      W:advance(1)
+      A.eq(#W.sent, 0)
+      W.state.inGroup = true
+      W.state.groupMembers = { "Frostie" }
+      A.ok(ns.Comm.sendGroup("POS", { c = "0", x = "1", y = "2" }, { replace = "POS" }))
+      A.ok(ns.Comm.sendGroup("POS", { c = "0", x = "5", y = "6" }, { replace = "POS" }))
+      W:advance(1)
+      A.eq(#W.sent, 1, "the newer position replaced the waiting one")
+      A.eq(W.sent[1].chatType, "PARTY")
+      A.contains(W.sent[1].text, "x=5")
+      W.state.inRaid = true
+      ns.Comm.sendGroup("MEET", { id = "a" })
+      W:advance(1)
+      A.eq(W.sent[2].chatType, "RAID")
+      local msg = ns.Codec.decode(W.sent[1].text)
+      A.eq(msg.type, "POS")
+      A.eq(ns.Codec.decode(W.sent[2].text).type, "MEET")
+      noErrors(ns, A)
+    end,
     send_before_join_is_delivered_after_join = function(ns, A, W)
       boot(ns, W)
       A.ok(ns.Transport.isPending())

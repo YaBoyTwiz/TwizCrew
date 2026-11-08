@@ -28,6 +28,20 @@ function Queue:push(item)
   self.items[self.back] = item
 end
 
+-- Like push, but a waiting item with the same key (and the same destination table) gets replaced instead: a newer
+-- position takes the place of one that has not gone out yet, so stale ones never pile up.
+function Queue:replace(key, item)
+  item.key = key
+  for i = self.first, self.back do
+    local old = self.items[i]
+    if old and old.key == key and old.dest == item.dest then
+      self.items[i] = item
+      return
+    end
+  end
+  self:push(item)
+end
+
 function Queue:size()
   return self.back - self.first + 1
 end

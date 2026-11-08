@@ -567,6 +567,9 @@ local function groupDestination()
   if IsInGroup() then return { chatType = "PARTY" } end
 end
 
+-- The group (RAID or PARTY) as one destination, or nil when not in a group.
+function Transport.groupDestination() return groupDestination() end
+
 local function fallback()
   local out = {}
   local g = groupDestination()

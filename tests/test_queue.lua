@@ -55,5 +55,19 @@ return {
         A.ok(n <= 2 + 4, "window at " .. times[i] .. " has " .. n)
       end
     end,
+    replace_swaps_a_waiting_item_with_the_same_key = function(ns, A)
+      local q = ns.Queue.new({ perSecond = 2, burst = 4, now = function() return 0 end })
+      local party, raid = {}, {}
+      q:push({ text = "other", dest = party })
+      q:replace("POS", { text = "old", dest = party })
+      q:replace("POS", { text = "new", dest = party })
+      q:replace("POS", { text = "raid", dest = raid })
+      A.eq(q:size(), 3, "one waiting position per destination")
+      local got = {}
+      q:pump(function(item) got[#got + 1] = item.text end)
+      A.eq(got, { "other", "new", "raid" })
+      q:replace("POS", { text = "after", dest = party })
+      A.eq(q:size(), 1, "once sent, a new one is pushed")
+    end,
   },
 }

@@ -57,6 +57,22 @@ function Comm.sendTo(name, msgType, fields, opts)
   return true
 end
 
+-- Only to the group (one PARTY or RAID message), never whispered and never to the channel. Returns false, sending
+-- nothing, when not in a group. opts.replace = a key: a waiting message with that key gets the new text instead.
+local groupDest = {} -- chat type -> one destination table, so Queue:replace can tell "the same destination"
+function Comm.sendGroup(msgType, fields, opts)
+  local g = ns.Transport.groupDestination()
+  if not g then return false end
+  local dest = groupDest[g.chatType]
+  if not dest then dest = g; groupDest[g.chatType] = g end
+  local key = opts and opts.replace
+  for i, text in ipairs(ns.Codec.encode(msgType, fields or {}, opts)) do
+    if key then queue:replace(key .. "#" .. i, { text = text, dest = dest })
+    else queue:push({ text = text, dest = dest }) end
+  end
+  return true
+end
+
 function Comm.on(msgType, fn)
   local list = handlers[msgType]
   if not list then list = {}; handlers[msgType] = list end

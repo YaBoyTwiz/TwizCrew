@@ -246,7 +246,7 @@ return {
       A.ok(has(d, "setting:find:sharePosition"))
       A.no(has(d, "setting:comm:channel"), "no crew channel setup on Basics")
       A.no(has(d, "section:Essentials"))
-      A.ok(#d <= 24, "short: " .. #d .. " rows")
+      A.ok(#d <= 26, "short: " .. #d .. " rows")
       ns.Settings.setTab("advanced", "all")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "setting:comm:channel"), "Advanced has everything")
@@ -283,7 +283,7 @@ return {
       A.eq(ns.Settings.subTab(), "test", "an unknown sub-tab changes nothing")
       -- every module is on some sub-tab
       local seen = {}
-      for _, st in ipairs({ "panel", "roasts", "popups", "find", "crew", "test" }) do
+      for _, st in ipairs({ "panel", "roasts", "popups", "find", "crew", "tools", "test" }) do
         ns.Settings.setTab("advanced", st)
         for _, v in ipairs(ns.Settings.describeForTest()) do
           local id = v:match("^module:([^:]+):")

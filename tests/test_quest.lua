@@ -125,19 +125,21 @@ return {
     right_click_menu = function(ns, A, W)
       start(ns, W)
       local M = ns.Panel.rowMenu
-      local ME1, ME2 = "Me: set my status", "Me: go AFK" -- my own options, on every row
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends", ME1, ME2 })
-      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", ME1, ME2 }, "offline")
+      local ME1, ME2, ME3 = "Me: set my status", "Me: go AFK", "Me: update my spell ranks" -- mine, on every row
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends", ME1, ME2, ME3 })
+      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", ME1, ME2, ME3 }, "offline")
       W.state.groupMembers = { "Frostie" }
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends", ME1, ME2 }, "already grouped")
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends", ME1, ME2, ME3 }, "already grouped")
       W.state.groupMembers = {}
       A.eq(labels(M({ name = "Frostie", tags = { "DEAD" } })), { "Whisper", "Invite to group", "Mock them",
-        "Add to friends", ME1, ME2 }, "dead: mock")
+        "Add to friends", ME1, ME2, ME3 }, "dead: mock")
+      A.eq(labels(M({ name = "Frostie", dinged = true, tags = {} })), { "Whisper", "Invite to group",
+        "Congratulate them", "Add to friends", ME1, ME2, ME3 }, "just leveled up: congrats")
       local items = M({ name = "Frostie", tags = {} })
-      items[#items].onClick()
+      items[5].onClick()
       A.eq(ns.Away.isAway(), true, "Me: go AFK from a friend's row")
       A.eq(labels(M({ name = "Frostie", tags = {} }))[5], "Me: I'm back")
-      items[#items].onClick()
+      items[5].onClick()
       W.state.units.party1 = { name = "Frostie", player = true, visible = true }
       W.env.CanInspect = function() return true end
       local inspected

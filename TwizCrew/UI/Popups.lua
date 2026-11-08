@@ -89,6 +89,8 @@ local function click(f)
     end
   elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
     ns.Find.pointToMeet()
+  elseif p.kind == "levelup" and ns.Roasts and ns.Roasts.canCheer and not ns.isTestName(p.names[1]) then
+    ns.Roasts.cheer(p.names[1])
   elseif p.kind == "online" and #p.names == 1 and not ns.isTestName(p.names[1]) then
     local name = p.names[1]
     if type(ChatFrame_SendTell) == "function" then

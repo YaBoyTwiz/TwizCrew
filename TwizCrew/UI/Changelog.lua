@@ -18,6 +18,9 @@ Changelog.HISTORY = {
     "The What's new line always stays at the top of the panel, so it's easy to find.",
     "Your own row is off again (less clutter). Turn it on with Show myself in the list.",
     "Right-click anyone's row for your own options too: set your status, go AFK.",
+    "Congrats button: shows on a friend's row after they level up. They see your character cheer for them.",
+    "Clicking a friend's level-up pop-up sends congrats too.",
+    "Spell rank updater (Settings, Tools tab, or /tc rankup): puts your highest spell ranks on your bars.",
   } },
   { ver = "0.1.12", date = "2026-11-08", lines = {
     "This window! Click the version in the panel's title to see what changed.",

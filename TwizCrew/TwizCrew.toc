@@ -56,6 +56,7 @@ Find\Where.lua
 Find\Find.lua
 Find\BigArrow.lua
 Find\MeetMap.lua
+Tools\RankUp.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

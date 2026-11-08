@@ -397,6 +397,14 @@ local function tryMock(mode)
 end
 
 function ACTIONS.mockLive() tryMock("live") end
+function ACTIONS.cheer()
+  local me = ns.playerName()
+  local lines = ns.Roasts.CHEER_LINES
+  local text = ns.Roasts.mockText(lines[math.random(#lines)], me, me, ns.Roasts.mockInfo(me))
+  local _, class = UnitClass("player")
+  ns.MockShow.show(me, (text:gsub("{%a+}", "")), { cheer = true, mode = "live", unit = "player", class = class,
+    look = ns.MockShow.decodeLook(ns.MockShow.myLook()) })
+end
 function ACTIONS.mockIcon() tryMock("icon") end
 
 function ACTIONS.fake()
@@ -622,7 +630,7 @@ end
 local COMMANDS = {
   fake = "fake", copy = "copy", ding = "ding", death = "death", layer = "layer", roast = "roast", clear = "clear",
   ["update reload"] = "updateReload", ["update restart"] = "updateRestart", walk = "walk",
-  mock = "mockLive", ["mock live"] = "mockLive", ["mock icon"] = "mockIcon",
+  mock = "mockLive", ["mock live"] = "mockLive", ["mock icon"] = "mockIcon", cheer = "cheer", congrats = "cheer",
 }
 
 TestTools.HELP = {
@@ -680,6 +688,8 @@ ns.Modules.register({
       .. "same person wait 10 seconds between them, like the real ones."),
     button("mockLive", "Try a mock (live)", "Your own character laughs at you with a roast, the way a friend near "
       .. "you looks when they mock you. Checks the 3D model and the laugh."),
+    button("cheer", "Try a congrats", "Your own character cheers for you with an encouraging line, the way a "
+      .. "friend's Congrats looks when you level up."),
     button("mockIcon", "Try a mock (icon)", "What a far-away friend you haven't been near this session gets: their "
       .. "class icon with the speech bubble."),
     button("updateReload", "Update notice (reload)", "Pretends Testbuddy has a newer TwizCrew that a /reload loads: "

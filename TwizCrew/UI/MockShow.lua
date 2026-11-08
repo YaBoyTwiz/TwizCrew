@@ -15,6 +15,8 @@ local T = ns.Theme
 local C = T.COLOR
 
 local LAUGH = 70          -- the /laugh animation
+local CHEER = 68          -- the /cheer animation (a friend congratulates you on a level-up)
+local CHEER_SOUND = 888   -- the game's level-up fanfare (LEVELUPSOUND)
 local SECONDS = 6         -- how long the show stays up
 local FADE = 0.6
 local CAPTURE_TICK = 5    -- how often we look for crew members near us to remember their look
@@ -210,11 +212,12 @@ end
 local frame, holder, bubble, bubbleText, liveModel, iconTex, nameText
 local hideAt, fadeFrom
 local current -- the model being animated (or nil for the icon)
+local anim = LAUGH -- what the model does: laughs (a mock) or cheers (congrats)
 
 local function laugh(model)
   try(model, "SetFacing", 0)
   try(model, "SetPortraitZoom", ZOOM) -- loading a model or an animation can reset the camera: set it every time
-  try(model, "SetAnimation", LAUGH)
+  try(model, "SetAnimation", anim)
 end
 
 local function build()
@@ -354,12 +357,15 @@ function MockShow.pick(name)
   return "icon"
 end
 
--- Shows the show. name: who mocked you; text: the roast. opts (test tools): { mode =, unit =, look =, class = }.
+-- Shows the show. name: who mocked you; text: the roast. opts: { cheer = true } for congrats (cheers instead of
+-- laughing, the level-up fanfare, a gold frame), and for test tools { mode =, unit =, look =, class = }.
 -- Returns the mode used.
 function MockShow.show(name, text, opts)
   opts = opts or {}
   if not frame then build() end
   MockShow.hide()
+  anim = opts.cheer and CHEER or LAUGH
+  MockShow.lastKind = opts.cheer and "cheer" or "mock"
   local m = ns.roster and ns.roster:get(name)
   local mode = opts.mode or MockShow.pick(name)
   current = nil
@@ -385,7 +391,7 @@ function MockShow.show(name, text, opts)
     iconTex:Show()
   end
   if current then laugh(current) end
-  nameText:SetText(ns.Util.safeText(tostring(name)) .. " laughs at you:")
+  nameText:SetText(ns.Util.safeText(tostring(name)) .. (opts.cheer and " cheers for you:" or " laughs at you:"))
   bubbleText:SetText(ns.Util.safeText(tostring(text)))
   -- the bubble grows with the roast (long ones wrap onto more lines)
   local nameH = tonumber(nameText.GetStringHeight and nameText:GetStringHeight()) or 0
@@ -396,7 +402,13 @@ function MockShow.show(name, text, opts)
   bubble:SetHeight(bubbleH)
   frame:SetHeight(bubbleH + 4 + MODEL_H)
   MockShow.lastSound = nil
-  if ns.Modules.setting(FEATURE, "mockSound") ~= false then
+  if opts.cheer then
+    if ns.Modules.setting(FEATURE, "mockSound") ~= false and type(PlaySound) == "function" then
+      local kit = type(SOUNDKIT) == "table" and (SOUNDKIT.LEVELUP or SOUNDKIT.LEVEL_UP) or nil
+      pcall(PlaySound, kit or CHEER_SOUND, "Master")
+      MockShow.lastSound = kit or CHEER_SOUND
+    end
+  elseif ns.Modules.setting(FEATURE, "mockSound") ~= false then
     local race, sex
     local unit = (mode == "live") and (opts.unit or liveUnit(name)) or nil
     if unit then
@@ -416,7 +428,7 @@ function MockShow.show(name, text, opts)
   frame:SetAlpha(1)
   frame:Show()
   hideAt = ns.now() + SECONDS
-  ns.Log.add("info", "mock show: %s (%s)", tostring(name), mode)
+  ns.Log.add("info", "%s show: %s (%s)", opts.cheer and "congrats" or "mock", tostring(name), mode)
   return mode
 end
 

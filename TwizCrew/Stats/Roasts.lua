@@ -323,13 +323,19 @@ local function showMock(sender, f)
   if type(sender) ~= "string" or type(f) ~= "table" then return end
   local text = cleanLine(f.x)
   if not text then return end
-  if not ns.Modules.isEnabled(FEATURE) or not setting("mocks") then return end
+  local cheer = f.k == "g"
+  if not ns.Modules.isEnabled(FEATURE) then return end
+  if cheer then
+    if setting("cheers") == false then return end
+  elseif not setting("mocks") then
+    return
+  end
   if not mockShowLimit:allow(sender, ns.now()) then return end
-  -- a mock about ME from a friend: their character laughs at me (the mock show), if that's on
+  -- about ME from a friend: their character laughs at me (a mock) or cheers for me (congrats), if that's on
   if ns.MockShow and f.t and ns.isMe(f.t) and not ns.isMe(sender) and setting("mockModel") ~= false then
     shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
     if #shown > SHOWN_MAX then table.remove(shown, 1) end
-    ns.MockShow.show(sender, text)
+    ns.MockShow.show(sender, text, cheer and { cheer = true } or nil)
     ns.Log.add("info", "mock shown from %s (3D)", sender)
     return
   end
@@ -366,6 +372,69 @@ function Roasts.mock(target)
   return text
 end
 
+------------------------------------------------------------------------------------------------- congrats
+-- The Congrats button (on a friend's row for a few minutes after they level up): an encouraging line the crew sees.
+-- It rides on the MOCK message with k = "g", so older copies still show it (as a plain line). The friend it's about
+-- sees the sender's character cheer for them, with the level-up fanfare.
+Roasts.CHEER_LINES = {
+  "GG {name}! Level {level} looks good on you.",
+  "Ding! {name} hit level {level}. The grind pays off!",
+  "Level {level}! {name} is getting scary strong.",
+  "Look at you, {name}. Level {level} already!",
+  "{name} reached level {level}. So proud of you!",
+  "Another level down, {name}. Keep going!",
+  "Level {level}, {name}! New spells, who dis?",
+  "Huge, {name}! Level {level} unlocked.",
+  "{name} leveled up! Time to visit your trainer.",
+  "Grats on {level}, {name}! You earned it.",
+  "Level {level}! The whole crew is proud of you, {name}.",
+  "Way to go, {name}! Level {level} {class} coming through.",
+  "{name} is level {level} now. Nothing can stop you!",
+  "Level {level}! {me} is cheering for you, {name}!",
+  "That's how it's done, {name}. Level {level}!",
+  "{name} hit {level}! Every level counts.",
+  "Grats {name}! Level {level} and looking good.",
+  "Level up! {name}, you're on fire.",
+  "Nice one, {name}! Level {level} in {zone}.",
+  "{name}, level {level}! Don't forget your new talent point.",
+  "Woo! {name} is level {level}!",
+  "Keep it up, {name}! Level {level} today, max level soon.",
+  "GZ {name}! Level {level} is a big one.",
+  "From {me}: grats on level {level}, {name}!",
+  "{name} just got stronger. Level {level}, let's go!",
+}
+local cheerLimit = ns.StatsLogic.newLimiter(MOCK_GAP)
+local cheerBag = {}
+
+local function nextCheer()
+  local list = Roasts.CHEER_LINES
+  if #cheerBag == 0 then for i = 1, #list do cheerBag[#cheerBag + 1] = i end end
+  return list[table.remove(cheerBag, math.random(#cheerBag))]
+end
+
+-- May the Congrats button show for this friend? (the panel also checks they just leveled up)
+function Roasts.canCheer(target)
+  return ns.Modules.isEnabled(FEATURE) and setting("cheers") ~= false and type(target) == "string" and target ~= ""
+    and not ns.isMe(target) and true or false
+end
+
+-- The Congrats button: returns the text sent, or nil (too soon or not allowed).
+function Roasts.cheer(target)
+  if not Roasts.canCheer(target) then return nil end
+  if not cheerLimit:allow(target, ns.now()) then return nil end
+  local info = Roasts.mockInfo(target)
+  local text
+  for _ = 1, #Roasts.CHEER_LINES do -- skip lines that need something we don't know about them
+    local t = cleanLine(Roasts.mockText(nextCheer(), target, ns.playerName(), info))
+    if t and not t:find("{%a+}") then text = t break end
+  end
+  if not text then text = "Grats on the level, " .. target .. "!" end
+  local fields = { t = target, x = text, k = "g" }
+  ns.Comm.send("MOCK", fields)
+  showMock(ns.playerName(), fields)
+  return text
+end
+
 ns.Comm.on("MOCK", function(sender, fields) ns.Log.safe(FEATURE, showMock, sender, fields) end)
 
 local KIND_SETTINGS = {
@@ -381,7 +450,7 @@ local KIND_SETTINGS = {
 }
 
 local defaults = { aboutMe = true, sound = false, mocks = true, mockModel = true, mockSound = true, ownOnly = false,
-  addMock = "" }
+  addMock = "", cheers = true }
 local settings = {}
 for _, s in ipairs(KIND_SETTINGS) do
   defaults[s[1]] = true
@@ -395,6 +464,10 @@ settings[#settings + 1] = { key = "sound", label = "Play a sound", kind = "toggl
 settings[#settings + 1] = { key = "mocks", label = "Mock button roasts", kind = "toggle",
   info = "When a friend dies, a Mock button shows on their row. Click it to roast them in front of the crew. "
     .. "This switch also decides whether you see the mocks your friends send." }
+settings[#settings + 1] = { key = "cheers", label = "Congrats button", kind = "toggle",
+  info = "For a few minutes after a friend levels up, a Congrats button shows on their row (and clicking the "
+    .. "level-up pop-up does the same). It sends an encouraging line the crew sees; your friend sees your character "
+    .. "cheer for them in 3D with the level-up fanfare. This switch also decides whether you see congrats." }
 settings[#settings + 1] = { key = "mockModel", label = "Show who mocked me (3D)", kind = "toggle", parent = "mocks",
   info = "When a friend mocks you, their character laughs at you with the roast in a speech bubble: their real "
     .. "character if they're near you (or were earlier this session), otherwise their class icon. Off: the plain "

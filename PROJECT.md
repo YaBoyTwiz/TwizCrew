@@ -152,6 +152,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   v0.1.13: the What's new line always stays (dim once read: "so people can always see it"); my own row off again
   ("too much clutter", db.panelSince0113); my options (Me: set my status, Me: go AFK) are on every row's right-click
   menu, the place for future "me" actions.
+- **Congrats button and Tools (2026-11-08):** a Congrats button on a friend's row for 5 minutes after they level up
+  (also: clicking their level-up pop-up, "Congratulate them" in the row menu). It rides on MOCK with k = "g" (older
+  copies show a plain line); the friend sees the sender's character /cheer (animation 68) with the level-up fanfare.
+  Switch: Roasts, Congrats button. The standalone RankUp addon was merged in as module "rankup" (Tools/RankUp.lua,
+  Settings Advanced sub-tab Tools and a Tools part on Basics, /tc rankup, panel menus, optional on-screen button).
 
 ## Ideas so far (not decided)
 

@@ -36,6 +36,8 @@ local grip -- the move-arrows handle at the left of the header (dim while the pa
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
 local newsBar, versionButton, offBar -- "New in vX" line; click the title for What's new; the "Offline (N)" bar
 local newsLine, offBarShown, entries = nil, false, {}
+local CHEER_FOR = 300 -- seconds the Congrats button stays on a friend's row after they level up
+local dingAt, cheered = {}, {} -- name -> when they leveled up; name -> true once we congratulated them
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local tabBar, crewTab, shameTab
 local tab = "crew"     -- "crew" | "shame" (session only)
@@ -64,6 +66,13 @@ local function clamp(v, lo, hi, fallback)
 end
 
 local function round(v) return math.floor(v * 10 + 0.5) / 10 end
+
+-- A list without its holes (menu entries that are nil when their feature is off).
+local function compact(t)
+  local out = {}
+  for i = 1, table.maxn(t) do if t[i] ~= nil then out[#out + 1] = t[i] end end
+  return out
+end
 
 local function allSettings()
   local out = {}
@@ -245,6 +254,36 @@ local function createRow()
   r.mock:Hide()
   -- important: stays fully visible while the panel is faded (or the row dimmed)
   if r.mock.SetIgnoreParentAlpha then r.mock:SetIgnoreParentAlpha(true) end
+  -- the Congrats button: on a friend's row for a few minutes after they level up
+  r.cheer = T.frame("Button", nil, r)
+  r.cheer:SetSize(66, 18)
+  r.cheer:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
+  T.paint(r.cheer, "1f7a2e", 1, "000000", 1)
+  T.gloss(r.cheer, nil, 0.25, "ARTWORK")
+  r.cheer.icon = r.cheer:CreateTexture(nil, "OVERLAY")
+  r.cheer.icon:SetSize(14, 14)
+  r.cheer.icon:SetPoint("LEFT", r.cheer, "LEFT", 3, 0)
+  r.cheer.icon:SetTexture("Interface\\Icons\\Achievement_Level_10")
+  r.cheer.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  r.cheer.text = T.readable(T.text(r.cheer, T.FONT.small, C.white))
+  r.cheer.text:SetPoint("LEFT", r.cheer.icon, "RIGHT", 2, 0)
+  r.cheer.text:SetText("Congrats")
+  local cheerHl = r.cheer:CreateTexture(nil, "HIGHLIGHT")
+  cheerHl:SetAllPoints(r.cheer)
+  T.color(cheerHl, C.white, 0.15)
+  script(r.cheer, "OnClick", function(self) Panel.cheer(self:GetParent()) end)
+  script(r.cheer, "OnEnter", function(self)
+    local m = self:GetParent().tcModel
+    if not GameTooltip or not m then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Congratulate " .. tostring(m.name))
+    GameTooltip:AddLine("Sends an encouraging line the crew sees. " .. tostring(m.name) .. " sees your character "
+      .. "cheer for them.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(r.cheer, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  r.cheer:Hide()
+  if r.cheer.SetIgnoreParentAlpha then r.cheer:SetIgnoreParentAlpha(true) end
   -- Find the crew: a small arrow to a group member (turns as you turn) and the distance; click = the big arrow
   r.arrow = T.frame("Button", nil, r)
   r.arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
@@ -518,12 +557,26 @@ local function layoutRow(r, m, style, s, width)
   if away and not m.offline then r.afk:Show() else r.afk:Hide() end
   local dead = false
   for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
-  if dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.name) then
+  local mockOn = dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.name)
+  if mockOn then
     r.mock:ClearAllPoints()
     r.mock:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)
     r.mock:Show()
   else
     r.mock:Hide()
+  end
+  r.tcCheer = nil
+  if m.dinged and not m.offline and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(m.name) then
+    r.cheer:ClearAllPoints()
+    if mockOn then
+      r.cheer:SetPoint("RIGHT", r.mock, "LEFT", -4, 0)
+    else
+      r.cheer:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)
+    end
+    r.cheer:Show()
+    r.tcCheer = true
+  else
+    r.cheer:Hide()
   end
   r:SetAlpha(m.offline and 0.4 or (away and 0.75 or 1))
   layoutPills(r, m.tags)
@@ -692,6 +745,11 @@ local function redraw()
   local hidden
   models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
     titleOf(), ns.maxLevel())
+  local now = ns.now()
+  for _, m in ipairs(models) do
+    local at = dingAt[m.name]
+    if at and not m.offline and not cheered[m.name] and now - at < CHEER_FOR then m.dinged = true end
+  end
   entries = Logic.entries(models, hidden, s.showOffline ~= false)
   header = Logic.headerText(online, total)
   headerShort = (online or 0) .. "/" .. (total or 0)
@@ -880,7 +938,7 @@ local function isOn(key)
 end
 
 function Panel.menuItems()
-  return {
+  return compact {
     { label = "Show offline friends", checked = isOn("showOffline"), onClick = flip("showOffline") },
     { label = "Lock position", checked = isOn("locked"), onClick = flip("locked") },
     { label = "Row style: " .. choiceLabel("rowStyle", setting("rowStyle")),
@@ -888,6 +946,8 @@ function Panel.menuItems()
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
     { label = "Set my status", onClick = function() Panel.openStatusBox() end },
     { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK", onClick = function() Panel.toggleAway() end },
+    ns.RankUp and ns.Modules.isEnabled("rankup") and
+      { label = "Update spell ranks", onClick = function() ns.RankUp.run() end } or nil,
     { label = "Open settings", onClick = function()
       if ns.Settings and ns.Settings.open then ns.Settings.open() end
     end },
@@ -1005,6 +1065,9 @@ function Panel.rowMenu(m)
     end
     local dead = false
     for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
+    if m.dinged and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(name) then
+      items[#items + 1] = { label = "Congratulate them", onClick = function() Panel.cheer({ tcModel = m }) end }
+    end
     if dead and ns.Roasts and ns.Roasts.canMock(name) then
       items[#items + 1] = { label = "Mock them", onClick = function()
         if not ns.Roasts.mock(name) then print("TwizCrew: give it a few seconds before mocking " .. name .. " again.") end
@@ -1019,10 +1082,27 @@ end
 
 -- What I can do for myself from any row's menu (and my own row's).
 function Panel.myItems()
-  return {
+  return compact {
     { label = "Me: set my status", onClick = function() Panel.openStatusBox() end },
     { label = (ns.Away and ns.Away.isAway()) and "Me: I'm back" or "Me: go AFK", onClick = function() Panel.toggleAway() end },
+    ns.RankUp and ns.Modules.isEnabled("rankup") and
+      { label = "Me: update my spell ranks", onClick = function() ns.RankUp.run() end } or nil,
   }
+end
+
+-- The Congrats button (or menu entry): congratulate them once; the button goes away.
+function Panel.cheer(r)
+  local m = r and r.tcModel
+  if not m or not ns.Roasts or not ns.Roasts.cheer then return end
+  if ns.Roasts.cheer(m.name) then
+    cheered[m.name] = true
+    requestRedraw()
+  end
+end
+
+function Panel.rowCheerShownForTest(i)
+  local r = rowFrames[i]
+  return r ~= nil and i <= visibleRows and rawget(r, "tcCheer") == true
 end
 
 function Panel.mock(r)
@@ -1341,6 +1421,13 @@ local function onEnable()
   end
   ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) if id == "stats" then forgetTitles() end end)
   for _, name in ipairs(REDRAW_ON) do ns.Bus.on(FEATURE, name, requestRedraw) end
+  ns.Bus.on(FEATURE, "MEMBER_LEVELUP", function(name)
+    if type(name) ~= "string" then return end
+    dingAt[name], cheered[name] = ns.now(), nil
+    requestRedraw()
+    -- the button goes away by itself after a few minutes
+    if C_Timer and C_Timer.After then C_Timer.After(CHEER_FOR + 1, function() ns.Log.safe(FEATURE, requestRedraw) end) end
+  end)
   ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() inCombat = true; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() inCombat = false; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", requestRedraw)

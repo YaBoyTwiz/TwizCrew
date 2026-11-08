@@ -483,7 +483,7 @@ return {
       local labels = {}
       for i, item in ipairs(items) do labels[i] = item.label end
       A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Set my status",
-        "Go AFK", "Open settings", "Hide panel" })
+        "Go AFK", "Update spell ranks", "Open settings", "Hide panel" })
       A.eq(items[1].checked(), false, "offline friends are behind the Offline bar by default")
       items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), true)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
@@ -493,8 +493,9 @@ return {
       items[6].onClick(); A.eq(ns.Away.isAway(), true, "Go AFK")
       A.eq(ns.Panel.menuItems()[6].label, "I'm back")
       items[6].onClick(); A.eq(ns.Away.isAway(), false, "and back")
-      items[7].onClick()
-      items[8].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
+      items[7].onClick() -- spell ranks: nothing to change in the test game
+      items[8].onClick()
+      items[9].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
       W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       ns.Modules.setEnabled("panel", true); W:advance(1)

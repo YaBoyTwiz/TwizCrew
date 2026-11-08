@@ -156,13 +156,15 @@ function PanelLogic.tooltipLines(m, now, maxLevel)
 end
 
 -- members: already sorted. titleOf(name) -> award title | nil (optional; online rows only). maxLevel: the game's
--- max level (optional). Returns row models.
+-- max level (optional). Returns row models, and how many offline friends were left out (showOffline off).
 function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf, maxLevel)
   settings = settings or {}
   local style = settings.rowStyle or "full"
   local out = {}
+  local hidden = 0
   for _, m in ipairs(members or {}) do
     local offline = not m.online
+    if offline and settings.showOffline == false then hidden = hidden + 1 end
     if not (offline and settings.showOffline == false) then
       local row = {
         name = text(m.name), class = m.class, level = level(m.level), zoneText = zoneText(m),
@@ -193,7 +195,29 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
       out[#out + 1] = row
     end
   end
+  return out, hidden
+end
+
+-- What the panel draws, top to bottom: the online rows, then the "Offline (N)" bar (when anyone is offline), then
+-- the offline rows when the bar is open. rows: from PanelLogic.rows; hidden: its second result; open: showOffline.
+function PanelLogic.entries(rows, hidden, open)
+  local on, off = {}, {}
+  for _, r in ipairs(rows or {}) do
+    if r.offline then off[#off + 1] = r else on[#on + 1] = r end
+  end
+  local out = {}
+  for _, r in ipairs(on) do out[#out + 1] = r end
+  local count = #off + (tonumber(hidden) or 0)
+  if count > 0 then
+    out[#out + 1] = { bar = true, count = count, open = open and true or false }
+    if open then for _, r in ipairs(off) do out[#out + 1] = r end end
+  end
   return out
+end
+
+-- The offline bar's words: "Offline (3)" with a hint which way a click goes.
+function PanelLogic.offlineBarText(count, open)
+  return "Offline (" .. (tonumber(count) or 0) .. ")" .. (open and "  -  click to hide" or "  -  click to show")
 end
 
 -- ctx = { inCombat, inInstance, onlineCount }

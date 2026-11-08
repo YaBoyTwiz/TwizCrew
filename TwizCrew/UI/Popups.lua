@@ -1,4 +1,5 @@
--- Small pop-ups near the top centre for layer changes, deaths and friends' level-ups (module "popups").
+-- Small pop-ups near the top centre for layer changes, deaths, friends' level-ups and friends coming online
+-- (module "popups").
 -- Rules about what shows and when live in PopupLogic; this file only owns the frames.
 -- When more than POPUP_MAX pop-ups are due at once, the oldest visible one is replaced (nothing is queued).
 -- Roasts (Popups.showRoast, called by the roasts module) use the same frames and work even while this module is off.
@@ -12,7 +13,8 @@ local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
 local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
-  meet = "3fa9f5" }
+  meet = "3fa9f5", online = "33cc66" }
+local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
 local logic          -- PopupLogic instance (nil while the module is off)
@@ -24,6 +26,7 @@ local quietDone = false
 -- Per friend, so the same news is not shown twice: the last layer pop-up shown ("different" / "same"), and
 -- whether they were seen on our layer since the last "different" one. Forgotten when they go offline.
 local announced, sameSince = {}, {}
+local offlineAt = {} -- name -> when they went offline this session (a quick /reload gets no "online" pop-up)
 local history = {}   -- texts of the last pop-ups shown (test hook)
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
@@ -86,6 +89,13 @@ local function click(f)
     end
   elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
     ns.Find.pointToMeet()
+  elseif p.kind == "online" and #p.names == 1 and not ns.isTestName(p.names[1]) then
+    local name = p.names[1]
+    if type(ChatFrame_SendTell) == "function" then
+      ChatFrame_SendTell(name)
+    elseif type(ChatFrame_OpenChat) == "function" then
+      ChatFrame_OpenChat("/w " .. name .. " ")
+    end
   end
   close(f)
 end
@@ -133,6 +143,34 @@ local function remember(text)
   if #history > 20 then table.remove(history, 1) end
 end
 
+-- Under "Frostie is online": "Level 12 Mage in Elwynn Forest"; for several friends, their names.
+local function className(token)
+  if type(token) ~= "string" or token == "" then return nil end
+  local t = type(LOCALIZED_CLASS_NAMES_MALE) == "table" and LOCALIZED_CLASS_NAMES_MALE[token]
+  if type(t) == "string" then return t end
+  return token:sub(1, 1) .. token:sub(2):lower()
+end
+
+local function onlineDetail(names)
+  if #names > 2 then
+    local list = {}
+    for i, n in ipairs(names) do list[i] = ns.Util.safeText(tostring(n)) end
+    return table.concat(list, ", ")
+  end
+  local m = ns.roster and ns.roster:get(names[1])
+  if not m then return nil end
+  local parts = {}
+  if tonumber(m.level) then parts[#parts + 1] = "Level " .. math.floor(tonumber(m.level)) end
+  local cls = className(m.class)
+  if cls then parts[#parts + 1] = cls end
+  local text = table.concat(parts, " ")
+  if type(m.zone) == "string" and m.zone ~= "" then
+    text = (text ~= "" and (text .. " in ") or "") .. ns.Util.safeText(m.zone)
+  end
+  if text == "" then return "Click to whisper them" end
+  return text
+end
+
 local function show(p)
   local f = takeFrame()
   local names = {}
@@ -140,6 +178,7 @@ local function show(p)
   local extra = { zone = p.extra.zone and ns.Util.safeText(p.extra.zone),
     subzone = p.extra.subzone and ns.Util.safeText(p.extra.subzone),
     level = p.extra.level, maxLevel = p.extra.maxLevel }
+  if p.kind == "online" then extra.detail = onlineDetail(names) end
   local text, sub = ns.PopupLogic.text(p.kind, names, extra, colorName)
   seq = seq + 1
   remember(text)
@@ -177,6 +216,15 @@ end
 -- while the pop-up waited) and that are news. Returns nil when nobody is left.
 local WANT = { layer_diff = "different", layer_same = "same" }
 local function stillTrue(p)
+  if p.kind == "online" then -- only the ones still online
+    local names = {}
+    for _, name in ipairs(p.names) do
+      local m = ns.roster and ns.roster:get(name)
+      if m and m.online then names[#names + 1] = name end
+    end
+    if #names == 0 then return nil end
+    return { kind = "online", names = names, extra = p.extra or {} }
+  end
   local want = WANT[p.kind]
   if not want then return p end
   local names = {}
@@ -253,6 +301,17 @@ end
 
 local function onOffline(name)
   announced[name], sameSince[name] = nil, nil
+  offlineAt[name] = ns.now()
+  if logic then logic:cancel("online", name) end
+end
+
+-- A friend started playing (or came back after a while). Not for a quick /reload or relog.
+local function onOnline(name)
+  if not setting("online") then return end
+  local gone = offlineAt[name]
+  offlineAt[name] = nil
+  if gone and ns.now() - gone < RELOG then return end
+  push("online", name)
 end
 
 local function onDied(name, zone, subzone)
@@ -280,6 +339,7 @@ local function onEnable()
   ns.Bus.on(FEATURE, "MEMBER_DIED", onDied)
   ns.Bus.on(FEATURE, "MEMBER_LEVELUP", onLevelUp)
   ns.Bus.on(FEATURE, "MEMBER_OFFLINE", onOffline)
+  ns.Bus.on(FEATURE, "MEMBER_ONLINE", onOnline)
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
   end
@@ -294,11 +354,15 @@ end
 
 ns.Modules.register({
   id = FEATURE, name = "Pop-ups", tier = "module",
-  info = "Small messages near the top of the screen when a friend changes layer, dies or reaches a new level. "
-    .. "They are short and never pile up.",
-  defaults = { layerDiff = true, layerSame = true, death = true, levelUp = true, levelUpSound = false, sound = false,
-    seconds = 5 },
+  info = "Small messages near the top of the screen when a friend comes online, changes layer, dies or reaches a "
+    .. "new level. They are short and never pile up.",
+  defaults = { online = true, layerDiff = true, layerSame = true, death = true, levelUp = true, levelUpSound = false,
+    sound = false, seconds = 5 },
   settings = {
+    { key = "online", label = "Friends coming online", kind = "toggle",
+      info = "Shows a pop-up like \"Frostie is online: Level 12 Mage in Elwynn Forest\" when a friend starts "
+        .. "playing. Several at once share one pop-up. Not when you log in yourself, and not when a friend just did "
+        .. "a /reload. Click it to whisper them." },
     { key = "layerDiff", label = "Layer changes", kind = "toggle",
       info = "Shows a pop-up when a friend ends up on a different layer than you. Click it to invite them." },
     { key = "layerSame", label = "Back on my layer", kind = "toggle",

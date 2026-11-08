@@ -17,6 +17,7 @@ local HELP = {
   "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
   "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
   "/tc mock spot - put the mock show back in its normal spot (drag it to move it)",
+  "/tc new - what's new: every version and what changed",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
@@ -211,6 +212,9 @@ local ACTIONS = {
   status = setStatus,
   mock = mock,
   afk = function() ns.Panel.toggleAway() end,
+  new = function() ns.Changelog.open() end,
+  news = function() ns.Changelog.open() end,
+  changelog = function() ns.Changelog.open() end,
   meet = meetCommand,
   reset = function()
     ns.Settings.open()

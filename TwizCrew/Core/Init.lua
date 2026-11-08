@@ -7,8 +7,8 @@ ns.ADDON = ADDON
 -- they match). Set RESTART_SINCE to the new version when a release adds or removes files or changes the .toc in any
 -- other way (the game reads those only when it starts): older copies are then told to restart the game, not reload.
 -- The version is kept here and not read from the .toc, because the game may keep the old .toc after a /reload.
-local ADDON_VERSION = "0.1.11"
-local RESTART_SINCE = "0.1.10"
+local ADDON_VERSION = "0.1.12"
+local RESTART_SINCE = "0.1.12"
 
 ns.VERSION = ADDON_VERSION
 ns.RESTART_SINCE = RESTART_SINCE

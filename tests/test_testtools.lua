@@ -113,6 +113,7 @@ return {
     ------------------------------------------------------------------------------------------------ fake friends
     fake_friends_show_in_every_row_style = function(ns, A, W)
       boot(W)
+      ns.Modules.set("panel", "showOffline", true) -- open the Offline list so Offbuddy has a row
       tc(W, "test fake")
       W:advance(0.1)
       local b = rowOf(ns, BUDDY)

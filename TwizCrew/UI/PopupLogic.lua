@@ -37,9 +37,9 @@ function Logic:push(kind, name, now, extra, force)
     return
   end
   local opposite = OPPOSITE[kind]
-  if not opposite then return end
+  if not opposite and kind ~= "online" then return end
   -- Going away and coming back inside one batch: nothing happened worth a pop-up.
-  local other = self.batches[opposite]
+  local other = opposite and self.batches[opposite]
   if other then
     local i = indexOf(other.names, name)
     if i then
@@ -56,6 +56,15 @@ function Logic:push(kind, name, now, extra, force)
   if not indexOf(batch.names, name) then batch.names[#batch.names + 1] = name end
 end
 
+-- Takes a name out of a waiting batch (a friend who came online and left again before it showed).
+function Logic:cancel(kind, name)
+  local batch = self.batches[kind]
+  if not batch then return end
+  local i = indexOf(batch.names, name)
+  if i then table.remove(batch.names, i) end
+  if #batch.names == 0 then self.batches[kind] = nil end
+end
+
 local function popupFor(kind, names)
   local p = { kind = kind, names = names, extra = {} }
   if kind == "layer_diff" then
@@ -69,7 +78,7 @@ function Logic:due(now)
   local out = {}
   for _, d in ipairs(self.deaths) do out[#out + 1] = d end
   self.deaths = {}
-  for _, kind in ipairs({ "layer_diff", "layer_same" }) do
+  for _, kind in ipairs({ "layer_diff", "layer_same", "online" }) do
     local batch = self.batches[kind]
     if batch and now >= batch.first + self.combineWindow then
       out[#out + 1] = popupFor(kind, batch.names)
@@ -115,6 +124,14 @@ function PopupLogic.text(kind, names, extra, colorName)
     return text, kind == "layer_diff" and "Click to invite them to your group" or nil
   end
   extra = extra or {}
+  if kind == "online" then
+    local detail = (type(extra.detail) == "string" and extra.detail ~= "") and extra.detail or nil
+    if n == 1 then return string.format("%s is online", colorName(names[1])), detail end
+    if n == 2 then
+      return string.format("%s and %s are online", colorName(names[1]), colorName(names[2])), nil
+    end
+    return string.format("%d friends are online", n), detail
+  end
   if kind == "meet" then
     local place = (type(extra.zone) == "string" and extra.zone ~= "") and extra.zone or nil
     return string.format("%s wants to meet up", colorName(names[1])),

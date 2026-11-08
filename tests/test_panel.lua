@@ -235,11 +235,11 @@ return {
       for i, s in ipairs(d.settings) do keys[i] = s.key end
       A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "showXP",
         "xpText", "xpTooltip",
-        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "tag_DEAD",
+        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
-      A.eq(d.defaults.fadeAlpha, 0.35); A.eq(d.defaults.fadeOut, true); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
+      A.eq(d.defaults.fadeAlpha, 0.5); A.eq(d.defaults.showOffline, false); A.eq(d.defaults.showSelf, true); A.eq(d.defaults.fadeOut, true); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
       local sort
       for _, s in ipairs(d.settings) do if s.key == "sort" then sort = s end end
       A.eq(sort.choices, { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
@@ -247,6 +247,7 @@ return {
     end,
     panel_loads_and_draws_without_errors = function(ns, A, W)
       start(ns, W)
+      ns.Modules.set("panel", "showSelf", false)
       feedTwelve(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
@@ -266,11 +267,12 @@ return {
       A.eq(ns.Panel.models()[1].name, "Twiz")
       ns.Modules.resetAll()
       W:advance(31)
-      A.eq(#ns.Panel.models(), 12)
+      A.eq(#ns.Panel.models(), 13, "my own row is on by default")
       A.eq(ns.Log.errors(10), {})
     end,
     panel_draws_level_progress_in_every_style = function(ns, A, W)
       start(ns, W)
+      ns.Modules.set("panel", "showSelf", false)
       receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12", xp = "63", xc = "637", xm = "1871", rx = "2000",
         zn = "Elwynn Forest", ver = "0.1.0" })
       W:advance(1)
@@ -288,6 +290,7 @@ return {
       A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "full without numbers: as before")
       ns.Modules.resetAll(); W:advance(1)
       A.eq(ns.Modules.setting("panel", "xpText"), true)
+      ns.Modules.set("panel", "showSelf", false)
       receive(ns, W, "Ginkan", "UPDATE", { lv = "60", xm = "0", xc = "0", xp = "0" }); W:advance(1)
       A.eq(ns.Panel.rowTextsForTest(1), { bar = "Lv 60 " .. DOT .. " max level" })
       A.eq(ns.Log.errors(10), {})
@@ -306,6 +309,7 @@ return {
       start(ns, W)
       receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12", xp = "63", xc = "637", xm = "1871", rx = "2000",
         zn = "Elwynn Forest", ver = "0.1.0" })
+      ns.Modules.set("panel", "showSelf", false)
       W:advance(1)
       local r = ns.Panel.rowFrameForTest(1)
       r._scripts.OnEnter(r)
@@ -345,7 +349,7 @@ return {
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", ver = "0.2.0", rs = "0.1.0" })
       W:advance(1)
       A.eq(ns.Panel.updateLineForTest(), "Update available: v0.2.0")
-      A.eq(#ns.Panel.models(), 1, "rows still drawn")
+      A.eq(#ns.Panel.models(), 2, "rows still drawn (Frostie and me)")
       local b = ns.Panel.updateLineButtonForTest()
       b._scripts.OnClick(b, "LeftButton")
       A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0", "a click shows how to update")
@@ -367,7 +371,7 @@ return {
       feedTwelve(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
-      A.eq(#ns.Panel.models(), 12)
+      A.eq(#ns.Panel.models(), 13)
       A.eq(ns.Panel.updateLineForTest(), nil)
       A.ok(ns.Modules.isEnabled("panel"))
       for _, e in ipairs(ns.Log.errors(10)) do A.contains(e, "ERROR updates: ") end
@@ -480,8 +484,8 @@ return {
       for i, item in ipairs(items) do labels[i] = item.label end
       A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Set my status",
         "Go AFK", "Open settings", "Hide panel" })
-      A.eq(items[1].checked(), true)
-      items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), false)
+      A.eq(items[1].checked(), false, "offline friends are behind the Offline bar by default")
+      items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), true)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
       items[3].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
       items[4].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)

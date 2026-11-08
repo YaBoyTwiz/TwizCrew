@@ -142,6 +142,14 @@ Other players never see any of it. The messages are hidden addon messages, not c
   do it within the panel"): the AFK tag, a "zzz" on the portrait and a faded row. Auto-away after 3 idle minutes
   (setting). Look (2026-11-07): rows in the class color, gold XP bar that brightens as it fills, icons on tags.
 
+- **Quality of life, v0.1.12 (2026-11-08):** "What's new" window (UI/Changelog.lua: HISTORY, newest first, one entry
+  per release; opened by clicking the panel title, /tc new, Settings Basics; a blue "New in vX" line shows once after
+  an update, never on a new install). The panel lists only online friends plus your own row by default; offline
+  friends sit behind an "Offline (N)" bar at the bottom (click to open; remembered, same as Show offline friends).
+  Fade default 50% ("its already too transparent"). Pop-up "Frostie is online" (Pop-ups: Friends coming online, on):
+  not during the login quiet time, not when they were gone under 2 minutes (a /reload), several at once share one,
+  click = whisper. Older saved settings were switched once (db.panelSince0112).
+
 ## Ideas so far (not decided)
 
 - **Friend radar:** a small panel with each friend's level, zone and what they are doing.

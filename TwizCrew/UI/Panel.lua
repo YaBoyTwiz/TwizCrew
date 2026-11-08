@@ -16,6 +16,8 @@ local ICON_SIZE = { full = 22, compact = 20, tiny = 16 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
 local UPDATE_HEIGHT = 15 -- the gold "Update available: vX" line under the header
+local NEWS_HEIGHT = 15   -- the "New in vX" line under it, once after an update (click = What's new)
+local OFF_HEIGHT = 18    -- the "Offline (N)" bar between online and offline friends
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
@@ -32,6 +34,8 @@ local afkButton -- the "zzz" button in the header: go AFK / come back
 local titleText, headerShort = nil, nil -- "TwizCrew" in the header; the short count ("1/3") when room is tight
 local grip -- the move-arrows handle at the left of the header (dim while the panel is locked)
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
+local newsBar, versionButton, offBar -- "New in vX" line; click the title for What's new; the "Offline (N)" bar
+local newsLine, offBarShown, entries = nil, false, {}
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local tabBar, crewTab, shameTab
 local tab = "crew"     -- "crew" | "shame" (session only)
@@ -621,6 +625,18 @@ local function drawHeader(s)
   else
     updateBar:Hide()
   end
+  newsLine = nil
+  if ns.Changelog and ns.Changelog.unseen() then
+    newsLine = "New in v" .. ns.Util.safeText(tostring(ns.VERSION)) .. "! Click to see what changed"
+    newsBar:ClearAllPoints()
+    newsBar:SetPoint("TOPLEFT", root, "TOPLEFT", 2, -(top - 2))
+    newsBar:SetPoint("TOPRIGHT", root, "TOPRIGHT", -2, -(top - 2))
+    newsBar.text:SetText(newsLine)
+    newsBar:Show()
+    top = top + NEWS_HEIGHT
+  else
+    newsBar:Hide()
+  end
   if tabBar then
     tabBar:ClearAllPoints()
     tabBar:SetPoint("TOPLEFT", root, "TOPLEFT", 0, -(top - 2))
@@ -664,8 +680,10 @@ local function redraw()
   if s.showSelf and ns.Self then
     table.insert(members, 1, Logic.selfMember(ns.playerName(), ns.Self.lastSent()))
   end
-  models = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(), titleOf(),
-    ns.maxLevel())
+  local hidden
+  models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+    titleOf(), ns.maxLevel())
+  entries = Logic.entries(models, hidden, s.showOffline ~= false)
   header = Logic.headerText(online, total)
   headerShort = (online or 0) .. "/" .. (total or 0)
   countText:SetText(header)
@@ -682,6 +700,7 @@ local function redraw()
 
   if tab == "shame" then
     for _, r in ipairs(rowFrames) do r:Hide() end
+    offBar:Hide(); offBarShown = false
     if tipRow then Panel.hideRowTip(tipRow) end
     visibleRows = 0
     stopArrowTicker()
@@ -708,24 +727,38 @@ local function redraw()
   if ns.Board then ns.Log.safe("board", ns.Board.hide) end
 
   local max = ns.Config.PANEL_MAX_ROWS
-  local first, last = Logic.window(#models, offset, max)
+  local first, last = Logic.window(#entries, offset, max)
   offset, firstRow = first - 1, first
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style]
   local alpha = clamp(s.bgAlpha, 0, 1, 0.8)
   local y = top + GAP
   local used = 0
+  offBarShown = false
   for i = first, last do
-    used = used + 1
-    local r = rowFrames[used]
-    if not r then r = createRow(); rowFrames[used] = r end
-    local h = layoutRow(r, models[i], style, s, width)
-    r:ClearAllPoints()
-    r:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, -y)
-    T.setBackgroundAlpha(r, alpha)
-    r:Show()
-    y = y + h + GAP
+    local e = entries[i]
+    if e.bar then
+      offBar:ClearAllPoints()
+      offBar:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, -y)
+      offBar:SetSize(width, OFF_HEIGHT)
+      offBar.text:SetText(Logic.offlineBarText(e.count, e.open))
+      offBar.icon:SetTexture(e.open and "Interface\Buttons\UI-MinusButton-Up" or "Interface\Buttons\UI-PlusButton-Up")
+      offBar:Show()
+      offBarShown = true
+      y = y + OFF_HEIGHT + GAP
+    else
+      used = used + 1
+      local r = rowFrames[used]
+      if not r then r = createRow(); rowFrames[used] = r end
+      local h = layoutRow(r, e, style, s, width)
+      r:ClearAllPoints()
+      r:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, -y)
+      T.setBackgroundAlpha(r, alpha)
+      r:Show()
+      y = y + h + GAP
+    end
   end
+  if not offBarShown then offBar:Hide() end
   for i = used + 1, #rowFrames do
     rowFrames[i]:Hide()
     if tipRow == rowFrames[i] then Panel.hideRowTip(tipRow) end
@@ -735,15 +768,15 @@ local function redraw()
   updateArrowTicker()
 
   note = nil
-  if #models == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
-  elseif #models > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #models .. ")" end
+  if #entries == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
+  elseif #entries > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #entries .. ")" end
   if note then
     noteText:ClearAllPoints()
     noteText:SetPoint("TOPLEFT", root, "TOPLEFT", PAD, -(y - GAP + 4))
     noteText:SetWidth(width)
     noteText:SetText(note)
     noteText:Show()
-    y = y - GAP + 4 + (#models == 0 and 2 * LINE or LINE)
+    y = y - GAP + 4 + (#entries == 0 and 2 * LINE or LINE)
   else
     noteText:Hide()
   end
@@ -1046,6 +1079,20 @@ local function build()
   title:SetText("TwizCrew")
   versionText = T.text(head, T.FONT.small, C.muted)
   versionText:SetPoint("LEFT", title, "RIGHT", 4, 0)
+  -- click the title (or its version) for What's new; dragging it still moves the panel
+  versionButton = CreateFrame("Button", nil, head)
+  versionButton:SetPoint("TOPLEFT", title, "TOPLEFT", -2, 3)
+  versionButton:SetPoint("BOTTOMRIGHT", versionText, "BOTTOMRIGHT", 2, -3)
+  draggable(versionButton)
+  script(versionButton, "OnClick", function() if ns.Changelog then ns.Changelog.toggle() end end)
+  script(versionButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("TwizCrew v" .. tostring(ns.VERSION))
+    GameTooltip:AddLine("Click to see what's new in each version", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  script(versionButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   local gear = CreateFrame("Button", nil, head)
   gear:SetSize(16, 16)
   gear:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
@@ -1118,6 +1165,39 @@ local function build()
   end)
   script(updateBar, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   updateBar:Hide()
+
+  newsBar = CreateFrame("Button", nil, root)
+  if newsBar.SetIgnoreParentAlpha then newsBar:SetIgnoreParentAlpha(true) end -- important: never faded
+  newsBar:SetHeight(NEWS_HEIGHT)
+  local newsGlow = newsBar:CreateTexture(nil, "BACKGROUND")
+  newsGlow:SetAllPoints(newsBar)
+  T.color(newsGlow, "3fa9f5", 0.15)
+  local newsHl = newsBar:CreateTexture(nil, "HIGHLIGHT")
+  newsHl:SetAllPoints(newsBar)
+  T.color(newsHl, "3fa9f5", 0.15)
+  newsBar.text = T.text(newsBar, T.FONT.small, "8fd0ff")
+  newsBar.text:SetPoint("LEFT", newsBar, "LEFT", PAD - 2, 0)
+  newsBar.text:SetPoint("RIGHT", newsBar, "RIGHT", -(PAD - 2), 0)
+  newsBar.text:SetJustifyH("LEFT")
+  script(newsBar, "OnClick", function() if ns.Changelog then ns.Changelog.open() end end)
+  newsBar:Hide()
+
+  offBar = CreateFrame("Button", nil, root)
+  offBar:SetSize(ROW_WIDTH.full, OFF_HEIGHT)
+  T.paint(offBar, C.row, 0.6, C.rowBorder, 1)
+  offBar.icon = offBar:CreateTexture(nil, "ARTWORK")
+  offBar.icon:SetSize(14, 14)
+  offBar.icon:SetPoint("LEFT", offBar, "LEFT", 4, 0)
+  offBar.text = T.readable(T.text(offBar, T.FONT.small, C.muted))
+  offBar.text:SetPoint("LEFT", offBar.icon, "RIGHT", 4, 0)
+  offBar.text:SetJustifyH("LEFT")
+  local offHl = offBar:CreateTexture(nil, "HIGHLIGHT")
+  offHl:SetAllPoints(offBar)
+  T.color(offHl, C.white, 0.08)
+  draggable(offBar)
+  script(offBar, "OnClick", function() Panel.toggleOffline() end)
+  offBar:Hide()
+
   noteText = T.text(root, T.FONT.small, C.muted)
   noteText:SetJustifyH("LEFT")
 
@@ -1159,6 +1239,16 @@ function Panel.setTab(id)
 end
 
 function Panel.tab() return (tab == "shame" and statsOn()) and "shame" or "crew" end
+
+-- Opens or closes the offline friends list at the bottom (the "Offline (N)" bar; remembered).
+function Panel.toggleOffline()
+  set("showOffline", setting("showOffline") == false)
+  requestRedraw()
+end
+
+function Panel.newsLineForTest() return newsLine end
+function Panel.offlineBarForTest() return offBarShown and offBar or nil end
+function Panel.entriesForTest() return entries end
 function Panel.refresh() requestRedraw() end
 
 function Panel.isShown() return shown end
@@ -1190,6 +1280,15 @@ function Panel.arrowTickerForTest() return arrowTicker ~= nil end
 
 local function onEnable()
   enabled = true
+  if ns.Changelog then ns.Changelog.checkFresh() end -- before the marks below: a new install has no "new" line
+  if ns.db and ns.db.fadeOnSince017 and not ns.db.panelSince0112 then
+    -- v0.1.12, once for copies that saved the old defaults: online friends only (offline behind the bar), my own
+    -- row on, a lighter fade
+    if ns.Modules.setting(FEATURE, "showOffline") == true then ns.Modules.set(FEATURE, "showOffline", false) end
+    if ns.Modules.setting(FEATURE, "showSelf") == false then ns.Modules.set(FEATURE, "showSelf", true) end
+    if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.35 then ns.Modules.set(FEATURE, "fadeAlpha", 0.5) end
+  end
+  if ns.db then ns.db.panelSince0112 = true end
   if ns.db and not ns.db.fadeOnSince017 then -- v0.1.10: fading became the default; once, for everyone
     ns.db.fadeOnSince017 = true
     if ns.Modules.setting(FEATURE, "fadeOut") == false then ns.Modules.set(FEATURE, "fadeOut", true) end
@@ -1233,8 +1332,8 @@ ns.Modules.register({
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
     showQuest = true, shareQuest = true,
     xpText = true, xpTooltip = true,
-    fadeOut = true, fadeAlpha = 0.35, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
-    hideWhenAlone = false, showOffline = true, sort = "online", showSelf = false,
+    fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
+    hideWhenAlone = false, showOffline = false, sort = "online", showSelf = true,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
@@ -1284,7 +1383,9 @@ ns.Modules.register({
     { key = "hideWhenAlone", label = "Hide when no crew is online", kind = "toggle",
       info = "Hides the panel while none of your friends are playing, and shows it when one logs in." },
     { key = "showOffline", label = "Show offline friends", kind = "toggle",
-      info = "Also lists friends who are not playing, greyed out, with when they were last seen." },
+      info = "Opens the list of friends who are not playing (greyed out, with when they were last seen) at the "
+        .. "bottom of the panel. Off: only friends who are online show, and an \"Offline\" bar opens the rest. "
+        .. "Clicking that bar does the same as this switch." },
     { key = "sort", label = "Sort", kind = "choice",
       choices = { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
         { "layer", "Same layer first" } },
@@ -1292,6 +1393,9 @@ ns.Modules.register({
         .. "in the world at the top." },
     { key = "showSelf", label = "Show myself in the list", kind = "toggle",
       info = "Adds a row for you at the top, so you can see what your friends see about you." },
+    { key = "whatsNew", label = "What's new", kind = "button",
+      onClick = function() if ns.Changelog then ns.Changelog.open() end end,
+      info = "Shows every TwizCrew version and what changed. Also: click the panel's title, or /tc new." },
     tagSetting("DEAD", "Shows DEAD on a friend who is dead or a ghost."),
     tagSetting("LAYER", "Shows OTHER LAYER on a friend who is on a different copy of the world, "
       .. "so you cannot see each other."),

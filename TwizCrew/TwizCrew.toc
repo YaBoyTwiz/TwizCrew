@@ -50,6 +50,7 @@ UI\Updates.lua
 Find\FindLogic.lua
 Find\Where.lua
 Find\Find.lua
+Find\BigArrow.lua
 UI\Extras.lua
 UI\Settings.lua
 UI\Report.lua

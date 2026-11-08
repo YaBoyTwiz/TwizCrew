@@ -23,7 +23,9 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
-  "AWAY_CHANGED" }
+  "AWAY_CHANGED", "FIND_CHANGED" }
+local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
+local ARROW_SIZE = 16
 
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
@@ -42,6 +44,7 @@ local offset = 0       -- scroll: rows skipped at the top
 local firstRow, visibleRows = 1, 0
 local enabled, shown, inCombat, pending, moving = false, false, false, false, false
 local ticker
+local arrowTicker -- turns the visible row arrows between redraws (Find the crew)
 local redraws = 0
 local fadeElapsed = 0
 
@@ -236,6 +239,32 @@ local function createRow()
   end)
   script(r.mock, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   r.mock:Hide()
+  -- Find the crew: a small arrow to a group member (turns as you turn) and the distance; click = the big arrow
+  r.arrow = T.frame("Button", nil, r)
+  r.arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
+  r.arrow:SetFrameLevel((r:GetFrameLevel() or 1) + 4)
+  r.arrow.tex = r.arrow:CreateTexture(nil, "ARTWORK")
+  r.arrow.tex:SetAllPoints(r.arrow)
+  r.arrow.tex:SetTexture(ARROW_TEXTURE)
+  local arrowHl = r.arrow:CreateTexture(nil, "HIGHLIGHT")
+  arrowHl:SetAllPoints(r.arrow)
+  T.color(arrowHl, C.white, 0.15)
+  r.arrow.dist = T.readable(T.text(r, T.FONT.small, C.white))
+  r.arrow.dist:SetJustifyH("RIGHT")
+  script(r.arrow, "OnClick", function(self) Panel.arrowClicked(self:GetParent()) end)
+  script(r.arrow, "OnEnter", function(self)
+    local m = self:GetParent().tcModel
+    local a = rawget(self:GetParent(), "tcArrow")
+    if not GameTooltip or not m then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Point the way to " .. tostring(m.name))
+    if a and a.still and a.zone then GameTooltip:AddLine("In " .. tostring(a.zone), 1, 1, 1) end
+    GameTooltip:AddLine("Click for a big arrow that leads you there (click again to close it).", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(r.arrow, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  r.arrow:Hide()
+  r.arrow.dist:Hide()
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
@@ -298,6 +327,43 @@ local function layoutPills(r, tags)
   end
 end
 
+---------------------------------------------------------------------------------------------------- row arrows
+local DIST_WIDTH = 44 -- room for "999 yd" / "1.2k yd", so a changing distance never pushes into the name
+
+-- The row arrow for a model (Find the crew), worked out in that module's own guard: an error there means "no
+-- arrow", never a broken panel.
+local function rowArrow(m)
+  if type(m) ~= "table" or m.offline or not ns.Find or not ns.Find.arrowFor then return nil end
+  local ok, a = ns.Log.safe("find", ns.Find.arrowFor, m.name)
+  if ok and type(a) == "table" then return a end
+  return nil
+end
+
+-- Colours and turns a row's arrow: the friend's class colour; a still arrow (another zone) is dimmer and points up.
+local function paintArrow(r, a, m, withDist)
+  local cr, cg, cb = T.classColor(m.class)
+  r.arrow.tex:SetVertexColor(math.min(1, cr + 0.25), math.min(1, cg + 0.25), math.min(1, cb + 0.25))
+  if a.still then
+    r.arrow.tex:SetRotation(0)
+    r.arrow.tex:SetAlpha(0.6)
+  else
+    r.arrow.tex:SetRotation(a.angle or 0)
+    r.arrow.tex:SetAlpha(1)
+  end
+  r.tcArrowAngle = (not a.still) and a.angle or nil
+  if withDist then
+    r.arrow.dist:ClearAllPoints()
+    r.arrow.dist:SetPoint("RIGHT", r.arrow, "LEFT", -2, 0)
+    r.arrow.dist:SetWidth(DIST_WIDTH)
+    r.arrow.dist:SetText(a.text or "")
+    r.arrow.dist:Show()
+    r.tcArrowText = a.text
+  else
+    r.arrow.dist:Hide()
+    r.tcArrowText = nil
+  end
+end
+
 -- Draws one row model; returns the row's height.
 local function layoutRow(r, m, style, s, width)
   r:SetWidth(width)
@@ -337,6 +403,21 @@ local function layoutRow(r, m, style, s, width)
     roomRight = math.max(roomRight, textWidth(r.level, corner) + 14)
   else
     r.level:Hide()
+  end
+  -- Find the crew: the row arrow (and its distance) sits just left of the corner text, on the name's line
+  local a = rowArrow(m)
+  r.tcArrow = a
+  if a then
+    local right = corner and (textWidth(r.level, corner) + 12) or 8
+    r.arrow:ClearAllPoints()
+    r.arrow:SetPoint("RIGHT", r, "TOPRIGHT", -right, -(5 + icon / 2))
+    local withDist = not a.still and style ~= "tiny"
+    paintArrow(r, a, m, withDist)
+    r.arrow:Show()
+    roomRight = math.max(roomRight, right + ARROW_SIZE + 4 + (withDist and (DIST_WIDTH + 2) or 0))
+  else
+    r.arrow:Hide()
+    r.arrow.dist:Hide()
   end
   r.name:ClearAllPoints()
   r.name:SetPoint("LEFT", r.icon, "RIGHT", 5, 0)
@@ -518,6 +599,12 @@ local function drawHeader(s)
 end
 
 ---------------------------------------------------------------------------------------------------------- redraw
+local updateArrowTicker -- (below requestRedraw) starts or stops the row arrows' ticker
+
+local function stopArrowTicker()
+  if arrowTicker then arrowTicker:Cancel(); arrowTicker = nil end
+end
+
 local function hide()
   if root then
     stopDrag() -- a drag cut short by hiding must not leave the panel "moving"
@@ -526,6 +613,7 @@ local function hide()
   if tipRow then Panel.hideRowTip(tipRow) end
   shown = false
   note = nil
+  stopArrowTicker()
   Widgets.closeMenu()
 end
 
@@ -565,6 +653,7 @@ local function redraw()
     for _, r in ipairs(rowFrames) do r:Hide() end
     if tipRow then Panel.hideRowTip(tipRow) end
     visibleRows = 0
+    stopArrowTicker()
     local ok, h = ns.Log.safe("board", ns.Board.draw, root, top + GAP, BOARD_WIDTH)
     if ok and type(h) == "number" then
       noteText:Hide()
@@ -612,6 +701,7 @@ local function redraw()
   end
   visibleRows = used
   refreshRowTip()
+  updateArrowTicker()
 
   note = nil
   if #models == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
@@ -644,6 +734,49 @@ local function requestRedraw()
   else
     run()
   end
+end
+
+-- Between redraws: turn the visible row arrows and update their distance. When an arrow appears, disappears or
+-- changes kind (another zone), the whole panel redraws instead (sizes may change).
+local function turnArrows()
+  if not shown then return stopArrowTicker() end
+  local s = setting("rowStyle")
+  for i = 1, visibleRows do
+    local r = rowFrames[i]
+    local old = r and rawget(r, "tcArrow")
+    local m = r and r.tcModel
+    if m then
+      local a = rowArrow(m)
+      if (a == nil) ~= (old == nil) or (a and old and (a.still and true or false) ~= (old.still and true or false)) then
+        requestRedraw()
+        return
+      end
+      if a then
+        r.tcArrow = a
+        paintArrow(r, a, m, not a.still and s ~= "tiny")
+      end
+    end
+  end
+end
+
+updateArrowTicker = function()
+  local any = false
+  for i = 1, visibleRows do
+    local r = rowFrames[i]
+    if r and rawget(r, "tcArrow") then any = true end
+  end
+  if any and not arrowTicker and C_Timer and C_Timer.NewTicker then
+    arrowTicker = C_Timer.NewTicker(ns.Config.FIND_ARROW_TICK, function() ns.Log.safe(FEATURE, turnArrows) end)
+  elseif not any then
+    stopArrowTicker()
+  end
+end
+
+-- A row arrow was clicked: the big arrow to that friend (again: closes it).
+function Panel.arrowClicked(r)
+  local m = r and r.tcModel
+  if not m or not ns.BigArrow then return end
+  ns.Log.safe("find", ns.BigArrow.toggle, m.name)
 end
 
 ---------------------------------------------------------------------------------------------------------- menu
@@ -943,6 +1076,14 @@ function Panel.rowTextsForTest(i)
   if not r then return nil end
   return { corner = rawget(r, "tcCorner"), bar = rawget(r, "tcBarText") }
 end
+-- Row i's arrow (Find the crew): nil when hidden, else { still, angle, text } as drawn.
+function Panel.rowArrowForTest(i)
+  local r = rowFrames[i]
+  local a = r and rawget(r, "tcArrow")
+  if not a or i > visibleRows then return nil end
+  return { still = a.still and true or false, angle = rawget(r, "tcArrowAngle"), text = rawget(r, "tcArrowText") }
+end
+function Panel.arrowTickerForTest() return arrowTicker ~= nil end
 
 local function onEnable()
   enabled = true

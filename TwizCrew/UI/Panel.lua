@@ -1091,6 +1091,12 @@ function Panel.rowMenu(m)
     end
     local dead = false
     for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
+    if m.questName and ns.Quest and ns.Quest.request then
+      local title = m.questName
+      local shown = ns.Util.truncateUTF8(ns.Util.safeText(title), 28)
+      if shown ~= ns.Util.safeText(title) then shown = shown .. "..." end
+      items[#items + 1] = { label = "Ask to share: " .. shown, onClick = function() ns.Quest.request(name, title) end }
+    end
     if m.dinged and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(name) then
       items[#items + 1] = { label = "Congratulate them", onClick = function() Panel.cheer({ tcModel = m }) end }
     end
@@ -1500,7 +1506,7 @@ ns.Modules.register({
     .. "Drag it to move it; right-click its title for quick options.",
   defaults = {
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
-    showQuest = true, shareQuest = true,
+    showQuest = true, shareQuest = true, questRequests = true,
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, sort = "online", showSelf = false,
@@ -1527,6 +1533,9 @@ ns.Modules.register({
     { key = "shareQuest", label = "Share my quest", kind = "toggle",
       info = "Tells your crew which quest you're on (the one you made progress on last, or the one you track) and "
         .. "its objectives. Turn it off to keep it to yourself." },
+    { key = "questRequests", label = "Quest share requests", kind = "toggle",
+      info = "Lets friends ask you to share your quest (right-click your row, Ask to share). You get a pop-up; one "
+        .. "click on it shares the quest. Sharing only works in a group." },
     { key = "showXP", label = "Show XP bar", kind = "toggle",
       info = "Shows a gold bar with how close each friend is to their next level. It gets brighter as it fills." },
     { key = "xpText", label = "Show level and XP numbers", kind = "toggle",

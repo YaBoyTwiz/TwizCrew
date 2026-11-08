@@ -233,7 +233,7 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "showXP",
+      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "showXP",
         "xpText", "xpTooltip",
         "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })

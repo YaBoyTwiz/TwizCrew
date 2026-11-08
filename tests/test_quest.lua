@@ -122,6 +122,65 @@ return {
       receive(ns, W, "Frostie", "UPDATE", { qc = "" })
       A.eq(ns.roster:get("Frostie").questComplete, false)
     end,
+    ask_a_friend_to_share_their_quest = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves Across the Border", qo = "Pelt: 2/8" })
+      W:advance(1)
+      local row = ns.Panel.models()[1]
+      A.eq(row.questName, "Wolves Across the Border")
+      local items = ns.Panel.rowMenu(row)
+      local ask
+      for _, it in ipairs(items) do if it.label:find("^Ask to share") then ask = it end end
+      A.ok(ask, "Ask to share in the row menu")
+      A.eq(ask.label, "Ask to share: Wolves Across the Border")
+      local before = #W.sent
+      ask.onClick()
+      W:advance(1)
+      A.eq(#W.sent, before, "not in a group: nothing sent")
+      A.contains(W.printed[#W.printed], "only works in a group")
+      W.state.groupMembers = { "Frostie" }
+      A.ok(ns.Quest.request("Frostie", "Wolves Across the Border"))
+      W:advance(1)
+      local req
+      for _, m in ipairs(W.sent) do
+        local msg = ns.Codec.decode(m.text)
+        if msg and msg.type == "QREQ" then req = msg.fields end
+      end
+      A.ok(req, "a QREQ went out")
+      A.eq(req.t, "Frostie"); A.eq(req.q, "Wolves Across the Border")
+      A.no(ns.Quest.request("Frostie", "Wolves Across the Border"), "not again right away")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_share_request_pops_up_and_one_click_shares = function(ns, A, W)
+      questLog(W, { { id = 7, title = "Kobold Camp Cleanup", objectives = {} },
+        { id = 33, title = "Wolves Across the Border", objectives = {} } }, 7)
+      local selected, pushed = nil, 0
+      rawset(W.env.C_QuestLog, "SetSelectedQuest", function(id) selected = id end)
+      rawset(W.env.C_QuestLog, "IsPushableQuest", function() return true end)
+      W.env.QuestLogPushQuest = function() pushed = pushed + 1 end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Wolves Across the Border" })
+      local t = ns.Popups.textsForTest()
+      A.eq(t[#t].text, "Frostie asks you to share a quest")
+      A.eq(t[#t].subtext, "Wolves Across the Border  -  click to share it")
+      ns.Popups.clickForTest(#t)
+      A.eq(selected, 33, "that quest is picked")
+      A.eq(pushed, 1, "and shared")
+      receive(ns, W, "Ginkan", "QREQ", { t = "Twiz", q = "Wolves Across the Border" })
+      A.eq(#ns.Popups.textsForTest(), 0, "strangers can't ask")
+      W:advance(16)
+      receive(ns, W, "Frostie", "QREQ", { t = "Holly", q = "Wolves Across the Border" })
+      A.eq(#ns.Popups.textsForTest(), 0, "a request meant for someone else")
+      A.eq(ns.Quest.share("Not In My Log"), "missing")
+      rawset(W.env.C_QuestLog, "IsPushableQuest", function() return false end)
+      A.eq(ns.Quest.share("Kobold Camp Cleanup"), "unshareable")
+      ns.Modules.set("panel", "questRequests", false)
+      W:advance(16)
+      receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Kobold Camp Cleanup" })
+      A.eq(#ns.Popups.textsForTest(), 0, "switched off")
+      A.eq(ns.Log.errors(10), {})
+    end,
     right_click_menu = function(ns, A, W)
       start(ns, W)
       local M = ns.Panel.rowMenu

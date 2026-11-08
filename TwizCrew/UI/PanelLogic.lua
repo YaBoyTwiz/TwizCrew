@@ -173,6 +173,7 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
       }
       if not offline then
         row.quest = ns.Quest and ns.Quest.short(m.questName, m.questObjectives, m.questComplete) or nil
+        if type(m.questName) == "string" and m.questName ~= "" then row.questName = m.questName end
         row.questDone = m.questComplete and true or false
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
         if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end

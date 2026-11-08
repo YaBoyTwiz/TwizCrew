@@ -7,7 +7,8 @@ ns.Codec = Codec
 
 local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BYE = true,
   STATS = true, STATSREQ = true, ROAST = true, UPDREQ = true, MOCK = true,
-  POS = true, MEET = true } -- find the crew: a group member's position, a meet-up
+  POS = true, MEET = true, -- find the crew: a group member's position, a meet-up
+  QREQ = true } -- "please share this quest with me" (t = who should share, q = the quest title)
 
 local ESCAPE = { ["%"] = "%25", ["^"] = "%5E", ["~"] = "%7E", ["="] = "%3D" }
 local UNESCAPE = { ["25"] = "%", ["5E"] = "^", ["7E"] = "~", ["3D"] = "=" }

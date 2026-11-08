@@ -13,7 +13,8 @@ local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
 local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
-  meet = "3fa9f5", online = "33cc66" }
+  meet = "3fa9f5", online = "33cc66", qshare = "f0c040" }
+local QSHARE_SECONDS = 20 -- a quest share request stays this long (it needs a click)
 local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
@@ -89,6 +90,8 @@ local function click(f)
     end
   elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
     ns.Find.pointToMeet()
+  elseif p.kind == "qshare" and ns.Quest and ns.Quest.shareFor then
+    ns.Quest.shareFor(p.names[1], p.title)
   elseif p.kind == "levelup" and ns.Roasts and ns.Roasts.canCheer and not ns.isTestName(p.names[1]) then
     ns.Roasts.cheer(p.names[1])
   elseif p.kind == "online" and #p.names == 1 and not ns.isTestName(p.names[1]) then
@@ -125,7 +128,8 @@ local function newFrame()
   Widgets.script(f, "OnUpdate", function(self)
     if not self.tcShown then return end
     local left = self.tcExpires - ns.now()
-    if left <= 0 and self.tcPopup and self.tcPopup.kind == "roast" then close(self); return end
+    local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare")
+    if left <= 0 and own then close(self); return end
     self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
   end, FEATURE)
   pool[#pool + 1] = f
@@ -407,6 +411,29 @@ function Popups.showRoast(text, seconds)
   f:SetAlpha(1)
   f:Show()
   layout()
+end
+
+-- A friend asks you to share a quest: "<Name> asks you to share a quest", the title, click = share it. Shows whether
+-- or not the pop-ups module is on (it's a direct request that needs your click), and closes itself.
+function Popups.questRequest(name, title)
+  if type(name) ~= "string" or type(title) ~= "string" then return end
+  local f = takeFrame()
+  seq = seq + 1
+  local text = colorName(name) .. " asks you to share a quest"
+  remember(text)
+  f.tcSeq, f.tcShown, f.tcPopup = seq, true, { kind = "qshare", names = { name }, title = title, extra = {} }
+  f.tcText, f.tcSub = text, ns.Util.safeText(title) .. "  -  click to share it"
+  f.tcExpires = ns.now() + QSHARE_SECONDS + FADE
+  f:SetWidth(ROAST_WIDTH)
+  T.color(f.edge, EDGE.qshare, 1)
+  f.title:SetText(f.tcText)
+  f.sub:SetText(f.tcSub)
+  f:SetAlpha(1)
+  f:Show()
+  layout()
+  if type(PlaySound) == "function" and type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_OPEN then
+    pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN)
+  end
 end
 
 -- A friend's meet-up (Find the crew): "<Name> wants to meet up", the place, click = the big arrow. Shown at the next

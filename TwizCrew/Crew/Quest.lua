@@ -152,6 +152,92 @@ function Quest.objectiveLines(objText)
   return out
 end
 
+---------------------------------------------------------------------------------------------- quest sharing
+-- Asking a friend to share their quest: the game only shares when that player clicks something themselves, so the
+-- friend gets a pop-up ("Twiz asks you to share Kobold Camp Cleanup") and one click on it shares it. Sharing only
+-- works in a group (the game's rule).
+local REQUEST_GAP = 15 -- seconds between requests to (or from) the same friend
+local askedAt, heardAt = {}, {}
+
+local function inGroupWith(name)
+  if type(UnitInParty) == "function" and call(UnitInParty, name) then return true end
+  if type(UnitInRaid) == "function" and call(UnitInRaid, name) then return true end
+  return false
+end
+
+-- Ask `name` to share `title` (their quest, as their copy sent it). Returns true when the request went out, or
+-- false and a reason ("group", "soon", "quest").
+function Quest.request(name, title)
+  if type(name) ~= "string" or name == "" then return false, "quest" end
+  if type(title) ~= "string" or title == "" then return false, "quest" end
+  if not inGroupWith(name) and not ns.isTestName(name) then
+    print("TwizCrew: quest sharing only works in a group. Invite " .. ns.Util.safeText(name) .. " first.")
+    return false, "group"
+  end
+  local now = ns.now()
+  if askedAt[name] and now - askedAt[name] < REQUEST_GAP then
+    print("TwizCrew: you just asked " .. ns.Util.safeText(name) .. ". Give them a moment.")
+    return false, "soon"
+  end
+  askedAt[name] = now
+  local fields = { t = name, q = title }
+  if not ns.Comm.sendTo(name, "QREQ", fields) then ns.Comm.sendGroup("QREQ", fields) end
+  print("TwizCrew: asked " .. ns.Util.safeText(name) .. " to share \"" .. ns.Util.safeText(title) .. "\".")
+  return true
+end
+
+-- Shares the quest with this title (or the title as it was cut short for the wire) with the group.
+-- Returns "shared", "missing" (not in your log), "unshareable" (the game won't share it) or "noapi".
+function Quest.share(want)
+  if type(want) ~= "string" or want == "" then return "missing" end
+  for _, q in ipairs(entries()) do
+    if q.title == want or ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX) == want then
+      if type(q.id) == "number" and QLog().SetSelectedQuest then call(QLog().SetSelectedQuest, q.id) end
+      if type(SelectQuestLogEntry) == "function" then call(SelectQuestLogEntry, q.index) end
+      local pushable
+      if type(q.id) == "number" and QLog().IsPushableQuest then
+        pushable = call(QLog().IsPushableQuest, q.id)
+      elseif type(GetQuestLogPushable) == "function" then
+        pushable = call(GetQuestLogPushable)
+      end
+      if pushable == false or pushable == 0 then return "unshareable" end
+      if type(QuestLogPushQuest) ~= "function" then return "noapi" end
+      call(QuestLogPushQuest)
+      return "shared"
+    end
+  end
+  return "missing"
+end
+
+-- The click on the pop-up: share it, or say why not.
+function Quest.shareFor(name, title)
+  local r = Quest.share(title)
+  if r == "missing" then
+    print("TwizCrew: you don't have \"" .. ns.Util.safeText(title) .. "\" anymore.")
+  elseif r == "unshareable" then
+    print("TwizCrew: the game won't let \"" .. ns.Util.safeText(title) .. "\" be shared.")
+  elseif r == "noapi" then
+    print("TwizCrew: quest sharing isn't available in this game version.")
+  end
+  return r
+end
+
+local function onRequest(sender, f)
+  if type(sender) ~= "string" or type(f) ~= "table" or type(f.q) ~= "string" or f.q == "" then return end
+  if f.t and not ns.isMe(f.t) then return end -- a group message meant for someone else
+  if ns.isMe(sender) then return end
+  if not (ns.roster and ns.roster:get(sender)) then return end -- crew only
+  if ns.Modules.setting("panel", "questRequests") == false then return end
+  local now = ns.now()
+  if heardAt[sender] and now - heardAt[sender] < REQUEST_GAP then return end
+  heardAt[sender] = now
+  local title = ns.Util.truncateUTF8(f.q, TITLE_MAX)
+  if ns.Popups and ns.Popups.questRequest then ns.Popups.questRequest(sender, title) end
+  ns.Log.add("info", "quest share request from %s", sender)
+end
+
+ns.Comm.on("QREQ", function(sender, fields) ns.Log.safe("panel", onRequest, sender, fields) end)
+
 function Quest.start()
   if Quest.started then return end
   Quest.started = true

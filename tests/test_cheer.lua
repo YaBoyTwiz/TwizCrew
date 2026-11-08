@@ -93,6 +93,24 @@ return {
       A.eq(ns.MockShow.lastKind, "cheer", "/tc test cheer")
     end,
     ----------------------------------------------------------------------------------------------- spell ranks
+    wrench_button_has_the_tools = function(ns, A, W)
+      start(ns, W)
+      A.ok(ns.Panel.toolsButtonForTest(), "a wrench in the header")
+      local items = ns.Panel.toolItems()
+      local labels = {}
+      for i, it in ipairs(items) do labels[i] = it.label end
+      A.eq(labels[1], "Update my spell ranks")
+      A.eq(items[2].checked(), false)
+      items[2].onClick()
+      A.eq(ns.Modules.setting("rankup", "auto"), true, "auto from the wrench")
+      items[3].onClick()
+      A.ok(ns.RankUp.buttonShownForTest(), "its own button from the wrench")
+      items[3].onClick()
+      A.no(ns.RankUp.buttonShownForTest())
+      local b = ns.Panel.toolsButtonForTest()
+      b._scripts.OnClick(b, "LeftButton") -- opens the menu
+      A.eq(ns.Log.errors(10), {})
+    end,
     rank_plan_rules = function(ns, A)
       local R = ns.RankUp
       A.eq(R.rankOf("Rank 3"), 3); A.eq(R.rankOf(""), nil); A.eq(R.rankOf(nil), nil)

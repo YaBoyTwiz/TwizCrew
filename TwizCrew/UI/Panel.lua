@@ -31,6 +31,7 @@ local ARROW_SIZE = 16
 
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
+local toolsButton -- the wrench in the header: a menu of handy tools (spell ranks, ...)
 local titleText, headerShort = nil, nil -- "TwizCrew" in the header; the short count ("1/3") when room is tight
 local grip -- the move-arrows handle at the left of the header (dim while the panel is locked)
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
@@ -654,7 +655,7 @@ local function drawHeader(s)
   -- goes, then "2 of 3 online" becomes "2/3".
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style] + 2 * PAD
-  local right = (PAD - 2) + 16 + 6 + 6 + 16 + 6 -- gear, gaps, AFK button, gap before the title side
+  local right = (PAD - 2) + 16 + 4 + 16 + 6 + 6 + 16 + 6 -- gear, tools, gaps, AFK button, gap before the title
   local left = (PAD - 2) + 16 + 4 + textWidth(titleText, "TwizCrew")
   local function fits(count, withVersion)
     local used = left + right + textWidth(countText, count)
@@ -937,6 +938,29 @@ local function isOn(key)
   return function() return setting(key) and true or false end
 end
 
+-- The wrench button's menu: handy tools. New tools go here.
+function Panel.toolItems()
+  local function rank(key) return ns.Modules.setting("rankup", key) end
+  local function flipRank(key)
+    return function()
+      if not ns.Modules.isEnabled("rankup") then ns.Modules.setEnabled("rankup", true) end
+      ns.Modules.set("rankup", key, not rank(key))
+    end
+  end
+  return compact {
+    ns.RankUp and { label = "Update my spell ranks", onClick = function() ns.RankUp.run() end } or nil,
+    ns.RankUp and { label = "  ...by itself when I learn a spell", checked = function() return rank("auto") and true or false end,
+      onClick = flipRank("auto") } or nil,
+    ns.RankUp and { label = "  ...with its own button on screen",
+      checked = function() return rank("showButton") and true or false end, onClick = flipRank("showButton") } or nil,
+    ns.MockEditor and { label = "My mocks", onClick = function() ns.MockEditor.open() end } or nil,
+    ns.Changelog and { label = "What's new", onClick = function() ns.Changelog.open() end } or nil,
+    { label = "Health check (to copy to Discord)", onClick = function() if ns.Report then ns.Report.show() end end },
+  }
+end
+
+function Panel.toolsButtonForTest() return toolsButton end
+
 function Panel.menuItems()
   return compact {
     { label = "Show offline friends", checked = isOn("showOffline"), onClick = flip("showOffline") },
@@ -946,8 +970,6 @@ function Panel.menuItems()
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
     { label = "Set my status", onClick = function() Panel.openStatusBox() end },
     { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK", onClick = function() Panel.toggleAway() end },
-    ns.RankUp and ns.Modules.isEnabled("rankup") and
-      { label = "Update spell ranks", onClick = function() ns.RankUp.run() end } or nil,
     { label = "Open settings", onClick = function()
       if ns.Settings and ns.Settings.open then ns.Settings.open() end
     end },
@@ -1213,7 +1235,27 @@ local function build()
   end)
   script(gear, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   countText = T.text(head, T.FONT.small, C.muted)
-  countText:SetPoint("RIGHT", gear, "LEFT", -6, 0)
+  -- the tools button: a wrench left of the gear; click = a menu of handy tools
+  toolsButton = CreateFrame("Button", nil, head)
+  toolsButton:SetSize(16, 16)
+  toolsButton:SetPoint("RIGHT", gear, "LEFT", -4, 0)
+  local toolsIcon = toolsButton:CreateTexture(nil, "ARTWORK")
+  toolsIcon:SetAllPoints(toolsButton)
+  toolsIcon:SetTexture("Interface\Icons\INV_Misc_Wrench_01")
+  toolsIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  local toolsHl = toolsButton:CreateTexture(nil, "HIGHLIGHT")
+  toolsHl:SetAllPoints(toolsButton)
+  T.color(toolsHl, C.white, 0.25)
+  script(toolsButton, "OnClick", function(self) Widgets.menu(self, Panel.toolItems()) end)
+  script(toolsButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Tools")
+    GameTooltip:AddLine("Click for handy tools, like putting your highest spell ranks on your bars.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(toolsButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  countText:SetPoint("RIGHT", toolsButton, "LEFT", -6, 0)
   afkButton = CreateFrame("Button", nil, head)
   afkButton:SetSize(16, 16)
   afkButton:SetPoint("RIGHT", countText, "LEFT", -6, 0)

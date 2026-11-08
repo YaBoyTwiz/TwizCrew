@@ -20,7 +20,8 @@ Changelog.HISTORY = {
     "Right-click anyone's row for your own options too: set your status, go AFK.",
     "Congrats button: shows on a friend's row after they level up. They see your character cheer for them.",
     "Clicking a friend's level-up pop-up sends congrats too.",
-    "Spell rank updater (Settings, Tools tab, or /tc rankup): puts your highest spell ranks on your bars.",
+    "New wrench button on the panel: handy tools in one place.",
+    "First tool: put your highest spell ranks on your bars (also /tc rankup).",
   } },
   { ver = "0.1.12", date = "2026-11-08", lines = {
     "This window! Click the version in the panel's title to see what changed.",

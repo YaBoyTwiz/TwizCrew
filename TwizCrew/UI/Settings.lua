@@ -48,9 +48,6 @@ local BASICS = {
   { id = "find", key = "rowArrows" },
   { id = "find", key = "meetups" },
   { id = "find", key = "sharePosition" },
-  { title = "Tools", note = "handy extras" },
-  { id = "rankup", key = "update" },
-  { id = "rankup", key = "showButton" },
 }
 local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
 -- The Advanced tab's sub-tabs: which modules each shows, in that order. A module not listed lands on Crew.

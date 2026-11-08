@@ -17,7 +17,8 @@ Changelog.HISTORY = {
   { ver = "0.1.17", date = "2026-11-08", lines = {
     "The big arrow to a friend stays until you close it: no more turning it on again after a fight.",
     "Next to them it says Right here, and points again when they move away.",
-    "A small share icon after a friend's quest when they can share it with you. Click it to ask.",
+    "After a friend's quest: green + they can share it with you (click to ask), red X they can't (hover for why).",
+    "A green check after a friend's quest when you're on it too.",
     "Congrats got sassier: 45 new lines that cheer for your friend while poking fun at them.",
   } },
   { ver = "0.1.16", date = "2026-11-08", lines = {

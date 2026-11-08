@@ -188,11 +188,18 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
           if m.questShareable == true or m.questShareable == false then row.questShareable = m.questShareable end
           -- can they share it with me? yes when we know I can get it (Questie), or when it can be shared and I
           -- neither have it nor did it (without Questie we can't check level or earlier quests)
+          -- questShare: "yes" (they can share it with me), "no" (they can't: questWhy says why), "same" (I'm on it
+          -- too), nil (can't tell)
           if ns.Quest and ns.Quest.canGet then
-            local status = ns.Quest.canGet(row.questId, m.questName, row.questShareable)
-            row.questCanGet = status
-            row.questShare = status == "ok" or (status == "unknown" and row.questShareable == true
-              and row.questId ~= nil) or nil
+            local status, words = ns.Quest.canGet(row.questId, m.questName, row.questShareable)
+            row.questCanGet, row.questWhy = status, words
+            if status == "ok" or (status == "unknown" and row.questShareable == true and row.questId ~= nil) then
+              row.questShare = "yes"
+            elseif status == "have" then
+              row.questShare = "same"
+            elseif status == "no" or status == "done" or status == "unshareable" then
+              row.questShare = "no"
+            end
           end
         end
         row.questDone = m.questComplete and true or false

@@ -326,8 +326,7 @@ local function createRow()
   r.share:SetFrameLevel((r:GetFrameLevel() or 1) + 4)
   r.share.icon = r.share:CreateTexture(nil, "ARTWORK")
   r.share.icon:SetAllPoints(r.share)
-  r.share.icon:SetTexture("Interface\\Icons\\Spell_ChargePositive")
-  r.share.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  -- (picture set in layoutRow: green + you can get it, red X you can't, green check you're on it too)
   local shareHl = r.share:CreateTexture(nil, "HIGHLIGHT")
   shareHl:SetAllPoints(r.share)
   T.color(shareHl, C.white, 0.3)
@@ -336,9 +335,19 @@ local function createRow()
     local m = self:GetParent().tcModel
     if not GameTooltip or not m then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText(tostring(m.name) .. " can share this quest with you", 0.3, 1, 0.4)
-    GameTooltip:AddLine(tostring(m.questName or ""), 1, 1, 1)
-    GameTooltip:AddLine("Click to ask them to share it (you need to be in a group).", 0.8, 0.8, 0.8, true)
+    if m.questShare == "yes" then
+      GameTooltip:SetText(tostring(m.name) .. " can share this quest with you", 0.3, 1, 0.4)
+      GameTooltip:AddLine(tostring(m.questName or ""), 1, 1, 1)
+      GameTooltip:AddLine("Click to ask them to share it (you need to be in a group).", 0.8, 0.8, 0.8, true)
+    elseif m.questShare == "same" then
+      GameTooltip:SetText("You're on this quest too", 0.3, 1, 0.4)
+      GameTooltip:AddLine(tostring(m.questName or ""), 1, 1, 1)
+    else
+      GameTooltip:SetText(tostring(m.name) .. " can't share this quest with you", 1, 0.35, 0.3)
+      GameTooltip:AddLine(tostring(m.questName or ""), 1, 1, 1)
+      local why = tostring(m.questWhy or "")
+      if why ~= "" then GameTooltip:AddLine((why:gsub("^%l", string.upper)) .. ".", 0.8, 0.8, 0.8, true) end
+    end
     GameTooltip:Show()
   end)
   script(r.share, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -442,6 +451,13 @@ local function paintArrow(r, a, m, withDist)
 end
 
 -- Draws one row model; returns the row's height.
+-- The quest line's share picture: { texture, is a spell icon (trim its edge) }
+local SHARE_PIC = {
+  yes = { "Interface\\Icons\\Spell_ChargePositive", true },
+  no = { "Interface\\RaidFrame\\ReadyCheck-NotReady", false },
+  same = { "Interface\\RaidFrame\\ReadyCheck-Ready", false },
+}
+
 local function layoutRow(r, m, style, s, width)
   r:SetWidth(width)
   local icon = ICON_SIZE[style]
@@ -535,10 +551,13 @@ local function layoutRow(r, m, style, s, width)
       placeLine(r, r.quest, m.quest, y, width)
       local textX = 22
       if m.questShare then
+        local pic = SHARE_PIC[m.questShare]
+        r.share.icon:SetTexture(pic[1])
+        if pic[2] then r.share.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else r.share.icon:SetTexCoord(0, 1, 0, 1) end
         r.share:ClearAllPoints()
         r.share:SetPoint("TOPLEFT", r, "TOPLEFT", 21, -y + 1)
         r.share:Show()
-        r.tcShare = true
+        r.tcShare = m.questShare
         textX = 37
       end
       r.quest:ClearAllPoints()
@@ -1178,12 +1197,15 @@ end
 function Panel.askShare(r)
   local m = r and r.tcModel
   if not m or not m.questName or not ns.Quest or not ns.Quest.request then return end
+  if m.questShare == "no" then print("TwizCrew: no use asking: " .. tostring(m.questWhy or "you can't get it") .. "."); return end
+  if m.questShare == "same" then print("TwizCrew: you're on that quest too."); return end
   ns.Quest.request(m.name, m.questName)
 end
 
 function Panel.rowShareShownForTest(i)
   local r = rowFrames[i]
-  return r ~= nil and i <= visibleRows and rawget(r, "tcShare") == true
+  if r == nil or i > visibleRows then return nil end
+  return rawget(r, "tcShare") -- "yes" | "no" | "same" | nil
 end
 
 -- The Congrats button (or menu entry): congratulate them once; the button goes away.

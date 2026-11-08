@@ -225,11 +225,16 @@ return {
       local found
       for _, l in ipairs(row.info or {}) do if l:find("You can get it", 1, true) then found = true end end
       A.ok(found, "tooltip: you can get it")
-      A.ok(row.questShare, "the share icon's flag")
-      A.ok(ns.Panel.rowShareShownForTest(1), "the share icon on the quest line")
-      done[33] = true
+      A.eq(row.questShare, "yes")
+      A.eq(ns.Panel.rowShareShownForTest(1), "yes", "green: they can share it with you")
+      state, text = 7, "Unavailable: Missing pre quest"
       W:advance(31) -- the panel redraws by itself
-      A.no(ns.Panel.rowShareShownForTest(1), "already done: no share icon")
+      A.eq(ns.Panel.rowShareShownForTest(1), "no", "red: an earlier step is missing")
+      A.eq(ns.Panel.models()[1].questWhy, "you can't take it (missing pre quest)")
+      state, text = 0, "Available: Doable"
+      done[33] = true
+      W:advance(31)
+      A.eq(ns.Panel.rowShareShownForTest(1), "no", "already done: red too")
       local label
       for _, it in ipairs(ns.Panel.rowMenu(row)) do if it.label:find("share") then label = it.label end end
       A.eq(label, "Can't share: Wolves (you already did it)")

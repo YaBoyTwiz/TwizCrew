@@ -58,6 +58,12 @@ ns.Config = {
   -- minimap button: the icon (must match "## IconTexture" in TwizCrew.toc, a test checks it) and the starting angle
   -- in degrees (0 = right, counter-clockwise; 190 = left edge, just below the middle)
   MINIMAP_ICON = "Interface\\Icons\\Ability_Warrior_BattleShout", MINIMAP_ANGLE = 190,
+  -- find the crew: our position is looked at every FIND_TICK s and goes to the group when we moved FIND_MOVE yards
+  -- and the last one is FIND_GAP s old, or every FIND_KEEPALIVE s; a friend's is unknown after FIND_STALE s. Row
+  -- arrows hide within FIND_NEAR yards; the big arrow closes within FIND_NEAR yards of a friend and FIND_ARRIVE_MEET
+  -- of a meet-up. A meet-up lives MEET_LIFE s.
+  FIND_TICK = 1, FIND_MOVE = 10, FIND_GAP = 3, FIND_KEEPALIVE = 30, FIND_STALE = 60, FIND_NEAR = 15,
+  FIND_ARRIVE_MEET = 20, MEET_LIFE = 900, FIND_ARROW_TICK = 0.1,
 }
 
 function ns.now() return GetTime() end

@@ -11,7 +11,8 @@ local Widgets = ns.Widgets
 local TICK, FADE = 0.5, 0.5
 local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
-local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100" }
+local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
+  meet = "3fa9f5" }
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
 local logic          -- PopupLogic instance (nil while the module is off)
@@ -83,6 +84,8 @@ local function click(f)
     for _, name in ipairs(p.invite) do
       if not inGroup(name) and not ns.isTestName(name) then invite(name) end -- a fake (test tools) is never invited
     end
+  elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
+    ns.Find.pointToMeet()
   end
   close(f)
 end
@@ -338,6 +341,13 @@ function Popups.showRoast(text, seconds)
   f:SetAlpha(1)
   f:Show()
   layout()
+end
+
+-- A friend's meet-up (Find the crew): "<Name> wants to meet up", the place, click = the big arrow. Shown at the next
+-- tick even in the login quiet time (a meet-up is worth it); needs this module on, like the other pop-ups.
+function Popups.meet(name, place)
+  if not logic or type(name) ~= "string" then return end
+  logic:push("meet", name, ns.now(), { zone = type(place) == "string" and place or nil }, true)
 end
 
 -- Test hooks.

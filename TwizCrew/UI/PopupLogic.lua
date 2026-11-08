@@ -24,11 +24,12 @@ local function indexOf(list, name)
   for i, n in ipairs(list) do if n == name then return i end end
 end
 
--- Shown right away, one per friend (never combined): deaths and level-ups.
-local INSTANT = { death = true, levelup = true }
+-- Shown right away, one per friend (never combined): deaths, level-ups and meet-ups.
+local INSTANT = { death = true, levelup = true, meet = true }
 
--- kind: "layer_diff" | "layer_same" | "death" | "levelup"; extra: { zone, subzone } (deaths),
--- { level, maxLevel } (level-ups). force: shown even in the quiet period (test tools' pop-ups only).
+-- kind: "layer_diff" | "layer_same" | "death" | "levelup" | "meet"; extra: { zone, subzone } (deaths; a meet-up's
+-- place is its zone), { level, maxLevel } (level-ups). force: shown even in the quiet period (test tools' pop-ups
+-- and meet-ups).
 function Logic:push(kind, name, now, extra, force)
   if now < self.quietUntil and not force then return end
   if INSTANT[kind] then
@@ -114,6 +115,11 @@ function PopupLogic.text(kind, names, extra, colorName)
     return text, kind == "layer_diff" and "Click to invite them to your group" or nil
   end
   extra = extra or {}
+  if kind == "meet" then
+    local place = (type(extra.zone) == "string" and extra.zone ~= "") and extra.zone or nil
+    return string.format("%s wants to meet up", colorName(names[1])),
+      (place and (place .. ": ") or "") .. "click to point the way"
+  end
   if kind == "levelup" then
     local lv, maxLevel = tonumber(extra.level), tonumber(extra.maxLevel)
     if not lv then return string.format("%s leveled up!", colorName(names[1])) end

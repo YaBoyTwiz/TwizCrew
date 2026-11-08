@@ -16,6 +16,7 @@ local HELP = {
   "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
   "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
+  "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
   "/tc debug - turn technical chat messages on or off",
@@ -146,6 +147,16 @@ local function mock(rest)
   end
 end
 
+-- /tc meet clear: takes the meet-up away for everyone it went to. Placing one is on the world map only.
+local function meetCommand(rest)
+  if rest:lower() == "clear" then
+    if not ns.Modules.isEnabled("find") then say("Find the crew is turned off in /tc."); return end
+    say(ns.Find.clearMeet() and "meet-up cleared." or "there is no meet-up to clear.")
+  else
+    say("to meet up, open the world map and Ctrl + right-click a spot. /tc meet clear takes the meet-up away.")
+  end
+end
+
 local function toggleDebug()
   local on = not ns.Modules.setting("comm", "debug")
   ns.Modules.set("comm", "debug", on)
@@ -195,6 +206,7 @@ local ACTIONS = {
   status = setStatus,
   mock = mock,
   afk = function() ns.Panel.toggleAway() end,
+  meet = meetCommand,
   reset = function()
     ns.Settings.open()
     ns.Settings.confirmReset()

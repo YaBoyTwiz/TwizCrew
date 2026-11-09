@@ -44,7 +44,8 @@ ns.StatsDefs.TABS = {
 }
 
 -- Every award, tab by tab (TABS order), in show order. `key` = plain stat, or `value(stats)` -> number | nil (nil =
--- not taking part). `lowest` = the smallest value wins; `last` = shown at the end of the show.
+-- not taking part). `lowest` = the smallest value wins; `last` = shown at the end of the show. `noSteal` = no
+-- stolen crown pop-ups: the lead changes without anyone doing anything (rates and "right now" numbers).
 ns.StatsDefs.AWARDS = {
   -- Deaths
   { id = "corpse", tab = "deaths", name = "Professional Corpse", key = "dt", unit = "death",
@@ -72,7 +73,7 @@ ns.StatsDefs.AWARDS = {
   { id = "marathon", tab = "move", name = "Marathon Runner", key = "st", unit = "steps",
     icon = "Interface\\Icons\\INV_Misc_Foot_Kodo",
     info = "Walked the most steps on foot.", joke = "Never met a mount they could not out-walk." },
-  { id = "couch", tab = "move", name = "Couch Potato", unit = "perhour", lowest = true,
+  { id = "couch", tab = "move", name = "Couch Potato", unit = "perhour", lowest = true, noSteal = true,
     value = function(st)
       local pt = st.pt
       if type(pt) ~= "number" or pt < ns.Config.COUCH_MIN_PLAYED then return nil end
@@ -83,7 +84,7 @@ ns.StatsDefs.AWARDS = {
     icon = "Interface\\Icons\\INV_Misc_Fork&Knife",
     info = "Walked the fewest steps per hour (needs at least 30 minutes played).",
     joke = "Moves only when the loot window opens." },
-  { id = "neverwalks", tab = "move", name = "Never Walks", unit = "ratio",
+  { id = "neverwalks", tab = "move", name = "Never Walks", unit = "ratio", noSteal = true,
     value = function(st)
       local mt, yards = st.mt or 0, (st.st or 0) / ns.Config.STEPS_PER_YARD
       if mt + yards < ns.Config.NEVERWALKS_MIN_YARDS then return nil end
@@ -105,7 +106,7 @@ ns.StatsDefs.AWARDS = {
     icon = "Interface\\Icons\\Ability_Hunter_EagleEye",
     info = "Took the most flight paths.", joke = "The flight master knows their coffee order." },
   -- Money & Loot
-  { id = "pauper", tab = "loot", name = "Pauper", unit = "money", lowest = true, -- new
+  { id = "pauper", tab = "loot", name = "Pauper", unit = "money", lowest = true, noSteal = true, -- new
     value = function(st)
       -- under 30 minutes played (a forgotten alt logged in for a moment): not taking part
       local pt = st.pt
@@ -164,7 +165,7 @@ ns.StatsDefs.AWARDS = {
     icon = "Interface\\Icons\\Spell_Nature_Sleep",
     info = "Spent the most time away from the keyboard.",
     joke = "Could be mistaken for a very quiet statue." },
-  { id = "snail", tab = "lazy", name = "Snail", unit = "xpperhour", lowest = true, -- new
+  { id = "snail", tab = "lazy", name = "Snail", unit = "xpperhour", lowest = true, noSteal = true, -- new
     value = function(st)
       local xt = st.xt
       if type(xt) ~= "number" or xt < ns.Config.COUCH_MIN_PLAYED then return nil end

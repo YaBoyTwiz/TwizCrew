@@ -43,16 +43,38 @@ function L.streakLine(n)
   return "and for the " .. L.ordinal(n) .. " session in a row"
 end
 
+L.REPEAT_KEYS = { "id", "i" }
+
+-- The whole AWC goes out as one codec piece with w and x uncut (a split or cut card would be misread).
+local function onePiece(f)
+  local out = ns.Codec.encode("AWC", f, { repeatKeys = L.REPEAT_KEYS })
+  local msg = #out == 1 and ns.Codec.decode(out[1])
+  return msg and msg.fields.w == f.w and msg.fields.x == f.x and msg.fields.k == f.k or false
+end
+
 -- An AWC's fields for card i of show id. streak: shown when 2 or more; jump: straight to the reveal.
+-- Fake crew members are never sent. When too many winners tie to fit one message, w keeps the first ones that fit
+-- and m says how many more there are.
 function L.cardToWire(id, i, card, streak, jump)
   local f = { id = id, i = tostring(i), k = card and card.kind or "end" }
   if f.k == "award" then
     local a = card.award
     f.a = a.def.id
-    f.w = table.concat(a.winners or {}, ",")
+    local real = {}
+    for _, name in ipairs(a.winners or {}) do
+      if not ns.isTestName(name) then real[#real + 1] = name end
+    end
     if a.text ~= nil then f.x = tostring(a.text) end
-    if tonumber(streak) and streak >= 2 then f.s = tostring(math.floor(streak)) end
+    local n = tonumber(streak)
+    if n and n >= 2 then f.s = tostring(math.floor(n)) end
     if jump then f.r = "1" end
+    local kept = #real
+    while true do
+      f.w = table.concat(real, ",", 1, kept)
+      f.m = kept < #real and tostring(#real - kept) or nil
+      if kept == 0 or onePiece(f) then break end
+      kept = kept - 1
+    end
   elseif f.k ~= "nobody" then
     f.k = "end"
   end
@@ -72,6 +94,8 @@ function L.cardFromWire(f)
     text = type(f.x) == "string" and f.x or "", jump = f.r == "1" }
   local s = tonumber(f.s)
   if s and s >= 2 and s == math.floor(s) then c.streak = s end
+  local more = tonumber(f.m)
+  if more and more >= 1 and more == math.floor(more) and more <= 1000 then c.more = more end
   return c
 end
 

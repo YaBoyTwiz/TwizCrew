@@ -48,6 +48,18 @@ local function crewNight(ns, W)
   return S
 end
 
+-- Booted with Frostie (a priest) online; Frostie starts a show. Returns the show id.
+local function frostieShow(ns, W, v)
+  start(ns, W)
+  hello(W, ns, "Frostie", "PRIEST")
+  receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = v or "session" })
+  return "Frostie-1"
+end
+
+local function card(W, ns, sender, fields)
+  receive(W, ns, sender or "Frostie", "AWC", fields)
+end
+
 return {
   files = "toc",
   tests = {
@@ -237,6 +249,234 @@ return {
       W:advance(3)
       A.eq(#sentOf(ns, W, mark, "AWX"), 1, "the presenter tells the crew")
       A.eq(ns.Log.errors(10), {})
+    end,
+
+    viewer_follows_the_show = function(ns, A, W)
+      local mark = #W.sent
+      local id = frostieShow(ns, W)
+      A.ok(ns.AwardsShow.isOpen(), "Frostie's AWS opens the show")
+      local st = state(ns)
+      A.eq(st.role, "viewer"); A.eq(st.phase, "loading")
+      A.eq(st.header, "TwizCrew Awards: Frostie's show")
+      A.eq(st.hint, "Frostie is presenting")
+      card(W, ns, "Frostie", { id = id, i = "1", k = "award", a = "corpse", w = "Twiz,Frostie", x = "7 deaths" })
+      A.eq(state(ns).phase, "badge")
+      A.eq(state(ns).title, "Professional Corpse")
+      ns.AwardsShow.next() -- a viewer's click does nothing mid-show
+      A.eq(state(ns).phase, "badge")
+      W:advance(0.6)
+      A.eq(state(ns).phase, "drum")
+      W:advance(1.5)
+      st = state(ns)
+      A.eq(st.phase, "reveal")
+      A.eq(st.winners, { "Twiz", "Frostie" })
+      A.eq(st.text, "7 deaths")
+      A.eq(st.streak, nil)
+      A.ok(st.line:find("Frostie", 1, true), "the winners are drawn")
+      ns.AwardsShow.next()
+      A.eq(state(ns).index, 1, "a click at the reveal does nothing either")
+      card(W, ns, "Frostie", { id = id, i = "2", k = "award", a = "medic", w = "Frostie", x = "2 rezzes", s = "3" })
+      A.eq(state(ns).phase, "badge")
+      card(W, ns, "Frostie", { id = id, i = "2", k = "award", a = "medic", w = "Frostie", x = "2 rezzes", s = "3",
+        r = "1" })
+      st = state(ns)
+      A.eq(st.phase, "reveal", "r = 1 jumps to the reveal")
+      A.eq(st.index, 2)
+      A.eq(st.streak, "and for the 3rd session in a row")
+      card(W, ns, "Frostie", { id = id, i = "3", k = "end" })
+      st = state(ns)
+      A.eq(st.phase, "end"); A.eq(st.hint, "Click or press Space to close")
+      ns.AwardsShow.next()
+      A.no(ns.AwardsShow.isOpen(), "a click at the end card closes it")
+      W:advance(5)
+      A.eq(#sentOf(ns, W, mark, "AWX"), 0, "a viewer never sends")
+      A.eq(#sentOf(ns, W, mark, "AWC"), 0)
+      card(W, ns, "Frostie", { id = id, i = "3", k = "end" })
+      A.no(ns.AwardsShow.isOpen(), "a card after closing does not open it again")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    viewer_nobody_card_and_all_time_header = function(ns, A, W)
+      local id = frostieShow(ns, W, "all")
+      A.eq(state(ns).header, "TwizCrew Awards: all time")
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      A.eq(state(ns).phase, "nobody")
+      A.eq(state(ns).hint, "Frostie is presenting")
+    end,
+
+    presenter_closing_closes_viewers = function(ns, A, W)
+      local mark = #W.sent
+      local id = frostieShow(ns, W)
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      receive(W, ns, "Frostie", "AWX", { id = "Other-1" })
+      A.ok(ns.AwardsShow.isOpen(), "another show's AWX")
+      receive(W, ns, "Frostie", "AWX", { id = id })
+      A.no(ns.AwardsShow.isOpen())
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-2", v = "session" })
+      A.ok(ns.AwardsShow.isOpen(), "a new show opens")
+      ns.AwardsShow.close() -- Escape: closes only my window
+      W:advance(5)
+      A.eq(#sentOf(ns, W, mark, "AWX"), 0, "Escape sends nothing")
+    end,
+
+    viewer_setting_off_or_stats_off = function(ns, A, W)
+      start(ns, W)
+      hello(W, ns, "Frostie")
+      ns.Modules.set("stats", "crewShow", false)
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = "session" })
+      A.no(ns.AwardsShow.isOpen(), "setting off")
+      ns.Modules.set("stats", "crewShow", true)
+      ns.Modules.setEnabled("stats", false)
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-2", v = "session" })
+      A.no(ns.AwardsShow.isOpen(), "stats off")
+      ns.Modules.setEnabled("stats", true)
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-3", v = "session" })
+      A.ok(ns.AwardsShow.isOpen(), "both on")
+    end,
+
+    viewer_ignores_strangers_and_fakes = function(ns, A, W)
+      start(ns, W)
+      receive(W, ns, "Stranger", "AWS", { id = "Stranger-1", v = "session" })
+      A.no(ns.AwardsShow.isOpen(), "not in the crew")
+      for _, text in ipairs(ns.Codec.encode("AWS", { id = "Bob (test)-1", v = "session" })) do
+        ns.Comm.inject("Bob (test)", text)
+      end
+      A.no(ns.AwardsShow.isOpen(), "a fake crew member")
+    end,
+
+    viewer_in_a_fight_catches_up = function(ns, A, W)
+      start(ns, W)
+      hello(W, ns, "Frostie")
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = "session" })
+      A.no(ns.AwardsShow.isOpen(), "not opened in a fight")
+      card(W, ns, "Frostie", { id = "Frostie-1", i = "1", k = "award", a = "corpse", w = "Frostie", x = "7 deaths" })
+      card(W, ns, "Frostie", { id = "Frostie-1", i = "2", k = "award", a = "medic", w = "Frostie", x = "2 rezzes" })
+      A.no(ns.AwardsShow.isOpen())
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      local st = state(ns)
+      A.ok(ns.AwardsShow.isOpen(), "the fight is over")
+      A.eq(st.role, "viewer"); A.eq(st.index, 2); A.eq(st.phase, "reveal", "straight to the latest card's reveal")
+      A.eq(st.title, "Medic")
+      ns.AwardsShow.close()
+      -- the show closed during the fight: nothing opens afterwards
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-2", v = "session" })
+      receive(W, ns, "Frostie", "AWX", { id = "Frostie-2" })
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.no(ns.AwardsShow.isOpen(), "AWX during the fight")
+      -- only the start seen: it opens loading
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-3", v = "session" })
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.ok(ns.AwardsShow.isOpen())
+      A.eq(state(ns).phase, "loading")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    viewer_idle_show_closes = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      W:advance(59)
+      A.ok(ns.AwardsShow.isOpen())
+      card(W, ns, "Frostie", { id = id, i = "2", k = "end" })
+      W:advance(59)
+      A.ok(ns.AwardsShow.isOpen(), "a card restarts the clock")
+      W:advance(2)
+      A.no(ns.AwardsShow.isOpen(), "61 s of silence")
+      -- waiting in a fight also gives up after 60 s
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-2", v = "session" })
+      W:advance(61)
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.no(ns.AwardsShow.isOpen(), "the presenter went quiet during the fight")
+    end,
+
+    second_show_is_ignored = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      hello(W, ns, "Lurabe", "ROGUE")
+      receive(W, ns, "Lurabe", "AWS", { id = "Lurabe-1", v = "all" })
+      card(W, ns, "Lurabe", { id = "Lurabe-1", i = "1", k = "nobody" })
+      card(W, ns, "Lurabe", { id = id, i = "1", k = "nobody" })
+      local st = state(ns)
+      A.eq(st.header, "TwizCrew Awards: Frostie's show")
+      A.eq(st.phase, "loading", "only Frostie's cards for Frostie's show")
+    end,
+
+    presenter_ignores_other_shows = function(ns, A, W)
+      crewNight(ns, W)
+      ns.AwardsShow.start("session")
+      W:advance(5)
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = "session" })
+      card(W, ns, "Frostie", { id = "Frostie-1", i = "1", k = "nobody" })
+      local st = state(ns)
+      A.eq(st.role, "presenter")
+      A.eq(st.phase, "badge")
+      A.eq(st.header, "TwizCrew Awards: this session")
+    end,
+
+    starting_again_restarts_the_idle_clock = function(ns, A, W)
+      crewNight(ns, W)
+      ns.AwardsShow.start("session")
+      W:advance(5 + 57) -- the first card's idle clock ends 3 s from now
+      ns.AwardsShow.start("all")
+      W:advance(4) -- still loading the new show
+      A.ok(ns.AwardsShow.isOpen(), "the old show's clock does not close the new one")
+    end,
+
+    many_tied_winners_fit_one_message = function(ns, A, W)
+      start(ns, W)
+      local L = ns.ShowLogic
+      local winners = {}
+      for i = 1, 20 do winners[i] = "Longername" .. string.char(96 + i) .. "xx" end
+      winners[21] = "Bob (test)"
+      local def = ns.StatsDefs.AWARDS[1]
+      local c = { kind = "award", award = { def = def, winners = winners, text = "8 deaths" } }
+      local f = L.cardToWire("Twiz-1700000000", 7, c, nil, true)
+      local pieces = ns.Codec.encode("AWC", f, { repeatKeys = { "id", "i" } })
+      A.eq(#pieces, 1, "one piece")
+      local got = ns.Codec.decode(pieces[1]).fields
+      A.eq(got.w, f.w, "w is not cut")
+      A.eq(got.x, "8 deaths"); A.eq(got.r, "1")
+      local sent = L.cardFromWire(got)
+      A.ok(#sent.winners < 20)
+      A.eq(#sent.winners + tonumber(got.m), 20, "the rest are counted; the fake one is left out")
+      A.eq(sent.more, tonumber(got.m))
+      for i, name in ipairs(sent.winners) do A.eq(name, winners[i]) end
+      -- few winners: no m
+      f = L.cardToWire("Twiz-1", 1, { kind = "award", award = { def = def, winners = { "Twiz", "Bob (test)" },
+        text = "1 death" } })
+      A.eq(f.w, "Twiz", "fake crew members are never sent"); A.eq(f.m, nil)
+      -- the viewer shows "and N more"
+      hello(W, ns, "Frostie")
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = "session" })
+      got.id = "Frostie-1"
+      card(W, ns, "Frostie", got)
+      local st = state(ns)
+      A.eq(st.phase, "reveal")
+      A.eq(st.more, tonumber(got.m))
+      A.ok(st.line:find("and " .. got.m .. " more", 1, true), st.line)
+    end,
+
+    streak_must_be_a_number = function(ns, A)
+      local L = ns.ShowLogic
+      local c = { kind = "award", award = { def = ns.StatsDefs.AWARDS[1], winners = { "Twiz" }, text = "1" } }
+      A.eq(L.cardToWire("Twiz-1", 1, c, "3").s, "3")
+      A.eq(L.cardToWire("Twiz-1", 1, c, "nope").s, nil)
+      A.eq(L.cardToWire("Twiz-1", 1, c, {}).s, nil)
+    end,
+
+    viewer_names_escaped_once = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      card(W, ns, "Frostie", { id = id, i = "1", k = "award", a = "corpse", w = "Fro|stie", x = "a|b", r = "1" })
+      local st = state(ns)
+      A.eq(st.winners, { "Fro||stie" })
+      A.ok(st.line:find("Fro||stie", 1, true) and not st.line:find("Fro||||stie", 1, true), st.line)
+      A.eq(st.number, "a||b")
     end,
   },
 }

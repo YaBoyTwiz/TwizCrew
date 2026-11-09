@@ -14,6 +14,31 @@ end
 
 local function entry(name, stats) return { name = name, stats = stats } end
 
+-- Counts stolen crown pop-ups (Popups.notice calls) and keeps the last one.
+local function watchNotices(ns)
+  local seen = { n = 0 }
+  local real = ns.Popups.notice
+  ns.Popups.notice = function(icon, title, sub, onClick, seconds)
+    seen.n, seen.title, seen.sub, seen.onClick = seen.n + 1, title, sub, onClick
+    return real(icon, title, sub, onClick, seconds)
+  end
+  return seen
+end
+
+-- Booted, past the first 15 minutes, Lurabe 2 deaths and 50 jumps, me 3 deaths and 10 jumps: corpse is mine,
+-- bunny is hers. Returns the session id.
+local function oldSession(ns, W)
+  boot(W)
+  W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+  local sid = ns.Session.current().id
+  receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "2", s_jp = "50" })
+  ns.Stats.count("dt", 3)
+  ns.Stats.count("jp", 10)
+  W:advance(901)
+  ns.Steals.check() -- baseline
+  return sid
+end
+
 return {
   files = "toc",
   tests = {
@@ -244,12 +269,131 @@ return {
       ns.Steals.flush()
       A.contains(ns.Steals.lastShown(), "crowns changed hands")
       -- switched off
+      local seen = watchNotices(ns)
       ns.Modules.set("roasts", "stealPopups", false)
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "4", s_dt = "20", s_jp = "50" })
       ns.Steals.check()
       W:advance(61)
       ns.Steals.flush()
-      A.contains(ns.Steals.lastShown(), "crowns changed hands", "nothing new while off")
+      A.eq(seen.n, 0, "nothing new while off")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    turning_stats_off_steals_nothing = function(ns, A, W)
+      local sid = oldSession(ns, W)
+      local seen = watchNotices(ns)
+      ns.Modules.setEnabled("stats", false) -- I leave the board: corpse "passes" to Lurabe
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "my stats off: no steal")
+      ns.Modules.setEnabled("stats", true) -- back: corpse is mine again
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "back on: a silent baseline, not stealing back")
+      -- a friend who turns stats off: her bunny "passes" to me, then back to her
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", off = "1" })
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "her stats off: no steal")
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "2", s_jp = "50" })
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "her stats back on: no steal")
+      -- still works after all that
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "4", s_dt = "9", s_jp = "50" })
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 1)
+      A.eq(seen.title, "Lurabe just stole Professional Corpse from Twiz!")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    steals_are_merged_per_award = function(ns, A, W)
+      local sid = oldSession(ns, W)
+      local seen = watchNotices(ns)
+      -- stolen and taken back inside the minute: undone, nothing shown
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "5", s_jp = "50" })
+      ns.Stats.count("dt", 3) -- 6
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "two flips: undone")
+      -- a steal that sticks: shown once
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "8", s_jp = "50" })
+      ns.Steals.check()
+      ns.Steals.flush()
+      A.eq(seen.n, 1)
+      A.eq(seen.title, "Lurabe just stole Professional Corpse from Twiz!")
+      -- three flips (me, her, me): one award, shown once, from the first victim
+      W:advance(61)
+      ns.Stats.count("dt", 3) -- 9
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "4", s_dt = "10", s_jp = "50" })
+      ns.Stats.count("dt", 2) -- 11
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 2)
+      A.eq(seen.title, "Twiz just stole Professional Corpse from Lurabe!")
+      A.eq(seen.sub, "(11 deaths vs 10 deaths)  -  click to see")
+      -- two different awards: one pop-up, each listed once
+      W:advance(61)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "5", s_dt = "12", s_jp = "50" }) -- corpse is hers
+      ns.Stats.count("jp", 41) -- 51: bunny is mine
+      ns.Stats.count("dt", 2) -- 13: corpse back to me...
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "6", s_dt = "14", s_jp = "50" }) -- ...and hers again
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.eq(seen.n, 3)
+      A.eq(seen.title, "2 crowns changed hands")
+      A.eq(seen.sub, "Professional Corpse: Lurabe, Bunny Hopper: Twiz")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    rates_and_right_now_awards_are_never_stolen = function(ns, A)
+      local L, S = ns.TrophyLogic, ns.StatsLogic
+      local before = { entry("Twiz", { gn = 100, pt = 3600, st = 1000, xt = 3600, xg = 100, mt = 5000 }),
+        entry("Lurabe", { gn = 200, pt = 3600, st = 2000, xt = 3600, xg = 200, mt = 2000 }) }
+      local after = { entry("Twiz", { gn = 300, pt = 3600, st = 3000, xt = 3600, xg = 300, mt = 1000 }),
+        entry("Lurabe", { gn = 200, pt = 3600, st = 2000, xt = 3600, xg = 200, mt = 2000 }) }
+      local old, list = L.leaders(S.awards(before)), S.awards(after)
+      local now = L.leaders(list)
+      for _, id in ipairs({ "pauper", "couch", "snail", "neverwalks" }) do
+        A.eq(old[id], { "Twiz" }, id .. " was mine")
+        A.eq(now[id], { "Lurabe" }, id .. " is hers now")
+      end
+      local ids = {}
+      for _, s in ipairs(L.steals(old, list, function() return "" end)) do ids[#ids + 1] = s.def.id end
+      A.eq(ids, { "marathon" }, "only Marathon Runner was taken by doing something")
+    end,
+    clicking_a_steal_opens_this_sessions_board = function(ns, A, W)
+      local sid = oldSession(ns, W)
+      local seen = watchNotices(ns)
+      ns.Commands.setPanel(false, true)
+      ns.Board.setView("all")
+      ns.Board.setTab("lazy")
+      W:advance(1)
+      A.eq(ns.Panel.isShown(), false)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "9", s_jp = "50" })
+      ns.Steals.check()
+      ns.Steals.flush()
+      A.eq(seen.n, 1)
+      seen.onClick()
+      W:advance(1)
+      A.eq(ns.Panel.isShown(), true)
+      A.eq(ns.Panel.tab(), "shame")
+      A.eq(ns.Board.tab(), "deaths")
+      A.eq(ns.Board.view(), "session")
+      -- stats off: the click does nothing
+      ns.Commands.setPanel(false, true)
+      ns.Board.setView("all")
+      ns.Modules.setEnabled("stats", false)
+      seen.onClick()
+      W:advance(1)
+      A.eq(ns.Panel.isShown(), false)
+      A.eq(ns.Board.view(), "all")
       A.eq(ns.Log.errors(10), {})
     end,
   },

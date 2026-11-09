@@ -152,15 +152,23 @@ function L.leaders(awardsList)
   return out
 end
 
+local function allIn(list, set)
+  for _, name in ipairs(list) do if not set[name] then return false end end
+  return true
+end
+
 -- Steals between the old leaders and the awards now: the new winners share nobody with the old ones.
--- valueOf(def, name) -> the person's number as text ("8 deaths").
-function L.steals(old, awardsList, valueOf)
+-- valueOf(def, name) -> the person's number as text ("8 deaths"). here / wasHere (optional sets of names): who is on
+-- the board now / was at the last check. A victim who left (stats off) or a thief who just came back is no steal.
+-- Awards with `noSteal` never count.
+function L.steals(old, awardsList, valueOf, here, wasHere)
   local out = {}
   local now = L.leaders(awardsList)
   for _, a in ipairs(awardsList or {}) do
     local id = a.def.id
     local before, after = old and old[id], now[id]
-    if before and after and #before > 0 then
+    if before and after and #before > 0 and not a.def.noSteal
+      and (not here or allIn(before, here)) and (not wasHere or allIn(after, wasHere)) then
       local shared = false
       for _, name in ipairs(after) do if has(before, name) then shared = true end end
       if not shared then

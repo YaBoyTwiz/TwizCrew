@@ -46,6 +46,7 @@ Stats\Detectors.lua
 Stats\Stats.lua
 Stats\TrophyLogic.lua
 Stats\Trophies.lua
+Stats\Steals.lua
 Stats\Roasts.lua
 UI\MockShow.lua
 UI\MockEditor.lua

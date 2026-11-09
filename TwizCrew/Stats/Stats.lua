@@ -258,6 +258,7 @@ ns.Modules.register({
     sendTicker = C_Timer.NewTicker(ns.Config.STATS_SEND_INTERVAL, function() ns.Log.safe(FEATURE, sendIfChanged) end)
     if cur then Stats.send() end -- turned back on: friends see my numbers again
     if ns.Trophies then ns.Trophies.start() end
+    if ns.Steals then ns.Steals.start() end
   end,
   -- Also runs when the error breaker turns the module off: both are announced the same way.
   onDisable = function()

@@ -334,6 +334,7 @@ local function awardValue(def, stats)
   if not isNumber(v) or v == math.huge or v == -math.huge then return nil end
   return v
 end
+L.awardValue = awardValue
 
 function L.awards(entries)
   local out = {}

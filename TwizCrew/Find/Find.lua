@@ -295,6 +295,7 @@ end
 -- A group member who was right next to you and suddenly isn't: their arrow flashes red and a pop-up shows (no sound).
 -- When we are the one who left, RAN_OFF fires instead (the stats count it for Wanderer).
 local runTracks, runUntil, selfTracks = {}, {}, {}
+local lastMe -- { c, x, y, at }: my position at the last look, to tell a teleport from a walk or a flight
 
 function Find.isRunningOff(name)
   return type(name) == "string" and runUntil[name] ~= nil and ns.now() < runUntil[name]
@@ -308,8 +309,18 @@ function Find.alarmForTest(name, dist) runUntil[name] = ns.now() + cfg().FIND_RU
 local function checkRunaways()
   if not ns.roster then return end
   local me = Where.me()
-  if not me then return end
+  local now = ns.now()
   local c = cfg()
+  local before = lastMe
+  lastMe = me and { c = me.c, x = me.x, y = me.y, at = now }
+  if not me then return end
+  -- a portal, summon, hearthstone or a ghost released to the graveyard: we moved faster than any mount
+  local jumped = false
+  if before then
+    local moved = Logic.vector(before, me)
+    jumped = moved == nil or moved > c.MAX_RUN_SPEED * (now - before.at)
+  end
+  local selfOff = jumped or Where.meDead() -- dead or teleported: we didn't run off from anyone
   local opts = { near = c.FIND_RUN_NEAR, far = c.FIND_RUN_FAR, window = c.FIND_RUN_WINDOW }
   local alarmOn = setting("runaway") ~= false
   for _, name in ipairs(ns.roster:names()) do
@@ -328,9 +339,13 @@ local function checkRunaways()
       else
         runTracks[name] = nil
       end
-      local mine, ran, dist = Logic.runaway(selfTracks[name], them, me, ns.now(), opts)
-      selfTracks[name] = mine
-      if ran then ns.Bus.fire("RAN_OFF", name, dist) end
+      if selfOff then
+        selfTracks[name] = nil
+      else
+        local mine, ran, dist = Logic.runaway(selfTracks[name], them, me, now, opts)
+        selfTracks[name] = mine
+        if ran then ns.Bus.fire("RAN_OFF", name, dist) end
+      end
     else
       runTracks[name], selfTracks[name] = nil, nil
     end

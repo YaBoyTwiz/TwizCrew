@@ -176,13 +176,51 @@ return {
       ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
       W:advance(1.1)
-      W.state.map.y = 0.57 -- we walk 140 yards away; Frostie stays
+      W.state.map.y = 0.535 -- we run 140 yards away in two seconds (a mount's speed); Frostie stays
+      W:advance(1)
+      W.state.map.y = 0.57
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
       W:advance(3)
       A.eq(ran, { "Frostie" })
       A.eq(ns.StatsStore.get("session", "wd"), 1)
       W:advance(10)
       A.eq(ns.StatsStore.get("session", "wd"), 1, "once, until we're close again")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_ghost_running_off_is_not_a_wanderer = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      group(W)
+      friend(ns, W, "Frostie")
+      local ran = {}
+      ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
+      W:advance(1.1)
+      W.state.dead = true -- we die and run off as a ghost; Frostie stays
+      W.state.map.y = 0.535
+      W:advance(1)
+      W.state.map.y = 0.57
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(3)
+      A.eq(ran, {}, "dead or a ghost: no run-off")
+      A.eq(ns.StatsStore.get("session", "wd") or 0, 0)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    a_teleport_is_not_running_off = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      group(W)
+      friend(ns, W, "Frostie")
+      local ran = {}
+      ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(1.1)
+      W.state.map.y = 0.65 -- 300 yards in a blink: a portal, a summon or a hearthstone
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(3)
+      A.eq(ran, {}, "a teleport: no run-off")
+      A.eq(ns.StatsStore.get("session", "wd") or 0, 0)
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -195,7 +233,9 @@ return {
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
       W:advance(1.1)
       local before = #ns.Popups.textsForTest()
-      W.state.map.y = 0.57 -- we walk away; Frostie stays
+      W.state.map.y = 0.535 -- we ride away; Frostie stays
+      W:advance(1)
+      W.state.map.y = 0.57
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
       W:advance(3)
       A.eq(ran, { "Frostie" })

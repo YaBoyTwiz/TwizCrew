@@ -58,6 +58,35 @@ local GREY = "You receive loot: |cff9d9d9d|Hitem:2211::::::::1:::::::|h[Broken F
 return {
   files = "toc",
   tests = {
+    set_and_distinct_numbers = function(ns, A, W)
+      start(ns, W)
+      local S = ns.StatsStore
+      S.markSent()
+      A.eq(S.set("gn", 500), true)
+      A.eq(get(ns, "session", "gn"), 500)
+      A.eq(get(ns, "all", "gn"), 500, "the same number in both views")
+      A.ok(S.dirty())
+      S.markSent()
+      A.eq(S.set("gn", 500), false, "no change: not dirty")
+      A.no(S.dirty())
+      A.eq(S.set("gn", 0), true, "0 gold is a real value")
+      A.eq(get(ns, "session", "gn"), 0)
+      A.eq(S.set("dt", 9), false, "only set keys can be set")
+      -- zones: counted once per view
+      A.eq(S.addZone("Elwynn Forest"), true)
+      A.eq(S.addZone("Elwynn Forest"), false)
+      A.eq(S.addZone("Westfall"), true)
+      A.eq(get(ns, "session", "zv"), 2)
+      A.eq(get(ns, "all", "zv"), 2)
+      A.eq(S.addZone(""), false)
+      -- a new session: session zones start over, all time keeps them
+      S.setSession("Ginkan-1", nil, false)
+      A.eq(get(ns, "session", "zv"), 0)
+      A.eq(S.addZone("Westfall"), true, "new this session")
+      A.eq(get(ns, "session", "zv"), 1)
+      A.eq(get(ns, "all", "zv"), 2, "not new for all time")
+      A.eq(get(ns, "session", "gn"), 0, "gold carried is gone until set again")
+    end,
     store_rules = function(ns, A, W)
       start(ns, W)
       local S = ns.StatsStore

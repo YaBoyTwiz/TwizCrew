@@ -41,6 +41,9 @@ function Store.mine()
   if type(rec.sid) ~= "string" then rec.sid = "" end
   if type(rec.s) ~= "table" then rec.s = {} end
   if type(rec.a) ~= "table" then rec.a = {} end
+  -- zones seen (names -> true): this session and all time, for "zv" (Tourist)
+  if type(rec.zs) ~= "table" then rec.zs = {} end
+  if type(rec.za) ~= "table" then rec.za = {} end
   return rec
 end
 
@@ -59,6 +62,35 @@ function Store.add(key, n)
   if not Defs.TIME_KEYS[key] then isDirty = true end
 end
 
+-- A set key (Defs.SET_KEYS): the number now, the same in both views. Returns true when it changed.
+function Store.set(key, value)
+  if not Defs.SET_KEYS[key] or not isNumber(value) or value < 0 then return false end
+  local rec = Store.mine()
+  if not rec then return false end
+  if rec.s[key] == value and rec.a[key] == value then return false end
+  rec.s[key], rec.a[key] = value, value
+  isDirty = true
+  return true
+end
+
+-- A zone visited: "zv" goes up by one in each view where it is new. Returns true when it was new anywhere.
+function Store.addZone(zone)
+  if type(zone) ~= "string" or zone == "" then return false end
+  local rec = Store.mine()
+  if not rec then return false end
+  local added = false
+  for _, pair in ipairs({ { rec.zs, rec.s }, { rec.za, rec.a } }) do
+    local seen, t = pair[1], pair[2]
+    if not seen[zone] then
+      seen[zone] = true
+      t.zv = (isNumber(t.zv) and t.zv or 0) + 1
+      added = true
+    end
+  end
+  if added then isDirty = true end
+  return added
+end
+
 -- view: "session" | "all"
 function Store.get(view, key)
   local rec = Store.mine()
@@ -71,7 +103,7 @@ end
 function Store.setSession(newId, fromId, keep)
   local rec = Store.mine()
   if not rec or type(newId) ~= "string" or rec.sid == newId then return end
-  if not (keep and fromId ~= nil and rec.sid == fromId) then rec.s = {} end
+  if not (keep and fromId ~= nil and rec.sid == fromId) then rec.s, rec.zs = {}, {} end
   rec.sid = newId
   isDirty = true
 end
@@ -79,7 +111,7 @@ end
 function Store.resetMine()
   local rec = Store.mine()
   if not rec then return end
-  rec.s, rec.a = {}, {}
+  rec.s, rec.a, rec.zs, rec.za = {}, {}, {}, {}
   isDirty = true
 end
 

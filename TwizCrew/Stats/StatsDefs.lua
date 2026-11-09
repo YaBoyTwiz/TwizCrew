@@ -2,12 +2,14 @@
 local _, ns = ...
 
 ns.StatsDefs = {
-  -- Every stat key, in wire order. All are sums except "ld" (a minimum).
+  -- Every stat key, in wire order. All are sums except "ld" (a minimum), "gn" (set: the number now, the same in
+  -- both views, sent even at 0) and "zv" (distinct zones, see StatsStore.addZone).
   KEYS = { "dt", "df", "dd", "dw", "db", "ld", "pl", "wp", "af", "ds", "st", "mt", "sw", "jp", "hs", "jk", "rp",
-           "qa", "dl", "dv", "rz", "pt" },
+           "qa", "dl", "dv", "rz", "pt", "gn", "ml", "mg", "nj", "oj", "tf", "wd", "xg", "xt", "ch", "em", "zv", "fp" },
   MIN_KEYS = { ld = true },
+  SET_KEYS = { gn = true },
   -- Keys that never make a send due (time just passing).
-  TIME_KEYS = { pt = true },
+  TIME_KEYS = { pt = true, xt = true },
   ROAST_KINDS = { "weak", "fall", "drown", "again", "deaths", "wipe", "steps", "jumps", "quit" },
   SPELLS = {
     hearth = { names = { "Hearthstone" }, ids = { 8690 } },

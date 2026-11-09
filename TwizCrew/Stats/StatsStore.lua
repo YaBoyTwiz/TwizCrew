@@ -144,7 +144,9 @@ local function clean(t)
 end
 
 -- A friend's STATS piece (decoded fields). A new (sid, q) replaces their record, the same (sid, q) merges the
--- piece in; "off" keeps their numbers but hides them until a new snapshot comes. Returns true when saved.
+-- piece in; "off" keeps their numbers but hides them until a new snapshot comes. A new sid keeps their old
+-- session's numbers in rec.prev (their STATS can arrive before the UPDATE that ends my session).
+-- Returns true when saved.
 function Store.applyWire(name, fields, wall)
   local snap = ns.StatsLogic.fromWire(fields)
   if not snap or type(name) ~= "string" or name == "" then return false end
@@ -160,7 +162,9 @@ function Store.applyWire(name, fields, wall)
     for key, v in pairs(snap.s) do rec.s[key] = v end
     for key, v in pairs(snap.a) do rec.a[key] = v end
   else
-    rec = { sid = snap.sid, q = snap.q, s = snap.s, a = snap.a }
+    local prev = rec and rec.prev
+    if rec and rec.sid ~= snap.sid and not rec.off then prev = { sid = rec.sid, s = rec.s, at = rec.at } end
+    rec = { sid = snap.sid, q = snap.q, s = snap.s, a = snap.a, prev = prev }
   end
   rec.at = wall
   stats.crew[name] = rec
@@ -173,7 +177,8 @@ end
 
 -- view: "session" | "all". Array of { name, class, stats, mine, at, online }, sorted by name: my characters (this
 -- one only while the stats module is on) and every crew record that is not off and not one of mine. "session"
--- keeps only records of sessionId (nobody when it is nil) and shows their session numbers.
+-- keeps only records of sessionId (nobody when it is nil) and shows their session numbers; a friend who already
+-- moved on is listed with their numbers from that session (rec.prev).
 function Store.entries(view, sessionId)
   local stats = root()
   local out = {}
@@ -195,6 +200,10 @@ function Store.entries(view, sessionId)
     end
   end
   for name, rec in pairs(stats.crew) do
+    if type(rec) == "table" and session and rec.sid ~= sessionId and type(rec.prev) == "table"
+      and rec.prev.sid == sessionId then
+      rec = { sid = sessionId, s = rec.prev.s, at = rec.prev.at, off = rec.off }
+    end
     if type(name) == "string" and wanted(rec) and not rec.off and stats.chars[name] == nil then
       local m = ns.roster and ns.roster:get(name)
       out[#out + 1] = {

@@ -326,6 +326,25 @@ return {
       A.no(find(ns.StatsStore.entries("session", "Ginkan-5"), "Ginkan"))
     end,
 
+    a_friends_new_session_keeps_their_old_numbers = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      receive(W, "Frostie", "STATS", { sid = S, q = "1", s_dt = "3", a_dt = "9" }, ns)
+      receive(W, "Frostie", "STATS", { sid = "Frostie-9", q = "2", s_dt = "1", a_dt = "10" }, ns)
+      receive(W, "Frostie", "STATS", { sid = "Frostie-9", q = "3", s_dt = "2", a_dt = "11" }, ns)
+      local old = ns.StatsStore.entries("session", S)
+      A.eq(names(old), { "Frostie", "Twiz" }, "still listed in the old session, once")
+      A.eq(find(old, "Frostie").stats, { dt = 3 }, "with the old numbers")
+      local new = ns.StatsStore.entries("session", "Frostie-9")
+      A.eq(names(new), { "Frostie" })
+      A.eq(find(new, "Frostie").stats, { dt = 2 })
+      A.eq(find(ns.StatsStore.entries("all"), "Frostie").stats, { dt = 11 }, "all time: just the newest")
+      A.eq(#ns.StatsStore.entries("all"), 2)
+      -- broken saved numbers are cleaned
+      ns.db.stats.crew.Frostie.prev.s = { dt = "x", jp = 4 }
+      A.eq(find(ns.StatsStore.entries("session", S), "Frostie").stats, { jp = 4 })
+    end,
+
     stats_from_broken_copy_is_tamed = function(ns, A, W)
       start(ns, W)
       local fired = 0

@@ -2,7 +2,8 @@
 -- db.stats.trophies[sid] (kept forever) and are swapped pull-only, like the calendar's diaries:
 --   TRD  digest: r = the DIGEST_SIZE newest session ids I have (to everyone now and then, and to a friend coming online)
 --   TRQ  "send me session s" (to one friend whose digest has a session I lack)
---   TRP  one session's record (TrophyLogic.toWire), in pieces merged per sender and session until complete
+--   TRP  one session's record (TrophyLogic.toWire), in pieces merged per sender and session until complete;
+--        the first record of a session is kept unless one with more people comes
 -- Runs under the feature id "trophies" (not a module): it follows the stats module (no records while it is off).
 local _, ns = ...
 
@@ -13,6 +14,7 @@ local FEATURE = "trophies"
 local L = ns.TrophyLogic
 
 local DIGEST_SIZE = 10
+local DIGEST_CHARS = 200 -- the digest's r is never longer
 local DIGEST_EVERY = 600 -- seconds between digests to everyone
 local FIRST_DIGEST = 25  -- after login
 local ASK_GAP = 120      -- seconds before asking for the same session again
@@ -36,10 +38,16 @@ function Trophies.records() return store() or {} end
 
 local function add(r)
   local t = store()
-  if not t or type(r) ~= "table" or t[r.sid] ~= nil then return false end
+  if not t or type(r) ~= "table" then return false end
+  local old = t[r.sid]
+  if old ~= nil and not (type(old.people) == "table" and #r.people > #old.people) then return false end
   t[r.sid] = r
   cache = nil
-  ns.Log.add("info", "trophies: session %s recorded (%d people)", r.sid, #r.people)
+  if old ~= nil then
+    ns.Log.add("info", "trophies: session %s replaced (%d people instead of %d)", r.sid, #r.people, #old.people)
+  else
+    ns.Log.add("info", "trophies: session %s recorded (%d people)", r.sid, #r.people)
+  end
   ns.Bus.fire("TROPHIES_CHANGED", r.sid)
   return true
 end
@@ -84,8 +92,13 @@ local function newest()
     if a.start ~= b.start then return a.start > b.start end
     return a.sid > b.sid
   end)
-  local out = {}
-  for i = 1, math.min(DIGEST_SIZE, #list) do out[i] = list[i].sid end
+  -- newest first; the oldest are left out when the list would grow past DIGEST_CHARS
+  local out, len = {}, -1
+  for i = 1, math.min(DIGEST_SIZE, #list) do
+    len = len + 1 + #list[i].sid
+    if len > DIGEST_CHARS then break end
+    out[i] = list[i].sid
+  end
   return out
 end
 
@@ -135,7 +148,6 @@ end
 
 local function onRecord(sender, f)
   if not on() or not known(sender) or type(f) ~= "table" or type(f.s) ~= "string" then return end
-  if Trophies.records()[f.s] then return end
   local key = sender .. ">" .. f.s
   local p = pending[key]
   if not p or ns.now() - p.at > PIECE_LIFE then p = { at = ns.now(), fields = {} }; pending[key] = p end

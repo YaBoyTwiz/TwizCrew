@@ -119,6 +119,80 @@ return {
         people = { "Lurabe", "Twiz" }, winners = { bunny = { "Lurabe" } } }))
       A.eq(ns.Trophies.records()["Lurabe-500"].winners.bunny, { "Twiz" }, "the first one is kept")
     end,
+    a_friend_starting_a_new_session_stays_in_the_old_record = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      for _, name in ipairs({ "Lurabe", "Ginkan" }) do
+        receive(W, ns, name, "STATE", { ver = "0.1.22", cl = "MAGE", lv = "20", zn = "Elwynn Forest", sz = "",
+          lk = "", ins = "0" })
+      end
+      local sid = ns.Session.current().id
+      W:advance(1900)
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "5", s_pt = "1900" })
+      receive(W, ns, "Ginkan", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      local newId = "Lurabe-" .. (ns.wallclock() + 5)
+      -- Lurabe pressed "new": her STATS (new sid, numbers wiped) comes first, her UPDATE after a short delay
+      receive(W, ns, "Lurabe", "STATS", { sid = newId, q = "2", s_pt = "0" })
+      receive(W, ns, "Lurabe", "STATS", { sid = newId, q = "3", s_pt = "1" }) -- another one before the UPDATE
+      A.eq(next(ns.Trophies.records()), nil, "nothing recorded yet")
+      receive(W, ns, "Lurabe", "UPDATE", { sid = newId, sst = tostring(ns.wallclock() + 5) .. "m" })
+      A.eq(ns.Session.current().id, newId, "my session switched")
+      local r = ns.Trophies.records()[sid]
+      A.ok(r, "the old session was recorded")
+      A.eq(r and r.people, { "Ginkan", "Lurabe", "Twiz" })
+      A.eq(r and r.winners.corpse, { "Lurabe" }, "Lurabe keeps her crown")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_record_with_more_people_replaces_mine = function(ns, A, W)
+      boot(W)
+      receive(W, ns, "Lurabe", "STATE", { ver = "0.1.22", cl = "MAGE", lv = "20", zn = "Elwynn Forest", sz = "",
+        lk = "", ins = "0" })
+      local fired = 0
+      ns.Bus.on("test", "TROPHIES_CHANGED", function() fired = fired + 1 end)
+      local small = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Twiz" }, winners = { corpse = { "Twiz" } } }
+      ns.Trophies.records()["Twiz-500"] = small
+      A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy")
+      -- same number of people: mine stays
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire({ sid = "Twiz-500", start = 500,
+        people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }))
+      A.eq(ns.Trophies.records()["Twiz-500"], small, "a tie keeps mine")
+      A.eq(fired, 0)
+      -- more people: theirs replaces mine
+      local big = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Lurabe", "Twiz" },
+        winners = { corpse = { "Lurabe" } } }
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(big))
+      A.eq(ns.Trophies.records()["Twiz-500"], big, "the fuller record wins")
+      A.eq(fired, 1)
+      A.eq(ns.Trophies.lineFor("Twiz"), nil, "the summary was rebuilt")
+      A.eq(ns.Trophies.lineFor("Lurabe"), "1 trophy")
+      -- fewer people: mine stays
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(small))
+      A.eq(ns.Trophies.records()["Twiz-500"], big, "fewer people: ignored")
+      A.eq(fired, 1)
+    end,
+    the_digest_stays_short = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      local recs = ns.Trophies.records()
+      for i = 1, 12 do
+        local sid = string.rep("Averyveryverylongcharactername", 1) .. "-" .. (1000000000 + i)
+        recs[sid] = { sid = sid, start = 1000000000 + i, people = { "Lurabe", "Twiz" }, winners = {} }
+      end
+      local mark = #W.sent
+      ns.Trophies.sendDigest()
+      W:advance(3)
+      local r
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "TRD" then r = msg.fields.r end
+      end
+      A.ok(r, "a digest was sent")
+      A.ok(#r <= 200, "at most 200 characters, got " .. #(r or ""))
+      A.ok(r:find("Averyveryverylongcharactername-1000000012", 1, true) == 1, "newest first")
+      A.no(r:find("1000000001", 1, true), "the oldest are dropped")
+      for sid in r:gmatch("[^,]+") do A.ok(recs[sid], "whole ids only: " .. sid) end
+    end,
     the_summary_is_cached_until_a_record_is_added = function(ns, A, W)
       boot(W)
       local recs = ns.Trophies.records()

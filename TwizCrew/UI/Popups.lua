@@ -284,7 +284,8 @@ local function tick()
     p = stillTrue(p)
     if p then
       show(p)
-      if p.kind == "levelup" then dings = dings + 1 else shown = shown + 1 end
+      -- running off is silent (owner, 2026-11-08): only its flashing and the pop-up
+      if p.kind == "levelup" then dings = dings + 1 elseif p.kind ~= "runaway" then shown = shown + 1 end
     end
   end
   layout()

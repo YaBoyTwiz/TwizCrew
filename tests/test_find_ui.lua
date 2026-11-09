@@ -151,7 +151,7 @@ return {
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" }) -- 140 yards away a few seconds later
       W:advance(3)
       A.ok(ns.Find.isRunningOff("Frostie"), "running off")
-      A.ok(#played >= 1, "a sound")
+      A.eq(played, {}, "no sound (owner 2026-11-08: the flashing and the pop-up are enough)")
       local t = ns.Popups.textsForTest()
       A.eq(t[#t].text, "Frostie is running off!")
       A.eq(t[#t].subtext, "140 yd away: click for the big arrow")

@@ -317,9 +317,7 @@ local function checkRunaways()
         runUntil[name] = ns.now() + c.FIND_RUN_ALARM
         ns.Log.add("info", "find: %s is running off (%d yd)", name, math.floor(dist or 0))
         ns.Bus.fire("RUNNING_OFF", name, dist)
-        if setting("runawaySound") ~= false and type(PlaySound) == "function" and type(SOUNDKIT) == "table" then
-          pcall(PlaySound, SOUNDKIT.RAID_WARNING or 8959, "Master")
-        end
+        -- no sound (owner, 2026-11-08): the flashing arrow and the pop-up are enough
         if ns.Popups and ns.Popups.runaway then ns.Popups.runaway(name, Logic.distanceText(dist or 0)) end
       end
     else
@@ -401,7 +399,7 @@ ns.Modules.register({
     .. "to tell your party (or everyone) to meet there. Your position only goes to your group.",
   defaults = {
     rowArrows = true, meetups = true, sharePosition = true, meetPopup = true, meetArrow = true, meetMinimap = true,
-    runaway = true, runawaySound = true,
+    runaway = true,
     arrowScale = 1.0, arrowPos = { point = "TOP", x = 230, y = -150 },
   },
   settings = {
@@ -411,9 +409,7 @@ ns.Modules.register({
     { key = "runaway", label = "Warn me when someone runs off", kind = "toggle",
       info = "When a group member who was right next to you is suddenly far away (about 100 yards within 20 "
         .. "seconds, and they moved, not you), their arrow on the panel flashes red and grows, a pop-up says so (click "
-        .. "it for the big arrow), and the big arrow flashes too if it points at them." },
-    { key = "runawaySound", label = "With a sound", kind = "toggle", parent = "runaway",
-      info = "Plays the raid warning sound with the running-off warning, so you notice even when you're busy." },
+        .. "it for the big arrow), and the big arrow flashes too if it points at them. No sound." },
     { key = "meetups", label = "Meet-ups", kind = "toggle",
       info = "Ctrl + right-click a spot on the world map to ask your party (or everyone) to meet there. They get a "
         .. "pop-up, an arrow and an icon on their map. Off: you can't send them and you don't get them." },

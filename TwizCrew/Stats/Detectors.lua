@@ -477,6 +477,26 @@ add({ id = "gold", label = "gold carried, lost and gained",
   end,
   tick = readGold })
 
+-- Red errors: "Not enough mana" (Out of Juice), "Out of range" (Too Far Away). Repeats within ERROR_GAP s count once.
+local ERROR_GAP = 2
+local errorTexts, errorLimiter
+add({ id = "errors", label = "red error messages",
+  needs = function()
+    errorTexts = Logic.errorTexts(ns.StatsDefs.ERRORS, _G)
+    if next(errorTexts) == nil then return false, "no error texts" end
+    return true
+  end,
+  start = function()
+    errorLimiter = Logic.newLimiter(ERROR_GAP)
+    onEvent(byId.errors, "UI_ERROR_MESSAGE", function(a, b)
+      local message = a
+      if type(a) ~= "string" then message = b end -- newer clients send (errorType, message)
+      if secret(message) then return end
+      local key = Logic.errorKey(message, errorTexts)
+      if key and errorLimiter:allow(key, ns.now()) then api.count(key, 1) end
+    end)
+  end })
+
 local ABANDON_DEDUPE = 1
 local lastAbandon
 add({ id = "abandon", label = "quests abandoned",

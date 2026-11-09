@@ -801,6 +801,23 @@ return {
       A.ok(statusOf(ns, "gold").on, "and never an error")
     end,
 
+    red_errors_count_once_per_two_seconds = function(ns, A, W)
+      start(ns, W, function()
+        W.env.ERR_OUT_OF_MANA = "Not enough mana"
+        W.env.ERR_OUT_OF_RANGE = "Out of range."
+      end)
+      W:fire("UI_ERROR_MESSAGE", 51, "Not enough mana")
+      W:fire("UI_ERROR_MESSAGE", 51, "Not enough mana") -- mashing the button
+      A.eq(get(ns, "session", "oj"), 1)
+      W:advance(2.1)
+      W:fire("UI_ERROR_MESSAGE", "Not enough mana") -- older clients: the text comes first
+      A.eq(get(ns, "session", "oj"), 2)
+      W:fire("UI_ERROR_MESSAGE", 52, "Out of range.")
+      A.eq(get(ns, "session", "tf"), 1)
+      W:fire("UI_ERROR_MESSAGE", 53, "Can't do that while moving")
+      A.eq(get(ns, "session", "oj") + get(ns, "session", "tf"), 3)
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0
@@ -831,7 +848,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "gold", "abandon", "duel" })
+        "repair", "gold", "errors", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

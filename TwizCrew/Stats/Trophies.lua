@@ -167,6 +167,7 @@ ns.Comm.on("TRP", function(s, f) ns.Log.safe(FEATURE, onRecord, s, f) end)
 function Trophies.start()
   if started then return end
   started = true
+  ns.Bus.on(FEATURE, "TROPHIES_CHANGED", function() cache = nil end)
   C_Timer.After(FIRST_DIGEST, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)
   C_Timer.NewTicker(DIGEST_EVERY, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)

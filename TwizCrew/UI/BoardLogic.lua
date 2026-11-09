@@ -76,7 +76,58 @@ local function wipes(ctx)
   return math.floor(most)
 end
 
+BoardLogic.TROPHY_TAB = { id = "trophies", label = "Trophies", name = "Trophies" }
+
+local function awardDef(id)
+  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
+end
+
+-- One row per person with trophies: "7 trophies", their top awards by count, a tooltip with every award and streak.
+local function trophyRows(summary, ctx)
+  local people = {}
+  for name, p in pairs(summary or {}) do
+    if type(p) == "table" and (p.total or 0) > 0 then people[#people + 1] = { name = name, p = p } end
+  end
+  table.sort(people, function(a, b)
+    if a.p.total ~= b.p.total then return a.p.total > b.p.total end
+    return a.name < b.name
+  end)
+  local rows = {}
+  for _, x in ipairs(people) do
+    local awards = {}
+    for id, n in pairs(x.p.counts or {}) do
+      local d = awardDef(id)
+      if d then awards[#awards + 1] = { name = d.name, n = n, streak = (x.p.streaks or {})[id] } end
+    end
+    table.sort(awards, function(a, b)
+      if a.n ~= b.n then return a.n > b.n end
+      return a.name < b.name
+    end)
+    local total = x.p.total .. (x.p.total == 1 and " trophy" or " trophies")
+    local parts, tip = {}, { text(x.name) .. ": " .. total }
+    for i, a in ipairs(awards) do
+      if i <= 2 then parts[#parts + 1] = a.name .. " x" .. a.n end
+      local line = a.name .. ": " .. a.n
+      if a.streak and a.streak >= 2 then line = line .. " (" .. a.streak .. " sessions in a row)" end
+      tip[#tip + 1] = line
+    end
+    local e = ctx.entries and ctx.entries[x.name]
+    rows[#rows + 1] = {
+      id = x.name, name = text(x.name), icon = "Interface\\Icons\\INV_Misc_Ribbon_01", text = total,
+      winners = { table.concat(parts, ", ") }, classes = { type(e) == "table" and e.class or false },
+      more = 0, empty = false, tip = tip,
+    }
+  end
+  if #rows == 0 then
+    rows[1] = { id = "none", name = "No trophies yet", icon = ns.StatsDefs.ICON_FALLBACK, text = "", winners = {},
+      classes = {}, more = 0, empty = true,
+      tip = { "Trophies are handed out when a crew session ends (at least 30 minutes, at least 2 people)." } }
+  end
+  return rows
+end
+
 local function tabOf(id)
+  if id == "trophies" then return BoardLogic.TROPHY_TAB end
   for _, t in ipairs(ns.StatsDefs.TABS) do if t.id == id then return t end end
   return ns.StatsDefs.TABS[1]
 end
@@ -93,6 +144,13 @@ function BoardLogic.model(view, awardsList, ctx)
   local out = { rows = {}, tabs = {} }
   for _, t in ipairs(ns.StatsDefs.TABS) do
     out.tabs[#out.tabs + 1] = { id = t.id, label = t.label, active = t.id == tab.id }
+  end
+  out.tabs[#out.tabs + 1] = { id = BoardLogic.TROPHY_TAB.id, label = BoardLogic.TROPHY_TAB.label,
+    active = tab.id == BoardLogic.TROPHY_TAB.id }
+  if tab.id == "trophies" then
+    out.subtitle = "Trophies: from every session the crew played"
+    out.rows = trophyRows(ctx.trophies, ctx)
+    return out
   end
   local sub
   if not session then

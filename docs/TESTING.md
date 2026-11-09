@@ -285,7 +285,10 @@ this is the list of what to report:
 2. Live roasts > "Stolen crown pop-ups" off: no more steal pop-ups.
 3. After 30+ minutes with a friend, type `/tc session new`: the Hall of Shame's Trophies tab lists the winners of
    the session that just ended. Your friend's Trophies tab shows the same.
-4. A friend who was offline when that session ended logs in: within a minute their Trophies tab has it too.
+4. A friend who was offline when that session ended logs in: within a minute their Trophies tab has it too. A
+   friend who left early (logged off before the session ended) gets a record at their next login from the numbers
+   they had; once someone who stayed to the end is online, it is swapped for the full version within about 10
+   minutes.
 5. Win the same award two sessions in a row: the Trophies tab's tooltip and your row's tooltip on the Crew tab say
    "streak x2".
 

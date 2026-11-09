@@ -1,11 +1,23 @@
 return {
   files = { "Core/Init.lua", "Core/Util.lua", "Stats/StatsDefs.lua", "Stats/StatsLogic.lua" },
   tests = {
+    wire_sends_gold_carried_at_zero = function(ns, A)
+      local L = ns.StatsLogic
+      local f = L.toWire({ sid = "x", q = "1", s = { gn = 0, dt = 0, ml = 50 }, a = { gn = 0, zv = 3 } })
+      A.eq(f.s_gn, "0", "0 gold goes out")
+      A.eq(f.s_dt, nil, "other zeros don't")
+      A.eq(f.s_ml, "50")
+      A.eq(f.a_zv, "3")
+      local back = L.fromWire(f)
+      A.eq(back.s.gn, 0)
+      A.eq(back.a.zv, 3)
+    end,
     defs_shape = function(ns, A)
       local D = ns.StatsDefs
-      A.eq(table.concat(D.KEYS, " "), "dt df dd dw db ld pl wp af ds st mt sw jp hs jk rp qa dl dv rz pt")
+      A.eq(table.concat(D.KEYS, " "), "dt df dd dw db ld pl wp af ds st mt sw jp hs jk rp qa dl dv rz pt gn ml mg nj oj tf wd xg xt ch em zv fp")
       A.eq(D.MIN_KEYS, { ld = true })
-      A.eq(D.TIME_KEYS, { pt = true })
+      A.eq(D.SET_KEYS, { gn = true })
+      A.eq(D.TIME_KEYS, { pt = true, xt = true })
       A.eq(table.concat(D.ROAST_KINDS, " "), "weak fall drown again deaths wipe steps jumps quit")
       A.eq(D.SPELLS.hearth.ids, { 8690 })
       A.eq(#D.SPELLS.rez.ids, 20)

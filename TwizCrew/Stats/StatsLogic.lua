@@ -358,7 +358,9 @@ function L.toWire(snap)
         local v = src[key]
         if isNumber(v) and v ~= math.huge then
           v = math.floor(v)
-          if v > 0 then f[prefix .. "_" .. key] = string.format("%.0f", v) end
+          if v > 0 or (v == 0 and ns.StatsDefs.SET_KEYS[key]) then
+            f[prefix .. "_" .. key] = string.format("%.0f", v)
+          end
         end
       end
     end

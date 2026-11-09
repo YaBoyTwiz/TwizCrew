@@ -288,7 +288,9 @@ this is the list of what to report:
 4. A friend who was offline when that session ended logs in: within a minute their Trophies tab has it too. A
    friend who left early (logged off before the session ended) gets a record at their next login from the numbers
    they had; once someone who stayed to the end is online, it is swapped for the full version within about 10
-   minutes.
+   minutes. If the crew logs off one by one instead (nobody ends the session), everyone gets a record at their
+   next login; once you have been online together, everyone's Trophies tab shows the version of whoever stayed
+   latest, within about 10 minutes.
 5. Win the same award two sessions in a row: the Trophies tab's tooltip and your row's tooltip on the Crew tab say
    "streak x2".
 

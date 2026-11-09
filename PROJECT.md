@@ -109,7 +109,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
   yet (checks: `docs/TESTING.md`). Part 2 (stolen crowns, trophies, streaks) built 2026-11-09, plan
   `docs/superpowers/plans/2026-11-09-hall-of-shame-part2.md`; not tried in game. New files: the next release sets
   RESTART_SINCE. The swap offers only the 10 newest sessions. A record saved at login (the session ended while I was away) is
-  "late" and is swapped for a full one from someone who stayed; a late one never replaces a full one. Stolen-crown pop-ups skip Pauper, Couch Potato, Snail
+  "late" and is swapped for a full one from someone who stayed; a late one never replaces a full one. When the crew
+  logs off one by one, every copy ends up with the late version made from the freshest numbers (the friend who
+  stayed latest), once they've been online together. Stolen-crown pop-ups skip Pauper, Couch Potato, Snail
   and Never Walks (they change without anyone doing anything), and a friend's very first numbers never count as a
   steal. Part 3 not started. Built-in notes: Wanderer counts one run-off per group
   member left behind (a flight away from the group counts too; a hearthstone, portal, summon or releasing your

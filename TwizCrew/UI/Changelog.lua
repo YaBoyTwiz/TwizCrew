@@ -14,6 +14,17 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.22", date = "2026-11-09", lines = {
+    "Stolen crowns: a pop-up when someone takes the lead in a Hall of Shame award (after the first 15 minutes,",
+    "  at most one a minute). Click it to see the award. Switch: Live roasts > Stolen crown pop-ups.",
+    "Trophy case: when a crew session ends, each award's winners get a trophy. See them on the new Trophies tab,",
+    "  with streaks (\"3 sessions in a row\"). Hover a friend on the Crew tab for their trophies.",
+    "The awards show (/tc awards) now plays on everyone's screen and follows the presenter's clicks.",
+    "  Escape closes it for you. Switch: Stats > Show the crew's awards show on my screen.",
+    "Clown of the Night: after the last award, everyone votes (not for yourself, 30 seconds).",
+    "  The clown gets the title under their name until the next show, and a clown trophy.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.1.21", date = "2026-11-09", lines = {
     "Hall of Shame: 11 new awards, in five tabs (Deaths, Moving, Money, Oops, Lazy). It remembers your tab.",
     "  Pauper: carries the least gold right now (exact amount; needs 30 minutes played).",

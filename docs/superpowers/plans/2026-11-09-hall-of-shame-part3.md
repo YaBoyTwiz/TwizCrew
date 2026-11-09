@@ -42,7 +42,8 @@ sends and never advances on its own clicks). The vote card is a new phase of the
   - `AWS` show starts: `id` (show id = "<presenter>-<wallclock>"), `v` ("session" | "all").
   - `AWC` a card: `id`, `i` (card number), `k` ("award" | "nobody" | "end"), for awards `a` (award id), `w` (winner
     names, comma), `x` (value text), `s` (streak number, only when ≥ 2), `r = "1"` when it jumps straight to the
-    reveal (the presenter clicked during the drumroll). repeatKeys: `id`, `i`.
+    reveal (the presenter clicked during the drumroll), `m` (how many winners were left out of `w` so the card fits
+    one message; shown as "and N more"). repeatKeys: `id`, `i`.
   - `AWV` vote starts: `id`, `c` (candidate names, comma), `t` (seconds, "30").
   - `AWB` a vote: `id`, `c` (the name voted for). Sent to everyone so every screen can count "N voted".
   - `AWR` vote result: `id`, `w` (clown names, comma; empty = nobody), `n` (votes), or `k = "skip"`.

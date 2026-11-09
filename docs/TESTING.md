@@ -294,6 +294,28 @@ this is the list of what to report:
 5. Win the same award two sessions in a row: the Trophies tab's tooltip and your row's tooltip on the Crew tab say
    "streak x2".
 
+### Hall of Shame part 3 (shared show, vote)
+
+You need a friend online with this version, both in the same crew session.
+
+1. Type `/tc awards`: the show opens on your friend's screen too ("TwizCrew Awards: <your name>'s show") and
+   follows your clicks: each award appears on their screen when you move to it, and a click during the drumroll
+   jumps to the winner on both screens. Their clicks do nothing until the end card.
+2. Your friend presses **Escape**: only their show closes. Yours keeps going.
+3. Your friend starts a fight, then you start the show and click on a card or two. When their fight ends, the show
+   opens on their screen at the award you are on now (straight to the winner).
+4. After the last award, everyone gets the vote card "Who's the Clown of the Night?": a button for each person in
+   the session in their class colour, but no button for yourself. Click one: it shows your pick and the other
+   buttons stop working. The "N of M voted" line goes up on every screen as people vote. After 30 seconds (or as
+   soon as everyone online has voted) every screen shows the same result, for example "Clown of the Night: Twiz
+   (2 votes)", two names joined with "&" for a tie, or "No clown tonight." when nobody voted. Afterwards, the
+   clown's row on the Crew tab says **Clown of the Night** under their name (on every screen, while award titles
+   are on). After `/tc session new` (30+ minutes, 2+ people) the Trophies tab lists "Clown of the Night x1".
+5. Start the show again and press **Skip** on the vote card: everyone goes straight to the end card.
+6. Leave the show on one card for more than a minute: it closes on every screen.
+7. Your friend turns off "Show the crew's awards show on my screen" (`/tc`, Stats & Hall of Shame): start the show
+   again, nothing opens on their screen.
+
 ## "Tell crew to update" button
 
 Built too, every test outside the game passes (including an old and a new copy talking). **Not tried in the game

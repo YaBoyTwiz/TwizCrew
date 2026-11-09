@@ -24,11 +24,19 @@ local function keep(text)
   if #pending > PENDING_MAX then table.remove(pending, 1) end
 end
 
-local function pushToDestinations(text)
+local function sameDest(a, b)
+  return a == b or (a.chatType == b.chatType and a.target == b.target)
+end
+
+-- key: waiting copies with this key (per destination) are dropped for the new one. sent: { left, fn }, counts the
+-- copies still waiting; fn runs when the last one has gone out.
+local function pushToDestinations(text, key, sent)
   local dests = ns.Transport.destinations() -- may find the channel gone and start joining it again
   if ns.Transport.isPending() then keep(text); return end
   for _, dest in ipairs(dests) do
-    queue:push({ text = text, dest = dest })
+    local item = { text = text, dest = dest, sent = sent }
+    if sent then sent.left = sent.left + 1 end
+    if key then queue:supersede(key, item, sameDest) else queue:push(item) end
   end
 end
 
@@ -39,11 +47,18 @@ local function flushPending()
   for _, text in ipairs(texts) do pushToDestinations(text) end
 end
 
+-- opts.replace = a key (a show id, say): copies of an earlier msgType message with the same key that are still
+-- waiting are dropped, the new one goes out instead. opts.onSent = a function run once every copy has left the
+-- queue (at once when nothing was queued: the connection is still being set up, or there is nobody to send to).
 function Comm.send(msgType, fields, opts)
   local texts = ns.Codec.encode(msgType, fields or {}, opts)
-  for _, text in ipairs(texts) do
-    if ns.Transport.isPending() then keep(text) else pushToDestinations(text) end
+  local replace = opts and opts.replace
+  local sent = opts and opts.onSent and { left = 0, fn = opts.onSent }
+  for i, text in ipairs(texts) do
+    local key = replace and (msgType .. ":" .. replace .. "#" .. i)
+    if ns.Transport.isPending() then keep(text) else pushToDestinations(text, key, sent) end
   end
+  if sent and sent.left == 0 then ns.Log.safe(FEATURE, sent.fn) end
 end
 
 -- Only to this crew member, as a whisper (automatic and whisper mode). Returns false, sending nothing, when this
@@ -152,6 +167,11 @@ local function sendItem(item)
   end
   ns.Log.debug("send %s via %s to %s%s", tostring(item.text:match("^%d+%^(%u+)%^") or "?"),
     tostring(item.dest.chatType), tostring(item.dest.target or "-"), ok and "" or " failed")
+  local sent = item.sent
+  if sent then
+    sent.left = sent.left - 1
+    if sent.left == 0 then ns.Log.safe(FEATURE, sent.fn) end
+  end
   return true -- a refused message is dropped, never retried forever
 end
 

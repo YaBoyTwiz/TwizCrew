@@ -220,6 +220,46 @@ return {
       A.eq(ns.Codec.decode(W.sent[2].text).type, "MEET")
       noErrors(ns, A)
     end,
+    send_replace_keeps_one_waiting_copy_per_destination = function(ns, A, W)
+      local db = boot(ns, W)
+      W:advance(6)
+      db.crew.extra = { "Ginkan", "Frostie" } -- the channel and two whispers
+      for i = 1, 6 do ns.Comm.send("PING", {}) end -- fill the bucket so the rest has to wait
+      W:advance(0.2)
+      local mark = #W.sent
+      ns.Comm.send("AWC", { id = "s", i = "1" }, { replace = "s" })
+      ns.Comm.send("AWC", { id = "s", i = "2" }, { replace = "s" })
+      ns.Comm.send("AWC", { id = "other", i = "1" }, { replace = "other" })
+      ns.Comm.send("AWS", { id = "s" })
+      ns.Comm.send("AWS", { id = "s" })
+      W:advance(30)
+      local awc, aws = {}, 0
+      for i = mark + 1, #W.sent do
+        local m = ns.Codec.decode(W.sent[i].text)
+        if m.type == "AWC" then awc[#awc + 1] = m.fields.id .. m.fields.i end
+        if m.type == "AWS" then aws = aws + 1 end
+      end
+      table.sort(awc)
+      A.eq(awc, { "other1", "other1", "other1", "s2", "s2", "s2" }, "only the latest card of a show, per destination")
+      A.eq(aws, 6, "other types are never replaced")
+      noErrors(ns, A)
+    end,
+    send_on_sent_runs_when_the_last_copy_left = function(ns, A, W)
+      local db = boot(ns, W)
+      W:advance(6)
+      db.crew.extra = { "Ginkan", "Frostie" }
+      for i = 1, 6 do ns.Comm.send("PING", {}) end
+      local doneAt, calls = nil, 0
+      ns.Comm.send("AWV", { id = "s" }, { onSent = function() calls = calls + 1; doneAt = #W.sent end })
+      A.eq(calls, 0, "still waiting")
+      W:advance(30)
+      A.eq(calls, 1)
+      A.eq(ns.Codec.decode(W.sent[doneAt].text).type, "AWV", "right after the last copy")
+      local n = 0
+      for i = 1, doneAt do if ns.Codec.decode(W.sent[i].text).type == "AWV" then n = n + 1 end end
+      A.eq(n, 3, "all three copies were out")
+      noErrors(ns, A)
+    end,
     send_before_join_is_delivered_after_join = function(ns, A, W)
       boot(ns, W)
       A.ok(ns.Transport.isPending())

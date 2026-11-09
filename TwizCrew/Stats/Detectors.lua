@@ -497,6 +497,42 @@ add({ id = "errors", label = "red error messages",
     end)
   end })
 
+-- Need rolls won in a group (Ninja). The roll's type comes from our own RollOnLoot click (1 = Need); a client that
+-- says "You (Need - 87) Won: X" itself needs no click.
+local NEED_KEEP = 300
+local needed = {}
+local function inGroup()
+  for _, f in ipairs({ IsInGroup, IsInRaid }) do
+    local v = call(f)
+    if not secret(v) and v then return true end
+  end
+  return false
+end
+
+add({ id = "ninja", label = "Need rolls won",
+  needs = function()
+    if type(LOOT_ROLL_YOU_WON) ~= "string" and type(LOOT_ROLL_YOU_WON_NO_SPAM_NEED) ~= "string" then
+      return false, "LOOT_ROLL_YOU_WON missing"
+    end
+    return true
+  end,
+  start = function()
+    local d = byId.ninja
+    needed = {}
+    if fn("RollOnLoot") and fn("hooksecurefunc") then
+      hook(d, nil, "RollOnLoot", function(rollID, rollType)
+        if secret(rollType) or rollType ~= 1 or not fn("GetLootRollItemLink") then return end
+        local link = GetLootRollItemLink(rollID)
+        if not secret(link) and type(link) == "string" then needed[link] = ns.now() end
+      end)
+    end
+    onEvent(d, "CHAT_MSG_LOOT", function(text)
+      if secret(text) or not inGroup() then return end
+      local needFmt = type(LOOT_ROLL_YOU_WON_NO_SPAM_NEED) == "string" and LOOT_ROLL_YOU_WON_NO_SPAM_NEED or nil
+      if Logic.needWin(text, needFmt, LOOT_ROLL_YOU_WON, needed, ns.now(), NEED_KEEP) then api.count("nj", 1) end
+    end)
+  end })
+
 local ABANDON_DEDUPE = 1
 local lastAbandon
 add({ id = "abandon", label = "quests abandoned",

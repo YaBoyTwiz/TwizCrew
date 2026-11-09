@@ -322,6 +322,8 @@ local function build(W)
     return m.name, 30000, 60000, -1, m.paused or 0, "Breath"
   end
   fakes.GetMoney = function() return st.money end
+  fakes.RollOnLoot = function() end -- hideable through st.missing
+  fakes.GetLootRollItemLink = function() return nil end
 
   -- minimap button: the Minimap frame, the cursor and the minimap shape, all hideable through st.missing
   -- ("Minimap", "GetCursorPosition", "GetMinimapShape"). st.minimap = size, centre and effective scale of the

@@ -832,10 +832,25 @@ return {
       W.env.RollOnLoot(7, 2) -- Greed
       W:fire("CHAT_MSG_LOOT", "You won: " .. link)
       A.eq(get(ns, "session", "nj"), 1, "Greed doesn't count")
+      W.env.RollOnLoot(7, 1) -- Need, then Greed on the same item
+      W.env.RollOnLoot(7, 2)
+      W:fire("CHAT_MSG_LOOT", "You won: " .. link)
+      A.eq(get(ns, "session", "nj"), 1, "Greed after Need doesn't count")
       W.state.inGroup = false
       W.env.RollOnLoot(7, 1)
       W:fire("CHAT_MSG_LOOT", "You won: " .. link)
       A.eq(get(ns, "session", "nj"), 1, "only in a group")
+    end,
+
+    ninja_is_off_when_it_cannot_count = function(ns, A, W)
+      start(ns, W, function()
+        W.env.LOOT_ROLL_YOU_WON = "You won: %s"
+        W.env.LOOT_ROLL_YOU_WON_NO_SPAM_NEED = nil
+        W.state.missing.RollOnLoot = true
+      end)
+      local s = statusOf(ns, "ninja")
+      A.no(s.on)
+      A.contains(s.why, "RollOnLoot missing")
     end,
 
     my_chat_and_emotes_are_counted = function(ns, A, W)
@@ -848,7 +863,21 @@ return {
       W:fire("CHAT_MSG_EMOTE", "flexes", "Twiz")
       W:fire("CHAT_MSG_TEXT_EMOTE", "Ginkan laughs.", "Ginkan")
       A.eq(get(ns, "session", "em"), 2)
-      A.eq(ns.db.stats.chars.Twiz.s.pull, nil, "the words are never kept")
+      W.state.secret["Twiz"] = true
+      W:fire("CHAT_MSG_PARTY", "hidden", "Twiz")
+      A.eq(get(ns, "session", "ch"), 2, "a secret sender is not counted")
+      local function keeps(t, text)
+        for k, v in pairs(t) do
+          if type(v) == "string" and v:find(text, 1, true) then return true end
+          if type(k) == "string" and k:find(text, 1, true) then return true end
+          if type(v) == "table" and keeps(v, text) then return true end
+        end
+        return false
+      end
+      local rec = ns.db.stats.chars.Twiz
+      for _, text in ipairs({ "pull?", "go", "You dance", "flexes", "hidden" }) do
+        A.no(keeps({ rec.s, rec.a }, text), "the words are never kept: " .. text)
+      end
     end,
 
     stats_changed_is_rate_limited = function(ns, A, W)

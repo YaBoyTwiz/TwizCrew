@@ -514,6 +514,11 @@ add({ id = "ninja", label = "Need rolls won",
     if type(LOOT_ROLL_YOU_WON) ~= "string" and type(LOOT_ROLL_YOU_WON_NO_SPAM_NEED) ~= "string" then
       return false, "LOOT_ROLL_YOU_WON missing"
     end
+    -- Without the client's Need text, the count depends on seeing our own RollOnLoot click.
+    if type(LOOT_ROLL_YOU_WON_NO_SPAM_NEED) ~= "string" then
+      local why = missingOf("RollOnLoot", "hooksecurefunc", "GetLootRollItemLink")
+      if why then return false, why end
+    end
     return true
   end,
   start = function()
@@ -521,9 +526,11 @@ add({ id = "ninja", label = "Need rolls won",
     needed = {}
     if fn("RollOnLoot") and fn("hooksecurefunc") then
       hook(d, nil, "RollOnLoot", function(rollID, rollType)
-        if secret(rollType) or rollType ~= 1 or not fn("GetLootRollItemLink") then return end
+        if secret(rollType) or not fn("GetLootRollItemLink") then return end
         local link = GetLootRollItemLink(rollID)
-        if not secret(link) and type(link) == "string" then needed[link] = ns.now() end
+        if secret(link) or type(link) ~= "string" then return end
+        -- Need counts; a later Greed or Pass on the same item takes it back.
+        if rollType == 1 then needed[link] = ns.now() else needed[link] = nil end
       end)
     end
     onEvent(d, "CHAT_MSG_LOOT", function(text)
@@ -533,8 +540,6 @@ add({ id = "ninja", label = "Need rolls won",
     end)
   end })
 
-local ABANDON_DEDUPE = 1
-local lastAbandon
 -- My own party / raid / instance chat lines (Chatterbox) and emotes (Emote Spammer): only counted, never kept.
 local CHAT_KEYS = {
   CHAT_MSG_PARTY = "ch", CHAT_MSG_PARTY_LEADER = "ch", CHAT_MSG_RAID = "ch", CHAT_MSG_RAID_LEADER = "ch",
@@ -551,6 +556,9 @@ add({ id = "chatter", label = "chat lines and emotes",
       end)
     end
   end })
+
+local ABANDON_DEDUPE = 1
+local lastAbandon
 
 add({ id = "abandon", label = "quests abandoned",
   needs = function()

@@ -2,7 +2,6 @@
 -- StatsStore.entries (what the Hall of Shame and the awards show read). Full TOC boot.
 
 local function boot(W, before)
-  W.state.missing.GetMoney = true -- the gold detector stays off: these tests count only what they count themselves
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
@@ -217,6 +216,22 @@ return {
       sent = statsSince(ns, W, mark)
       A.eq(#sent, 1, "again on a session change")
       A.eq(sent[1].off, "1")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    new_session_stats_carry_gold_carried = function(ns, A, W)
+      W.state.money = 12345
+      start(ns, W)
+      W:advance(30)
+      A.eq(ns.StatsStore.get("session", "gn"), 12345, "gold is read before the session change")
+      local mark = #W.sent
+      ns.Bus.fire("SESSION_CHANGED", { id = "Frostie-5", start = 5, manual = true }, ns.Session.current(), false)
+      A.eq(ns.StatsStore.get("session", "gn"), 12345, "still the gold I carry right after the change")
+      W:advance(1)
+      local sent = statsSince(ns, W, mark)
+      A.eq(#sent, 1)
+      A.eq(sent[1].a_gn, "12345")
+      A.eq(sent[1].s_gn, sent[1].a_gn, "the new session's first STATS has the gold too")
       A.eq(ns.Log.errors(10), {})
     end,
 

@@ -103,7 +103,11 @@ end
 function Store.setSession(newId, fromId, keep)
   local rec = Store.mine()
   if not rec or type(newId) ~= "string" or rec.sid == newId then return end
-  if not (keep and fromId ~= nil and rec.sid == fromId) then rec.s, rec.zs = {}, {} end
+  if not (keep and fromId ~= nil and rec.sid == fromId) then
+    rec.s, rec.zs = {}, {}
+    -- A set key (gold carried) is the same number in both views, so it carries into the new session.
+    for key in pairs(Defs.SET_KEYS) do rec.s[key] = rec.a[key] end
+  end
   rec.sid = newId
   isDirty = true
 end

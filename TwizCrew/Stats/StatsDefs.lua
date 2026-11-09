@@ -184,6 +184,12 @@ ns.StatsDefs.EXTRA_TROPHIES = {
   { id = "clown", name = "Clown of the Night", icon = "Interface\\Icons\\INV_Misc_Bandana_03" },
 }
 
+-- The award with this id, or nil.
+function ns.StatsDefs.awardDef(id)
+  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
+  return nil
+end
+
 -- The award or extra trophy with this id, or nil.
 function ns.StatsDefs.trophyDef(id)
   for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end

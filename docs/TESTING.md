@@ -308,12 +308,19 @@ You need a friend online with this version, both in the same crew session.
    the session in their class colour, but no button for yourself. Click one: it shows your pick and the other
    buttons stop working. The "N of M voted" line goes up on every screen as people vote. After 30 seconds (or as
    soon as everyone online has voted) every screen shows the same result, for example "Clown of the Night: Twiz
-   (2 votes)", two names joined with "&" for a tie, or "No clown tonight." when nobody voted. Afterwards, the
-   clown's row on the Crew tab says **Clown of the Night** under their name (on every screen, while award titles
-   are on). After `/tc session new` (30+ minutes, 2+ people) the Trophies tab lists "Clown of the Night x1".
-5. Start the show again and press **Skip** on the vote card: everyone goes straight to the end card.
-6. Leave the show on one card for more than a minute: it closes on every screen.
-7. Your friend turns off "Show the crew's awards show on my screen" (`/tc`, Stats & Hall of Shame): start the show
+   (2 votes)", two names joined with "&" for a tie, or "No clown tonight." when nobody voted. When the 30 seconds
+   run out, the buttons fade and stop working. Afterwards, the clown's row on the Crew tab says **Clown of the
+   Night** under their name, on every screen that watched the result (a friend who closed the show or wasn't on
+   doesn't get it), while award titles are on. After `/tc session new` (30+ minutes, 2+ people) the Trophies tab
+   lists "Clown of the Night x1".
+5. Start the show again and press **Skip** on the vote card: everyone goes straight to the end card, and the
+   Clown of the Night title is gone from the Crew tab (no clown until the next show). The trophy from step 4 stays
+   (same session).
+6. **Click through the show quickly** (several clicks a second, right to the vote): your friend's screen jumps to
+   the latest card instead of playing every one, and they still get the full 30 seconds to vote (their countdown
+   starts near 30 and your result comes only after theirs reaches 0).
+7. Leave the show on one card for more than a minute: it closes on every screen.
+8. Your friend turns off "Show the crew's awards show on my screen" (`/tc`, Stats & Hall of Shame): start the show
    again, nothing opens on their screen.
 
 ## "Tell crew to update" button

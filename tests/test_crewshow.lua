@@ -134,8 +134,10 @@ return {
       A.eq(#cards, 1, "card 1 as it starts; the reveal on its own timer sends nothing")
       A.eq(cards[1], { id = id, i = "1", k = "award", a = "corpse", w = "Twiz", x = "7 deaths" })
       ns.AwardsShow.next() -- Medic
+      W:advance(0.5) -- the send queue lets it out (a card still waiting would be replaced by the next)
       A.eq(state(ns).phase, "badge")
       ns.AwardsShow.next() -- a click during the badge: straight to the reveal
+      W:advance(0.5)
       ns.AwardsShow.next() -- Frostie and me were in the session: the Clown of the Night vote
       A.eq(state(ns).phase, "vote")
       A.ok(press(ns, "Skip")) -- the end card
@@ -553,7 +555,7 @@ return {
       receive(W, ns, "Stranger", "AWB", { id = id, c = "Twiz" })
       A.eq(state(ns).voted, "2 of 3 voted")
       A.eq(state(ns).phase, "vote", "I have not voted yet")
-      W:advance(27)
+      W:advance(30) -- the clock started when AWV went out (within those 3 s)
       A.eq(state(ns).phase, "clown", "30 s are up")
       st = state(ns)
       A.eq(st.text, "Clown of the Night: Frostie & Lurabe (1 vote)", "a tie: co-clowns")
@@ -605,13 +607,17 @@ return {
     end,
 
     nobody_votes_no_clown = function(ns, A, W)
-      voteNight(ns, W)
+      local S = voteNight(ns, W)
+      ns.db.stats.clown = { names = { "Frostie" }, sid = S, at = 1 }
+      local changed = 0
+      ns.Bus.on("test", "CLOWN_CHANGED", function() changed = changed + 1 end)
       local mark = #W.sent
       toTheVote(ns, W)
-      W:advance(30)
+      W:advance(33)
       A.eq(state(ns).phase, "clown")
       A.eq(state(ns).text, "No clown tonight.")
-      A.eq(ns.db.stats.clown, nil)
+      A.eq(ns.db.stats.clown, nil, "no clown until the next show")
+      A.eq(changed, 1)
       W:advance(3)
       local r = sentOf(ns, W, mark, "AWR")
       A.eq(#r, 1)
@@ -625,8 +631,10 @@ return {
       toTheVote(ns, W)
       W:advance(3)
       local id = sentOf(ns, W, mark, "AWS")[1].id
+      ns.db.stats.clown = { names = { "Frostie" }, sid = "old", at = 1 }
       A.ok(press(ns, "Skip"))
       A.eq(state(ns).phase, "end", "straight to the end card")
+      A.eq(ns.db.stats.clown, nil, "Skip: no clown until the next show")
       W:advance(3)
       A.eq(sentOf(ns, W, mark, "AWR"), { { id = id, k = "skip" } })
       local cards = sentOf(ns, W, mark, "AWC")
@@ -686,10 +694,80 @@ return {
       receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Twiz", t = "30" })
       receive(W, ns, "Frostie", "AWR", { id = id, n = "0" })
       A.eq(state(ns).text, "No clown tonight.")
-      A.eq(ns.db.stats.clown.names, { "Lurabe" }, "no clown: the old one stays")
-      receive(W, ns, "Frostie", "AWR", { id = id, k = "skip" })
+      A.eq(ns.db.stats.clown, nil, "no clown: the old one is gone")
       card(W, ns, "Frostie", { id = id, i = "2", k = "end" })
       A.eq(state(ns).phase, "end")
+      ns.AwardsShow.close()
+      -- a second show that skips the vote
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-2", v = "session" })
+      receive(W, ns, "Frostie", "AWV", { id = "Frostie-2", c = "Frostie,Twiz", t = "30" })
+      ns.db.stats.clown = { names = { "Frostie" }, sid = "old", at = 1 }
+      receive(W, ns, "Frostie", "AWR", { id = "Frostie-2", k = "skip" })
+      A.eq(ns.db.stats.clown, nil, "Skip: no clown either")
+      A.eq(state(ns).phase, "end", "the end card, the presenter's follows")
+      card(W, ns, "Frostie", { id = "Frostie-2", i = "2", k = "end" })
+      A.eq(state(ns).phase, "end")
+    end,
+
+    viewer_skip_in_a_fight_shows_the_end_after = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Twiz", t = "30" })
+      receive(W, ns, "Frostie", "AWR", { id = id, k = "skip" })
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.eq(state(ns).phase, "end", "never the old card")
+      A.eq(state(ns).text, "That's the show. GG crew.")
+    end,
+
+    vote_buttons_dim_at_zero = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      hello(W, ns, "Lurabe", "ROGUE")
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Lurabe,Twiz", t = "30" })
+      W:advance(30.5)
+      A.eq(state(ns).left, 0)
+      A.ok(state(ns).dimmed, "the buttons fade at 0 s")
+      A.ok(press(ns, "Frostie"))
+      A.eq(state(ns).picked, nil, "too late to vote")
+      W:advance(3)
+      A.eq(#sentOf(ns, W, 0, "AWB"), 0)
+    end,
+
+    a_fast_presenter_does_not_flood_the_crew = function(ns, A, W)
+      start(ns, W)
+      ns.db.crew.extra = { "Ana", "Bo", "Cy", "Di", "Ed" } -- five whispers and the channel: 6 copies a message
+      local S = ns.Session.current().id
+      hello(W, ns, "Frostie", "PRIEST")
+      hello(W, ns, "Lurabe", "ROGUE")
+      receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_rz = "2", a_rz = "2", s_kb = "3", a_kb = "3" })
+      receive(W, ns, "Lurabe", "STATS", { sid = S, q = "1", s_dt = "1", a_dt = "1", s_pt = "900", a_pt = "900" })
+      ns.Stats.count("dt", 7)
+      W:advance(30) -- the hellos and numbers go out first
+      local mark = #W.sent
+      ns.AwardsShow.start("session")
+      W:advance(5)
+      local clicks = 0
+      for _ = 1, 60 do -- no time for the queue between clicks
+        if state(ns).phase == "vote" then break end
+        ns.AwardsShow.next()
+        clicks = clicks + 1
+      end
+      A.eq(state(ns).phase, "vote")
+      local lastIndex = state(ns).index
+      -- step by 0.1 s: when does the last AWV copy go out, and when the first AWR?
+      local awvAt, awrAt
+      for _ = 1, 900 do
+        W:advance(0.1)
+        if not awvAt and #sentOf(ns, W, mark, "AWV") == 6 then awvAt = W.clock end
+        if not awrAt and #sentOf(ns, W, mark, "AWR") > 0 then awrAt = W.clock; break end
+      end
+      A.ok(awvAt and awrAt, "both went out")
+      A.ok(awrAt - awvAt >= 29.5, "the crew got the full 30 s: " .. tostring(awrAt - awvAt))
+      local cards = sentOf(ns, W, mark, "AWC")
+      A.ok(clicks >= 4 and #cards <= 6, #cards .. " AWCs for " .. clicks .. " clicks to 6 destinations")
+      A.eq(cards[#cards].i, tostring(lastIndex), "the last card still arrives")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     viewer_sees_the_first_eight = function(ns, A, W)
@@ -779,13 +857,42 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    clown_trophy_is_the_last_clown_voted_in_the_session = function(ns, A, W)
+      start(ns, W)
+      local sid = ns.Session.current().id
+      hello(W, ns, "Lurabe", "ROGUE")
+      W:advance(1900)
+      hello(W, ns, "Lurabe", "ROGUE")
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      local mark = #W.sent
+      toTheVote(ns, W)
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      press(ns, "Lurabe")
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Twiz" })
+      A.eq(ns.db.stats.clown.names, { "Lurabe", "Twiz" })
+      ns.AwardsShow.next()
+      ns.AwardsShow.next() -- closed
+      A.no(ns.AwardsShow.isOpen())
+      W:advance(2)
+      toTheVote(ns, W) -- a second show in the same session skips the vote
+      A.eq(state(ns).phase, "vote")
+      A.ok(press(ns, "Skip"))
+      A.eq(ns.db.stats.clown, nil, "the title is gone")
+      ns.AwardsShow.close()
+      ns.Session.newByHand()
+      A.eq(ns.Trophies.records()[sid].winners.clown, { "Lurabe", "Twiz" }, "the last clown voted keeps the trophy")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     clown_of_another_session_gets_no_trophy = function(ns, A, W)
       start(ns, W)
       local sid = ns.Session.current().id
       W:advance(1900)
       ns.Stats.count("dt", 3)
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
-      ns.db.stats.clown = { names = { "Lurabe" }, sid = "Other-1", at = 1 }
+      ns.db.stats.clownBySid = { ["Other-1"] = { "Lurabe" } }
       ns.Session.newByHand()
       A.eq(ns.Trophies.records()[sid].winners.clown, nil)
     end,
@@ -796,7 +903,7 @@ return {
       W:advance(1900)
       ns.Stats.count("dt", 3)
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
-      ns.db.stats.clown = { names = { "Ginkan", "Lurabe" }, sid = sid, at = 1 }
+      ns.db.stats.clownBySid = { [sid] = { "Ginkan", "Lurabe" } }
       ns.Session.newByHand()
       A.eq(ns.Trophies.records()[sid].winners.clown, { "Lurabe" })
       local p = ns.Trophies.summary().Lurabe

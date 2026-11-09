@@ -12,8 +12,10 @@
 -- yourself (up to 8, the first by name), "N of M voted" and a countdown. A click sends AWB { id, c } once; every
 -- screen counts the AWBs it hears (one per voter, the first counts). The presenter ends it after 30 s, or once every
 -- online candidate voted, with AWR { id, w, n } (ShowLogic.tally), or AWR { id, k = "skip" } from its Skip button.
--- Each screen that shows a clown saves db.stats.clown = { names, sid, at } and fires CLOWN_CHANGED (Crew-tab title,
--- trophy when the session ends).
+-- The presenter's 30 s start once its AWV has left the send queue, so the crew gets the full time. An AWC still
+-- waiting in the queue is replaced by the next one (the crew jumps to the latest card).
+-- Every result replaces the clown on each screen that sees it (no clown or Skip: none until the next show): the
+-- Crew-tab title db.stats.clown = { names, sid, at } and the session's trophy db.stats.clownBySid; CLOWN_CHANGED.
 -- Feature id "awards": every script and timer runs inside ns.Log.safe.
 local _, ns = ...
 
@@ -116,8 +118,10 @@ local function idleClock()
   end)
 end
 
-local function send(msgType, fields)
-  ns.Comm.send(msgType, fields, { repeatKeys = ns.ShowLogic.REPEAT_KEYS })
+-- opts: replace (a key: a waiting copy with the same key is dropped for this one), onSent (runs once it went out).
+local function send(msgType, fields, opts)
+  ns.Comm.send(msgType, fields, { repeatKeys = ns.ShowLogic.REPEAT_KEYS, replace = opts and opts.replace,
+    onSent = opts and opts.onSent })
 end
 
 ---------------------------------------------------------------------------------------------------------- frames
@@ -238,12 +242,19 @@ end
 
 local function votedText() return vote.count .. " of " .. #vote.candidates .. " voted" end
 
-local function secondsLeft() return math.max(0, math.ceil(vote.endsAt - ns.now())) end
+-- The full time until the clock starts (presenter: once AWV has gone out).
+local function secondsLeft()
+  if not vote.endsAt then return vote.seconds end
+  return math.max(0, math.ceil(vote.endsAt - ns.now()))
+end
+
+-- My buttons work while I'm a candidate, the vote is open and time is left (they fade otherwise).
+local function canVote() return vote.me ~= nil and not vote.closed and secondsLeft() > 0 end
 
 local function drawVote()
   voteTitle:SetText(VOTE_TITLE)
   local list = buttonNames()
-  local canVote = vote.me ~= nil and not vote.closed
+  local can = canVote()
   for i, b in ipairs(buttons) do
     local name = list[i]
     onButton[i] = name
@@ -251,7 +262,7 @@ local function drawVote()
       local label = colored(name, vote.escaped)
       if vote.mine == name then label = "|cff" .. GOLD .. ">|r " .. label .. " |cff" .. GOLD .. "<|r" end
       b.text:SetText(label)
-      b:SetAlpha(((vote.mine and vote.mine ~= name) or not canVote) and 0.45 or 1)
+      b:SetAlpha(((vote.mine and vote.mine ~= name) or not can) and 0.45 or 1)
       b:Show()
     end
   end
@@ -347,7 +358,8 @@ end
 local function sendCard(jump)
   if not showId then return end
   local c = cards[index] or { kind = "end" }
-  send("AWC", ns.ShowLogic.cardToWire(showId, index, c, c.streak, jump))
+  -- a card still waiting in the send queue is dropped: the crew jumps to the latest one
+  send("AWC", ns.ShowLogic.cardToWire(showId, index, c, c.streak, jump), { replace = showId })
 end
 
 local function showCard(i)
@@ -384,11 +396,6 @@ local function setHeader(text)
   header:SetText(text)
 end
 
-local function awardDef(id)
-  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
-  return nil
-end
-
 local function classOf(name)
   if ns.isMe(name) then
     local ok, _, class = pcall(UnitClass, "player")
@@ -401,9 +408,10 @@ end
 ------------------------------------------------------------------------------------------------------------ vote
 local function showIdNow() return showId or (follow and follow.id) end
 
-local function newVote(candidates, seconds, escaped)
-  local v = { candidates = candidates, isCandidate = {}, votes = {}, count = 0, endsAt = ns.now() + seconds,
-    escaped = escaped, seconds = seconds }
+-- started: the clock runs from now (a viewer); the presenter's starts once its AWV has gone out.
+local function newVote(candidates, seconds, escaped, started)
+  local v = { candidates = candidates, isCandidate = {}, votes = {}, count = 0,
+    endsAt = started and ns.now() + seconds or nil, escaped = escaped, seconds = seconds }
   for _, name in ipairs(candidates) do
     v.isCandidate[name] = true
     if ns.isMe(name) then v.me = name end
@@ -418,21 +426,32 @@ local function enterVote()
   local function tick()
     if phase ~= "vote" then return end
     draw()
-    if ns.now() < vote.endsAt then after(1, tick) end
+    if not vote.closed then after(1, tick) end
   end
   after(1, tick)
 end
 
--- Saves the clown (only candidates) on this screen: the Crew-tab title, and a trophy when the session ends.
+-- Every vote result replaces the clown on this screen (only candidates; none: no clown until the next show). The
+-- Crew-tab title is db.stats.clown; the trophy is the last clown voted in a session, db.stats.clownBySid[sid],
+-- which a later "no clown" in the same session does not take away.
 local function saveClown(names)
+  if not ns.db then return end
   local list = {}
   for _, name in ipairs(names or {}) do
     if vote.isCandidate[name] and not ns.isTestName(name) then list[#list + 1] = name end
   end
-  if #list == 0 or not ns.db then return end
   if type(ns.db.stats) ~= "table" then ns.db.stats = {} end
-  local session = ns.Session and ns.Session.current()
-  ns.db.stats.clown = { names = list, sid = session and session.id or nil, at = ns.wallclock() }
+  local stats = ns.db.stats
+  if #list == 0 then
+    if stats.clown == nil then return end
+    stats.clown = nil
+  else
+    local session = ns.Session and ns.Session.current()
+    local sid = session and session.id or nil
+    stats.clown = { names = list, sid = sid, at = ns.wallclock() }
+    -- only this session's: an ended session's trophy was already recorded when it ended
+    if sid then stats.clownBySid = { [sid] = list } end
+  end
   ns.Bus.fire("CLOWN_CHANGED")
 end
 
@@ -477,6 +496,18 @@ local function countVote(voter, choice)
   if role == "presenter" and everyoneVoted() then finishVote() end
 end
 
+-- Presenter: AWV has left the send queue, so the crew has it: now the vote clock starts (they get the full time).
+local function voteSent(v)
+  if vote ~= v or v.closed or not open or role ~= "presenter" then return end
+  v.endsAt = ns.now() + v.seconds
+  cardSerial = cardSerial + 1 -- the idle clock waits for the vote too
+  idleClock()
+  C_Timer.After(v.seconds, function()
+    ns.Log.safe(FEATURE, function() if vote == v and open then finishVote() end end)
+  end)
+  if phase == "vote" then draw() end
+end
+
 -- The people in this session (real names, sorted); nil outside the session view.
 local function sessionCandidates()
   if view ~= "session" or not ns.Session then return nil end
@@ -500,13 +531,13 @@ local function startVote(endIndex)
   if not showId or not list or #list < 2 then return false end
   local f, kept = ns.ShowLogic.voteToWire(showId, list, ns.ShowLogic.VOTE_SECONDS)
   if #kept < 2 then return false end
-  vote = newVote(kept, ns.ShowLogic.VOTE_SECONDS, false)
+  vote = newVote(kept, ns.ShowLogic.VOTE_SECONDS, false, false)
   vote.endIndex = endIndex
-  send("AWV", f)
   cardSerial = cardSerial + 1
   idleClock()
   enterVote()
-  after(vote.seconds, finishVote)
+  local v = vote
+  send("AWV", f, { onSent = function() voteSent(v) end })
   return true
 end
 
@@ -514,7 +545,7 @@ end
 local function viewerCard(c)
   if c.kind ~= "award" then return { kind = c.kind } end
   return { kind = "award", escaped = true, streak = c.streak, more = c.more,
-    award = { def = awardDef(c.awardId), winners = c.winners, text = c.text } }
+    award = { def = ns.StatsDefs.awardDef(c.awardId), winners = c.winners, text = c.text } }
 end
 
 -- Shows a card the presenter sent. reveal: straight to the reveal (a jump, or catching up after a fight).
@@ -539,9 +570,11 @@ end
 -- The latest thing the presenter sent, shown after a fight: a card's reveal, the vote card or the clown.
 local function showLatest(c)
   if c.kind == "vote" then
-    if vote and not vote.closed then enterVote() end
+    if vote and not vote.closed then enterVote() else setPhase("end") end
   elseif c.kind == "clown" then
     setPhase("clown")
+  elseif c.kind == "skip" then
+    setPhase("end") -- the vote was skipped: the presenter's end card follows
   else
     showWireCard(c, true)
   end
@@ -617,7 +650,7 @@ local function onVoteStart(sender, f)
   if not fromPresenter(sender, f) or vote then return end -- one vote per show
   local v = ns.ShowLogic.voteFromWire(f)
   if not v then return end
-  vote = newVote(v.candidates, v.seconds, true)
+  vote = newVote(v.candidates, v.seconds, true, true)
   if latest({ kind = "vote" }) then enterVote() end
 end
 
@@ -640,8 +673,10 @@ local function onResult(sender, f)
   if not fromPresenter(sender, f) or not vote or vote.closed then return end
   local r = ns.ShowLogic.resultFromWire(f)
   if not r then return end
-  if r.skip then -- the presenter's end card follows
+  if r.skip then -- no clown until the next show; the presenter's end card follows
     vote.closed = true
+    saveClown(nil)
+    if latest({ kind = "skip" }) then setPhase("end") end
     return
   end
   reveal(r.names, r.n, false)
@@ -771,7 +806,7 @@ end
 
 -- A vote button: my vote, once (the presenter counts it at once; it is also sent so every screen counts it).
 function Show.vote(name)
-  if not open or phase ~= "vote" or not vote or vote.closed or vote.mine or not vote.me then return end
+  if not open or phase ~= "vote" or not vote or vote.mine or not canVote() then return end
   if type(name) ~= "string" or name == vote.me or not vote.isCandidate[name] then return end
   vote.mine = name
   send("AWB", { id = showIdNow(), c = name })
@@ -783,6 +818,7 @@ end
 function Show.skipVote()
   if role ~= "presenter" or phase ~= "vote" or not vote or vote.closed then return end
   vote.closed = true
+  saveClown(nil)
   send("AWR", { id = showId, k = "skip" })
   showCard(vote.endIndex)
 end
@@ -811,6 +847,7 @@ function Show.stateForTest()
       if onButton[i] then s.buttons[#s.buttons + 1] = onButton[i] end
     end
     s.left = secondsLeft()
+    s.dimmed = not canVote()
   elseif phase == "clown" then
     local r = vote and vote.result or { names = {}, n = 0 }
     s.title = #r.names == 0 and ns.ShowLogic.clownLine(r.names, r.n) or ns.ShowLogic.CLOWN_TITLE

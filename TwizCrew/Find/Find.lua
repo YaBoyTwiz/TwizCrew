@@ -293,7 +293,7 @@ end
 
 -------------------------------------------------------------------------------------------------- running off
 -- A group member who was right next to you and suddenly isn't: their arrow flashes red, a pop-up and a sound.
-local runTracks, runUntil = {}, {}
+local runTracks, runUntil, selfTracks = {}, {}, {}
 
 function Find.isRunningOff(name)
   return type(name) == "string" and runUntil[name] ~= nil and ns.now() < runUntil[name]
@@ -302,26 +302,36 @@ end
 -- For tests and the test tools: start the alarm for a name.
 function Find.alarmForTest(name, dist) runUntil[name] = ns.now() + cfg().FIND_RUN_ALARM; ns.Bus.fire("RUNNING_OFF", name, dist) end
 
+-- Each group member: the alarm when they ran off from us (setting "runaway"), and RAN_OFF when we ran off from
+-- them (the same rule with the two positions swapped; the stats count it for Wanderer, alarm setting or not).
 local function checkRunaways()
-  if setting("runaway") == false or not ns.roster then return end
+  if not ns.roster then return end
   local me = Where.me()
   if not me then return end
   local c = cfg()
   local opts = { near = c.FIND_RUN_NEAR, far = c.FIND_RUN_FAR, window = c.FIND_RUN_WINDOW }
+  local alarmOn = setting("runaway") ~= false
   for _, name in ipairs(ns.roster:names()) do
     local them = Find.positionOf(name)
     if them then
-      local track, alarm, dist = Logic.runaway(runTracks[name], me, them, ns.now(), opts)
-      runTracks[name] = track
-      if alarm then
-        runUntil[name] = ns.now() + c.FIND_RUN_ALARM
-        ns.Log.add("info", "find: %s is running off (%d yd)", name, math.floor(dist or 0))
-        ns.Bus.fire("RUNNING_OFF", name, dist)
-        -- no sound (owner, 2026-11-08): the flashing arrow and the pop-up are enough
-        if ns.Popups and ns.Popups.runaway then ns.Popups.runaway(name, Logic.distanceText(dist or 0)) end
+      if alarmOn then
+        local track, alarm, dist = Logic.runaway(runTracks[name], me, them, ns.now(), opts)
+        runTracks[name] = track
+        if alarm then
+          runUntil[name] = ns.now() + c.FIND_RUN_ALARM
+          ns.Log.add("info", "find: %s is running off (%d yd)", name, math.floor(dist or 0))
+          ns.Bus.fire("RUNNING_OFF", name, dist)
+          -- no sound (owner, 2026-11-08): the flashing arrow and the pop-up are enough
+          if ns.Popups and ns.Popups.runaway then ns.Popups.runaway(name, Logic.distanceText(dist or 0)) end
+        end
+      else
+        runTracks[name] = nil
       end
+      local mine, ran, dist = Logic.runaway(selfTracks[name], them, me, ns.now(), opts)
+      selfTracks[name] = mine
+      if ran then ns.Bus.fire("RAN_OFF", name, dist) end
     else
-      runTracks[name] = nil
+      runTracks[name], selfTracks[name] = nil, nil
     end
   end
 end

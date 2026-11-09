@@ -605,6 +605,16 @@ add({ id = "xp", label = "XP gained",
     if cur.level < ns.maxLevel() then api.count("xt", elapsed) end
   end })
 
+-- Times I ran off from a group member (Wanderer): Find the crew fires RAN_OFF.
+add({ id = "wander", label = "running off from the group",
+  needs = function() return true end,
+  start = function()
+    onBus(byId.wander, "RAN_OFF", function(name)
+      if ns.isTestName(name) then return end
+      api.count("wd", 1)
+    end)
+  end })
+
 local ABANDON_DEDUPE = 1
 local lastAbandon
 

@@ -102,6 +102,25 @@ return {
     end,
 
     show_skips_empty_and_handles_nobody = function(ns, A, W)
+      W.state.missing.GetMoney = true -- no gold detector: nothing is counted, so nobody has won
+      start(ns, W)
+      ns.AwardsShow.start("session")
+      W:advance(5)
+      local s = state(ns)
+      A.eq(s.phase, "nobody")
+      A.eq(s.title, "Nobody has won anything yet.")
+      A.eq(s.text, "Nobody has won anything yet.")
+      A.eq(s.count, 2)
+      ns.AwardsShow.next()
+      A.eq(state(ns).phase, "end")
+      ns.AwardsShow.close()
+      A.no(ns.AwardsShow.isOpen())
+      W:advance(10)
+      A.no(ns.AwardsShow.isOpen(), "closing stops the timers")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    pauper_card_when_only_gold_is_known = function(ns, A, W)
       start(ns, W)
       ns.AwardsShow.start("session")
       W:advance(5)

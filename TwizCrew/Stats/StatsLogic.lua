@@ -246,6 +246,9 @@ local UNIT_WORDS = {
   hearths = { "hearthstone", "hearthstones" }, junk = { "junk item", "junk items" },
   quests = { "quest abandoned", "quests abandoned" }, duels = { "duel lost", "duels lost" },
   rezzes = { "rez", "rezzes" },
+  zones = { "zone", "zones" }, flights = { "flight", "flights" }, needs = { "Need roll won", "Need rolls won" },
+  nojuice = { "time out of juice", "times out of juice" }, toofar = { "time too far", "times too far" },
+  wanders = { "run-off", "run-offs" }, messages = { "message", "messages" }, emotes = { "emote", "emotes" },
 }
 
 function L.valueText(award, value, stats)
@@ -255,6 +258,7 @@ function L.valueText(award, value, stats)
   if unit == "afk" then return L.duration(value) .. " AFK" end
   if unit == "money" then return L.money(value) end
   if unit == "perhour" then return L.number(value) .. " steps per hour" end
+  if unit == "xpperhour" then return L.number(value) .. " XP per hour" end
   if unit == "ratio" then return string.format("rides %.1fx more than walks", value) end
   local words = UNIT_WORDS[unit]
   local n = math.floor(value)

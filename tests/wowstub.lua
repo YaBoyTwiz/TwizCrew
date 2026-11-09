@@ -290,6 +290,8 @@ local function build(W)
     LOOT_ITEM_SELF_MULTIPLE = "You receive loot: %sx%d.",
     DUEL_WINNER_KNOCKOUT = "%1$s has defeated %2$s in a duel",
     DUEL_WINNER_RETREAT = "%2$s has fled from %1$s in a duel",
+    ERR_OUT_OF_MANA = "Not enough mana",
+    ERR_OUT_OF_RANGE = "Out of range.",
   }
   -- the tables are made once, so a test's rawset on them stays
   setmetatable(env, { __index = function(_, k)

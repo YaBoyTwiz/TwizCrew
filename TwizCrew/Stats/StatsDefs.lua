@@ -19,6 +19,11 @@ ns.StatsDefs = {
               20484, 20739, 20742, 20747, 20748 },
     },
   },
+  -- Red error texts, by the game's own global names (their text is read at start; a missing name is skipped).
+  ERRORS = {
+    oj = { "ERR_OUT_OF_MANA", "ERR_OUT_OF_RAGE", "ERR_OUT_OF_ENERGY", "ERR_OUT_OF_FOCUS" },
+    tf = { "ERR_OUT_OF_RANGE", "ERR_SPELL_OUT_OF_RANGE", "SPELL_FAILED_OUT_OF_RANGE", "ERR_USE_TOO_FAR" },
+  },
 }
 
 -- Sounds for the awards show (kit name, with the numeric id as fallback).

@@ -171,6 +171,23 @@ function L.junkCount(text, selfFmt, multiFmt)
   return count
 end
 
+-- { [error text] = stat key } from lists of global names (ns.StatsDefs.ERRORS) and the globals table.
+function L.errorTexts(lists, globals)
+  local out = {}
+  for key, names in pairs(lists or {}) do
+    for _, name in ipairs(names) do
+      local text = globals and globals[name]
+      if type(text) == "string" and text ~= "" then out[text] = key end
+    end
+  end
+  return out
+end
+
+function L.errorKey(message, texts)
+  if type(message) ~= "string" or type(texts) ~= "table" then return nil end
+  return texts[message]
+end
+
 function L.isPull(me, members)
   if type(me) ~= "table" or not me.dungeon then return false end
   local any = false

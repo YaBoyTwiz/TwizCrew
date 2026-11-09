@@ -275,6 +275,17 @@ return {
       A.eq(t.Twiz, "Professional Corpse")
       A.eq(t.Frostie, nil)
     end,
+    red_errors_are_matched_by_the_games_own_text = function(ns, A)
+      local L = ns.StatsLogic
+      local texts = L.errorTexts({ oj = { "ERR_OUT_OF_MANA", "ERR_NOPE" }, tf = { "ERR_USE_TOO_FAR" } },
+        { ERR_OUT_OF_MANA = "Not enough mana", ERR_USE_TOO_FAR = "You are too far away." })
+      A.eq(texts, { ["Not enough mana"] = "oj", ["You are too far away."] = "tf" }, "missing names are skipped")
+      A.eq(L.errorKey("Not enough mana", texts), "oj")
+      A.eq(L.errorKey("You are too far away.", texts), "tf")
+      A.eq(L.errorKey("Can't do that while moving", texts), nil)
+      A.eq(L.errorKey(nil, texts), nil)
+    end,
+
     wire_roundtrip = function(ns, A)
       local L = ns.StatsLogic
       local w = L.toWire({ sid = "T-1", q = "1-1", s = { dt = 3, st = 10.7, jp = 0, zz = 4 }, a = { st = 12403.2 } })

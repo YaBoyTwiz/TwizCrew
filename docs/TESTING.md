@@ -277,6 +277,18 @@ this is the list of what to report:
    still picked after /reload.
 9. Inside a dungeon: none of the above causes "turned itself off" in chat.
 
+### Hall of Shame part 2 (stolen crowns, trophies)
+
+1. Play 15+ minutes with a friend, then let them pass you in an award (more deaths, more jumps): a pop-up "<Name>
+   just stole <Award> from <you>!" appears within about 5 minutes (numbers are shared every few minutes). Click it:
+   the Hall of Shame opens at that award's tab. Several at once: one "N crowns changed hands" pop-up.
+2. Live roasts > "Stolen crown pop-ups" off: no more steal pop-ups.
+3. After 30+ minutes with a friend, type `/tc session new`: the Hall of Shame's Trophies tab lists the winners of
+   the session that just ended. Your friend's Trophies tab shows the same.
+4. A friend who was offline when that session ended logs in: within a minute their Trophies tab has it too.
+5. Win the same award two sessions in a row: the Trophies tab's tooltip and your row's tooltip on the Crew tab say
+   "streak x2".
+
 ## "Tell crew to update" button
 
 Built too, every test outside the game passes (including an old and a new copy talking). **Not tried in the game

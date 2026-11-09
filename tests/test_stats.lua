@@ -59,7 +59,7 @@ return {
   files = "toc",
   tests = {
     set_and_distinct_numbers = function(ns, A, W)
-      start(ns, W)
+      start(ns, W, function() W.state.zone = nil end) -- the travel detector would already have counted this zone
       local S = ns.StatsStore
       S.markSent()
       A.eq(S.set("gn", 500), true)
@@ -880,6 +880,34 @@ return {
       end
     end,
 
+    zones_flights_and_xp = function(ns, A, W)
+      W.state.zone = "Elwynn Forest"
+      W.state.level, W.state.xp, W.state.xpMax = 10, 100, 1000
+      start(ns, W)
+      A.eq(get(ns, "session", "zv"), 1, "where we are counts")
+      W.state.zone = "Westfall"
+      W:fire("ZONE_CHANGED_NEW_AREA")
+      W.state.zone = "Elwynn Forest"
+      W:fire("ZONE_CHANGED_NEW_AREA")
+      A.eq(get(ns, "session", "zv"), 2)
+      W.state.taxi = true
+      W:advance(1)
+      W:advance(30)
+      W.state.taxi = false
+      W:advance(1)
+      W.state.taxi = true
+      W:advance(1)
+      A.eq(get(ns, "session", "fp"), 2, "one per flight, not per second")
+      W.state.xp = 400
+      W:advance(1)
+      A.eq(get(ns, "session", "xg"), 300)
+      A.ok(get(ns, "session", "xt") > 30, "time below max level")
+      W.state.level = ns.maxLevel()
+      local xt = get(ns, "session", "xt")
+      W:advance(10)
+      A.eq(get(ns, "session", "xt"), xt, "max level: no Snail time")
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0
@@ -910,7 +938,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "gold", "errors", "ninja", "chatter", "abandon", "duel" })
+        "repair", "gold", "errors", "ninja", "chatter", "travel", "xp", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

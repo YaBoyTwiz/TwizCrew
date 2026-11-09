@@ -84,6 +84,12 @@ function Stats.set(key, value)
   if Store.set(key, value) then changed() end
 end
 
+-- A zone visited (Tourist): counted once per view.
+function Stats.zone(name)
+  if not enabled then return end
+  if Store.addZone(name) then changed() end
+end
+
 -- PLAYER_DEAD: what kind of death, then at most one roast (weak > fall > drown > again > deaths milestone).
 function Stats.died()
   if not enabled then return end
@@ -203,6 +209,7 @@ end
 
 local api = {
   count = function(key, n) Stats.count(key, n) end,
+  zone = function(name) Stats.zone(name) end,
   set = function(key, value) Stats.set(key, value) end,
   died = function() Stats.died() end,
   alive = function() Stats.alive() end,
@@ -212,6 +219,7 @@ local api = {
 local function onSession(new, old, keep)
   if type(new) ~= "table" then return end
   Store.setSession(new.id, type(old) == "table" and old.id or nil, keep)
+  if ns.Detectors.sessionStarted then ns.Detectors.sessionStarted() end
   changed(true)
   Stats.send() -- friends see our (new) session quickly
 end

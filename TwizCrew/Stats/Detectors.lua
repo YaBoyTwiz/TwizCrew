@@ -557,6 +557,54 @@ add({ id = "chatter", label = "chat lines and emotes",
     end
   end })
 
+-- Zones visited (Tourist) and flights taken (Frequent Flyer: the start of each ride).
+local wasTaxi
+local function readZone()
+  local zone = call(GetRealZoneText)
+  if not secret(zone) and type(zone) == "string" and zone ~= "" then api.zone(zone) end
+end
+
+add({ id = "travel", label = "zones visited and flights",
+  needs = function() local why = missingOf("GetRealZoneText", "UnitOnTaxi"); return why == nil, why end,
+  start = function()
+    local d = byId.travel
+    wasTaxi = player(UnitOnTaxi) and true or false -- logging in mid-flight is not a new flight
+    onEvent(d, "ZONE_CHANGED_NEW_AREA", readZone)
+    onEvent(d, "PLAYER_ENTERING_WORLD", readZone)
+    readZone()
+  end,
+  tick = function()
+    local now = player(UnitOnTaxi) and true or false
+    if now and not wasTaxi then api.count("fp", 1) end
+    wasTaxi = now
+  end })
+
+-- A new session starts with no zones seen: where we stand counts again (Stats calls this before it sends).
+function D.sessionStarted()
+  if running and state.travel and state.travel.on then ns.Log.safe("stats", readZone) end
+end
+
+-- XP gained (Snail) and time played below max level.
+local lastXp
+local function readXp()
+  local level, xp, max = call(UnitLevel, "player"), call(UnitXP, "player"), call(UnitXPMax, "player")
+  if secret(level) or secret(xp) or secret(max) then return nil end
+  if type(level) ~= "number" or type(xp) ~= "number" then return nil end
+  return { level = level, xp = xp, max = type(max) == "number" and max or nil }
+end
+
+add({ id = "xp", label = "XP gained",
+  needs = function() local why = missingOf("UnitLevel", "UnitXP", "UnitXPMax"); return why == nil, why end,
+  start = function() lastXp = readXp() end,
+  tick = function(elapsed)
+    local cur = readXp()
+    if not cur then return end
+    local gained = Logic.xpGained(lastXp, cur)
+    if gained > 0 then api.count("xg", gained) end
+    lastXp = cur
+    if cur.level < ns.maxLevel() then api.count("xt", elapsed) end
+  end })
+
 local ABANDON_DEDUPE = 1
 local lastAbandon
 
@@ -642,6 +690,7 @@ function D.stopAll()
   for timer in pairs(breath) do breath[timer] = nil end
   ctx.breathRunning = false
   merchantOpen, repairCost, repairMoney, lastPos, lastMoney = false, 0, nil, nil, nil
+  wasTaxi, lastXp = nil, nil
   pullPending = false
 end
 

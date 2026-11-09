@@ -52,6 +52,7 @@ UI\MockShow.lua
 UI\MockEditor.lua
 UI\BoardLogic.lua
 UI\Board.lua
+UI\ShowLogic.lua
 UI\AwardsShow.lua
 UI\Updates.lua
 Find\FindLogic.lua

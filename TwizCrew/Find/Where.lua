@@ -155,6 +155,11 @@ end
 
 local function yes(v) return not secret(v) and v and true or false end
 
+-- Dead or a ghost (a secret or missing answer = not dead).
+function Where.meDead()
+  return yes(call(UnitIsDeadOrGhost, "player"))
+end
+
 function Where.inGroup()
   return yes(call(IsInGroup)) or yes(call(IsInRaid))
 end

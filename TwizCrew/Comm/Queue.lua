@@ -42,6 +42,23 @@ function Queue:replace(key, item)
   self:push(item)
 end
 
+-- Drops every waiting item with this key whose destination is the same (same(a, b) says so), then pushes the new
+-- one at the back: the newest takes over, and it still goes out after anything queued before it.
+function Queue:supersede(key, item, same)
+  item.key = key
+  local j = self.first
+  for i = self.first, self.back do
+    local old = self.items[i]
+    if not (old.key == key and same(old.dest, item.dest)) then
+      self.items[j] = old
+      j = j + 1
+    end
+  end
+  for i = j, self.back do self.items[i] = nil end
+  self.back = j - 1
+  self:push(item)
+end
+
 function Queue:size()
   return self.back - self.first + 1
 end

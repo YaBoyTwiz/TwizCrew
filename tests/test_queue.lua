@@ -69,5 +69,17 @@ return {
       q:replace("POS", { text = "after", dest = party })
       A.eq(q:size(), 1, "once sent, a new one is pushed")
     end,
+    supersede_drops_waiting_ones_and_goes_to_the_back = function(ns, A)
+      local q = ns.Queue.new({ perSecond = 2, burst = 4, now = function() return 0 end })
+      local function same(a, b) return a.to == b.to end
+      q:supersede("C", { text = "c1", dest = { to = "a" } }, same)
+      q:supersede("C", { text = "c1", dest = { to = "b" } }, same)
+      q:push({ text = "vote", dest = { to = "a" } })
+      q:supersede("C", { text = "c2", dest = { to = "a" } }, same) -- equal by value, not the same table
+      A.eq(q:size(), 3, "one waiting card per destination")
+      local got = {}
+      q:pump(function(item) got[#got + 1] = item.text .. item.dest.to end)
+      A.eq(got, { "c1b", "votea", "c2a" }, "the newest card goes after what was queued before it")
+    end,
   },
 }

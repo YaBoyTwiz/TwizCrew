@@ -104,7 +104,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   `docs/superpowers/specs/2026-11-09-hall-of-shame-upgrade-design.md`. Crew asked for a "poorest" award; the owner
   picked Pauper + Money Pit (exact gold shown), 9 more awards, category tabs, stolen crown pop-ups, trophy case with
   streaks, the awards show on everyone's screen and a Clown of the Night vote. Not wanted for now: predictions,
-  custom awards. Built in three parts, each its own release. Nothing built yet.
+  custom awards. Built in three parts, each its own release. **Part 1 (new awards, tabs) built 2026-11-09** on
+  branch `hall-of-shame-part1`, plan `docs/superpowers/plans/2026-11-09-hall-of-shame-part1.md`; not tried in game
+  yet (checks: `docs/TESTING.md`). Parts 2 and 3 not started. Built-in notes: Wanderer counts one run-off per group
+  member left behind (a flight or hearth away from the group counts too); with only one person, solo awards like
+  Pauper always have a winner (same as the old awards); Snail ignores readings taken mid-ding.
 
 ## "Tell crew to update" button (owner approved 2026-11-05)
 

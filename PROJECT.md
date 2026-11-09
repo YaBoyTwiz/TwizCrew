@@ -213,6 +213,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
   the macro on the cursor), and the owner places them. A macro keeps its name when its text changes, so it stays
   on the bars. Turning Smart target off deletes the macro (the game empties its slot); the spell isn't put back.
   Basic Action Update (also installed) swaps ranks on the bars too.
+- **Spell helpers removed (2026-11-09, owner: "it isn't needed"):** the module, its window, /tc spells, the wrench
+  menu entry and the "new spell" pop-up are gone. Macros it already made stay in the game's macro list (the owner
+  can delete them in /macro). The rank updater (RankUp) now updates every bar spell again.
 - **Running-off alarm is silent (2026-11-08, owner):** "I don't mind a visible indication but not a sound". The
   flashing row arrow, the pop-up and the big arrow stay; its raid-warning sound and the "With a sound" setting are
   gone, and the running-off pop-up doesn't play the general pop-up sound either.

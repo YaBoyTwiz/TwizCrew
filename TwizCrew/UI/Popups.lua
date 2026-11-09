@@ -455,7 +455,7 @@ function Popups.questRequest(name, title)
   end
 end
 
--- A notice from one of our own tools (e.g. Spell helpers: "New spell: ..."): icon, title, the line under it, what a
+-- A notice from one of our own tools (e.g. a stolen crown): icon, title, the line under it, what a
 -- click does. Shows whether or not the pop-ups module is on, and closes itself after `seconds` (12).
 function Popups.notice(icon, title, sub, onClick, seconds)
   if type(title) ~= "string" then return end

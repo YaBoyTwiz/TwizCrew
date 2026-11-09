@@ -61,8 +61,6 @@ Find\Find.lua
 Find\BigArrow.lua
 Find\MeetMap.lua
 Tools\RankUp.lua
-Tools\SpellHelpersLogic.lua
-Tools\SpellHelpers.lua
 Calendar\CalendarLogic.lua
 Calendar\Notes.lua
 Calendar\Diary.lua

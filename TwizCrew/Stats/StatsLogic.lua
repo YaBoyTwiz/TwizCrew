@@ -188,6 +188,18 @@ function L.errorKey(message, texts)
   return texts[message]
 end
 
+-- A Need roll won? needFmt: the client's own "You (Need - %d) Won: %s" (nil when missing); wonFmt: "You won: %s";
+-- needed: { [item link] = when we rolled Need } (the matched link is removed); keep: how long a roll is remembered.
+function L.needWin(text, needFmt, wonFmt, needed, now, keep)
+  if matchFormat(text, needFmt) then return true end
+  local r = matchFormat(text, wonFmt)
+  local link = r and r[1]
+  if type(link) ~= "string" or type(needed) ~= "table" then return false end
+  local at = needed[link]
+  needed[link] = nil
+  return isNumber(at) and now - at <= keep
+end
+
 function L.isPull(me, members)
   if type(me) ~= "table" or not me.dungeon then return false end
   local any = false

@@ -286,6 +286,19 @@ return {
       A.eq(L.errorKey(nil, texts), nil)
     end,
 
+    need_rolls_won = function(ns, A)
+      local L = ns.StatsLogic
+      local link = "|cff1eff00|Hitem:1:|h[Sword]|h|r"
+      A.ok(L.needWin("You (Need - 87) Won: " .. link, "You (Need - %d) Won: %s", "You won: %s", {}, 10, 300),
+        "the client says Need itself")
+      local needed = { [link] = 5 }
+      A.ok(L.needWin("You won: " .. link, nil, "You won: %s", needed, 10, 300), "we rolled Need on it")
+      A.eq(needed[link], nil, "used up")
+      A.no(L.needWin("You won: " .. link, nil, "You won: %s", needed, 10, 300), "Greed (not in the list)")
+      A.no(L.needWin("You won: " .. link, nil, "You won: %s", { [link] = 1 }, 400, 300), "too long ago")
+      A.no(L.needWin("Ginkan won: " .. link, nil, "You won: %s", { [link] = 5 }, 10, 300))
+    end,
+
     wire_roundtrip = function(ns, A)
       local L = ns.StatsLogic
       local w = L.toWire({ sid = "T-1", q = "1-1", s = { dt = 3, st = 10.7, jp = 0, zz = 4 }, a = { st = 12403.2 } })

@@ -818,6 +818,26 @@ return {
       A.eq(get(ns, "session", "oj") + get(ns, "session", "tf"), 3)
     end,
 
+    need_rolls_won_in_a_group = function(ns, A, W)
+      local link = "|cff1eff00|Hitem:1:|h[Sword]|h|r"
+      start(ns, W, function()
+        W.env.LOOT_ROLL_YOU_WON = "You won: %s"
+        W.env.RollOnLoot = function() end
+        W.env.GetLootRollItemLink = function(id) return id == 7 and link or nil end
+      end)
+      W.state.inGroup = true
+      W.env.RollOnLoot(7, 1) -- Need
+      W:fire("CHAT_MSG_LOOT", "You won: " .. link)
+      A.eq(get(ns, "session", "nj"), 1)
+      W.env.RollOnLoot(7, 2) -- Greed
+      W:fire("CHAT_MSG_LOOT", "You won: " .. link)
+      A.eq(get(ns, "session", "nj"), 1, "Greed doesn't count")
+      W.state.inGroup = false
+      W.env.RollOnLoot(7, 1)
+      W:fire("CHAT_MSG_LOOT", "You won: " .. link)
+      A.eq(get(ns, "session", "nj"), 1, "only in a group")
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0
@@ -848,7 +868,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "gold", "errors", "abandon", "duel" })
+        "repair", "gold", "errors", "ninja", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

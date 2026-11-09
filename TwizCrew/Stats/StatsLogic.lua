@@ -188,15 +188,22 @@ function L.errorKey(message, texts)
   return texts[message]
 end
 
+-- The item id in an item link ("|Hitem:1234:..."), or nil.
+function L.itemId(link)
+  if type(link) ~= "string" then return nil end
+  return tonumber(link:match("Hitem:(%d+)"))
+end
+
 -- A Need roll won? needFmt: the client's own "You (Need - %d) Won: %s" (nil when missing); wonFmt: "You won: %s";
--- needed: { [item link] = when we rolled Need } (the matched link is removed); keep: how long a roll is remembered.
+-- needed: { [item id] = when we rolled Need } (the matched item is removed); keep: how long a roll is remembered.
+-- Matched by item id: the won line's link can differ from the rolled one in its extra fields.
 function L.needWin(text, needFmt, wonFmt, needed, now, keep)
   if matchFormat(text, needFmt) then return true end
   local r = matchFormat(text, wonFmt)
-  local link = r and r[1]
-  if type(link) ~= "string" or type(needed) ~= "table" then return false end
-  local at = needed[link]
-  needed[link] = nil
+  local id = L.itemId(r and r[1])
+  if not id or type(needed) ~= "table" then return false end
+  local at = needed[id]
+  needed[id] = nil
   return isNumber(at) and now - at <= keep
 end
 

@@ -840,6 +840,15 @@ return {
       W.env.RollOnLoot(7, 1)
       W:fire("CHAT_MSG_LOOT", "You won: " .. link)
       A.eq(get(ns, "session", "nj"), 1, "only in a group")
+      W.state.inGroup = true
+      W.env.RollOnLoot(7, 1)
+      W:fire("CHAT_MSG_LOOT", "You won: |cff1eff00|Hitem:1:0:0:0:0:0:0:0:20|h[Sword]|h|r")
+      A.eq(get(ns, "session", "nj"), 2, "the won link has other extra fields: the same item")
+      W.state.inGroup, W.state.inRaid = false, true
+      W.env.IsInGroup = nil
+      W.env.RollOnLoot(7, 1)
+      W:fire("CHAT_MSG_LOOT", "You won: " .. link)
+      A.eq(get(ns, "session", "nj"), 3, "no IsInGroup: a raid still counts")
     end,
 
     ninja_is_off_when_it_cannot_count = function(ns, A, W)

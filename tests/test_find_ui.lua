@@ -176,7 +176,7 @@ return {
       ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
       W:advance(1.1)
-      W.state.map.y = 0.535 -- we run 140 yards away in two seconds (a mount's speed); Frostie stays
+      W.state.map.y = 0.535 -- we move 140 yards away in two steps (under MAX_RUN_SPEED, so not a teleport); Frostie stays
       W:advance(1)
       W.state.map.y = 0.57
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })

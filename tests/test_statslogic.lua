@@ -292,12 +292,20 @@ return {
       local link = "|cff1eff00|Hitem:1:|h[Sword]|h|r"
       A.ok(L.needWin("You (Need - 87) Won: " .. link, "You (Need - %d) Won: %s", "You won: %s", {}, 10, 300),
         "the client says Need itself")
-      local needed = { [link] = 5 }
+      A.eq(L.itemId(link), 1)
+      A.eq(L.itemId("[Sword]"), nil, "no item in it")
+      A.eq(L.itemId(nil), nil)
+      local needed = { [1] = 5 }
       A.ok(L.needWin("You won: " .. link, nil, "You won: %s", needed, 10, 300), "we rolled Need on it")
-      A.eq(needed[link], nil, "used up")
+      A.eq(needed[1], nil, "used up")
       A.no(L.needWin("You won: " .. link, nil, "You won: %s", needed, 10, 300), "Greed (not in the list)")
-      A.no(L.needWin("You won: " .. link, nil, "You won: %s", { [link] = 1 }, 400, 300), "too long ago")
-      A.no(L.needWin("Ginkan won: " .. link, nil, "You won: %s", { [link] = 5 }, 10, 300))
+      A.no(L.needWin("You won: " .. link, nil, "You won: %s", { [1] = 1 }, 400, 300), "too long ago")
+      A.no(L.needWin("Ginkan won: " .. link, nil, "You won: %s", { [1] = 5 }, 10, 300))
+      -- the won line's link has other extra fields (or another colour) than the one we rolled on: same item
+      local won = "|cff0070dd|Hitem:1:0:0:0:0:0:0:0:20|h[Sword]|h|r"
+      A.ok(L.needWin("You won: " .. won, nil, "You won: %s", { [1] = 5 }, 10, 300), "matched by item id")
+      A.no(L.needWin("You won: |cff1eff00|Hitem:12:|h[Axe]|h|r", nil, "You won: %s", { [1] = 5 }, 10, 300),
+        "item 12 is not item 1")
     end,
 
     xp_gained_across_a_level_up = function(ns, A)

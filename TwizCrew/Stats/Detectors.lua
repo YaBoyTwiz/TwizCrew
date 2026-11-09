@@ -500,13 +500,12 @@ add({ id = "errors", label = "red error messages",
 -- Need rolls won in a group (Ninja). The roll's type comes from our own RollOnLoot click (1 = Need); a client that
 -- says "You (Need - 87) Won: X" itself needs no click.
 local NEED_KEEP = 300
-local needed = {}
+local needed = {} -- item id -> when we rolled Need
 local function inGroup()
-  for _, f in ipairs({ IsInGroup, IsInRaid }) do
-    local v = call(f)
-    if not secret(v) and v then return true end
-  end
-  return false
+  local v = call(IsInGroup)
+  if not secret(v) and v then return true end
+  v = call(IsInRaid)
+  return not secret(v) and v and true or false
 end
 
 add({ id = "ninja", label = "Need rolls won",
@@ -529,8 +528,14 @@ add({ id = "ninja", label = "Need rolls won",
         if secret(rollType) or not fn("GetLootRollItemLink") then return end
         local link = GetLootRollItemLink(rollID)
         if secret(link) or type(link) ~= "string" then return end
+        local id = Logic.itemId(link)
+        if not id then return end
+        local now = ns.now()
+        for old, at in pairs(needed) do -- forget rolls too old to count
+          if now - at > NEED_KEEP then needed[old] = nil end
+        end
         -- Need counts; a later Greed or Pass on the same item takes it back.
-        if rollType == 1 then needed[link] = ns.now() else needed[link] = nil end
+        if rollType == 1 then needed[id] = now else needed[id] = nil end
       end)
     end
     onEvent(d, "CHAT_MSG_LOOT", function(text)
@@ -585,24 +590,27 @@ function D.sessionStarted()
 end
 
 -- XP gained (Snail) and time played below max level.
-local lastXp
-local function readXp()
+-- Two readings { level, xp, max }, the baseline and the newest, reused every tick (no new table each time).
+local lastXp, curXp = {}, {}
+local function readXp(into)
   local level, xp, max = call(UnitLevel, "player"), call(UnitXP, "player"), call(UnitXPMax, "player")
-  if secret(level) or secret(xp) or secret(max) then return nil end
-  if type(level) ~= "number" or type(xp) ~= "number" then return nil end
-  return { level = level, xp = xp, max = type(max) == "number" and max or nil }
+  if secret(level) or secret(xp) or secret(max) then return false end
+  if type(level) ~= "number" or type(xp) ~= "number" then return false end
+  into.level, into.xp, into.max = level, xp, type(max) == "number" and max or nil
+  return true
 end
+local function forgetXp() lastXp.level, lastXp.xp, lastXp.max = nil, nil, nil end
 
 add({ id = "xp", label = "XP gained",
   needs = function() local why = missingOf("UnitLevel", "UnitXP", "UnitXPMax"); return why == nil, why end,
-  start = function() lastXp = readXp() end,
+  start = function() forgetXp(); readXp(lastXp) end,
   tick = function(elapsed)
-    local cur = readXp()
-    if not cur then return end
-    local gained, settled = Logic.xpGained(lastXp, cur)
+    if not readXp(curXp) then return end
+    local gained, settled = Logic.xpGained(lastXp, curXp)
     if gained > 0 then api.count("xg", gained) end
-    if settled then lastXp = cur end -- level and xp read a tick apart: keep the old baseline
-    if cur.level < ns.maxLevel() then api.count("xt", elapsed) end
+    local level = curXp.level
+    if settled then lastXp, curXp = curXp, lastXp end -- level and xp read a tick apart: keep the old baseline
+    if level < ns.maxLevel() then api.count("xt", elapsed) end
   end })
 
 -- Times I ran off from a group member (Wanderer): Find the crew fires RAN_OFF.
@@ -700,7 +708,8 @@ function D.stopAll()
   for timer in pairs(breath) do breath[timer] = nil end
   ctx.breathRunning = false
   merchantOpen, repairCost, repairMoney, lastPos, lastMoney = false, 0, nil, nil, nil
-  wasTaxi, lastXp = nil, nil
+  wasTaxi = nil
+  forgetXp()
   pullPending = false
 end
 

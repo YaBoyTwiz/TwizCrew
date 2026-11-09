@@ -80,14 +80,40 @@ return {
       A.eq(rows[1].title, nil, "no titleOf: no titles")
     end,
 
+    tabs_show_one_category_at_a_time = function(ns, A)
+      local list = { { name = "Twiz", stats = { dt = 3, gn = 14 } } }
+      local m = model(ns, "session", list)
+      A.eq(#m.tabs, 5)
+      A.eq(m.tabs[1], { id = "deaths", label = "Deaths", active = true })
+      A.eq(#m.rows, 6, "Deaths has six awards")
+      A.ok(rowById(m, "corpse"))
+      A.eq(rowById(m, "pauper"), nil, "Pauper is on another tab")
+      A.eq(m.subtitle, "Deaths: session started 9:02 pm by Twiz")
+      m = model(ns, "session", list, { tab = "loot" })
+      A.ok(m.tabs[3].active)
+      A.eq(rowById(m, "pauper").text, "14c")
+      A.eq(m.subtitle, "Money & Loot: session started 9:02 pm by Twiz")
+      m = model(ns, "all", list, { tab = "nope" })
+      A.ok(m.tabs[1].active, "an unknown tab falls back to the first")
+      A.eq(m.subtitle, "Deaths: all time")
+    end,
+    the_tab_is_remembered = function(ns, A, W)
+      start(ns, W)
+      ns.Board.setTab("oops")
+      A.eq(ns.Board.tab(), "oops")
+      A.eq(ns.Modules.setting("stats", "boardTab"), "oops")
+      ns.Board.setTab("bogus")
+      A.eq(ns.Board.tab(), "oops", "unknown tabs are ignored")
+    end,
+
     board_rows_model = function(ns, A)
       local list = {
         { name = "Twiz", class = "WARRIOR", stats = { dt = 7 }, mine = true, online = true, at = WALL },
         { name = "Holy|bøi", class = "PRIEST", stats = { dt = 9, ds = 300 }, mine = false, online = true, at = WALL },
       }
       local m = model(ns, "session", list)
-      A.eq(m.subtitle, "Session started 9:02 pm by Twiz")
-      A.eq(#m.rows, #ns.StatsDefs.AWARDS, "one row per award")
+      A.eq(m.subtitle, "Deaths: session started 9:02 pm by Twiz")
+      A.eq(#m.rows, 6, "one row per award on the Deaths tab")
       A.eq(m.rows[1].id, "corpse")
       local corpse = rowById(m, "corpse")
       A.eq(corpse.name, "Professional Corpse")
@@ -106,9 +132,9 @@ return {
       A.eq(gravity.text, "nobody yet")
       A.eq(gravity.winners, {})
       A.eq(gravity.tip, { ns.StatsDefs.AWARDS[2].info })
-      A.eq(model(ns, "all", list).subtitle, "All time")
-      A.eq(model(ns, "session", list, { session = false }).subtitle, "Waiting for the crew session to start")
-      A.eq(model(ns, "session", list, { starter = "Ho|ly" }).subtitle, "Session started 9:02 pm by Ho||ly")
+      A.eq(model(ns, "all", list).subtitle, "Deaths: all time")
+      A.eq(model(ns, "session", list, { session = false }).subtitle, "Deaths: waiting for the crew session to start")
+      A.eq(model(ns, "session", list, { starter = "Ho|ly" }).subtitle, "Deaths: session started 9:02 pm by Ho||ly")
     end,
 
     board_ties_and_top_three = function(ns, A)
@@ -116,7 +142,7 @@ return {
       for i, name in ipairs({ "Axel", "Bubbles", "Cora", "Dax" }) do
         list[i] = { name = name, stats = { jp = i <= 2 and 10 or i }, mine = false, online = true, at = WALL }
       end
-      local bunny = rowById(model(ns, "all", list), "bunny")
+      local bunny = rowById(model(ns, "all", list, { tab = "move" }), "bunny")
       A.eq(bunny.winners, { "Axel", "Bubbles" }, "ties show every name")
       A.eq(bunny.classes, { false, false }, "unknown class")
       A.eq(#bunny.tip, 4, "info + top 3")
@@ -128,11 +154,11 @@ return {
       for i, name in ipairs({ "Axel", "Bubbles", "Cora", "Da|x" }) do
         list[i] = { name = name, stats = { jp = 10 }, mine = false, online = true, at = WALL }
       end
-      local bunny = rowById(model(ns, "all", list), "bunny")
+      local bunny = rowById(model(ns, "all", list, { tab = "move" }), "bunny")
       A.eq(bunny.winners, { "Axel", "Bubbles", "Cora", "Da||x" }, "every tied name in the model")
       A.eq(bunny.more, 2, "two more than shown")
       A.eq(bunny.tip[#bunny.tip], "Tied: Axel, Bubbles, Cora, Da||x")
-      local two = rowById(model(ns, "all", { list[1], list[2] }), "bunny")
+      local two = rowById(model(ns, "all", { list[1], list[2] }, { tab = "move" }), "bunny")
       A.eq(two.more, 0)
       A.no(two.tip[#two.tip]:find("^Tied"), "two names fit: no Tied line")
     end,
@@ -146,6 +172,7 @@ return {
           s_ld = "3", s_pt = "3600" })
       end
       ns.Panel.setTab("shame")
+      ns.Board.setTab("move")
       W:advance(1)
       local L = ns.Board.layoutForTest()
       A.ok(L.width <= 320, "board at most 320 px wide")
@@ -162,6 +189,10 @@ return {
       A.ok(L.numberWidth >= 160, "room for the longest numbers: " .. L.numberWidth)
       A.ok(L.winnersWidth >= 280, "winners use the full row: " .. L.winnersWidth)
       A.eq(byName["Never Walks"].number, "rides 2.5x more than walks")
+      ns.Board.setTab("deaths")
+      W:advance(1)
+      byName = {}
+      for _, r in ipairs(ns.Board.layoutForTest().rows) do byName[r.name] = r end
       A.eq(byName["Died to a Weakling"].number, "1 death (lvl 3 mob)")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -310,13 +341,13 @@ return {
       A.eq(countType(ns, W, mark, "STATSREQ"), 1, "opening the tab asks for fresh numbers")
       local m = ns.Board.modelForTest()
       A.ok(m ~= nil)
-      A.eq(m.subtitle:sub(1, 16), "Session started ")
+      A.eq(m.subtitle:sub(1, 24), "Deaths: session started ")
       A.eq(ns.Panel.rowCountForTest(), 0, "crew rows hidden")
       A.eq(ns.Board.view(), "session")
       ns.Board.setView("all")
       W:advance(1)
       A.eq(ns.Board.view(), "all")
-      A.eq(ns.Board.modelForTest().subtitle, "All time")
+      A.eq(ns.Board.modelForTest().subtitle, "Deaths: all time")
       ns.Panel.setTab("crew")
       W:advance(1)
       A.eq(ns.Panel.tab(), "crew")
@@ -397,7 +428,7 @@ return {
       ns.Panel.setTab("shame")
       W:advance(1)
       local m = ns.Board.modelForTest()
-      A.eq(#m.rows, #ns.StatsDefs.AWARDS)
+      A.eq(#m.rows, 6, "the Deaths tab")
       A.eq(rowById(m, "corpse").winners, { "Holybøi" })
       A.eq(m.footer, "Wipe Squad: 2 wipes tonight")
       ns.Board.setView("all")

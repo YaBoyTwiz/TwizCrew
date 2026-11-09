@@ -53,10 +53,12 @@ local function has(list, name)
   return false
 end
 
--- Award ids this copy knows (a newer copy's award would make a blank line).
+-- Award ids this copy knows, extra trophies (Clown of the Night) included (a newer copy's award would make a blank
+-- line).
 local function knownIds()
   local out = {}
   for _, d in ipairs(ns.StatsDefs and ns.StatsDefs.AWARDS or {}) do out[d.id] = true end
+  for _, d in ipairs(ns.StatsDefs and ns.StatsDefs.EXTRA_TROPHIES or {}) do out[d.id] = true end
   return out
 end
 

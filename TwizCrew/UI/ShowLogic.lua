@@ -1,5 +1,5 @@
 -- Pure rules of the shared awards show (Hall of Shame part 3), no frames: a card's wire form (AWC), the streak
--- wording on a card, and the Clown of the Night vote count.
+-- wording on a card, the Clown of the Night vote messages (AWV, AWR) and the vote count.
 local _, ns = ...
 
 local L = {}
@@ -45,12 +45,18 @@ end
 
 L.REPEAT_KEYS = { "id", "i" }
 
--- The whole AWC goes out as one codec piece with w and x uncut (a split or cut card would be misread).
-local function onePiece(f)
-  local out = ns.Codec.encode("AWC", f, { repeatKeys = L.REPEAT_KEYS })
+-- The whole message goes out as one codec piece with the given fields uncut (a split or cut one would be misread).
+local function fits(msgType, f, keys)
+  local out = ns.Codec.encode(msgType, f, { repeatKeys = L.REPEAT_KEYS })
   local msg = #out == 1 and ns.Codec.decode(out[1])
-  return msg and msg.fields.w == f.w and msg.fields.x == f.x and msg.fields.k == f.k or false
+  if not msg then return false end
+  for _, k in ipairs(keys) do
+    if msg.fields[k] ~= f[k] then return false end
+  end
+  return true
 end
+
+local function onePiece(f) return fits("AWC", f, { "w", "x", "k" }) end
 
 -- An AWC's fields for card i of show id. streak: shown when 2 or more; jump: straight to the reveal.
 -- Fake crew members are never sent. When too many winners tie to fit one message, w keeps the first ones that fit
@@ -113,4 +119,56 @@ function L.tally(votes, candidates)
   end
   table.sort(winners)
   return winners, best
+end
+
+L.VOTE_SECONDS = 30
+L.CLOWN_TITLE = "Clown of the Night"
+
+-- An AWV's fields: the candidates that fit one message uncut (the last ones are left out), and that list.
+function L.voteToWire(id, candidates, seconds)
+  local list = {}
+  for _, name in ipairs(candidates or {}) do
+    if not ns.isTestName(name) then list[#list + 1] = name end
+  end
+  local f = { id = id, t = tostring(seconds or L.VOTE_SECONDS) }
+  local kept = #list
+  while true do
+    f.c = table.concat(list, ",", 1, kept)
+    if kept == 0 or fits("AWV", f, { "c", "t" }) then break end
+    kept = kept - 1
+  end
+  local out = {}
+  for i = 1, kept do out[i] = list[i] end
+  return f, out
+end
+
+-- An AWV as { candidates (sorted, no doubles, no fakes), seconds }, or nil with fewer than 2 candidates.
+function L.voteFromWire(f)
+  if type(f) ~= "table" then return nil end
+  local seen, list = {}, {}
+  for _, name in ipairs(names(f.c)) do
+    if not seen[name] then seen[name] = true; list[#list + 1] = name end
+  end
+  if #list < 2 then return nil end
+  table.sort(list)
+  local t = tonumber(f.t)
+  if not t or t ~= math.floor(t) or t < 5 or t > 120 then t = L.VOTE_SECONDS end
+  return { candidates = list, seconds = t }
+end
+
+-- An AWR as { skip = true } or { names (in the sent order), n }.
+function L.resultFromWire(f)
+  if type(f) ~= "table" then return nil end
+  if f.k == "skip" then return { skip = true } end
+  local n = tonumber(f.n)
+  if not n or n < 0 or n ~= math.floor(n) or n > 1000 then n = 0 end
+  return { names = names(f.w), n = n }
+end
+
+-- "Clown of the Night: Twiz & Frostie (1 vote)", or "No clown tonight.". joined(list, sep) can colour the names.
+function L.clownLine(list, n, joined)
+  if type(list) ~= "table" or #list == 0 then return "No clown tonight." end
+  local who = joined and joined(list, " & ") or table.concat(list, " & ")
+  n = tonumber(n) or 0
+  return L.CLOWN_TITLE .. ": " .. who .. " (" .. n .. (n == 1 and " vote)" or " votes)")
 end

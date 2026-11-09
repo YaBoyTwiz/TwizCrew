@@ -60,6 +60,31 @@ local function card(W, ns, sender, fields)
   receive(W, ns, sender or "Frostie", "AWC", fields)
 end
 
+-- Booted with Frostie (priest, 2 rezzes) and Lurabe (rogue, 1 death) in the session; me 7 deaths.
+local function voteNight(ns, W)
+  start(ns, W)
+  local S = ns.Session.current().id
+  hello(W, ns, "Frostie", "PRIEST")
+  hello(W, ns, "Lurabe", "ROGUE")
+  receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_rz = "2", a_rz = "2" })
+  receive(W, ns, "Lurabe", "STATS", { sid = S, q = "1", s_dt = "1", a_dt = "1" })
+  ns.Stats.count("dt", 7)
+  return S
+end
+
+-- The presenter starts the show and clicks through every award (until the vote or the end card).
+local function toTheVote(ns, W, v)
+  ns.AwardsShow.start(v or "session")
+  W:advance(5)
+  for _ = 1, 60 do
+    local p = state(ns).phase
+    if p == "vote" or p == "end" then break end
+    ns.AwardsShow.next()
+  end
+end
+
+local function press(ns, label) return ns.AwardsShow.pressForTest(label) end
+
 return {
   files = "toc",
   tests = {
@@ -111,7 +136,9 @@ return {
       ns.AwardsShow.next() -- Medic
       A.eq(state(ns).phase, "badge")
       ns.AwardsShow.next() -- a click during the badge: straight to the reveal
-      ns.AwardsShow.next() -- the end card
+      ns.AwardsShow.next() -- Frostie and me were in the session: the Clown of the Night vote
+      A.eq(state(ns).phase, "vote")
+      A.ok(press(ns, "Skip")) -- the end card
       W:advance(3)
       cards = sentOf(ns, W, mark, "AWC")
       A.eq(#cards, 4)
@@ -477,6 +504,314 @@ return {
       A.eq(st.winners, { "Fro||stie" })
       A.ok(st.line:find("Fro||stie", 1, true) and not st.line:find("Fro||||stie", 1, true), st.line)
       A.eq(st.number, "a||b")
+    end,
+
+    vote_rules = function(ns, A)
+      local L = ns.ShowLogic
+      local f, kept = L.voteToWire("Twiz-1", { "Frostie", "Lurabe", "Twiz" }, 30)
+      A.eq(f, { id = "Twiz-1", c = "Frostie,Lurabe,Twiz", t = "30" })
+      A.eq(kept, { "Frostie", "Lurabe", "Twiz" })
+      local many = {}
+      for i = 1, 40 do many[i] = "Longername" .. string.format("%02d", i) end
+      f, kept = L.voteToWire("Twiz-1700000000", many, 30)
+      A.ok(#kept < 40, "too many names for one message")
+      A.eq(#ns.Codec.encode("AWV", f, { repeatKeys = L.REPEAT_KEYS }), 1, "one piece")
+      A.eq(L.voteFromWire(f).candidates, kept, "nothing cut")
+      local v = L.voteFromWire({ id = "x", c = "Lurabe,Bob (test),Frostie,Lurabe", t = "30" })
+      A.eq(v.candidates, { "Frostie", "Lurabe" }, "sorted, no fakes, no doubles")
+      A.eq(v.seconds, 30)
+      A.eq(L.voteFromWire({ id = "x", c = "Lurabe", t = "30" }), nil, "one candidate: no vote")
+      A.eq(L.voteFromWire({ id = "x", c = "Lurabe,Twiz", t = "9999" }).seconds, 30, "silly time")
+      A.eq(L.resultFromWire({ id = "x", k = "skip" }), { skip = true })
+      A.eq(L.resultFromWire({ id = "x", w = "Twiz,Frostie", n = "2" }), { names = { "Twiz", "Frostie" }, n = 2 })
+      A.eq(L.resultFromWire({ id = "x", n = "0" }), { names = {}, n = 0 })
+      A.eq(L.clownLine({ "Twiz" }, 4), "Clown of the Night: Twiz (4 votes)")
+      A.eq(L.clownLine({ "Frostie", "Lurabe" }, 1), "Clown of the Night: Frostie & Lurabe (1 vote)")
+      A.eq(L.clownLine({}, 0), "No clown tonight.")
+    end,
+
+    presenter_runs_the_vote = function(ns, A, W)
+      local S = voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      local st = state(ns)
+      A.eq(st.phase, "vote")
+      A.eq(st.title, "Who's the Clown of the Night?")
+      A.eq(st.buttons, { "Frostie", "Lurabe" }, "no button for myself")
+      A.eq(st.voted, "0 of 3 voted")
+      A.ok(st.skip, "the presenter has Skip")
+      A.no(press(ns, "Twiz"), "no own button")
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      A.eq(sentOf(ns, W, mark, "AWV"), { { id = id, c = "Frostie,Lurabe,Twiz", t = "30" } })
+      for _, c in ipairs(sentOf(ns, W, mark, "AWC")) do A.ok(c.k ~= "end", "no end card before the vote") end
+      receive(W, ns, "Frostie", "AWB", { id = id, c = "Lurabe" })
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Frostie" })
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Twiz" }) -- a second vote: the first counts
+      receive(W, ns, "Frostie", "AWB", { id = "Other-1", c = "Twiz" }) -- another show
+      for _, text in ipairs(ns.Codec.encode("AWB", { id = id, c = "Twiz" })) do ns.Comm.inject("Bob (test)", text) end
+      receive(W, ns, "Stranger", "AWB", { id = id, c = "Twiz" })
+      A.eq(state(ns).voted, "2 of 3 voted")
+      A.eq(state(ns).phase, "vote", "I have not voted yet")
+      W:advance(27)
+      A.eq(state(ns).phase, "clown", "30 s are up")
+      st = state(ns)
+      A.eq(st.text, "Clown of the Night: Frostie & Lurabe (1 vote)", "a tie: co-clowns")
+      A.eq(ns.db.stats.clown.names, { "Frostie", "Lurabe" })
+      A.eq(ns.db.stats.clown.sid, S)
+      W:advance(3)
+      A.eq(sentOf(ns, W, mark, "AWR"), { { id = id, w = "Frostie,Lurabe", n = "1" } })
+      ns.AwardsShow.next() -- the end card
+      A.eq(state(ns).phase, "end")
+      W:advance(3)
+      local cards = sentOf(ns, W, mark, "AWC")
+      A.eq(cards[#cards].k, "end")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    presenter_votes_and_the_vote_ends_when_all_voted = function(ns, A, W)
+      voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      A.ok(press(ns, "Lurabe"))
+      A.eq(state(ns).picked, "Lurabe")
+      A.eq(state(ns).voted, "1 of 3 voted", "my own vote counts at once")
+      press(ns, "Frostie") -- a second click does nothing
+      A.eq(state(ns).picked, "Lurabe")
+      receive(W, ns, "Frostie", "AWB", { id = id, c = "Lurabe" })
+      A.eq(state(ns).phase, "vote")
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Twiz" })
+      A.eq(state(ns).phase, "clown", "everyone online voted")
+      A.eq(state(ns).text, "Clown of the Night: Lurabe (2 votes)")
+      W:advance(3)
+      A.eq(sentOf(ns, W, mark, "AWB"), { { id = id, c = "Lurabe" } }, "one AWB")
+      A.eq(sentOf(ns, W, mark, "AWR"), { { id = id, w = "Lurabe", n = "2" } })
+    end,
+
+    the_vote_ends_early_when_the_online_ones_voted = function(ns, A, W)
+      voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      ns.roster:get("Frostie").online = false
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Twiz" })
+      A.eq(state(ns).phase, "vote")
+      press(ns, "Lurabe")
+      A.eq(state(ns).phase, "clown", "Frostie is offline: no need to wait")
+      A.eq(state(ns).text, "Clown of the Night: Lurabe & Twiz (1 vote)")
+    end,
+
+    nobody_votes_no_clown = function(ns, A, W)
+      voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      W:advance(30)
+      A.eq(state(ns).phase, "clown")
+      A.eq(state(ns).text, "No clown tonight.")
+      A.eq(ns.db.stats.clown, nil)
+      W:advance(3)
+      local r = sentOf(ns, W, mark, "AWR")
+      A.eq(#r, 1)
+      A.eq(r[1].w or "", "", "nobody")
+      A.eq(r[1].n, "0")
+    end,
+
+    skip_ends_the_vote = function(ns, A, W)
+      voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      A.ok(press(ns, "Skip"))
+      A.eq(state(ns).phase, "end", "straight to the end card")
+      W:advance(3)
+      A.eq(sentOf(ns, W, mark, "AWR"), { { id = id, k = "skip" } })
+      local cards = sentOf(ns, W, mark, "AWC")
+      A.eq(cards[#cards].k, "end")
+      W:advance(30)
+      A.eq(#sentOf(ns, W, mark, "AWR"), 1, "the 30 s timer does nothing after a skip")
+      A.eq(state(ns).phase, "end")
+    end,
+
+    all_time_show_has_no_vote = function(ns, A, W)
+      voteNight(ns, W)
+      local mark = #W.sent
+      toTheVote(ns, W, "all")
+      A.eq(state(ns).phase, "end")
+      W:advance(3)
+      A.eq(#sentOf(ns, W, mark, "AWV"), 0)
+    end,
+
+    viewer_votes = function(ns, A, W)
+      local mark = #W.sent
+      local id = frostieShow(ns, W)
+      hello(W, ns, "Lurabe", "ROGUE")
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Lurabe,Twiz", t = "30" })
+      local st = state(ns)
+      A.eq(st.phase, "vote")
+      A.eq(st.buttons, { "Frostie", "Lurabe" }, "everyone but me")
+      A.eq(st.voted, "0 of 3 voted")
+      A.no(st.skip, "only the presenter skips")
+      A.ok(press(ns, "Frostie"))
+      press(ns, "Lurabe")
+      A.eq(state(ns).picked, "Frostie")
+      A.eq(state(ns).voted, "1 of 3 voted")
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Frostie" })
+      A.eq(state(ns).voted, "2 of 3 voted")
+      W:advance(31)
+      A.eq(state(ns).phase, "vote", "a viewer waits for the presenter's result")
+      receive(W, ns, "Lurabe", "AWR", { id = id, w = "Lurabe", n = "9" })
+      A.eq(state(ns).phase, "vote", "only the presenter's result counts")
+      receive(W, ns, "Frostie", "AWR", { id = id, w = "Frostie", n = "2" })
+      st = state(ns)
+      A.eq(st.phase, "clown")
+      A.eq(st.text, "Clown of the Night: Frostie (2 votes)")
+      A.eq(ns.db.stats.clown.names, { "Frostie" })
+      A.eq(ns.db.stats.clown.sid, ns.Session.current().id)
+      W:advance(3)
+      A.eq(sentOf(ns, W, mark, "AWB"), { { id = id, c = "Frostie" } }, "one AWB, never a second")
+      A.eq(#sentOf(ns, W, mark, "AWR"), 0, "a viewer never sends the result")
+      card(W, ns, "Frostie", { id = id, i = "2", k = "end" })
+      A.eq(state(ns).phase, "end")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    viewer_skip_and_no_clown = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      ns.db.stats.clown = { names = { "Lurabe" }, sid = "old", at = 1 }
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Twiz", t = "30" })
+      receive(W, ns, "Frostie", "AWR", { id = id, n = "0" })
+      A.eq(state(ns).text, "No clown tonight.")
+      A.eq(ns.db.stats.clown.names, { "Lurabe" }, "no clown: the old one stays")
+      receive(W, ns, "Frostie", "AWR", { id = id, k = "skip" })
+      card(W, ns, "Frostie", { id = id, i = "2", k = "end" })
+      A.eq(state(ns).phase, "end")
+    end,
+
+    viewer_sees_the_first_eight = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      local names = {}
+      for i = 1, 10 do names[i] = "Pal" .. string.char(96 + i) end -- Pala … Palj
+      names[#names + 1] = "Twiz"
+      receive(W, ns, "Frostie", "AWV", { id = id, c = table.concat(names, ","), t = "30" })
+      local st = state(ns)
+      A.eq(#st.buttons, 8)
+      A.eq(st.buttons[1], "Pala"); A.eq(st.buttons[8], "Palh", "the first 8 by name")
+      A.eq(st.voted, "0 of 11 voted")
+    end,
+
+    viewer_in_a_fight_sees_the_vote_after = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Twiz", t = "30" })
+      A.ok(state(ns).phase ~= "vote", "not drawn in a fight")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      A.eq(state(ns).phase, "vote")
+      A.eq(state(ns).buttons, { "Frostie" })
+    end,
+
+    fight_over_retries_while_still_in_combat = function(ns, A, W)
+      start(ns, W)
+      hello(W, ns, "Frostie")
+      W.state.combat = true
+      receive(W, ns, "Frostie", "AWS", { id = "Frostie-1", v = "session" })
+      W:fire("PLAYER_REGEN_ENABLED") -- the event can come a moment before the game says the fight is over
+      A.no(ns.AwardsShow.isOpen())
+      W.state.combat = false
+      W:advance(1.1)
+      A.ok(ns.AwardsShow.isOpen(), "tried again a moment later")
+    end,
+
+    clown_title_on_the_crew_tab = function(ns, A, W)
+      local id = frostieShow(ns, W)
+      W:advance(1)
+      local function title(name)
+        for _, m in ipairs(ns.Panel.models()) do if m.name == name then return m.title end end
+      end
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Frostie,Twiz", t = "30" })
+      receive(W, ns, "Frostie", "AWR", { id = id, w = "Frostie", n = "1" })
+      W:advance(1)
+      A.eq(title("Frostie"), "Clown of the Night")
+      ns.Modules.set("stats", "titles", "off")
+      W:advance(1)
+      A.eq(title("Frostie"), nil, "titles off: no clown title either")
+      ns.Modules.set("stats", "titles", "session")
+      ns.db.stats.clown = { names = { "Lurabe" }, sid = "x", at = 1 }
+      ns.Bus.fire("CLOWN_CHANGED")
+      W:advance(1)
+      A.eq(title("Frostie"), nil, "a new clown replaces the old")
+    end,
+
+    the_clown_gets_a_trophy = function(ns, A, W)
+      start(ns, W)
+      local sid = ns.Session.current().id
+      hello(W, ns, "Lurabe", "ROGUE")
+      W:advance(1900)
+      hello(W, ns, "Lurabe", "ROGUE")
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      local mark = #W.sent
+      toTheVote(ns, W)
+      A.eq(state(ns).phase, "vote")
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      receive(W, ns, "Lurabe", "AWB", { id = id, c = "Twiz" })
+      press(ns, "Lurabe")
+      A.eq(state(ns).text, "Clown of the Night: Lurabe & Twiz (1 vote)")
+      ns.AwardsShow.next()
+      ns.AwardsShow.next()
+      ns.Session.newByHand()
+      local r = ns.Trophies.records()[sid]
+      A.ok(r, "recorded")
+      A.eq(r.winners.clown, { "Lurabe", "Twiz" })
+      A.eq(ns.Trophies.summary().Lurabe.counts.clown, 1, "the clown trophy counts")
+      local w = ns.TrophyLogic.fromPieces(ns.TrophyLogic.toWire(r))
+      A.eq(w.winners.clown, { "Lurabe", "Twiz" }, "travels in TRP")
+      local m = ns.BoardLogic.model("session", {}, { tab = "trophies", trophies = ns.Trophies.summary() })
+      local lurabe
+      for _, row in ipairs(m.rows) do if row.id == "Lurabe" then lurabe = row end end
+      A.contains(table.concat(lurabe.tip, "\n"), "Clown of the Night: 1")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    clown_of_another_session_gets_no_trophy = function(ns, A, W)
+      start(ns, W)
+      local sid = ns.Session.current().id
+      W:advance(1900)
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      ns.db.stats.clown = { names = { "Lurabe" }, sid = "Other-1", at = 1 }
+      ns.Session.newByHand()
+      A.eq(ns.Trophies.records()[sid].winners.clown, nil)
+    end,
+
+    clown_not_in_the_session_gets_no_trophy = function(ns, A, W)
+      start(ns, W)
+      local sid = ns.Session.current().id
+      W:advance(1900)
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      ns.db.stats.clown = { names = { "Ginkan", "Lurabe" }, sid = sid, at = 1 }
+      ns.Session.newByHand()
+      A.eq(ns.Trophies.records()[sid].winners.clown, { "Lurabe" })
+      local p = ns.Trophies.summary().Lurabe
+      A.eq(p.streaks.clown, 1)
+      A.eq(p.counts.clown, 1)
+      local trophies = ns.TrophyLogic.summary({ { sid = "a", start = 1, people = { "Lurabe", "Twiz" },
+        winners = { clown = { "Lurabe" } } } })
+      A.eq(trophies.Lurabe.total, 1, "the clown is a known trophy")
+      local m = ns.BoardLogic.model("session", {}, { tab = "trophies", trophies = trophies })
+      A.eq(m.rows[1].winners[1], "Clown of the Night x1", "the Trophies tab")
+      ns.db.stats.trophies = { a = { sid = "a", start = 1, people = { "Lurabe", "Twiz" },
+        winners = { clown = { "Lurabe" } } }, b = { sid = "b", start = 2, people = { "Lurabe", "Twiz" },
+        winners = { clown = { "Lurabe" } } } }
+      ns.Bus.fire("TROPHIES_CHANGED", "b")
+      A.eq(ns.Trophies.lineFor("Lurabe"), "2 trophies · Clown of the Night streak x2")
     end,
   },
 }

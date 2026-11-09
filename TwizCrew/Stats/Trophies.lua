@@ -63,6 +63,20 @@ local function freshness(sid, entries)
   return math.floor(e)
 end
 
+-- The Clown of the Night voted in this session (db.stats.clown, saved by the awards show) gets a trophy: only names
+-- in the record's people.
+local function clownOf(r)
+  local c = ns.db and type(ns.db.stats) == "table" and ns.db.stats.clown
+  if type(c) ~= "table" or c.sid ~= r.sid or type(c.names) ~= "table" then return end
+  local people, list = {}, {}
+  for _, name in ipairs(r.people) do people[name] = true end
+  for _, name in ipairs(c.names) do
+    if people[name] then list[#list + 1] = name; people[name] = nil end
+  end
+  table.sort(list)
+  if #list > 0 then r.winners.clown = list end
+end
+
 -- A session just ended (called by Stats before the session numbers are wiped). late: noticed at login, so my
 -- numbers may be from when I left; a friend who stayed can send a better record later.
 function Trophies.sessionEnded(sid, late)
@@ -72,6 +86,7 @@ function Trophies.sessionEnded(sid, late)
   local entries = ns.StatsStore.entries("session", sid)
   local r = L.record(sid, entries, ns.StatsLogic.awards(entries), ns.Config.COUCH_MIN_PLAYED)
   if r then
+    clownOf(r)
     if late then r.late, r.e = true, freshness(sid, entries) end
     add(r)
   end
@@ -83,8 +98,8 @@ function Trophies.summary()
 end
 
 local function awardName(id)
-  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d.name end end
-  return id
+  local d = ns.StatsDefs.trophyDef(id)
+  return d and d.name or id
 end
 
 -- "12 trophies · Professional Corpse streak x3" for the Crew tab's tooltip; nil without trophies.
@@ -93,10 +108,14 @@ function Trophies.lineFor(name)
   if not p or p.total <= 0 then return nil end
   local line = p.total .. (p.total == 1 and " trophy" or " trophies")
   local best, bestN = nil, 1
-  for _, d in ipairs(ns.StatsDefs.AWARDS) do
-    local n = p.streaks[d.id]
-    if n and n > bestN then best, bestN = d.id, n end
+  local function look(list)
+    for _, d in ipairs(list) do
+      local n = p.streaks[d.id]
+      if n and n > bestN then best, bestN = d.id, n end
+    end
   end
+  look(ns.StatsDefs.AWARDS)
+  look(ns.StatsDefs.EXTRA_TROPHIES)
   if best then line = line .. " · " .. awardName(best) .. " streak x" .. bestN end
   return line
 end

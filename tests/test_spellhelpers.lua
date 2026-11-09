@@ -128,117 +128,108 @@ return {
       local L = ns.SpellHelpersLogic
       local choices = { Fireball = { smart = true }, ["Flash Heal"] = { smart = true, newest = false, switch = true } }
       local function choiceOf(s) return L.choice(choices[s]) end
-      local function kindOf(s) return ({ Fireball = "harm", ["Flash Heal"] = "help" })[s] end
-      local function bestRank(s) return ({ Fireball = 3, ["Flash Heal"] = 2 })[s] end
-      local want, place = L.plan({
-        { slot = 1, spell = "Fireball", rank = 1 },
-        { slot = 2, spell = "Flash Heal", rank = 1 },
-        { slot = 3, spell = "Bear Form" },
-        { slot = 4, spell = "Frostbolt", rank = 2, ours = true, name = "Frostbolt 2", body = "x" },
-        { slot = 5, spell = "Fireball", ours = true, name = "Fireball", body = "x" },
-      }, choiceOf, kindOf, bestRank)
-      A.eq(want, { Fireball = L.body("Fireball", nil, "harm", false),
-        ["Flash Heal 1"] = L.body("Flash Heal", 1, "help", true) })
-      A.eq(place, {
-        { slot = 1, macro = "Fireball" },
-        { slot = 2, macro = "Flash Heal 1" },
-        { slot = 4, spell = "Frostbolt" }, -- smart target off now: the plain spell back (newest rank)
-      }, "slot 5 already has the right macro (its text gets fixed in place)")
+      local function kindOf(s) return ({ Fireball = "harm", ["Flash Heal"] = "help", Frostbolt = "harm" })[s] end
+      local function bestRank(s) return ({ Fireball = 3, ["Flash Heal"] = 2, Frostbolt = 4 })[s] end
+      local fb = L.body("Fireball", nil, "harm", false)
+      local have = {
+        { index = 121, name = "Fireball", body = fb, p = L.parse(fb) },
+        { index = 122, name = "Frostbolt 2", body = L.body("Frostbolt", 2, "harm", false),
+          p = L.parse(L.body("Frostbolt", 2, "harm", false)) },
+        { index = 123, name = "Flash Heal 1", body = L.body("Flash Heal", 1, "help", false),
+          p = L.parse(L.body("Flash Heal", 1, "help", false)) },
+      }
+      local edit, make, drop = L.macros({ "Fireball", "Flash Heal", "Bear Form", "Frostbolt" }, have, choiceOf, kindOf, bestRank)
+      A.eq(edit, { { index = 123, name = "Flash Heal 1", body = L.body("Flash Heal", 1, "help", true) } },
+        "Flash Heal keeps its macro and its name (so it stays on your bars) and the rank it had; only the text changes")
+      A.eq(make, {}, "Fireball's macro is already right")
+      A.eq(drop, { 122 }, "smart target is off for Frostbolt: its macro goes")
+      -- a new one: named after the spell, never with the rank (so the name never has to change)
+      edit, make, drop = L.macros({ "Fireball", "Flash Heal" }, {}, choiceOf, kindOf, bestRank)
+      A.eq(make, { { name = "Fireball", body = fb, spell = "Fireball" },
+        { name = "Flash Heal", body = L.body("Flash Heal", 2, "help", true), spell = "Flash Heal" } })
+      A.eq(edit, {}); A.eq(drop, {})
     end,
-    smart_target_on_the_bars = function(ns, A, W)
+    smart_target_never_touches_the_bars = function(ns, A, W)
       start(ns, W)
       local g = game(W)
       local SH = ns.SpellHelpers
+      local before = {}
+      for k, v in pairs(g.bars) do before[k] = { v[1], v[2], v[3] } end
       SH.apply()
-      A.eq(g.bars[1], { "spell", 131 }, "nothing changes until you ask")
-      A.eq(#g.chars, 0)
-      -- Fireball: smart target
+      A.eq(#g.chars, 0, "nothing until you ask")
+      -- Fireball: smart target makes its macro, the bars stay as they are
       SH.set("Fireball", "smart", true)
       W:advance(1)
-      local name, body = g.macroOn(1)
-      A.eq(name, "Fireball")
-      A.eq(body, ns.SpellHelpersLogic.body("Fireball", nil, "harm", false), "always the top rank: cast by name")
+      A.eq(g.bars, before, "bars untouched")
       A.eq(#g.chars, 1)
-      -- switch target: the same macro, new text
+      local i = g.indexOf("Fireball")
+      A.eq(select(3, W.env.GetMacroInfo(i)), ns.SpellHelpersLogic.body("Fireball", nil, "harm", false))
+      A.eq(SH.macroFor("Fireball"), i)
+      -- you drag it onto slot 7 yourself
+      A.ok(SH.pickup("Fireball"))
+      W.env.PlaceAction(7)
+      W.env.ClearCursor()
+      W:fire("ACTIONBAR_SLOT_CHANGED", 7)
+      W:advance(1)
+      A.eq((g.macroOn(7)), "Fireball")
+      A.eq(g.bars[1], { "spell", 131 }, "the plain Fireball on slot 1 is left alone")
+      -- switch target / keep the rank: the same macro (same name), new text; slot 7 still has it
       SH.set("Fireball", "switch", true)
       W:advance(1)
-      name, body = g.macroOn(1)
-      A.eq(name, "Fireball")
-      A.contains(body, "/assist [help,nodead]")
-      A.eq(#g.chars, 1, "still one macro")
-      -- keep the rank: it keeps the one it has now (the top one), the old macro goes
+      A.contains(select(2, g.macroOn(7)), "/assist [help,nodead]")
       SH.set("Fireball", "newest", false)
       W:advance(1)
-      name, body = g.macroOn(1)
-      A.eq(name, "Fireball 3")
-      A.contains(body, "Fireball(Rank 3)")
-      A.eq(#g.chars, 1, "the unused macro was deleted")
-      -- Flash Heal too: the numbers of the macros move (sorted), each slot still gets the right one
+      A.eq((g.macroOn(7)), "Fireball", "the name never changes")
+      A.contains(select(2, g.macroOn(7)), "Fireball(Rank 3)")
+      A.eq(#g.chars, 1)
+      -- Flash Heal too: its own macro, nothing moves
       SH.set("Flash Heal", "smart", true)
       W:advance(1)
-      A.eq((g.macroOn(2)), "Flash Heal")
-      A.contains(select(2, g.macroOn(2)), "[@target,help][@targettarget,help][@player] Flash Heal")
-      A.eq((g.macroOn(1)), "Fireball 3")
       A.eq(#g.chars, 2)
-      -- Bear Form isn't aimed at anyone: no macro even when asked
+      A.eq(g.bars[2], { "spell", 202 })
+      A.eq((g.macroOn(7)), "Fireball")
+      -- Bear Form isn't aimed at anyone: no macro
       SH.set("Bear Form", "smart", true)
       W:advance(1)
-      A.eq(g.bars[3], { "spell", 300 })
+      A.eq(#g.chars, 2)
       -- your own macro is never touched, even one with a spell's name
       local own = "/cast Flash Heal /say healing!"
       g.account[6] = { "Flash Heal", 1, own }
-      g.bars[8] = { "macro", "Flash Heal", "account" }
       SH.apply()
       A.eq(g.account[6][3], own)
-      A.eq(g.bars[8], { "macro", "Flash Heal", "account" }, "still your macro on that slot")
-      g.bars[8] = nil
-      A.eq(g.bars[4], { "macro", "MyMacro" })
       A.eq(g.account[5][3], "/say hi")
-      -- smart target off: the plain spell back, at the rank it kept; its macro goes
+      A.eq(g.bars[4], { "macro", "MyMacro" })
+      -- smart target off: the macro goes (and the game empties its slot); nothing is put anywhere
       SH.set("Fireball", "smart", false)
       W:advance(1)
-      A.eq(g.bars[1], { "spell", 133 })
       A.eq(#g.chars, 1)
-      -- and with newest rank on again, the rank updater keeps it current
-      SH.set("Flash Heal", "smart", false)
-      W:advance(1)
-      A.eq(g.bars[2], { "spell", 202 }, "newest rank: the top one")
-      A.eq(#g.chars, 0)
-      -- nothing left to do: nothing changes
-      A.eq(SH.apply(), 0)
+      A.eq(g.bars[1], { "spell", 131 })
+      A.eq(SH.apply(), 0, "nothing left to do")
       A.eq(ns.Log.errors(10), {})
     end,
-    waits_for_the_fight_and_the_cursor = function(ns, A, W)
+    waits_for_the_fight = function(ns, A, W)
       start(ns, W)
       local g = game(W)
       local SH = ns.SpellHelpers
       g.combat = true
       SH.set("Fireball", "smart", true)
       W:advance(1)
-      A.eq(g.bars[1], { "spell", 131 }, "not in a fight")
+      A.eq(#g.chars, 0, "no macro changes in a fight")
+      A.eq(SH.pickup("Fireball"), false)
       g.combat = false
       W:fire("PLAYER_REGEN_ENABLED")
-      A.eq((g.macroOn(1)), "Fireball", "right after it")
-      -- holding something on the cursor: wait, never drop it
-      SH.set("Fireball", "smart", false)
-      W.env.PickupSpell(201)
-      W:advance(1)
-      A.eq((g.macroOn(1)), "Fireball", "waits while you drag")
-      W.env.ClearCursor()
-      W:advance(2)
-      A.eq(g.bars[1][1], "spell", "done once the cursor is free")
+      A.eq(#g.chars, 1, "right after it")
       A.eq(ns.Log.errors(10), {})
     end,
-    a_new_spell_on_the_bar_gets_it_too = function(ns, A, W)
+    a_spell_dragged_onto_the_bar_stays_plain = function(ns, A, W)
       start(ns, W)
       local g = game(W)
       ns.SpellHelpers.set("Fireball", "smart", true)
       W:advance(1)
       g.bars[7] = { "spell", 132 }
       W:fire("ACTIONBAR_SLOT_CHANGED", 7)
-      W:advance(1)
-      A.eq((g.macroOn(7)), "Fireball", "dragged onto the bar: smart right away")
-      A.eq(#g.chars, 1, "the same macro for both")
+      W:advance(2)
+      A.eq(g.bars[7], { "spell", 132 }, "what you put on your bars stays exactly as you put it")
     end,
     the_rank_updater_skips_kept_ranks = function(ns, A, W)
       start(ns, W)
@@ -287,6 +278,12 @@ return {
       sw._scripts.OnClick(sw)
       A.eq(SH.choice("Fireball").smart, true)
       A.eq(sw.tcOn, true, "painted on")
+      W:advance(1)
+      local mb = SH.macroButtonForTest(i)
+      A.eq(SH.macroFor("Fireball"), 121, "made")
+      mb._scripts.OnDragStart(mb)
+      A.eq(W.env.GetCursorInfo(), "macro", "dragging it picks the macro up")
+      W.env.ClearCursor()
       -- in the wrench menu
       local found
       for _, it in ipairs(ns.Panel.toolItems()) do if it.label:find("Spell helpers") then found = it end end

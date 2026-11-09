@@ -138,3 +138,36 @@ function L.fromPieces(f)
   if #people < 2 then return nil end
   return { sid = f.s, start = tonumber(f.t) or 0, people = people, winners = winners }
 end
+
+-- Stolen crowns: who leads each award now ({ [awardId] = { names } }, only awards with a winner).
+function L.leaders(awardsList)
+  local out = {}
+  for _, a in ipairs(awardsList or {}) do
+    if not a.empty then
+      local list = {}
+      for _, name in ipairs(a.winners) do if real(name) then list[#list + 1] = name end end
+      if #list > 0 then out[a.def.id] = list end
+    end
+  end
+  return out
+end
+
+-- Steals between the old leaders and the awards now: the new winners share nobody with the old ones.
+-- valueOf(def, name) -> the person's number as text ("8 deaths").
+function L.steals(old, awardsList, valueOf)
+  local out = {}
+  local now = L.leaders(awardsList)
+  for _, a in ipairs(awardsList or {}) do
+    local id = a.def.id
+    local before, after = old and old[id], now[id]
+    if before and after and #before > 0 then
+      local shared = false
+      for _, name in ipairs(after) do if has(before, name) then shared = true end end
+      if not shared then
+        out[#out + 1] = { def = a.def, thieves = after, victims = before,
+          thiefText = valueOf(a.def, after[1]) or "", victimText = valueOf(a.def, before[1]) or "" }
+      end
+    end
+  end
+  return out
+end

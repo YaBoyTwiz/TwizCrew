@@ -202,5 +202,55 @@ return {
       ns.Trophies.sessionEnded("zzz") -- nothing to record; also must not break
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy", "cached until a record is added")
     end,
+    steals_need_new_leaders_who_share_nobody = function(ns, A)
+      local L, S = ns.TrophyLogic, ns.StatsLogic
+      local before = { entry("Twiz", { dt = 7 }), entry("Lurabe", { dt = 8 }) }
+      local old = L.leaders(S.awards(before))
+      A.eq(old.corpse, { "Lurabe" })
+      local after = { entry("Twiz", { dt = 9 }), entry("Lurabe", { dt = 8 }) }
+      local list = S.awards(after)
+      local st = L.steals(old, list, function(def, name) return name == "Twiz" and "9 deaths" or "8 deaths" end)
+      A.eq(#st, 1)
+      A.eq(st[1].def.id, "corpse")
+      A.eq(st[1].thieves, { "Twiz" })
+      A.eq(st[1].victims, { "Lurabe" })
+      A.eq(st[1].thiefText, "9 deaths")
+      A.eq(st[1].victimText, "8 deaths")
+      local tie = { entry("Twiz", { dt = 8 }), entry("Lurabe", { dt = 8 }) }
+      A.eq(#L.steals(old, S.awards(tie), function() return "" end), 0, "a tie is not a steal")
+      A.eq(#L.steals({}, list, function() return "" end), 0, "nobody held it before")
+    end,
+    stolen_crown_pop_ups = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      local sid = ns.Session.current().id
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "2" })
+      ns.Steals.check()
+      ns.Stats.count("dt", 3) -- I take Professional Corpse, but the session is young
+      ns.Steals.check()
+      ns.Steals.flush()
+      A.eq(ns.Steals.lastShown(), nil, "not in the first 15 minutes")
+      W:advance(901)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "5" })
+      ns.Steals.check()
+      ns.Steals.flush()
+      A.eq(ns.Steals.lastShown(), "Lurabe just stole Professional Corpse from Twiz!")
+      -- two at once inside a minute: one pop-up for both
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "5", s_jp = "50" })
+      ns.Stats.count("jp", 60)
+      ns.Stats.count("dt", 4) -- 7 deaths: back to me
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.contains(ns.Steals.lastShown(), "crowns changed hands")
+      -- switched off
+      ns.Modules.set("roasts", "stealPopups", false)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "4", s_dt = "20", s_jp = "50" })
+      ns.Steals.check()
+      W:advance(61)
+      ns.Steals.flush()
+      A.contains(ns.Steals.lastShown(), "crowns changed hands", "nothing new while off")
+      A.eq(ns.Log.errors(10), {})
+    end,
   },
 }

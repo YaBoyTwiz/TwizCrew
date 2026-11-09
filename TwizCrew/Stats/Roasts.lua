@@ -471,7 +471,7 @@ local KIND_SETTINGS = {
 }
 
 local defaults = { aboutMe = true, sound = false, mocks = true, mockModel = true, mockSound = true, ownOnly = false,
-  addMock = "", cheers = true }
+  addMock = "", cheers = true, stealPopups = true }
 local settings = {}
 for _, s in ipairs(KIND_SETTINGS) do
   defaults[s[1]] = true
@@ -489,6 +489,9 @@ settings[#settings + 1] = { key = "cheers", label = "Congrats button", kind = "t
   info = "For a few minutes after a friend levels up, a Congrats button shows on their row (and clicking the "
     .. "level-up pop-up does the same). It sends an encouraging line the crew sees; your friend sees your character "
     .. "cheer for them in 3D with the level-up fanfare. This switch also decides whether you see congrats." }
+settings[#settings + 1] = { key = "stealPopups", label = "Stolen crown pop-ups", kind = "toggle",
+  info = "A pop-up when someone takes the lead in a Hall of Shame award this session, like \"Twiz just stole "
+    .. "Professional Corpse from Lurabe!\". Not in the first 15 minutes of a session, and at most one a minute." }
 settings[#settings + 1] = { key = "mockModel", label = "Show who mocked me (3D)", kind = "toggle", parent = "mocks",
   info = "When a friend mocks you, their character laughs at you with the roast in a speech bubble: their real "
     .. "character if they're near you (or were earlier this session), otherwise their class icon. Off: the plain "

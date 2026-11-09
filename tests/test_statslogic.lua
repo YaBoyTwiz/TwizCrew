@@ -192,12 +192,13 @@ return {
         for _, a in ipairs(L.awards(list)) do if a.def.id == id then return a end end
       end
       local list = {
-        { name = "Twiz", stats = { gn = 14, ml = 5000, mg = 1000, xg = 3000, xt = 3600, zv = 4, fp = 2 } },
-        { name = "Lurabe", stats = { gn = 90000, ml = 100, mg = 900, xg = 9000, xt = 3600 } },
-        { name = "Ginkan", stats = { gn = 0, xg = 100, xt = 600 } },
+        { name = "Twiz", stats = { gn = 14, pt = 3600, ml = 5000, mg = 1000, xg = 3000, xt = 3600, zv = 4, fp = 2 } },
+        { name = "Lurabe", stats = { gn = 90000, pt = 1800, ml = 100, mg = 900, xg = 9000, xt = 3600 } },
+        { name = "Ginkan", stats = { gn = 0, pt = 1800, xg = 100, xt = 600 } },
+        { name = "Alty", stats = { gn = 0, pt = 1799 } }, -- a forgotten alt: under 30 minutes played
       }
       local p = award(list, "pauper")
-      A.eq(p.winners, { "Ginkan" }, "0 gold wins")
+      A.eq(p.winners, { "Ginkan" }, "0 gold wins; the alt under 30 minutes played is not taking part")
       A.eq(p.text, "0c")
       local m = award(list, "moneypit")
       A.eq(m.winners, { "Twiz" })

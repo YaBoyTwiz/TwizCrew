@@ -105,9 +105,16 @@ ns.StatsDefs.AWARDS = {
     icon = "Interface\\Icons\\Ability_Hunter_EagleEye",
     info = "Took the most flight paths.", joke = "The flight master knows their coffee order." },
   -- Money & Loot
-  { id = "pauper", tab = "loot", name = "Pauper", key = "gn", unit = "money", lowest = true, -- new
+  { id = "pauper", tab = "loot", name = "Pauper", unit = "money", lowest = true, -- new
+    value = function(st)
+      -- under 30 minutes played (a forgotten alt logged in for a moment): not taking part
+      local pt = st.pt
+      if type(st.gn) ~= "number" or type(pt) ~= "number" or pt < ns.Config.COUCH_MIN_PLAYED then return nil end
+      return st.gn
+    end,
     icon = "Interface\\Icons\\INV_Misc_Bag_10",
-    info = "Carries the least gold right now.", joke = "Checks the couch cushions for copper." },
+    info = "Carries the least gold right now (needs at least 30 minutes played).",
+    joke = "Checks the couch cushions for copper." },
   { id = "moneypit", tab = "loot", name = "Money Pit", unit = "money", -- new
     value = function(st)
       local lost = (type(st.ml) == "number" and st.ml or 0) - (type(st.mg) == "number" and st.mg or 0)

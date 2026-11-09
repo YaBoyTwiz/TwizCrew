@@ -78,9 +78,14 @@ end
 
 -- Extra lines that answer the in-game checks of the test list (docs/TESTING.md) in one paste.
 local function checkLines(add)
+  -- a secret answer (dungeons) can't be tested: it reads as nil ("no")
+  local function open(v)
+    if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
+    return v
+  end
   local function call(fn, ...)
     local ok, a, b = try(fn, ...)
-    if ok then return a, b end
+    if ok then return open(a), open(b) end
   end
   local inInstance, kind = call(IsInInstance)
   add("Game says: flying " .. yes(call(UnitOnTaxi, "player")) .. ", away " .. yes(call(UnitIsAFK, "player"))

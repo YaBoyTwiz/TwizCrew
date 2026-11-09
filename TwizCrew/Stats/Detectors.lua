@@ -98,7 +98,12 @@ local function add(d)
   return d
 end
 
-local function player(f) return call(f, "player") end
+-- A yes/no about you; a secret answer (dungeons: testing it is an error) counts as no.
+local function player(f)
+  local v = call(f, "player")
+  if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
+  return v
+end
 
 local function inDungeon()
   local inside, kind = call(IsInInstance)

@@ -34,11 +34,22 @@ Tags.INFO = {
   AFK = "This player has marked themselves as away from the keyboard.",
 }
 
+local function hidden(v)
+  if v == nil or type(issecretvalue) ~= "function" then return false end
+  local ok, secret = pcall(issecretvalue, v)
+  return not ok or secret and true or false
+end
+
+-- Calls a game function; nil when it's missing, errors, or answers with a secret value. In dungeons the game hides
+-- "AFK?", "dead?", "fighting?" behind secret values, and even testing one is an error (it turned the Crew panel
+-- off mid-dungeon, 2026-11-08), so a secret answer counts as "don't know".
 local function try(fn, ...)
   if type(fn) ~= "function" then return nil end
   local ok, a, b = pcall(fn, ...)
-  if ok then return a, b end
-  return nil
+  if not ok then return nil end
+  if hidden(a) then a = nil end
+  if hidden(b) then b = nil end
+  return a, b
 end
 
 ------------------------------------------------------------------------------------------------------------- away

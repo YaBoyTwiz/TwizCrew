@@ -90,7 +90,8 @@ local function iAmAway()
   if ns.Away and ns.Away.isAway and ns.Away.isAway() then return true end
   if type(UnitIsAFK) == "function" then
     local ok, v = pcall(UnitIsAFK, "player")
-    if ok and v == true then return true end
+    -- a secret answer (dungeons) can't even be compared: it counts as "not away"
+    if ok and not (type(issecretvalue) == "function" and issecretvalue(v)) and v == true then return true end
   end
   return false
 end

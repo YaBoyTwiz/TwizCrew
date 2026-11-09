@@ -435,6 +435,22 @@ return {
       W:advance(2)
       A.eq(ns.Self.lastSent().tg, "")
     end,
+    secret_answers_in_a_dungeon_count_as_unknown = function(ns, A, W)
+      -- In a dungeon the game answers "AFK?", "dead?", "fighting?" and "flying?" with secret values an addon may not
+      -- test (doing so errors; 3 errors in a minute turned the Crew panel off until /reload, owner 2026-11-08).
+      start(ns, W)
+      ns.Away.start()
+      local hidden = {}
+      W.state.secret[hidden] = true
+      W.state.afk, W.state.dead, W.state.combat, W.state.taxi = hidden, hidden, hidden, hidden
+      W.state.inInstance, W.state.instanceType = true, "party"
+      A.eq(ns.Away.isAway(), false, "a secret AFK answer is not 'away'")
+      A.eq(ns.Away.gameAFK(), false)
+      A.eq(ns.Tags.detectSelf(), { DUNGEON = true }, "only what the game lets us read")
+      W:advance(10)
+      A.ok(ns.Modules.isEnabled("panel"), "the panel stays on")
+      A.eq(ns.Modules.broken(), {})
+    end,
     mouse_movement_counts_as_here = function(ns, A, W)
       start(ns, W)
       ns.Away.start()

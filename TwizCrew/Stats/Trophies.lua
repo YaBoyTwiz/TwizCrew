@@ -63,14 +63,15 @@ local function freshness(sid, entries)
   return math.floor(e)
 end
 
--- The Clown of the Night voted in this session (db.stats.clown, saved by the awards show) gets a trophy: only names
--- in the record's people.
+-- The last Clown of the Night voted in this session (db.stats.clownBySid[sid], saved by the awards show) gets a
+-- trophy: only names in the record's people. A later "no clown" clears the title, not this.
 local function clownOf(r)
-  local c = ns.db and type(ns.db.stats) == "table" and ns.db.stats.clown
-  if type(c) ~= "table" or c.sid ~= r.sid or type(c.names) ~= "table" then return end
+  local by = ns.db and type(ns.db.stats) == "table" and ns.db.stats.clownBySid
+  local names = type(by) == "table" and by[r.sid]
+  if type(names) ~= "table" then return end
   local people, list = {}, {}
   for _, name in ipairs(r.people) do people[name] = true end
-  for _, name in ipairs(c.names) do
+  for _, name in ipairs(names) do
     if people[name] then list[#list + 1] = name; people[name] = nil end
   end
   table.sort(list)

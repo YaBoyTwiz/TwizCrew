@@ -121,7 +121,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   awards show on my screen". Vote (session view, 2+ people): AWV / AWB / AWR, 30 s, only the presenter's count
   is shown; more than 8 candidates: buttons for the first 8 by name. The clown is saved in `db.stats.clown`, gets
   the Crew-tab title "Clown of the Night" (only while award titles are on) and a `clown` trophy
-  (`StatsDefs.EXTRA_TROPHIES`). Built-in notes: Wanderer counts one run-off per group
+  (`StatsDefs.EXTRA_TROPHIES`, from `db.stats.clownBySid`). The presenter's 30 s start once its AWV has left the
+  send queue (viewers get the full time); a card (AWC) still waiting in the queue is replaced by the next one
+  (`Comm.send` option `replace`). Exception to "no frames in combat": a viewer's AwardsShow frame may be built in a
+  fight (a friend's AWS arrives) so its fight-end handler is registered; it is a plain frame (no secure templates),
+  which the game allows. Built-in notes: Wanderer counts one run-off per group
   member left behind (a flight away from the group counts too; a hearthstone, portal, summon or releasing your
   ghost doesn't); Pauper needs 30 minutes played (a forgotten alt doesn't win it); with only one person, solo awards
   like Pauper always have a winner (same as the old awards); Snail ignores readings taken mid-ding.
@@ -157,6 +161,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Settings: Basics and Advanced tabs (2026-11-07):** "too many advanced features... not so daunting". The window
   opens on Basics (transparency, size, row style, panel on/off, offline friends, lock, hide in fights, pop-ups,
   auto-away, minimap button); Advanced lists everything.
+- **Clown of the Night rules (2026-11-09, owner):** the title lasts "until the next show": every vote result
+  replaces it (a winner: those names; "No clown tonight." or Skip: no clown); an all-time show (no vote) leaves it
+  alone. The trophy for a session goes to the last clown actually voted in that session; a later no-clown or
+  skipped vote in the same session clears the title but doesn't take the trophy away. Each copy saves what it saw,
+  so clown titles and trophies can differ between friends when some didn't see the reveal (accepted).
 - **Quests and the row menu (2026-11-07):** each copy shares the quest you're on (qn / qo / qc: the one whose
   objectives moved last, else the first watched; never C_SuperTrack, see test_lint). Rows show "Quest (3/8)" with a
   ! or ?, hover adds where, quest objectives, status and distance; right-click a row for Whisper, Invite, Inspect
@@ -282,6 +291,9 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **No playing for you:** it cannot move, cast, or target on its own. Every action needs a key press or a click.
 - **Short messages, few per second:** about 255 characters per message, and the game throttles bursts (send a few
   per second at most; queue the rest).
+- **One message is several sends (TwizCrew, 2026-11-09):** in automatic mode `Comm.send` sends one copy per
+  destination (the group, a whisper to each channel member outside it, and the channel), all through the ~2 a
+  second queue. A live feature must keep its message count low (or replace waiting ones), or it falls behind.
 - **A brand-new custom channel refuses addon messages for a moment (seen in game, 2026-11-05):** on the owner's
   first login TwizCrew created `TwizCrewHQ`, and the sends in the same second as the join came back with result 7
   (very likely `InvalidChannel`). On the next login every send worked. TwizCrew now waits out refusals for 10 s

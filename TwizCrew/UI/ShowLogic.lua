@@ -10,8 +10,7 @@ local NAME_CHARS = 24
 
 local function awardDef(id)
   if type(id) ~= "string" then return nil end
-  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
-  return nil
+  return ns.StatsDefs.awardDef(id)
 end
 
 -- "a,b" -> { "a", "b" }: cleaned, cut to 24 letters, fake crew members left out; the order is kept.

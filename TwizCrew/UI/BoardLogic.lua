@@ -111,10 +111,10 @@ local function trophyRows(summary, ctx)
       if a.streak and a.streak >= 2 then line = line .. " (" .. a.streak .. " sessions in a row)" end
       tip[#tip + 1] = line
     end
-    local e = ctx.entries and ctx.entries[x.name]
+    -- the line lists award names, not people: plain text colour (false), never a class colour
     rows[#rows + 1] = {
       id = x.name, name = text(x.name), icon = "Interface\\Icons\\INV_Misc_Ribbon_01", text = total,
-      winners = { table.concat(parts, ", ") }, classes = { type(e) == "table" and e.class or false },
+      winners = { table.concat(parts, ", ") }, classes = { false },
       more = 0, empty = false, tip = tip,
     }
   end

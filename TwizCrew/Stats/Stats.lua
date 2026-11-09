@@ -216,14 +216,20 @@ local api = {
   wipe = function(zone) Stats.wipe(zone) end,
 }
 
+-- Before my session numbers are wiped for another session (the same test as Store.setSession), hand out that
+-- session's trophies. late when it ended while I was away (no old session, or my numbers aren't from it).
+local function endSession(newId, fromId, keep)
+  local mine = Store.mine()
+  if not mine or mine.sid == "" or mine.sid == newId or not ns.Trophies then return end
+  if keep and fromId ~= nil and mine.sid == fromId then return end -- kept, not wiped
+  ns.Log.safe("trophies", ns.Trophies.sessionEnded, mine.sid, fromId == nil or mine.sid ~= fromId)
+end
+
 local function onSession(new, old, keep)
   if type(new) ~= "table" then return end
-  -- the session my numbers belong to has ended (a new one, counts not kept): hand out its trophies first
-  local mine = Store.mine()
-  if not keep and mine and mine.sid ~= "" and mine.sid ~= new.id and ns.Trophies then
-    ns.Log.safe("trophies", ns.Trophies.sessionEnded, mine.sid)
-  end
-  Store.setSession(new.id, type(old) == "table" and old.id or nil, keep)
+  local fromId = type(old) == "table" and old.id or nil
+  endSession(new.id, fromId, keep)
+  Store.setSession(new.id, fromId, keep)
   if ns.Detectors.sessionStarted then ns.Detectors.sessionStarted() end
   changed(true)
   Stats.send() -- friends see our (new) session quickly
@@ -252,7 +258,10 @@ ns.Modules.register({
     ns.Bus.on(FEATURE, "SESSION_CHANGED", onSession)
     -- the session may have moved on while counting was off
     local cur = ns.Session and ns.Session.decided() and ns.Session.current()
-    if cur then Store.setSession(cur.id, nil, false) end
+    if cur then
+      endSession(cur.id, nil, false)
+      Store.setSession(cur.id, nil, false)
+    end
     ns.Detectors.startAll(api)
     ns.Events.on(FEATURE, "PLAYER_LOGOUT", sendAtLogout)
     sendTicker = C_Timer.NewTicker(ns.Config.STATS_SEND_INTERVAL, function() ns.Log.safe(FEATURE, sendIfChanged) end)

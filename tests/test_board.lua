@@ -102,7 +102,8 @@ return {
         Twiz = { total = 7, counts = { corpse = 6, bunny = 1 }, streaks = { corpse = 3 } },
         Lurabe = { total = 2, counts = { fish = 2 }, streaks = {} },
       }
-      local m = model(ns, "session", {}, { tab = "trophies", trophies = summary })
+      local m = model(ns, "session", {}, { tab = "trophies", trophies = summary,
+        entries = { Twiz = { name = "Twiz", class = "WARRIOR" } } })
       A.eq(#m.tabs, 6)
       A.eq(m.tabs[6], { id = "trophies", label = "Trophies", active = true })
       A.eq(m.subtitle, "Trophies: from every session the crew played")
@@ -110,6 +111,7 @@ return {
       A.eq(m.rows[1].name, "Twiz", "most trophies first")
       A.eq(m.rows[1].text, "7 trophies")
       A.eq(m.rows[1].winners, { "Professional Corpse x6, Bunny Hopper x1" })
+      A.eq(m.rows[1].classes, { false }, "award names: plain text colour, not the class colour")
       A.contains(table.concat(m.rows[1].tip, "\n"), "Professional Corpse: 6 (3 sessions in a row)")
       local empty = model(ns, "session", {}, { tab = "trophies", trophies = {} })
       A.eq(#empty.rows, 1)

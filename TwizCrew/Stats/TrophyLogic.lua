@@ -1,5 +1,6 @@
 -- Trophy case and stolen crowns: pure rules (no game calls). A session record is
--- { sid, start, people = { names }, winners = { [awardId] = { names } } }: who was in the session and who won what.
+-- { sid, start, people = { names }, winners = { [awardId] = { names } }, late }: who was in the session and who won
+-- what. late = true: saved at my next login from the numbers I had when I left (maybe before the end).
 local _, ns = ...
 
 local L = {}
@@ -51,8 +52,17 @@ local function has(list, name)
   return false
 end
 
+-- Award ids this copy knows (a newer copy's award would make a blank line).
+local function knownIds()
+  local out = {}
+  for _, d in ipairs(ns.StatsDefs and ns.StatsDefs.AWARDS or {}) do out[d.id] = true end
+  return out
+end
+
 -- Per person: total trophies, trophies per award, and current streaks (their own sessions, newest first).
+-- Only awards this copy knows count.
 function L.summary(records)
+  local known = knownIds()
   local list = {}
   for _, r in pairs(records or {}) do if type(r) == "table" then list[#list + 1] = r end end
   table.sort(list, function(a, b)
@@ -67,7 +77,7 @@ function L.summary(records)
   end
   for _, r in ipairs(list) do
     for id, names in pairs(r.winners or {}) do
-      for _, name in ipairs(names) do
+      for _, name in ipairs(known[id] and names or {}) do
         local p = person(name)
         p.total = p.total + 1
         p.counts[id] = (p.counts[id] or 0) + 1
@@ -82,7 +92,7 @@ function L.summary(records)
         if alive == nil then
           alive = {}
           for id, names in pairs(r.winners or {}) do
-            if has(names, name) then alive[id] = true; p.streaks[id] = 1 end
+            if known[id] and has(names, name) then alive[id] = true; p.streaks[id] = 1 end
           end
         else
           for id in pairs(alive) do
@@ -96,9 +106,9 @@ function L.summary(records)
   return out
 end
 
--- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names.
+-- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names, l = "1" when late.
 function L.toWire(r)
-  local f = { s = r.sid, t = tostring(r.start or 0), p = table.concat(r.people or {}, ",") }
+  local f = { s = r.sid, t = tostring(r.start or 0), p = table.concat(r.people or {}, ","), l = r.late and "1" or nil }
   local k = 0
   for id, names in pairs(r.winners or {}) do
     f["w_" .. id] = table.concat(names, ",")
@@ -119,11 +129,11 @@ local function split(s)
   return out
 end
 
--- A record from merged TRP pieces, or nil while incomplete (fewer w_ fields than k, or no p) or broken.
+-- A record from merged TRP pieces, or nil while incomplete (fewer w_ fields than k, no p or no t) or broken.
 function L.fromPieces(f)
   if type(f) ~= "table" or type(f.s) ~= "string" or f.s == "" or #f.s > 64 then return nil end
   local k = tonumber(f.k)
-  if not k or k < 0 or type(f.p) ~= "string" then return nil end
+  if not k or k < 0 or type(f.p) ~= "string" or not tonumber(f.t) then return nil end
   local winners, n = {}, 0
   for key, v in pairs(f) do
     local id = type(key) == "string" and key:match("^w_(%w+)$")
@@ -136,7 +146,7 @@ function L.fromPieces(f)
   if n < k then return nil end
   local people = split(f.p)
   if #people < 2 then return nil end
-  return { sid = f.s, start = tonumber(f.t) or 0, people = people, winners = winners }
+  return { sid = f.s, start = tonumber(f.t), people = people, winners = winners, late = f.l == "1" or nil }
 end
 
 -- Stolen crowns: who leads each award now ({ [awardId] = { names } }, only awards with a winner).

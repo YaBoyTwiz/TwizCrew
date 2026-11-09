@@ -100,6 +100,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
   shared only every few minutes when changed, at logout, and when someone opens the board. Milestone roasts only
   at big round numbers.
 
+- **Hall of Shame upgrade (designed 2026-11-09, owner said yes to every section; written spec waiting for review):**
+  `docs/superpowers/specs/2026-11-09-hall-of-shame-upgrade-design.md`. Crew asked for a "poorest" award; the owner
+  picked Pauper + Money Pit (exact gold shown), 9 more awards, category tabs, stolen crown pop-ups, trophy case with
+  streaks, the awards show on everyone's screen and a Clown of the Night vote. Not wanted for now: predictions,
+  custom awards. Built in three parts, each its own release. Nothing built yet.
+
 ## "Tell crew to update" button (owner approved 2026-11-05)
 
 - Addons can't update themselves (no downloads, no file writes). Flow: owner says "release it" → GitHub release →
@@ -163,15 +169,24 @@ Other players never see any of it. The messages are hidden addon messages, not c
   three switches each: Newest rank (default on; off = the rank updater skips it), Smart target (default off; a
   harmful spell at a friend hits the friend's target, a helpful one at an enemy lands on its target or you),
   Switch target (with smart: /assist, so that unit becomes your target). Each column has all on / all off and an
-  (i). Smart target = a character macro in the spell's slot: `#showtooltip` +
+  (i). Smart target = a character macro: `#showtooltip` +
   `/cast [@target,harm,nodead][@targettarget,harm,nodead][] X` or `/cast [@target,help][@targettarget,help][@player] X`
   (switch: `/assist [help,nodead]` / `/assist [harm,nodead]` first); cast by name = always the top rank, unless
-  Newest rank is off, then `X(Rank N)` (the rank it had). Macro named after the spell (16 letters, " N" for a kept
-  rank). Only this character's macros (deleting account macros could break alts' bars), only ones whose text is
-  exactly ours are changed or deleted; unused ones are deleted. Runs out of combat, never while the cursor holds
-  something, after any bar change (a spell dragged onto the bar becomes smart at once), at login and after
+  Newest rank is off, then `X(Rank N)` (the rank its macro had, else the top one). Macro named after the spell
+  (16 letters, no rank in new names). Only this character's macros (deleting account macros could break alts'
+  bars), only ones whose text is exactly ours are changed or deleted. Runs out of combat, at login and after
   learning. Choices per character in TwizCrewDB.spellHelp. Learning a spell or rank: a pop-up (Popups.notice) with
-  its Newest rank / Smart target state; click = the window at that spell. Not tried in game yet.
+  its Newest rank / Smart target state; click = the window at that spell. Played in game by the owner.
+- **Spell helpers never touch the bars (2026-11-08, owner):** the first version put each macro into the spell's bar
+  slots by itself, re-checked all 180 slots (form bars and extra pages too) after every bar change, and deleted
+  macros it thought unused; the owner had to rearrange their bars (wrong bars, bear bar messed up). Now it only
+  makes, edits and deletes its own macros; a Macro column in the window has a drag icon per spell (click or drag =
+  the macro on the cursor), and the owner places them. A macro keeps its name when its text changes, so it stays
+  on the bars. Turning Smart target off deletes the macro (the game empties its slot); the spell isn't put back.
+  Basic Action Update (also installed) swaps ranks on the bars too.
+- **Running-off alarm is silent (2026-11-08, owner):** "I don't mind a visible indication but not a sound". The
+  flashing row arrow, the pop-up and the big arrow stay; its raid-warning sound and the "With a sound" setting are
+  gone, and the running-off pop-up doesn't play the general pop-up sound either.
 
 - **Crew calendar, step 1 (2026-11-08, v0.1.16):** module "calendar" (Calendar/CalendarLogic.lua pure, Diary.lua
   data and swaps, CalendarUI.lua window). Each copy writes its own diary: 15-minute slots online (and AFK) per UTC
@@ -279,6 +294,11 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **"Secret" combat numbers:** during combat, health, buffs and enemy info can come back as secret values: you
   can show them (pass them straight to a status bar) but not compare or do math on them. Check with
   `issecretvalue()`.
+- **Seen in game (2026-11-08): inside a dungeon even `UnitIsAFK("player")` is secret,** and `if x then` on it errors
+  ("attempt to perform boolean test on a secret boolean value"). That error every redraw switched the Crew panel
+  off mid-dungeon (3 errors in 60 s turns a module off until /reload). Every yes/no from a game function must be
+  run through `issecretvalue` first (Tags' `try`, Stats' `player`, Report's `call` do this now). The log keeps 500
+  lines, so a flood of one error pushes out the earlier ones.
 - **No combat log** for addons in Forever (reported); Blizzard ships its own damage meter and cooldown tracker.
 - **No internet, no files, no other programs.** The only thing it writes is its SavedVariables file. A program
   outside the game could read that file after a `/reload` (e.g. for a stream overlay).
@@ -305,6 +325,12 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   (the Warcraft Wiki also lists `_Camelot` as an older alias). Questie and Quest Master ship both.
 - **Use modern API names:** `C_Spell`, `C_Item`, `C_ChatInfo`… Old globals like `GetSpellInfo` / `GetItemInfo` were
   reported missing.
+- **`.gitignore` used to say `tools/`, which on Windows (case-insensitive) also hid `TwizCrew/Tools/`:** RankUp and
+  Spell helpers were never committed, so releases (built with `git archive`) lacked them. Fixed 2026-11-08 to
+  `/tools/` (only the top-level Lua folder). On Windows the tests run with `tools/lua51/lua5.1.exe tests/run.lua`.
+- **The owner's Windows PC (2026-11-08):** the game is at `C:\Program Files (x86)\World of Warcraft\_forever_`, account
+  folder `WTF/Account/TWIZTIDFURY`. There `Interface/AddOns/TwizCrew` is a plain copy (not a link to the working
+  copy), so changes reach the game only when copied there (or through a release).
 - **Where the game is on this PC:** Lutris (Flatpak) → Battle.net (on GE-Proton11-12) → WoW Forever.
   AddOns folder:
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/`

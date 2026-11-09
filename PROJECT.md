@@ -113,7 +113,15 @@ Other players never see any of it. The messages are hidden addon messages, not c
   logs off one by one, every copy ends up with the late version made from the freshest numbers (the friend who
   stayed latest), once they've been online together. Stolen-crown pop-ups skip Pauper, Couch Potato, Snail
   and Never Walks (they change without anyone doing anything), and a friend's very first numbers never count as a
-  steal. Part 3 not started. Built-in notes: Wanderer counts one run-off per group
+  steal. Part 3 (the awards show on everyone's screen, Clown of the Night vote) built 2026-11-09 on branch
+  `hall-of-shame-part3`, plan `docs/superpowers/plans/2026-11-09-hall-of-shame-part3.md`; not tried in game (checks:
+  `docs/TESTING.md`). New file `UI/ShowLogic.lua`: the release sets RESTART_SINCE. The presenter sends one message
+  per card (AWS start, AWC card with `m` = winners left out so it fits one message, AWX close); viewers follow,
+  a fight makes them catch up afterwards, 60 s with no new card closes it everywhere; setting "Show the crew's
+  awards show on my screen". Vote (session view, 2+ people): AWV / AWB / AWR, 30 s, only the presenter's count
+  is shown; more than 8 candidates: buttons for the first 8 by name. The clown is saved in `db.stats.clown`, gets
+  the Crew-tab title "Clown of the Night" (only while award titles are on) and a `clown` trophy
+  (`StatsDefs.EXTRA_TROPHIES`). Built-in notes: Wanderer counts one run-off per group
   member left behind (a flight away from the group counts too; a hearthstone, portal, summon or releasing your
   ghost doesn't); Pauper needs 30 minutes played (a forgotten alt doesn't win it); with only one person, solo awards
   like Pauper always have a winner (same as the old awards); Snail ignores readings taken mid-ding.

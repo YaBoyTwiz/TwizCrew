@@ -16,6 +16,7 @@ local started = false
 local heard = {}       -- sender -> { sid = ..., sst = ... } as merged from their STATE / UPDATE pieces (HELLO forgets)
 local RESHARE_GAP = 30 -- seconds between re-sends of our sid/sst to a friend in another session or coming back
 local lastReshare      -- session clock of the last re-send
+local previous         -- { id, lastActive } of the session saved before login (read at the decision)
 
 local function copy(s)
   if s == nil then return nil end
@@ -67,6 +68,9 @@ local function decide()
   table.sort(list, function(a, b) return a.id < b.id end) -- same answer whatever order pairs() gives
   local stats = savedTable()
   local own = stats and stats.session
+  if type(own) == "table" and type(own.id) == "string" and type(own.lastActive) == "number" then
+    previous = { id = own.id, lastActive = own.lastActive } -- change() overwrites it
+  end
   local wall = ns.wallclock()
   local resume = ns.Config.SESSION_RESUME
   local s, keep = Logic.atLogin(own, list, wall, ns.playerName(), resume)
@@ -124,6 +128,11 @@ ns.Comm.on("HELLO", function(sender) ns.Log.safe(FEATURE, forget, sender) end)
 function Session.current() return copy(current) end
 function Session.decided() return isDecided end
 function Session.wire() return Logic.toWire(current) end
+-- When I was last active in session sid, if it is the one saved before this login; else nil.
+function Session.previousLastActive(sid)
+  if previous and previous.id == sid then return previous.lastActive end
+  return nil
+end
 
 -- "/tc session new": a hand-started session from me, now (even before the decision). Counts start over.
 -- Its start is later than every hand-started session we know of, so it wins even when a friend's PC clock is

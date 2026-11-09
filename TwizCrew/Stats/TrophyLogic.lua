@@ -1,6 +1,7 @@
 -- Trophy case and stolen crowns: pure rules (no game calls). A session record is
 -- { sid, start, people = { names }, winners = { [awardId] = { names } }, late }: who was in the session and who won
--- what. late = true: saved at my next login from the numbers I had when I left (maybe before the end).
+-- what. late = true: saved at my next login from the numbers I had when I left (maybe before the end);
+-- e = how fresh a late record's numbers are (wallclock of the newest of them).
 local _, ns = ...
 
 local L = {}
@@ -106,9 +107,10 @@ function L.summary(records)
   return out
 end
 
--- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names, l = "1" when late.
+-- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names, l = "1" and e when late.
 function L.toWire(r)
   local f = { s = r.sid, t = tostring(r.start or 0), p = table.concat(r.people or {}, ","), l = r.late and "1" or nil }
+  if r.late then f.e = tostring(math.floor(tonumber(r.e) or 0)) end
   local k = 0
   for id, names in pairs(r.winners or {}) do
     f["w_" .. id] = table.concat(names, ",")
@@ -146,7 +148,44 @@ function L.fromPieces(f)
   if n < k then return nil end
   local people = split(f.p)
   if #people < 2 then return nil end
-  return { sid = f.s, start = tonumber(f.t), people = people, winners = winners, late = f.l == "1" or nil }
+  local late = f.l == "1" or nil
+  local e = late and math.floor(math.max(tonumber(f.e) or 0, 0)) or nil
+  return { sid = f.s, start = tonumber(f.t), people = people, winners = winners, late = late, e = e }
+end
+
+-- Does record r replace old? Full beats late (whatever the people); late never beats full; two late ones: the
+-- fresher numbers (higher e) win; otherwise (same e, or both full) strictly more people wins.
+function L.better(old, r)
+  if type(old) ~= "table" then return true end
+  if type(r) ~= "table" then return false end
+  if old.late and not r.late then return true end
+  if r.late and not old.late then return false end
+  if r.late then
+    local re, oe = tonumber(r.e) or 0, tonumber(old.e) or 0
+    if re ~= oe then return re > oe end
+  end
+  return type(old.people) == "table" and #(r.people or {}) > #old.people
+end
+
+-- One digest entry: "<sid>" for a full record, "<sid>*<e>" for a late one.
+function L.digestEntry(sid, r)
+  if type(r) == "table" and r.late then return sid .. "*" .. math.floor(tonumber(r.e) or 0) end
+  return sid
+end
+
+-- A digest's r as a list of { sid, late, e }, in its order; malformed entries are skipped.
+function L.parseDigest(text)
+  local out = {}
+  if type(text) ~= "string" then return out end
+  for item in text:gmatch("[^,]+") do
+    if item:find("*", 1, true) then
+      local sid, e = item:match("^([^*]+)%*(%d+)$")
+      if sid and #sid <= 64 then out[#out + 1] = { sid = sid, late = true, e = tonumber(e) } end
+    elseif #item <= 64 then
+      out[#out + 1] = { sid = item }
+    end
+  end
+  return out
 end
 
 -- Stolen crowns: who leads each award now ({ [awardId] = { names } }, only awards with a winner).

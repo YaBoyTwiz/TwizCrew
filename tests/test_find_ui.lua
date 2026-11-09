@@ -163,6 +163,27 @@ return {
       A.no(ns.Panel.rowAlarmForTest(rowIndex(ns, "Frostie")))
       A.eq(ns.Log.errors(10), {})
     end,
+    running_off_yourself_counts_for_wanderer = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1) -- the stats session decides
+      group(W)
+      friend(ns, W, "Frostie")
+      ns.Modules.set("find", "runaway", false) -- counts even with the alarm off
+      local ran = {}
+      ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
+      W:advance(1.1)
+      W.state.map.y = 0.57 -- we walk 140 yards away; Frostie stays
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(3)
+      A.eq(ran, { "Frostie" })
+      A.no(ns.Find.isRunningOff("Frostie"), "no alarm about Frostie: we moved, not them")
+      A.eq(ns.StatsStore.get("session", "wd"), 1)
+      W:advance(10)
+      A.eq(ns.StatsStore.get("session", "wd"), 1, "once, until we're close again")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     the_running_off_warning_can_be_switched_off = function(ns, A, W)
       boot(W)
       group(W)

@@ -938,7 +938,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "gold", "errors", "ninja", "chatter", "travel", "xp", "abandon", "duel" })
+        "repair", "gold", "errors", "ninja", "chatter", "travel", "xp", "wander", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

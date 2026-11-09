@@ -1,6 +1,9 @@
 -- The awards show (/tc awards): a big window in the middle of the screen, one award at a time. It asks the crew for
 -- fresh numbers, waits SHOW_WAIT s, then for each award: the badge and its name, "and the award goes to…", then
 -- the winners (class colours), their number and the joke. Click or Space for the next one; Escape closes.
+-- The crew follows on their screens: when the cards are built the presenter sends AWS { id, v }, then an AWC per
+-- card as it starts (ShowLogic.cardToWire; again with r = "1" when a click jumps to the reveal) and AWX { id } when
+-- it closes. SHOW_IDLE s with no card change close the show.
 -- Feature id "awards": every script and timer runs inside ns.Log.safe.
 local _, ns = ...
 
@@ -28,6 +31,8 @@ local classes = {}     -- name -> class file, for the winners' colours
 local index = 0
 local phase = nil      -- "loading" | "badge" | "drum" | "reveal" | "nobody" | "end"
 local generation = 0   -- bumped on every step and on close: a stale timer does nothing
+local cardSerial = 0   -- bumped on every card change and on close: a stale idle clock does nothing
+local showId = nil     -- set when AWS was sent (this copy is presenting): "<me>-<wallclock>"
 local dragged = false
 
 local function say(text) print("TwizCrew: " .. text) end
@@ -64,6 +69,20 @@ local function after(delay, fn)
       if open and gen == generation then fn() end
     end)
   end)
+end
+
+-- Closes the show when SHOW_IDLE s pass with no card change (started on every card change).
+local function idleClock()
+  local serial = cardSerial
+  C_Timer.After(ns.Config.SHOW_IDLE, function()
+    ns.Log.safe(FEATURE, function()
+      if open and serial == cardSerial then Show.close() end
+    end)
+  end)
+end
+
+local function send(msgType, fields)
+  ns.Comm.send(msgType, fields, { repeatKeys = { "id", "i" } })
 end
 
 ---------------------------------------------------------------------------------------------------------- frames
@@ -173,7 +192,8 @@ local function draw()
     if phase == "drum" then
       line:SetText(DRUMROLL)
     elseif phase == "reveal" then
-      line:SetText(winnersText(a.winners))
+      local streak = ns.ShowLogic.streakLine(c.streak)
+      line:SetText(streak and (streak .. ", " .. winnersText(a.winners) .. "!") or winnersText(a.winners))
       number:SetText(ns.Util.safeText(a.text or ""))
       joke:SetText(a.def.joke or "")
     end
@@ -195,9 +215,29 @@ local function setPhase(p)
   end
 end
 
+-- The winner's streak with tonight (session view, one winner): their saved streak + 1; nil under 2.
+local function streakFor(c)
+  if view ~= "session" or not c or c.kind ~= "award" or not ns.Trophies then return nil end
+  local winners = c.award.winners or {}
+  if #winners ~= 1 then return nil end
+  local p = ns.Trophies.summary()[winners[1]]
+  local n = (p and p.streaks and p.streaks[c.award.def.id] or 0) + 1
+  return n >= 2 and n or nil
+end
+
+local function sendCard(jump)
+  if not showId then return end
+  local c = cards[index] or { kind = "end" }
+  send("AWC", ns.ShowLogic.cardToWire(showId, index, c, c.streak, jump))
+end
+
 local function showCard(i)
   index = i
+  cardSerial = cardSerial + 1
   local c = cards[i]
+  if c then c.streak = streakFor(c) end
+  sendCard(false)
+  idleClock()
   if not c or c.kind == "end" then
     setPhase("end")
   elseif c.kind == "nobody" then
@@ -214,6 +254,8 @@ local function buildCards()
   for _, e in ipairs(list) do classes[e.name] = e.class end
   cards = ns.StatsLogic.showCards(ns.StatsLogic.awards(list))
   if #cards == 1 then table.insert(cards, 1, { kind = "nobody" }) end
+  showId = ns.playerName() .. "-" .. ns.wallclock()
+  send("AWS", { id = showId, v = view })
   showCard(1)
 end
 
@@ -232,6 +274,8 @@ function Show.start(v)
   view = v == "all" and "all" or "session"
   header:SetText(view == "all" and "TwizCrew Awards: all time" or "TwizCrew Awards: this session")
   cards, classes, index = {}, {}, 0
+  if showId then send("AWX", { id = showId }) end -- started again over a show the crew is following
+  showId = nil
   open = true
   setPhase("loading")
   if frame.EnableKeyboard then frame:EnableKeyboard(true) end
@@ -247,7 +291,12 @@ function Show.close()
   if not open then return end
   open = false
   generation = generation + 1
+  cardSerial = cardSerial + 1
   phase = nil
+  if showId then
+    send("AWX", { id = showId })
+    showId = nil
+  end
   if frame then frame:Hide() end
 end
 
@@ -256,6 +305,7 @@ function Show.next()
   if not open then return end
   if phase == "badge" or phase == "drum" then
     setPhase("reveal")
+    sendCard(true)
   elseif phase == "reveal" or phase == "nobody" then
     showCard(index + 1)
   elseif phase == "end" then
@@ -278,6 +328,7 @@ function Show.stateForTest()
     if phase == "drum" then s.text = DRUMROLL
     elseif phase == "reveal" then
       s.text = a.text
+      s.streak = ns.ShowLogic.streakLine(c.streak)
       for i, name in ipairs(a.winners) do s.winners[i] = name end
     else s.text = "" end
   end

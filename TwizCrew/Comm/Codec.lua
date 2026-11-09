@@ -11,7 +11,9 @@ local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BY
   QREQ = true, -- "please share this quest with me" (t = who should share, q = the quest title)
   CALD = true, CALQ = true, CALP = true, -- crew calendar: digest, "send me this person", one person's diary
   TRD = true, TRQ = true, TRP = true, -- trophy case: digest, "send me this session", one session's record
-  CALN = true, CALR = true } -- a calendar note; a reply to one (seen, going / maybe / no, a comment)
+  CALN = true, CALR = true, -- a calendar note; a reply to one (seen, going / maybe / no, a comment)
+  AWS = true, AWC = true, AWX = true, -- crew awards show: it starts, a card, the presenter closed it
+  AWV = true, AWB = true, AWR = true } -- Clown of the Night: the vote starts, a vote, the result
 
 local ESCAPE = { ["%"] = "%25", ["^"] = "%5E", ["~"] = "%7E", ["="] = "%3D" }
 local UNESCAPE = { ["25"] = "%", ["5E"] = "^", ["7E"] = "~", ["3D"] = "=" }

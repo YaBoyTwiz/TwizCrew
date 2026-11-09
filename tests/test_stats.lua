@@ -908,6 +908,17 @@ return {
       A.eq(get(ns, "session", "xt"), xt, "max level: no Snail time")
     end,
 
+    a_ding_read_a_tick_apart_counts_once = function(ns, A, W)
+      W.state.level, W.state.xp, W.state.xpMax = 10, 900, 1000
+      start(ns, W)
+      W.state.level, W.state.xpMax = 11, 1200 -- the level shows first, xp still old
+      W:advance(1)
+      W.state.xp = 50
+      W:advance(1)
+      A.eq(get(ns, "session", "xg"), 150, "counted once")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0

@@ -581,7 +581,7 @@ add({ id = "travel", label = "zones visited and flights",
 
 -- A new session starts with no zones seen: where we stand counts again (Stats calls this before it sends).
 function D.sessionStarted()
-  if running and state.travel and state.travel.on then ns.Log.safe("stats", readZone) end
+  guard(byId.travel, readZone)
 end
 
 -- XP gained (Snail) and time played below max level.
@@ -599,9 +599,9 @@ add({ id = "xp", label = "XP gained",
   tick = function(elapsed)
     local cur = readXp()
     if not cur then return end
-    local gained = Logic.xpGained(lastXp, cur)
+    local gained, settled = Logic.xpGained(lastXp, cur)
     if gained > 0 then api.count("xg", gained) end
-    lastXp = cur
+    if settled then lastXp = cur end -- level and xp read a tick apart: keep the old baseline
     if cur.level < ns.maxLevel() then api.count("xt", elapsed) end
   end })
 

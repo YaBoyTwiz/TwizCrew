@@ -218,6 +218,11 @@ local api = {
 
 local function onSession(new, old, keep)
   if type(new) ~= "table" then return end
+  -- the session my numbers belong to has ended (a new one, counts not kept): hand out its trophies first
+  local mine = Store.mine()
+  if not keep and mine and mine.sid ~= "" and mine.sid ~= new.id and ns.Trophies then
+    ns.Log.safe("trophies", ns.Trophies.sessionEnded, mine.sid)
+  end
   Store.setSession(new.id, type(old) == "table" and old.id or nil, keep)
   if ns.Detectors.sessionStarted then ns.Detectors.sessionStarted() end
   changed(true)
@@ -252,6 +257,7 @@ ns.Modules.register({
     ns.Events.on(FEATURE, "PLAYER_LOGOUT", sendAtLogout)
     sendTicker = C_Timer.NewTicker(ns.Config.STATS_SEND_INTERVAL, function() ns.Log.safe(FEATURE, sendIfChanged) end)
     if cur then Stats.send() end -- turned back on: friends see my numbers again
+    if ns.Trophies then ns.Trophies.start() end
   end,
   -- Also runs when the error breaker turns the module off: both are announced the same way.
   onDisable = function()

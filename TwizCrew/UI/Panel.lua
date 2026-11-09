@@ -25,7 +25,7 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
-  "AWAY_CHANGED", "FIND_CHANGED" }
+  "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED" }
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
 local ARROW_SIZE = 26 -- big enough to read at a glance
 
@@ -851,6 +851,15 @@ local function redraw()
   for _, m in ipairs(models) do
     local at = dingAt[m.name]
     if at and not m.offline and not cheered[m.name] and now - at < CHEER_FOR then m.dinged = true end
+  end
+  if ns.Trophies then
+    for _, m in ipairs(models) do
+      local line = ns.Trophies.lineFor(m.name)
+      if line then
+        m.tip = m.tip or {}
+        m.tip[#m.tip + 1] = line
+      end
+    end
   end
   entries = Logic.entries(models, hidden, s.showOffline ~= false)
   header = Logic.headerText(online, total)

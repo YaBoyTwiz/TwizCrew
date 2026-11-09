@@ -227,6 +227,21 @@ return {
       ns.Trophies.sessionEnded("zzz") -- nothing to record; also must not break
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy", "cached until a record is added")
     end,
+    the_crew_tooltip_shows_trophies = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      receive(W, ns, "Lurabe", "STATE", { ver = "0.1.22", cl = "MAGE", lv = "20", zn = "Elwynn Forest", sz = "",
+        lk = "", ins = "0" })
+      local t = ns.db.stats.trophies or {}
+      ns.db.stats.trophies = t
+      t["a-1"] = { sid = "a-1", start = 1, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }
+      t["a-2"] = { sid = "a-2", start = 2, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }
+      ns.Bus.fire("TROPHIES_CHANGED", "a-2")
+      W:advance(1)
+      local tip
+      for _, m in ipairs(ns.Panel.models()) do if m.name == "Lurabe" then tip = m.tip end end
+      A.contains(table.concat(tip or {}, "\n"), "2 trophies · Professional Corpse streak x2")
+    end,
     steals_need_new_leaders_who_share_nobody = function(ns, A)
       local L, S = ns.TrophyLogic, ns.StatsLogic
       local before = { entry("Twiz", { dt = 7 }), entry("Lurabe", { dt = 8 }) }

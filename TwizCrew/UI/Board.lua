@@ -61,6 +61,7 @@ local function buildModel()
     timeText = session and ns.BoardLogic.timeText(session.start) or "",
     wipeLine = ns.Modules.setting("stats", "wipeLine") and true or false,
     tab = Board.tab(),
+    trophies = ns.Trophies and ns.Trophies.summary() or {},
     entries = map,
     online = function(name)
       local e = map[name]
@@ -137,7 +138,10 @@ local function build(parent)
   allButton:SetPoint("LEFT", sessionButton, "RIGHT", 4, 0)
   tabButtons = {}
   local prev
-  for _, t in ipairs(ns.StatsDefs.TABS) do
+  local tabList = {}
+  for _, t in ipairs(ns.StatsDefs.TABS) do tabList[#tabList + 1] = t end
+  tabList[#tabList + 1] = ns.BoardLogic.TROPHY_TAB
+  for _, t in ipairs(tabList) do
     local id = t.id
     local b = Board.textButton(frame, t.label, function() Board.setTab(id) end)
     if prev then b:SetPoint("LEFT", prev, "RIGHT", 2, 0) else b:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, -(SWITCH_HEIGHT + 2)) end
@@ -220,6 +224,7 @@ end
 function Board.view() return view end
 
 local function tabKnown(id)
+  if id == ns.BoardLogic.TROPHY_TAB.id then return true end
   for _, t in ipairs(ns.StatsDefs.TABS) do if t.id == id then return true end end
   return false
 end

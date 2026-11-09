@@ -229,7 +229,8 @@ ns.Modules.register({
   info = "Counts the funny things you do while playing, like deaths, falls, jumps and steps, for the Hall of Shame "
     .. "and the awards show. Turning it off stops counting and sharing your own numbers; what you already have "
     .. "is kept.",
-  defaults = { titles = "session", countSteps = true, wipeLine = true, showSound = true },
+  defaults = { titles = "session", countSteps = true, wipeLine = true, showSound = true,
+    boardTab = "deaths" },
   settings = {
     { key = "titles", label = "Award titles on the Crew panel", kind = "choice",
       choices = { { "session", "This session" }, { "all", "All time" }, { "off", "Off" } },

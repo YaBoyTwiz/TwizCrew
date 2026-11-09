@@ -76,20 +76,36 @@ local function wipes(ctx)
   return math.floor(most)
 end
 
--- view: "session" | "all"; awardsList from StatsLogic.awards; ctx = { session, starter, timeText, wipeLine,
--- entries = { [name] = entry }, online = fn(name) -> bool, wall }. Returns { subtitle, rows, footer }.
+local function tabOf(id)
+  for _, t in ipairs(ns.StatsDefs.TABS) do if t.id == id then return t end end
+  return ns.StatsDefs.TABS[1]
+end
+
+local function lowerFirst(s) return (s:gsub("^%u", string.lower)) end
+
+-- view: "session" | "all"; awardsList from StatsLogic.awards; ctx = { tab, session, starter, timeText, wipeLine,
+-- entries = { [name] = entry }, online = fn(name) -> bool, wall }. Returns { subtitle, rows, footer, tabs }: the
+-- rows of the chosen tab only (unknown tab: the first), tabs = { { id, label, active } } in order.
 function BoardLogic.model(view, awardsList, ctx)
   ctx = ctx or {}
   local session = view == "session"
-  local out = { rows = {} }
-  if not session then
-    out.subtitle = "All time"
-  elseif type(ctx.session) == "table" then
-    out.subtitle = "Session started " .. text(ctx.timeText) .. " by " .. text(ctx.starter)
-  else
-    out.subtitle = "Waiting for the crew session to start"
+  local tab = tabOf(ctx.tab)
+  local out = { rows = {}, tabs = {} }
+  for _, t in ipairs(ns.StatsDefs.TABS) do
+    out.tabs[#out.tabs + 1] = { id = t.id, label = t.label, active = t.id == tab.id }
   end
-  for _, a in ipairs(awardsList or {}) do out.rows[#out.rows + 1] = row(a, ctx) end
+  local sub
+  if not session then
+    sub = "All time"
+  elseif type(ctx.session) == "table" then
+    sub = "Session started " .. text(ctx.timeText) .. " by " .. text(ctx.starter)
+  else
+    sub = "Waiting for the crew session to start"
+  end
+  out.subtitle = tab.name .. ": " .. lowerFirst(sub)
+  for _, a in ipairs(awardsList or {}) do
+    if a.def.tab == tab.id then out.rows[#out.rows + 1] = row(a, ctx) end
+  end
   if ctx.wipeLine then
     local n = wipes(ctx)
     if n > 0 then

@@ -1,5 +1,5 @@
 -- The Hall of Shame tab, drawn inside the Crew panel (ns.Panel hosts it below its header): a "This session" /
--- "All time" switch, the subtitle, one row per award, a tooltip with the (i) text and the top 3, and the Wipe
+-- "All time" switch, five category tabs under the switch (TABS; only the chosen tab's awards are listed), the subtitle, one row per award, a tooltip with the (i) text and the top 3, and the Wipe
 -- Squad line. An award row has two lines: badge, award name and the number on the first; the winners (class
 -- colours, at most two names then "+N") under the name on the second. "nobody yet" rows are one greyed line.
 -- Every script runs under the feature id "board" (not a module): a broken board is only logged and never turns
@@ -21,7 +21,7 @@ local INDENT = ICON + 4         -- the award name and the winners start here
 local EMPTY_ALPHA = 0.45
 
 local view = "session"
-local frame, sessionButton, allButton, subtitle, footer
+local frame, sessionButton, allButton, subtitle, footer, tabButtons
 local rows = {}         -- pool, one per award at most
 local lastModel, lastLayout
 
@@ -60,6 +60,7 @@ local function buildModel()
     starter = session and ns.Session.starter(session) or nil,
     timeText = session and ns.BoardLogic.timeText(session.start) or "",
     wipeLine = ns.Modules.setting("stats", "wipeLine") and true or false,
+    tab = Board.tab(),
     entries = map,
     online = function(name)
       local e = map[name]
@@ -134,6 +135,15 @@ local function build(parent)
   sessionButton:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, 0)
   allButton = Board.textButton(frame, "All time", function() Board.setView("all") end)
   allButton:SetPoint("LEFT", sessionButton, "RIGHT", 4, 0)
+  tabButtons = {}
+  local prev
+  for _, t in ipairs(ns.StatsDefs.TABS) do
+    local id = t.id
+    local b = Board.textButton(frame, t.label, function() Board.setTab(id) end)
+    if prev then b:SetPoint("LEFT", prev, "RIGHT", 2, 0) else b:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, -(SWITCH_HEIGHT + 2)) end
+    tabButtons[#tabButtons + 1] = b
+    prev = b
+  end
   subtitle = T.text(frame, T.FONT.small, C.muted)
   noWrap(subtitle, "LEFT")
   footer = T.text(frame, T.FONT.small, C.muted)
@@ -159,8 +169,11 @@ function Board.draw(parent, top, width)
   frame:SetWidth(width)
   sessionButton:SetActive(view == "session")
   allButton:SetActive(view == "all")
+  for i, t in ipairs(m.tabs) do
+    if tabButtons[i] then tabButtons[i]:SetActive(t.active) end
+  end
 
-  local y = SWITCH_HEIGHT + 2
+  local y = 2 * (SWITCH_HEIGHT + 2)
   placeLine(subtitle, m.subtitle, y, width)
   y = y + LINE + 4
   local numberWidth = width - INDENT - NAME_WIDTH - 4
@@ -205,6 +218,24 @@ function Board.hide()
 end
 
 function Board.view() return view end
+
+local function tabKnown(id)
+  for _, t in ipairs(ns.StatsDefs.TABS) do if t.id == id then return true end end
+  return false
+end
+
+-- The chosen tab (remembered in the stats setting "boardTab").
+function Board.tab()
+  local id = ns.Modules.setting("stats", "boardTab")
+  if tabKnown(id) then return id end
+  return ns.StatsDefs.TABS[1].id
+end
+
+function Board.setTab(id)
+  if not tabKnown(id) then return end
+  ns.Modules.set("stats", "boardTab", id)
+  if ns.Panel and ns.Panel.refresh then ns.Panel.refresh() end
+end
 
 -- "session" | "all": asks the crew for fresh numbers (rate-limited) and redraws the panel.
 function Board.setView(v)

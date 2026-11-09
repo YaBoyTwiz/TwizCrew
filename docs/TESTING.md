@@ -256,6 +256,26 @@ this is the list of what to report:
 - **Abandoning quests**: does Quitter count when you abandon from the quest log?
 - **Sounds**: does the awards show (and a roast, if **Play a sound** is on under **Live roasts**) make a sound?
 
+### Hall of Shame part 1 (new awards, tabs)
+
+1. Cast a spell with too little mana (or rage/energy), and one out of range. `/tc report`: the "errors" detector is
+   on. The Hall of Shame, Oops tab: Out of Juice and Too Far Away each show 1 (pressing it 5 times fast still 1).
+   If not: copy the exact red text into a note for Claude (the game's wording may differ).
+2. In a group, roll Need on an item and win it: Money tab, Ninja shows 1 Need roll won. Greed doesn't count.
+   If not: copy the exact "You won" chat line for Claude.
+3. Buy or sell something: Money tab shows your exact gold under Pauper (if you're the poorest) and Money Pit moves
+   when you end up with less gold than you started with.
+4. Walk 100+ yards away from a group member who stays put: Oops tab, Wanderer shows 1 run-off; your friend's
+   screen shows the running-off warning about you (if theirs is on). Note: taking a flight or hearthing away from
+   group members counts one run-off per member who was close.
+5. Say something in party chat and do a /dance: Lazy tab, Chatterbox and Emote Spammer count them.
+6. Take a flight path and enter a new zone: Moving tab, Frequent Flyer and Tourist count them.
+7. Play 30 minutes below max level: Lazy tab, Snail shows XP per hour (lowest wins). Level up once and check the
+   number doesn't jump by a whole level.
+8. Click each tab: the right awards show, the subtitle starts with the tab's full name, and the tab you picked is
+   still picked after /reload.
+9. Inside a dungeon: none of the above causes "turned itself off" in chat.
+
 ## "Tell crew to update" button
 
 Built too, every test outside the game passes (including an old and a new copy talking). **Not tried in the game

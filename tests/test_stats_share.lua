@@ -2,6 +2,7 @@
 -- StatsStore.entries (what the Hall of Shame and the awards show read). Full TOC boot.
 
 local function boot(W, before)
+  W.state.missing.GetMoney = true -- the gold detector stays off: these tests count only what they count themselves
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")

@@ -780,6 +780,27 @@ return {
       A.eq(get(ns, "all", "dt"), 5)
     end,
 
+    gold_carried_lost_and_gained = function(ns, A, W)
+      W.state.money = 10000
+      start(ns, W)
+      W:advance(1)
+      A.eq(get(ns, "session", "gn"), 10000)
+      A.eq(get(ns, "all", "ml"), 0, "the first reading is only where we start")
+      W.state.money = 7500
+      W:fire("PLAYER_MONEY")
+      A.eq(get(ns, "session", "gn"), 7500)
+      A.eq(get(ns, "session", "ml"), 2500)
+      W.state.money = 8000
+      W:advance(1) -- the tick notices too
+      A.eq(get(ns, "session", "mg"), 500)
+      local hidden = {}
+      W.state.secret[hidden] = true
+      W.state.money = hidden
+      W:advance(1)
+      A.eq(get(ns, "session", "gn"), 8000, "a secret amount is skipped")
+      A.ok(statusOf(ns, "gold").on, "and never an error")
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0
@@ -810,7 +831,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "abandon", "duel" })
+        "repair", "gold", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

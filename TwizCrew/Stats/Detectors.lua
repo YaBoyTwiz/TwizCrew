@@ -2,7 +2,7 @@
 -- A detector: { id, label, needs() -> ok, why, start(api), tick(elapsed) }. Its events and bus listeners use the
 -- feature id "stats_<id>". A missing API turns it off (logged as warn, once); a Lua error inside it turns it off
 -- (logged as error); either way it stays off until /reload and the others keep counting.
--- api = { count(key, n), died(), alive(), wipe(zone) } (the stats module).
+-- api = { count(key, n), set(key, v), zone(name), died(), alive(), wipe(zone) } (the stats module).
 local _, ns = ...
 
 local D = {}
@@ -455,6 +455,28 @@ add({ id = "repair", label = "money spent on repairs",
   end,
   tick = readCost })
 
+-- Gold carried now (Pauper) and every drop / rise of it (Money Pit). The first reading is only the starting point.
+local lastMoney
+local function readGold()
+  local m = money()
+  if m == nil then return end
+  api.set("gn", m)
+  if lastMoney ~= nil then
+    local d = m - lastMoney
+    if d < 0 then api.count("ml", -d) elseif d > 0 then api.count("mg", d) end
+  end
+  lastMoney = m
+end
+
+add({ id = "gold", label = "gold carried, lost and gained",
+  needs = function() local why = missingOf("GetMoney"); return why == nil, why end,
+  start = function()
+    lastMoney = nil
+    onEvent(byId.gold, "PLAYER_MONEY", readGold)
+    readGold()
+  end,
+  tick = readGold })
+
 local ABANDON_DEDUPE = 1
 local lastAbandon
 add({ id = "abandon", label = "quests abandoned",
@@ -538,7 +560,7 @@ function D.stopAll()
   end
   for timer in pairs(breath) do breath[timer] = nil end
   ctx.breathRunning = false
-  merchantOpen, repairCost, repairMoney, lastPos = false, 0, nil, nil
+  merchantOpen, repairCost, repairMoney, lastPos, lastMoney = false, 0, nil, nil, nil
   pullPending = false
 end
 

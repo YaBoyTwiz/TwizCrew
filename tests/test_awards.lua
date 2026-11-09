@@ -2,6 +2,7 @@
 -- Full TOC boot.
 
 local function boot(W)
+  W.state.missing.GetMoney = true -- the gold detector stays off: these tests count only what they count themselves
   W:fire("ADDON_LOADED", "TwizCrew")
   W:fire("PLAYER_LOGIN")
   W:fire("PLAYER_ENTERING_WORLD")

@@ -78,6 +78,12 @@ function Stats.count(key, n)
   if not ns.StatsDefs.TIME_KEYS[key] then changed() end
 end
 
+-- A set key (gold carried now): the same number in both views; STATS_CHANGED only when it changed.
+function Stats.set(key, value)
+  if not enabled then return end
+  if Store.set(key, value) then changed() end
+end
+
 -- PLAYER_DEAD: what kind of death, then at most one roast (weak > fall > drown > again > deaths milestone).
 function Stats.died()
   if not enabled then return end
@@ -197,6 +203,7 @@ end
 
 local api = {
   count = function(key, n) Stats.count(key, n) end,
+  set = function(key, value) Stats.set(key, value) end,
   died = function() Stats.died() end,
   alive = function() Stats.alive() end,
   wipe = function(zone) Stats.wipe(zone) end,

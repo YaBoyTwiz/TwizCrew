@@ -264,10 +264,11 @@ this is the list of what to report:
 2. In a group, roll Need on an item and win it: Money tab, Ninja shows 1 Need roll won. Greed doesn't count.
    If not: copy the exact "You won" chat line for Claude.
 3. Buy or sell something: Money tab shows your exact gold under Pauper (if you're the poorest) and Money Pit moves
-   when you end up with less gold than you started with.
+   when you end up with less gold than you started with. Pauper needs 30 minutes played.
 4. Walk 100+ yards away from a group member who stays put: Oops tab, Wanderer shows 1 run-off; your friend's
-   screen shows the running-off warning about you (if theirs is on). Note: taking a flight or hearthing away from
-   group members counts one run-off per member who was close.
+   screen shows the running-off warning about you (if theirs is on). Taking a flight away from group members
+   counts one run-off per member who was close; hearthstones, portals, summons and releasing your ghost don't
+   count.
 5. Say something in party chat and do a /dance: Lazy tab, Chatterbox and Emote Spammer count them.
 6. Take a flight path and enter a new zone: Moving tab, Frequent Flyer and Tourist count them.
 7. Play 30 minutes below max level: Lazy tab, Snail shows XP per hour (lowest wins). Level up once and check the

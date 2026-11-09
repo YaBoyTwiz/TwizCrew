@@ -14,6 +14,11 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.23", date = "2026-11-09", lines = {
+    "Spell helpers removed (window, /tc spells, new-spell pop-up). Macros it made stay in /macro; delete them there",
+    "  if you don't want them. The rank updater now updates every spell on your bars.",
+    "Needs a full game restart (files were removed), not just /reload.",
+  } },
   { ver = "0.1.22", date = "2026-11-09", lines = {
     "Stolen crowns: a pop-up when someone takes the lead in a Hall of Shame award (after the first 15 minutes,",
     "  at most one a minute). Click it to see the award. Switch: Live roasts > Stolen crown pop-ups.",

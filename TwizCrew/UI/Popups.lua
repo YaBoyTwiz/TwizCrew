@@ -10,10 +10,10 @@ local T = ns.Theme
 local C = T.COLOR
 local Widgets = ns.Widgets
 local TICK, FADE = 0.5, 0.5
-local WIDTH, HEIGHT, GAP, TOP = 260, 44, 4, -120
+local WIDTH, HEIGHT, GAP, TOP = 270, 50, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
 local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
-  meet = "3fa9f5", online = "33cc66", qshare = "f0c040", runaway = "ff3030" }
+  meet = "3fa9f5", online = "33cc66", qshare = "f0c040", runaway = "ff3030", notice = "8a6cff" }
 local QSHARE_SECONDS = 20 -- a quest share request stays this long (it needs a click)
 local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
 local KIND_ICON = {
@@ -95,6 +95,8 @@ local function click(f)
     for _, name in ipairs(p.invite) do
       if not inGroup(name) and not ns.isTestName(name) then invite(name) end -- a fake (test tools) is never invited
     end
+  elseif p.kind == "notice" and type(p.onClick) == "function" then
+    ns.Log.safe("popups", p.onClick)
   elseif p.kind == "runaway" and ns.BigArrow and not ns.isTestName(p.names[1]) then
     ns.BigArrow.point({ kind = "member", name = p.names[1] })
   elseif p.kind == "meet" and ns.Find and ns.Find.pointToMeet then
@@ -124,11 +126,11 @@ local function newFrame()
   f.edge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
   f.edge:SetWidth(4)
   f.icon = f:CreateTexture(nil, "ARTWORK")
-  f.icon:SetSize(28, 28)
+  f.icon:SetSize(T.icon(28), T.icon(28))
   f.icon:SetPoint("LEFT", f, "LEFT", 10, 0)
   f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   f.title = T.text(f, T.FONT.normal, C.text)
-  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 46, -7)
+  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + T.icon(28), -8)
   f.title:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.title:SetJustifyH("LEFT")
   f.sub = T.text(f, T.FONT.small, C.muted)
@@ -450,6 +452,26 @@ function Popups.questRequest(name, title)
   if type(PlaySound) == "function" and type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_OPEN then
     pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN)
   end
+end
+
+-- A notice from one of our own tools (e.g. Spell helpers: "New spell: ..."): icon, title, the line under it, what a
+-- click does. Shows whether or not the pop-ups module is on, and closes itself after `seconds` (12).
+function Popups.notice(icon, title, sub, onClick, seconds)
+  if type(title) ~= "string" then return end
+  local f = takeFrame()
+  seq = seq + 1
+  remember(title)
+  f.tcSeq, f.tcShown, f.tcPopup = seq, true, { kind = "notice", names = {}, extra = {}, onClick = onClick }
+  f.tcText, f.tcSub = title, sub or false
+  f.tcExpires = ns.now() + (tonumber(seconds) or 12) + FADE
+  f:SetWidth(ROAST_WIDTH)
+  T.color(f.edge, EDGE.notice, 1)
+  f.icon:SetTexture(icon or KIND_ICON.levelup)
+  f.title:SetText(title)
+  f.sub:SetText(sub or "")
+  f:SetAlpha(1)
+  f:Show()
+  layout()
 end
 
 -- A group member ran off (Find the crew): "<Name> is running off!", how far, click = the big arrow. Shown at the

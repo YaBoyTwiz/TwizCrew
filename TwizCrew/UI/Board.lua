@@ -14,8 +14,8 @@ local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 
 local PAD = 8          -- the panel's own padding (left edge of the board)
-local SWITCH_HEIGHT, LINE, ICON = 16, 13, 16
-local ROW_ONE, ROW_TWO = 18, 30 -- an empty award (one line), an award with winners (two lines)
+local SWITCH_HEIGHT, LINE, ICON = 18, 15, 19
+local ROW_ONE, ROW_TWO = 21, 35 -- an empty award (one line), an award with winners (two lines)
 local NAME_WIDTH = 130
 local INDENT = ICON + 4         -- the award name and the winners start here
 local EMPTY_ALPHA = 0.45

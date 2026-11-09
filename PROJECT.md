@@ -158,6 +158,21 @@ Other players never see any of it. The messages are hidden addon messages, not c
   Switch: Roasts, Congrats button. The standalone RankUp addon was merged in as module "rankup" (Tools/RankUp.lua,
   Settings Advanced sub-tab Tools and a Tools part on Basics, /tc rankup, panel menus, optional on-screen button).
 
+- **Spell helpers (2026-11-08, v0.1.20, owner: "build it"):** module "spellhelp" (Tools/SpellHelpersLogic.lua pure,
+  Tools/SpellHelpers.lua). A window (wrench menu, /tc spells) lists every spell you know, bar spells first, with
+  three switches each: Newest rank (default on; off = the rank updater skips it), Smart target (default off; a
+  harmful spell at a friend hits the friend's target, a helpful one at an enemy lands on its target or you),
+  Switch target (with smart: /assist, so that unit becomes your target). Each column has all on / all off and an
+  (i). Smart target = a character macro in the spell's slot: `#showtooltip` +
+  `/cast [@target,harm,nodead][@targettarget,harm,nodead][] X` or `/cast [@target,help][@targettarget,help][@player] X`
+  (switch: `/assist [help,nodead]` / `/assist [harm,nodead]` first); cast by name = always the top rank, unless
+  Newest rank is off, then `X(Rank N)` (the rank it had). Macro named after the spell (16 letters, " N" for a kept
+  rank). Only this character's macros (deleting account macros could break alts' bars), only ones whose text is
+  exactly ours are changed or deleted; unused ones are deleted. Runs out of combat, never while the cursor holds
+  something, after any bar change (a spell dragged onto the bar becomes smart at once), at login and after
+  learning. Choices per character in TwizCrewDB.spellHelp. Learning a spell or rank: a pop-up (Popups.notice) with
+  its Newest rank / Smart target state; click = the window at that spell. Not tried in game yet.
+
 - **Crew calendar, step 1 (2026-11-08, v0.1.16):** module "calendar" (Calendar/CalendarLogic.lua pure, Diary.lua
   data and swaps, CalendarUI.lua window). Each copy writes its own diary: 15-minute slots online (and AFK) per UTC
   day, 30 days kept, keyed by a random id per WoW account (alts = one person). Swaps are pull-only: CALD digests
@@ -267,6 +282,18 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **No combat log** for addons in Forever (reported); Blizzard ships its own damage meter and cooldown tracker.
 - **No internet, no files, no other programs.** The only thing it writes is its SavedVariables file. A program
   outside the game could read that file after a `/reload` (e.g. for a stream overlay).
+- **The game's calendar works on the server, its window is switched off** (research 2026-11-08, from the code
+  and notes of Ultimate Calendar v1.9.2, CurseForge 1339939, which supports Forever; not tried by us):
+  Forever ships Blizzard's calendar code (`C_Calendar`) with no window. Ultimate Calendar draws its own window
+  and creates real server-side events through it, seen working on Forever by its author 2026-10-20. Guild
+  events (`C_Calendar.CreateGuildSignUpEvent`) are stored by Blizzard and seen by the whole guild with the
+  creator offline. That is the way to plug the "note made while nobody else was on" gap once the crew has a
+  guild: post the note as a guild event, read the guild's events back in. Limits: title 31 bytes,
+  description 255 bytes; only today up to `C_Calendar.GetMaxCreateDate()`; `AddEvent` / `UpdateEvent` are
+  marked restricted, so they are saved on the player's own click (the Create note button). Any member can
+  create guild events in Classic (no permission); guild event invites have been broken since Classic
+  1.15.3; characters outside a guild may only see changes after a relog. Comments and play times stay
+  peer-to-peer (too big).
 - Some interface changes are **locked during combat** (`InCombatLockdown()`): wait for `PLAYER_REGEN_ENABLED`.
 - **Lua 5.1**, Blizzard's version: no `goto`, no `//`, no bit operators (use the `bit` library), no `require`,
   `io` or `os`. The `.toc` file lists the files to load.
@@ -361,6 +388,13 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 
 - Plain words, short messages, one question at a time. The owner often types from a phone: read for intent, not typos.
 - No multiple-choice pop-ups; ask in plain words.
+- **Text and icons a little bigger everywhere** (owner, 2026-11-08: "the font and the icons need to be a bit
+  bigger... across the board"): Theme.FONT is the game's two fonts + Theme.TEXT_GROW (1.5) points, and icon
+  sizes go through Theme.icon(n) (x Theme.ICON_SCALE, 1.2). New UI uses both; windows keep their size where
+  they can (the panel grows a little taller: row lines are 15 px).
+- **Every option that isn't super obvious gets an (i) button** (Widgets' info button) saying what it does and
+  why you'd want it, with an example. Easy to find and click. Owner, 2026-11-08: "everything that isn't super
+  obvious needs this".
 - The owner streams (OBS + Discord). Anything on the game screen is on stream.
 - The repository is public (owner's go-ahead, 2026-11-05), but each new release still waits for the owner's
   "release it". Pushing work-in-progress commits to GitHub also waits for that.

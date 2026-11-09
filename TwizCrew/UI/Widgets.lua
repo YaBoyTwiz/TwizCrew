@@ -43,7 +43,7 @@ end
 
 function Widgets.infoButton(parent, title, text)
   local b = CreateFrame("Button", nil, parent)
-  b:SetSize(18, 16)
+  b:SetSize(22, 18)
   local fs = T.text(b, T.FONT.small, C.muted)
   fs:SetPoint("CENTER", b, "CENTER", 0, 0)
   fs:SetText("(i)")
@@ -327,25 +327,27 @@ local function buildMenu()
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewMenu") end -- Escape closes it
 end
 
+local MENU_ROW = 22 -- one menu line (room for the bigger text and icons)
+
 local function menuButton(i)
   local b = menuButtons[i]
   if b then return b end
   b = CreateFrame("Button", nil, menu)
-  b:SetHeight(18)
+  b:SetHeight(MENU_ROW)
   b.hl = b:CreateTexture(nil, "HIGHLIGHT")
   b.hl:SetAllPoints(b)
   T.color(b.hl, C.border, 0.5)
   b.check = b:CreateTexture(nil, "ARTWORK")
-  b.check:SetSize(14, 14)
+  b.check:SetSize(T.icon(14), T.icon(14))
   b.check:SetPoint("LEFT", b, "LEFT", 4, 0)
   b.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
   b.icon = b:CreateTexture(nil, "ARTWORK") -- an item's own picture (optional), right of the check
-  b.icon:SetSize(14, 14)
-  b.icon:SetPoint("LEFT", b, "LEFT", 21, 0)
+  b.icon:SetSize(T.icon(14), T.icon(14))
+  b.icon:SetPoint("LEFT", b, "LEFT", 6 + T.icon(14), 0)
   b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   b.icon:Hide()
   b.label = T.text(b, T.FONT.small, C.text)
-  b.label:SetPoint("LEFT", b, "LEFT", 22, 0)
+  b.label:SetPoint("LEFT", b, "LEFT", 8 + T.icon(14), 0)
   b.label:SetJustifyH("LEFT")
   script(b, "OnClick", function(self)
     closeMenu()
@@ -363,11 +365,11 @@ function Widgets.menu(anchor, items)
     local b = menuButton(i)
     b.item = item
     b.label:SetText(item.label or "")
-    local left = 22
+    local left = 8 + T.icon(14)
     if type(item.icon) == "string" then
       b.icon:SetTexture(item.icon)
       b.icon:Show()
-      left = 39
+      left = 10 + 2 * T.icon(14)
     else
       b.icon:Hide()
     end
@@ -378,12 +380,12 @@ function Widgets.menu(anchor, items)
     local checked = type(item.checked) == "function" and item.checked()
     if checked then b.check:Show() else b.check:Hide() end
     b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", menu, "TOPLEFT", 4, -4 - (i - 1) * 18)
+    b:SetPoint("TOPLEFT", menu, "TOPLEFT", 4, -4 - (i - 1) * MENU_ROW)
     b:SetPoint("RIGHT", menu, "RIGHT", -4, 0)
     b:Show()
   end
   for i = #items + 1, #menuButtons do menuButtons[i]:Hide() end
-  menu:SetSize(width, #items * 18 + 8)
+  menu:SetSize(width, #items * MENU_ROW + 8)
   menu:ClearAllPoints()
   menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
   catcher:Show()
@@ -424,7 +426,7 @@ function Widgets.tagPill(parent)
   pill:SetHeight(18)
   T.paint(pill, C.button, 1, C.pillBorder, 1)
   pill.icon = pill:CreateTexture(nil, "ARTWORK")
-  pill.icon:SetSize(16, 16)
+  pill.icon:SetSize(T.icon(16), T.icon(16))
   pill.icon:SetPoint("LEFT", pill, "LEFT", 2, 0)
   pill.shine = T.gloss(pill, nil, 0.25, "ARTWORK") -- under the label, so the text stays crisp
   pill.text = T.readable(T.text(pill, T.FONT.small, C.white))

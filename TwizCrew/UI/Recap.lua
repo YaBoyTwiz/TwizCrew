@@ -112,7 +112,7 @@ local function build()
   T.gloss(frame, nil, 0.05, "BORDER")
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewRecap") end
   local logo = frame:CreateTexture(nil, "ARTWORK")
-  logo:SetSize(26, 26)
+  logo:SetSize(T.icon(26), T.icon(26))
   logo:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -10)
   logo:SetTexture(I .. "INV_Scroll_03")
   logo:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -130,10 +130,10 @@ function Recap.show()
     local r = rows[i]
     if not r then
       r = CreateFrame("Frame", nil, frame)
-      r:SetSize(392, 24)
-      r:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -(46 + (i - 1) * 26))
+      r:SetSize(392, 28)
+      r:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -(48 + (i - 1) * 30))
       r.icon = r:CreateTexture(nil, "ARTWORK")
-      r.icon:SetSize(22, 22)
+      r.icon:SetSize(T.icon(22), T.icon(22))
       r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
       r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
       r.text = T.readable(T.text(r, T.FONT.small, C.white))
@@ -147,7 +147,7 @@ function Recap.show()
     r:Show()
   end
   for i = #lines + 1, #rows do rows[i]:Hide() end
-  frame:SetHeight(46 + #lines * 26 + 12)
+  frame:SetHeight(48 + #lines * 30 + 12)
   frame:Show()
   Recap.lastLines = lines
 end

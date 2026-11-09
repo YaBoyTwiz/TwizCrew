@@ -10,10 +10,21 @@ local FEATURE = "panel"
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local WIDTH, PAD = 470, 14
-local LINE_H = 16
-local LINES = 22 -- lines shown at once; the mouse wheel scrolls
+local LINE_H = 18
+local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.20", date = "2026-11-08", lines = {
+    "Spell helpers (wrench button, or /tc spells): every spell you know with three switches:",
+    "  Newest rank: always the highest rank (switch it off to keep a cheap low rank on purpose).",
+    "  Smart target: a harmful spell at a friend hits the friend's target; a helpful one at an enemy lands on",
+    "  whoever the enemy is attacking (or you). Done with a macro in the spell's slot, same icon and tooltip.",
+    "  Switch target: with smart target, that unit also becomes your target.",
+    "  Hover each (i) for examples. Only this character's macro slots are used; your own macros are never touched.",
+    "When you learn a new spell or rank, a pop-up says how it's set: click it to choose.",
+    "Bigger text and icons everywhere: the panel, menus, pop-ups, the calendar, the settings and every window.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.1.19", date = "2026-11-08", lines = {
     "Calendar, a day: each bar starts with that person's class icon and has their times on it (7pm-11pm).",
     "Hover the timeline to see who was on at that moment (\"At 8:15pm, 3 on: ...\"), AFK marked.",

@@ -76,8 +76,10 @@ local function dateKeyOf(day)
 end
 
 -------------------------------------------------------------------------------------------------- small pieces
+-- size: as first designed; drawn a little bigger (Theme.icon).
 local function iconTexture(parent, path, size, layer)
   local t = parent:CreateTexture(nil, layer or "ARTWORK")
+  size = T.icon(size)
   t:SetSize(size, size)
   if path then t:SetTexture(path) end
   t:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -345,7 +347,7 @@ local function buildDay()
     r:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(50 + (i - 1) * ROW_H))
     r:EnableMouse(true)
     r.face = r:CreateTexture(nil, "ARTWORK")
-    r.face:SetSize(16, 16)
+    r.face:SetSize(T.icon(16), T.icon(16))
     r.face:SetPoint("LEFT", r, "LEFT", 0, 0)
     r.name = T.readable(T.text(r, T.FONT.small, C.text))
     r.name:SetPoint("LEFT", r.face, "RIGHT", 4, 0)
@@ -383,8 +385,8 @@ local function buildDay()
   dayPane.noNotes:SetText("none yet: add one below (the whole crew sees it)")
   for i = 1, NOTE_ROWS do
     local r = CreateFrame("Frame", nil, dayPane)
-    r:SetSize(WIDTH - 2 * PAD, 20)
-    r:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(notesTop + 22 + (i - 1) * 21))
+    r:SetSize(WIDTH - 2 * PAD, 23)
+    r:SetPoint("TOPLEFT", dayPane, "TOPLEFT", 0, -(notesTop + 24 + (i - 1) * 25))
     r.icon = iconTexture(r, nil, 18)
     r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
     r.text = T.text(r, T.FONT.small, C.text)
@@ -413,7 +415,7 @@ local function buildDay()
   end
 
   -- one button: "Create a note" for this day (the window has the time, the icon and the rest)
-  local addTop = notesTop + 22 + NOTE_ROWS * 21 + 8
+  local addTop = notesTop + 24 + NOTE_ROWS * 25 + 8
   local create = Widgets.button(dayPane, "Create a note for this day", function()
     Calendar.openMaker({ day = shownDay })
   end, nil, FEATURE)
@@ -535,10 +537,10 @@ local function buildUsual()
   usualPane.everyone:SetPoint("TOPRIGHT", usualPane, "TOPRIGHT", 0, -(whoTop - 4))
   for i = 1, 10 do
     local r = CreateFrame("Button", nil, usualPane)
-    r:SetSize(WIDTH - 2 * PAD, 18)
-    r:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -(whoTop + 22 + (i - 1) * 19))
+    r:SetSize(WIDTH - 2 * PAD, 20)
+    r:SetPoint("TOPLEFT", usualPane, "TOPLEFT", 0, -(whoTop + 22 + (i - 1) * 21))
     r.face = r:CreateTexture(nil, "ARTWORK")
-    r.face:SetSize(16, 16)
+    r.face:SetSize(T.icon(16), T.icon(16))
     r.face:SetPoint("LEFT", r, "LEFT", 0, 0)
     r.text = T.text(r, T.FONT.small, C.text)
     r.text:SetPoint("LEFT", r.face, "RIGHT", 6, 0)
@@ -913,7 +915,7 @@ local function buildMaker()
     b.border:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
     b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 2, -2)
     T.color(b.border, C.title, 1)
-    local ic = iconTexture(b, e.tex, 22)
+    local ic = iconTexture(b, e.tex, 18) -- fills its 22 square button
     ic:SetAllPoints(b)
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(b)
@@ -1263,7 +1265,7 @@ local function drawDay()
       local mk = markers[k]
       if not mk then
         mk = CreateFrame("Frame", nil, dayPane)
-        mk:SetSize(16, 16)
+        mk:SetSize(T.icon(16), T.icon(16))
         mk.icon = iconTexture(mk, nil, 16)
         mk.icon:SetAllPoints(mk)
         mk.line = dayPane:CreateTexture(nil, "ARTWORK")

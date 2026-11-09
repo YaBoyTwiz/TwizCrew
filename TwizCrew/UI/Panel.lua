@@ -12,12 +12,12 @@ local T, Widgets, Logic = ns.Theme, ns.Widgets, ns.PanelLogic
 local C = T.COLOR
 
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
-local ICON_SIZE = { full = 22, compact = 20, tiny = 16 }
-local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 13
+local ICON_SIZE = { full = 26, compact = 23, tiny = 19 }
+local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 15
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
-local UPDATE_HEIGHT = 15 -- the gold "Update available: vX" line under the header
-local NEWS_HEIGHT = 16   -- the What's new line under it, always there (bright "New in vX!" until you've read it)
-local OFF_HEIGHT = 18    -- the "Offline (N)" bar between online and offline friends
+local UPDATE_HEIGHT = 17 -- the gold "Update available: vX" line under the header
+local NEWS_HEIGHT = 18   -- the What's new line under it, always there (bright "New in vX!" until you've read it)
+local OFF_HEIGHT = 20    -- the "Offline (N)" bar between online and offline friends
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
@@ -27,7 +27,7 @@ local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_U
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
   "AWAY_CHANGED", "FIND_CHANGED" }
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
-local ARROW_SIZE = 22 -- a little bigger, easier to read at a glance
+local ARROW_SIZE = 26 -- big enough to read at a glance
 
 local root, countText, noteText
 local afkButton -- the "zzz" button in the header: go AFK / come back
@@ -260,7 +260,7 @@ local function createRow()
   r.afk = r:CreateTexture(nil, "OVERLAY", nil, 2) -- "zzz" on the portrait while they're away
   r.afk:SetTexture(ns.Tags.ICON.AFK)
   r.afk:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  r.afk:SetSize(14, 14)
+  r.afk:SetSize(T.icon(14), T.icon(14))
   r.afk:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 4, -4)
   r.afk:Hide()
   -- the Mock button: only on a dead friend's row
@@ -270,7 +270,7 @@ local function createRow()
   T.paint(r.mock, "8a1c1c", 1, "000000", 1)
   T.gloss(r.mock, nil, 0.25, "ARTWORK")
   r.mock.icon = r.mock:CreateTexture(nil, "OVERLAY")
-  r.mock.icon:SetSize(14, 14)
+  r.mock.icon:SetSize(T.icon(14), T.icon(14))
   r.mock.icon:SetPoint("LEFT", r.mock, "LEFT", 3, 0)
   r.mock.icon:SetTexture(ns.Tags.ICON.DEAD)
   r.mock.text = T.readable(T.text(r.mock, T.FONT.small, C.white))
@@ -300,7 +300,7 @@ local function createRow()
   T.paint(r.cheer, "1f7a2e", 1, "000000", 1)
   T.gloss(r.cheer, nil, 0.25, "ARTWORK")
   r.cheer.icon = r.cheer:CreateTexture(nil, "OVERLAY")
-  r.cheer.icon:SetSize(14, 14)
+  r.cheer.icon:SetSize(T.icon(14), T.icon(14))
   r.cheer.icon:SetPoint("LEFT", r.cheer, "LEFT", 3, 0)
   r.cheer.icon:SetTexture("Interface\\Icons\\INV_Misc_Gift_01")
   r.cheer.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -356,10 +356,10 @@ local function createRow()
   r.title = T.text(r, T.FONT.small, C.muted)
   r.quest = T.text(r, T.FONT.small, C.status) -- the quest they're on, with a ! (or ? when ready to turn in)
   r.questIcon = r:CreateTexture(nil, "ARTWORK")
-  r.questIcon:SetSize(12, 12)
+  r.questIcon:SetSize(T.icon(12), T.icon(12))
   -- "they can share this quest with you": a small icon after the !, a button (click = ask them to share it)
   r.share = T.frame("Button", nil, r)
-  r.share:SetSize(13, 13)
+  r.share:SetSize(T.icon(13), T.icon(13))
   r.share:SetFrameLevel((r:GetFrameLevel() or 1) + 4)
   r.share.icon = r.share:CreateTexture(nil, "ARTWORK")
   r.share.icon:SetAllPoints(r.share)
@@ -1055,6 +1055,8 @@ function Panel.toolItems()
       checked = function() return rank("auto") and true or false end, onClick = flipRank("auto") } or nil,
     ns.RankUp and { label = "...with its own button on screen", icon = "Interface\\Icons\\INV_Misc_Rune_01",
       checked = function() return rank("showButton") and true or false end, onClick = flipRank("showButton") } or nil,
+    ns.SpellHelpers and { label = "Spell helpers (ranks, smart target)", icon = "Interface\\Icons\\Spell_Holy_HealingFocus",
+      onClick = function() ns.SpellHelpers.toggle() end } or nil,
     ns.Calendar and { label = "Crew calendar", icon = "Interface\\Icons\\INV_Scroll_03",
       onClick = function() ns.Calendar.toggle() end } or nil,
     ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
@@ -1353,7 +1355,7 @@ local function build()
   -- a move handle so it's obvious the panel can be dragged; hovering the header shows the move cursor and a tip
   grip = head:CreateTexture(nil, "ARTWORK")
   grip:SetTexture("Interface\\CURSOR\\UI-Cursor-Move")
-  grip:SetSize(16, 16)
+  grip:SetSize(T.icon(16), T.icon(16))
   grip:SetPoint("LEFT", head, "LEFT", PAD - 2, -2)
   script(head, "OnEnter", function(self)
     local locked = setting("locked")
@@ -1390,7 +1392,7 @@ local function build()
   end)
   script(versionButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   local gear = CreateFrame("Button", nil, head)
-  gear:SetSize(16, 16)
+  gear:SetSize(T.icon(16), T.icon(16))
   gear:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
   local gearIcon = gear:CreateTexture(nil, "ARTWORK")
   gearIcon:SetAllPoints(gear)
@@ -1411,7 +1413,7 @@ local function build()
   countText = T.text(head, T.FONT.small, C.muted)
   -- the tools button: a wrench left of the gear; click = a menu of handy tools
   toolsButton = CreateFrame("Button", nil, head)
-  toolsButton:SetSize(16, 16)
+  toolsButton:SetSize(T.icon(16), T.icon(16))
   toolsButton:SetPoint("RIGHT", gear, "LEFT", -4, 0)
   local toolsIcon = toolsButton:CreateTexture(nil, "ARTWORK")
   toolsIcon:SetAllPoints(toolsButton)
@@ -1431,7 +1433,7 @@ local function build()
   script(toolsButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   -- the calendar button: left of the wrench
   calButton = CreateFrame("Button", nil, head)
-  calButton:SetSize(16, 16)
+  calButton:SetSize(T.icon(16), T.icon(16))
   calButton:SetPoint("RIGHT", toolsButton, "LEFT", -4, 0)
   local calIcon = calButton:CreateTexture(nil, "ARTWORK")
   calIcon:SetAllPoints(calButton)
@@ -1451,7 +1453,7 @@ local function build()
   script(calButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   countText:SetPoint("RIGHT", calButton, "LEFT", -6, 0)
   afkButton = CreateFrame("Button", nil, head)
-  afkButton:SetSize(16, 16)
+  afkButton:SetSize(T.icon(16), T.icon(16))
   afkButton:SetPoint("RIGHT", countText, "LEFT", -6, 0)
   afkButton.glow = afkButton:CreateTexture(nil, "BACKGROUND")
   afkButton.glow:SetPoint("TOPLEFT", afkButton, "TOPLEFT", -3, 3)
@@ -1512,7 +1514,7 @@ local function build()
   newsHl:SetAllPoints(newsBar)
   T.color(newsHl, "3fa9f5", 0.25)
   newsBar.icon = newsBar:CreateTexture(nil, "ARTWORK")
-  newsBar.icon:SetSize(13, 13)
+  newsBar.icon:SetSize(T.icon(13), T.icon(13))
   newsBar.icon:SetPoint("LEFT", newsBar, "LEFT", PAD - 4, 0)
   newsBar.icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
   newsBar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -1535,7 +1537,7 @@ local function build()
   offBar:SetSize(ROW_WIDTH.full, OFF_HEIGHT)
   T.paint(offBar, C.row, 0.6, C.rowBorder, 1)
   offBar.icon = offBar:CreateTexture(nil, "ARTWORK")
-  offBar.icon:SetSize(14, 14)
+  offBar.icon:SetSize(T.icon(14), T.icon(14))
   offBar.icon:SetPoint("LEFT", offBar, "LEFT", 4, 0)
   offBar.text = T.readable(T.text(offBar, T.FONT.small, C.muted))
   offBar.text:SetPoint("LEFT", offBar.icon, "RIGHT", 4, 0)

@@ -2,7 +2,7 @@
 ## Title: TwizCrew
 ## Notes: See what your crew is doing and which layer they're on. Type /tc
 ## Author: YaBoyTwiz
-## Version: 0.1.19
+## Version: 0.1.20
 ## SavedVariables: TwizCrewDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BattleShout
 ## AddonCompartmentFunc: TwizCrew_OnAddonCompartmentClick
@@ -57,6 +57,8 @@ Find\Find.lua
 Find\BigArrow.lua
 Find\MeetMap.lua
 Tools\RankUp.lua
+Tools\SpellHelpersLogic.lua
+Tools\SpellHelpers.lua
 Calendar\CalendarLogic.lua
 Calendar\Notes.lua
 Calendar\Diary.lua

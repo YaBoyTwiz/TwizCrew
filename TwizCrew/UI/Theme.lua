@@ -14,7 +14,28 @@ Theme.COLOR = {
   danger = "5a1010", dangerBorder = "aa3333", line = "3a3322", confirm = "1a0d0d",
 }
 
-Theme.FONT = { normal = "GameFontNormal", small = "GameFontHighlightSmall" }
+-- Our text is the game's own two fonts made a little bigger (easier to read; owner, 2026-11-08). TEXT_GROW points
+-- are added to each; when the game can't make a font, the game's own is used as it is.
+Theme.TEXT_GROW = 1.5
+local function bigger(name, base)
+  local ok, made = pcall(function()
+    local from = _G[base]
+    if type(CreateFont) ~= "function" or type(from) ~= "table" or not from.GetFont then return nil end
+    local path, size, flags = from:GetFont()
+    if type(path) ~= "string" or type(size) ~= "number" then return nil end
+    local f = _G[name] or CreateFont(name)
+    f:CopyFontObject(from)
+    f:SetFont(path, size + Theme.TEXT_GROW, flags or "")
+    return name
+  end)
+  return (ok and made) or base
+end
+Theme.FONT = { normal = bigger("TwizCrewFontNormal", "GameFontNormal"),
+  small = bigger("TwizCrewFontSmall", "GameFontHighlightSmall") }
+
+-- Icons are drawn ICON_SCALE times the size they were first made at: Theme.icon(16) = 19.
+Theme.ICON_SCALE = 1.2
+function Theme.icon(n) return math.floor(n * Theme.ICON_SCALE + 0.5) end
 
 Theme.WHITE = "Interface\\Buttons\\WHITE8X8"
 

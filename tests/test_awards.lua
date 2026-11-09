@@ -15,6 +15,7 @@ end
 
 -- Boots and lets the session be decided.
 local function start(ns, W)
+  W.state.zone = nil -- no zone read: the Tourist card (zones visited) would join every show
   boot(W)
   W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
 end

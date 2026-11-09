@@ -299,6 +299,15 @@ return {
       A.no(L.needWin("Ginkan won: " .. link, nil, "You won: %s", { [link] = 5 }, 10, 300))
     end,
 
+    xp_gained_across_a_level_up = function(ns, A)
+      local L = ns.StatsLogic
+      A.eq(L.xpGained({ level = 10, xp = 100, max = 1000 }, { level = 10, xp = 250, max = 1000 }), 150)
+      A.eq(L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 11, xp = 50, max = 1200 }), 150, "the ding")
+      A.eq(L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 10, xp = 100, max = 1000 }), 0, "never minus")
+      A.eq(L.xpGained(nil, { level = 10, xp = 1, max = 1000 }), 0, "the first reading")
+      A.eq(L.xpGained({ level = 10, xp = 1, max = 1000 }, { level = 13, xp = 1, max = 2000 }), 0, "a jump: unknown")
+    end,
+
     wire_roundtrip = function(ns, A)
       local L = ns.StatsLogic
       local w = L.toWire({ sid = "T-1", q = "1-1", s = { dt = 3, st = 10.7, jp = 0, zz = 4 }, a = { st = 12403.2 } })

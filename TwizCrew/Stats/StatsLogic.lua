@@ -200,6 +200,18 @@ function L.needWin(text, needFmt, wonFmt, needed, now, keep)
   return isNumber(at) and now - at <= keep
 end
 
+-- XP gained between two readings { level, xp, max }: the same level, or one ding (the rest of the old level plus
+-- the new xp). Anything else (first reading, several levels at once, odd numbers) is 0.
+function L.xpGained(prev, cur)
+  if type(prev) ~= "table" or type(cur) ~= "table" then return 0 end
+  if not (isNumber(prev.level) and isNumber(prev.xp) and isNumber(cur.level) and isNumber(cur.xp)) then return 0 end
+  if cur.level == prev.level then return math.max(0, cur.xp - prev.xp) end
+  if cur.level == prev.level + 1 and isNumber(prev.max) and prev.max >= prev.xp then
+    return (prev.max - prev.xp) + math.max(0, cur.xp)
+  end
+  return 0
+end
+
 function L.isPull(me, members)
   if type(me) ~= "table" or not me.dungeon then return false end
   local any = false

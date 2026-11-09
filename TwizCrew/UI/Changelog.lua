@@ -14,6 +14,20 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.21", date = "2026-11-09", lines = {
+    "Hall of Shame: 11 new awards, in five tabs (Deaths, Moving, Money, Oops, Lazy). It remembers your tab.",
+    "  Pauper: carries the least gold right now (exact amount; needs 30 minutes played).",
+    "  Money Pit: lost the most gold. Ninja: won the most Need rolls in a group.",
+    "  Out of Juice: \"Not enough mana\" the most. Too Far Away: \"Out of range\" the most.",
+    "  Wanderer: ran off from the group the most (flights count; hearths, portals and ghosts don't).",
+    "  Snail: the least XP per hour. Chatterbox and Emote Spammer: the most party chat and emotes.",
+    "  Tourist: the most zones visited. Frequent Flyer: the most flight paths.",
+    "Fixed: the crew panel disappearing inside dungeons until /reload.",
+    "Spell helpers no longer move anything on your bars: drag each macro from the new Macro column yourself.",
+    "The running-off warning is silent now (the flashing arrow and pop-up stay).",
+    "Spell helpers and the rank updater were missing from the last download; they're in this one.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.1.20", date = "2026-11-08", lines = {
     "Spell helpers (wrench button, or /tc spells): every spell you know with three switches:",
     "  Newest rank: always the highest rank (switch it off to keep a cheap low rank on purpose).",

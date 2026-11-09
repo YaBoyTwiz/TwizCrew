@@ -141,11 +141,23 @@ return {
     end,
     awards_defs_shape = function(ns, A)
       local D = ns.StatsDefs
-      A.eq(#D.AWARDS, 18)
+      A.eq(#D.AWARDS, 29)
       A.eq(D.AWARDS[1].id, "corpse")
-      A.eq(D.AWARDS[18].id, "medic")
-      A.ok(D.AWARDS[18].last)
-      A.ok(D.AWARDS[9].id == "couch" and D.AWARDS[9].lowest and not D.AWARDS[10].lowest)
+      A.eq(D.AWARDS[29].id, "medic")
+      A.ok(D.AWARDS[29].last)
+      local tabs, perTab = {}, {}
+      for _, t in ipairs(D.TABS) do tabs[t.id] = true; perTab[t.id] = 0 end
+      A.eq(#D.TABS, 5)
+      local lastTab = 1
+      for _, d in ipairs(D.AWARDS) do
+        A.ok(tabs[d.tab], d.id .. " has a tab")
+        perTab[d.tab] = perTab[d.tab] + 1
+        local idx
+        for i, t in ipairs(D.TABS) do if t.id == d.tab then idx = i end end
+        A.ok(idx >= lastTab, d.id .. ": the table runs tab by tab")
+        lastTab = idx
+      end
+      A.eq(perTab, { deaths = 6, move = 7, loot = 5, oops = 6, lazy = 5 })
       for _, d in ipairs(D.AWARDS) do
         A.ok(d.name and d.unit and d.icon and d.info and d.joke, d.id)
         A.ok(d.key or d.value, d.id)
@@ -172,7 +184,30 @@ return {
       A.eq(#by.corpse.top, 3)
       A.eq(by.corpse.top[3].name, "Ginkan")
       A.eq(list[#list].def.id, "medic")
-      A.eq(#list, 18)
+      A.eq(#list, 29)
+    end,
+    new_awards_pick_the_right_winner = function(ns, A)
+      local L = ns.StatsLogic
+      local function award(list, id)
+        for _, a in ipairs(L.awards(list)) do if a.def.id == id then return a end end
+      end
+      local list = {
+        { name = "Twiz", stats = { gn = 14, ml = 5000, mg = 1000, xg = 3000, xt = 3600, zv = 4, fp = 2 } },
+        { name = "Lurabe", stats = { gn = 90000, ml = 100, mg = 900, xg = 9000, xt = 3600 } },
+        { name = "Ginkan", stats = { gn = 0, xg = 100, xt = 600 } },
+      }
+      local p = award(list, "pauper")
+      A.eq(p.winners, { "Ginkan" }, "0 gold wins")
+      A.eq(p.text, "0c")
+      local m = award(list, "moneypit")
+      A.eq(m.winners, { "Twiz" })
+      A.eq(m.text, "40s", "lost 5000, gained 1000")
+      local s = award(list, "snail")
+      A.eq(s.winners, { "Twiz" }, "Ginkan played under 30 minutes: not taking part")
+      A.eq(s.text, "3,000 XP per hour")
+      A.eq(award(list, "tourist").text, "4 zones")
+      A.eq(award(list, "flyer").text, "2 flights")
+      A.ok(award(list, "ninja").empty, "nobody yet")
     end,
     weakling_shows_mob_level = function(ns, A)
       local L = ns.StatsLogic

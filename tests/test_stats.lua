@@ -838,6 +838,19 @@ return {
       A.eq(get(ns, "session", "nj"), 1, "only in a group")
     end,
 
+    my_chat_and_emotes_are_counted = function(ns, A, W)
+      start(ns, W)
+      W:fire("CHAT_MSG_PARTY", "pull?", "Twiz-Realm")
+      W:fire("CHAT_MSG_RAID_LEADER", "go", "Twiz")
+      W:fire("CHAT_MSG_PARTY", "no", "Ginkan-Realm")
+      A.eq(get(ns, "session", "ch"), 2, "only my own messages")
+      W:fire("CHAT_MSG_TEXT_EMOTE", "You dance.", "Twiz")
+      W:fire("CHAT_MSG_EMOTE", "flexes", "Twiz")
+      W:fire("CHAT_MSG_TEXT_EMOTE", "Ginkan laughs.", "Ginkan")
+      A.eq(get(ns, "session", "em"), 2)
+      A.eq(ns.db.stats.chars.Twiz.s.pull, nil, "the words are never kept")
+    end,
+
     stats_changed_is_rate_limited = function(ns, A, W)
       start(ns, W)
       local fired = 0
@@ -868,7 +881,7 @@ return {
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end
       A.eq(ids, { "motion", "fall", "timers", "death", "drown", "target", "pulls", "wipes", "jumps", "spells", "junk",
-        "repair", "gold", "errors", "ninja", "abandon", "duel" })
+        "repair", "gold", "errors", "ninja", "chatter", "abandon", "duel" })
       -- one STATS goes out when the session is decided (inside start); counting after that sends nothing
       A.ok(#W.sent > 0, "the crew messages went out")
       local mark = #W.sent

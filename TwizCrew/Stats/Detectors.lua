@@ -535,6 +535,23 @@ add({ id = "ninja", label = "Need rolls won",
 
 local ABANDON_DEDUPE = 1
 local lastAbandon
+-- My own party / raid / instance chat lines (Chatterbox) and emotes (Emote Spammer): only counted, never kept.
+local CHAT_KEYS = {
+  CHAT_MSG_PARTY = "ch", CHAT_MSG_PARTY_LEADER = "ch", CHAT_MSG_RAID = "ch", CHAT_MSG_RAID_LEADER = "ch",
+  CHAT_MSG_INSTANCE_CHAT = "ch", CHAT_MSG_INSTANCE_CHAT_LEADER = "ch",
+  CHAT_MSG_TEXT_EMOTE = "em", CHAT_MSG_EMOTE = "em",
+}
+add({ id = "chatter", label = "chat lines and emotes",
+  needs = function() return true end,
+  start = function()
+    for event, key in pairs(CHAT_KEYS) do
+      onEvent(byId.chatter, event, function(_, sender)
+        if secret(sender) or type(sender) ~= "string" then return end
+        if ns.shortName(sender) == ns.playerName() then api.count(key, 1) end
+      end)
+    end
+  end })
+
 add({ id = "abandon", label = "quests abandoned",
   needs = function()
     if not fn("hooksecurefunc") then return false, "hooksecurefunc missing" end

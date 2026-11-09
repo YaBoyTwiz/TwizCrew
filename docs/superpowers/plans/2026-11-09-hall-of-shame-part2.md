@@ -45,9 +45,10 @@ shows at most one pop-up a minute through `Popups.notice`). The board gets a six
 - **The swap only offers the 10 newest sessions** (`DIGEST_SIZE`): a friend who missed more than 10 sessions in a
   row doesn't get the older ones. Messages: `TRD` digest (`r` = up to 10 session ids, comma-separated), `TRQ` ask
   (`s` = one session id), `TRP` one record (`s` id, `t` start, `p` people, `k` number of award fields, then one
-  `w_<awardId>` field per award with a winner = winner names comma-separated). Pieces of a `TRP` are merged per
-  sender and session id until all `k` award fields and `p` have arrived. The first complete record for a session id
-  is kept; later ones are ignored.
+  `w_<awardId>` field per award with a winner = winner names comma-separated; `l` = "1" on a late record, and
+  `l` on `TRD` lists the digest's late ones). Pieces of a `TRP` are merged per
+  sender and session id until all `k` award fields, `p` and `t` have arrived. The first complete record for a session id
+  is kept unless the new one has more people, or replaces a late one.
 - **Steals compare winner sets.** For each award: old winners (last check) and new winners; a steal when both are
   non-empty and share nobody. The pop-up text uses the first thief and first victim (ties: "Twiz & Ginkan").
 - **Trophies tab** is not an award tab: it is added by the board after the five `StatsDefs.TABS` (label

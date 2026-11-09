@@ -94,6 +94,8 @@ return {
       A.eq(state(ns).phase, "reveal", "old timers do nothing after a jump")
       A.eq(state(ns).title, "Medic")
       ns.AwardsShow.next()
+      A.eq(state(ns).phase, "vote", "Frostie and I were in the session: the Clown of the Night vote")
+      A.ok(ns.AwardsShow.pressForTest("Skip"))
       s = state(ns)
       A.eq(s.phase, "end")
       A.eq(s.text, "That's the show. GG crew.")

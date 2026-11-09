@@ -7,6 +7,13 @@
 -- Viewer role: a known crew member's AWS opens the same window (stats setting "crewShow"); it shows the cards the
 -- presenter sends (AWC) and closes on AWX. A viewer's clicks and Space do nothing except at the end card. In a fight
 -- it waits and catches up to the latest card's reveal when the fight ends. Escape closes only the viewer's window.
+-- Clown of the Night (session view only): after the last award, with 2 or more people in the session, the presenter
+-- sends AWV { id, c = candidates, t = "30" } and every screen shows the vote card: a button per candidate except
+-- yourself (up to 8, the first by name), "N of M voted" and a countdown. A click sends AWB { id, c } once; every
+-- screen counts the AWBs it hears (one per voter, the first counts). The presenter ends it after 30 s, or once every
+-- online candidate voted, with AWR { id, w, n } (ShowLogic.tally), or AWR { id, k = "skip" } from its Skip button.
+-- Each screen that shows a clown saves db.stats.clown = { names, sid, at } and fires CLOWN_CHANGED (Crew-tab title,
+-- trophy when the session ends).
 -- Feature id "awards": every script and timer runs inside ns.Log.safe.
 local _, ns = ...
 
@@ -25,14 +32,24 @@ local NOBODY = "Nobody has won anything yet."
 local THE_END = "That's the show. GG crew."
 local HINT_NEXT = "Click or press Space for the next one"
 local HINT_CLOSE = "Click or press Space to close"
+local VOTE_TITLE = "Who's the Clown of the Night?"
+local NOT_VOTING = "Only the people in the session vote"
+local MAX_BUTTONS, BUTTON_W, BUTTON_H, BUTTON_GAP = 8, 186, 24, 16
 
 local frame, header, badge, title, line, number, joke, hint
+local voteTitle, voteLine, skipButton
+local buttons = {}     -- the vote card's buttons
+local onButton = {}    -- [i] = the name on button i while it is shown
+local skipShown = false
+-- the Clown of the Night vote: { candidates (sorted), isCandidate, me (my name among them), votes = { [voter] =
+-- choice }, count, mine, endsAt, escaped (names from the wire), endIndex (presenter: the end card), closed, result }
+local vote = nil
 local open = false
 local view = "session"
 local cards = {}       -- from StatsLogic.showCards (+ the "nobody" card)
 local classes = {}     -- name -> class file, for the winners' colours
 local index = 0
-local phase = nil      -- "loading" | "badge" | "drum" | "reveal" | "nobody" | "end"
+local phase = nil      -- "loading" | "badge" | "drum" | "reveal" | "nobody" | "vote" | "clown" | "end"
 local generation = 0   -- bumped on every step and on close: a stale timer does nothing
 local cardSerial = 0   -- bumped on every card change and on close: a stale idle clock does nothing
 local showId = nil     -- set when AWS was sent (this copy is presenting): "<me>-<wallclock>"
@@ -100,7 +117,7 @@ local function idleClock()
 end
 
 local function send(msgType, fields)
-  ns.Comm.send(msgType, fields, { repeatKeys = { "id", "i" } })
+  ns.Comm.send(msgType, fields, { repeatKeys = ns.ShowLogic.REPEAT_KEYS })
 end
 
 ---------------------------------------------------------------------------------------------------------- frames
@@ -145,6 +162,21 @@ local function build()
   hint = T.text(frame, T.FONT.small, C.muted)
   hint:SetPoint("BOTTOM", frame, "BOTTOM", 0, 10)
 
+  -- the vote card: its title, up to 8 buttons in two columns, "N of M voted" and the presenter's Skip
+  voteTitle = centered(T.text(frame, T.FONT.normal, GOLD), -34)
+  for i = 1, MAX_BUTTONS do
+    local b = Widgets.button(frame, "", function() Show.vote(onButton[i]) end, nil, FEATURE)
+    b:SetSize(BUTTON_W, BUTTON_H)
+    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+    b:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD + col * (BUTTON_W + BUTTON_GAP), -60 - row * (BUTTON_H + 4))
+    b:Hide()
+    buttons[i] = b
+  end
+  voteLine = centered(T.text(frame, T.FONT.small, C.text), -180)
+  skipButton = Widgets.button(frame, "Skip", function() Show.skipVote() end, nil, FEATURE)
+  skipButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, 8)
+  skipButton:Hide()
+
   -- A click (not a drag) is "next". OnMouseDown resets the drag mark, so a lost OnMouseUp never eats a click.
   script(frame, "OnMouseDown", function() dragged = false end)
   script(frame, "OnDragStart", function(self) dragged = true; self:StartMoving() end)
@@ -181,17 +213,66 @@ local function build()
 end
 
 -- names: the winners; escaped: already cleaned with safeText (cards from the wire); more: winners not sent.
-local function winnersText(names, escaped, more)
+local function colored(name, escaped)
+  return "|cff" .. hex(T.classColor(classes[name])) .. (escaped and name or ns.Util.safeText(name)) .. "|r"
+end
+
+local function winnersText(names, escaped, more, sep)
   local parts = {}
-  for i, name in ipairs(names) do
-    parts[i] = "|cff" .. hex(T.classColor(classes[name])) .. (escaped and name or ns.Util.safeText(name)) .. "|r"
-  end
-  local s = table.concat(parts, ", ")
+  for i, name in ipairs(names) do parts[i] = colored(name, escaped) end
+  local s = table.concat(parts, sep or ", ")
   if more and more > 0 then s = s .. " and " .. more .. " more" end
   return s
 end
 
 local function card() return cards[index] end
+
+-- The candidates on the vote card's buttons: everyone but me, the first MAX_BUTTONS by name.
+local function buttonNames()
+  local out = {}
+  for _, name in ipairs(vote and vote.candidates or {}) do
+    if name ~= vote.me and #out < MAX_BUTTONS then out[#out + 1] = name end
+  end
+  return out
+end
+
+local function votedText() return vote.count .. " of " .. #vote.candidates .. " voted" end
+
+local function secondsLeft() return math.max(0, math.ceil(vote.endsAt - ns.now())) end
+
+local function drawVote()
+  voteTitle:SetText(VOTE_TITLE)
+  local list = buttonNames()
+  local canVote = vote.me ~= nil and not vote.closed
+  for i, b in ipairs(buttons) do
+    local name = list[i]
+    onButton[i] = name
+    if name then
+      local label = colored(name, vote.escaped)
+      if vote.mine == name then label = "|cff" .. GOLD .. ">|r " .. label .. " |cff" .. GOLD .. "<|r" end
+      b.text:SetText(label)
+      b:SetAlpha(((vote.mine and vote.mine ~= name) or not canVote) and 0.45 or 1)
+      b:Show()
+    end
+  end
+  voteLine:SetText(votedText())
+  hintText = vote.me and (secondsLeft() .. " s left") or (NOT_VOTING .. " · " .. secondsLeft() .. " s left")
+  skipShown = role == "presenter"
+  if skipShown then skipButton:Show() end
+end
+
+local function drawClown()
+  local r = vote and vote.result or { names = {}, n = 0 }
+  local def = ns.StatsDefs.trophyDef("clown")
+  badge:SetTexture(def and def.icon or ns.StatsDefs.ICON_FALLBACK)
+  badge:Show()
+  if #r.names == 0 then
+    title:SetText(ns.ShowLogic.clownLine(r.names, r.n))
+  else
+    title:SetText(ns.ShowLogic.CLOWN_TITLE)
+    lineText = winnersText(r.names, vote.escaped, nil, " & ") .. " (" .. r.n .. (r.n == 1 and " vote)" or " votes)")
+  end
+end
 
 -- Draws the current phase.
 local function draw()
@@ -200,9 +281,18 @@ local function draw()
   badge:Hide()
   title:SetText("")
   joke:SetText("")
+  voteTitle:SetText("")
+  voteLine:SetText("")
+  for i, b in ipairs(buttons) do onButton[i] = nil; b:Hide() end
+  skipShown = false
+  skipButton:Hide()
   lineText, numberText, hintText = "", "", HINT_NEXT
   if role == "viewer" then hintText = ns.Util.safeText(follow and follow.presenter or "") .. " is presenting" end
-  if phase == "loading" then
+  if phase == "vote" and vote then
+    drawVote()
+  elseif phase == "clown" then
+    drawClown()
+  elseif phase == "loading" then
     title:SetText(LOADING)
     if role ~= "viewer" then hintText = "" end
   elseif phase == "nobody" then
@@ -308,6 +398,118 @@ local function classOf(name)
   return m and m.class or nil
 end
 
+------------------------------------------------------------------------------------------------------------ vote
+local function showIdNow() return showId or (follow and follow.id) end
+
+local function newVote(candidates, seconds, escaped)
+  local v = { candidates = candidates, isCandidate = {}, votes = {}, count = 0, endsAt = ns.now() + seconds,
+    escaped = escaped, seconds = seconds }
+  for _, name in ipairs(candidates) do
+    v.isCandidate[name] = true
+    if ns.isMe(name) then v.me = name end
+  end
+  return v
+end
+
+-- Shows the vote card (and keeps its countdown going once a second, drawn on this screen only).
+local function enterVote()
+  for _, name in ipairs(vote.candidates) do classes[name] = classes[name] or classOf(name) end
+  setPhase("vote")
+  local function tick()
+    if phase ~= "vote" then return end
+    draw()
+    if ns.now() < vote.endsAt then after(1, tick) end
+  end
+  after(1, tick)
+end
+
+-- Saves the clown (only candidates) on this screen: the Crew-tab title, and a trophy when the session ends.
+local function saveClown(names)
+  local list = {}
+  for _, name in ipairs(names or {}) do
+    if vote.isCandidate[name] and not ns.isTestName(name) then list[#list + 1] = name end
+  end
+  if #list == 0 or not ns.db then return end
+  if type(ns.db.stats) ~= "table" then ns.db.stats = {} end
+  local session = ns.Session and ns.Session.current()
+  ns.db.stats.clown = { names = list, sid = session and session.id or nil, at = ns.wallclock() }
+  ns.Bus.fire("CLOWN_CHANGED")
+end
+
+-- The result is known: saved, and shown unless show is false (a viewer in a fight sees it afterwards).
+local function reveal(names, n, show)
+  vote.closed = true
+  vote.result = { names = names, n = n }
+  saveClown(names)
+  cardSerial = cardSerial + 1
+  idleClock()
+  if show ~= false then setPhase("clown") end
+end
+
+-- Presenter: the vote is over (30 s, or everyone online voted): tally, tell the crew, reveal.
+local function finishVote()
+  if role ~= "presenter" or not vote or vote.closed then return end
+  local w, n = ns.ShowLogic.tally(vote.votes, vote.candidates)
+  send("AWR", { id = showId, w = table.concat(w, ","), n = tostring(n) })
+  reveal(w, n)
+end
+
+local function isOnline(name)
+  if ns.isMe(name) then return true end
+  local m = ns.roster and ns.roster:get(name)
+  return m ~= nil and m.online and true or false
+end
+
+local function everyoneVoted()
+  for _, name in ipairs(vote.candidates) do
+    if not vote.votes[name] and isOnline(name) then return false end
+  end
+  return true
+end
+
+-- One vote per voter (the first counts), only candidates, never for yourself.
+local function countVote(voter, choice)
+  if not vote or vote.closed or not vote.isCandidate[voter] or not vote.isCandidate[choice] or voter == choice
+    or vote.votes[voter] then return end
+  vote.votes[voter] = choice
+  vote.count = vote.count + 1
+  if phase == "vote" then draw() end
+  if role == "presenter" and everyoneVoted() then finishVote() end
+end
+
+-- The people in this session (real names, sorted); nil outside the session view.
+local function sessionCandidates()
+  if view ~= "session" or not ns.Session then return nil end
+  local session = ns.Session.current()
+  if not session then return nil end
+  local seen, list = {}, {}
+  for _, e in ipairs(ns.StatsStore.entries("session", session.id)) do
+    local name = e.name
+    if type(name) == "string" and name ~= "" and not ns.isTestName(name) and not seen[name] then
+      seen[name] = true
+      list[#list + 1] = name
+    end
+  end
+  table.sort(list)
+  return list
+end
+
+-- Presenter: starts the vote before the end card (endIndex); false when there is no vote (all time, fewer than 2).
+local function startVote(endIndex)
+  local list = sessionCandidates()
+  if not showId or not list or #list < 2 then return false end
+  local f, kept = ns.ShowLogic.voteToWire(showId, list, ns.ShowLogic.VOTE_SECONDS)
+  if #kept < 2 then return false end
+  vote = newVote(kept, ns.ShowLogic.VOTE_SECONDS, false)
+  vote.endIndex = endIndex
+  send("AWV", f)
+  cardSerial = cardSerial + 1
+  idleClock()
+  enterVote()
+  after(vote.seconds, finishVote)
+  return true
+end
+
 -- A card from the wire (ShowLogic.cardFromWire) in the shape draw() uses; its names are already escaped.
 local function viewerCard(c)
   if c.kind ~= "award" then return { kind = c.kind } end
@@ -334,6 +536,17 @@ local function showWireCard(c, reveal)
   end
 end
 
+-- The latest thing the presenter sent, shown after a fight: a card's reveal, the vote card or the clown.
+local function showLatest(c)
+  if c.kind == "vote" then
+    if vote and not vote.closed then enterVote() end
+  elseif c.kind == "clown" then
+    setPhase("clown")
+  else
+    showWireCard(c, true)
+  end
+end
+
 local function openViewer()
   if not frame then build() end
   role, view = "viewer", follow.view
@@ -341,7 +554,7 @@ local function openViewer()
     or "TwizCrew Awards: " .. ns.Util.safeText(follow.presenter) .. "'s show")
   cards, classes, index = {}, {}, 0
   open = true
-  if follow.latest then showWireCard(follow.latest, true) else setPhase("loading") end
+  if follow.latest then showLatest(follow.latest) else setPhase("loading") end
   if frame.EnableKeyboard then frame:EnableKeyboard(true) end
   frame:Show()
 end
@@ -356,6 +569,7 @@ local function onStart(sender, f)
   if not crewShowOn() or not known(sender) then return end
   if not frame then build() end -- its PLAYER_REGEN_ENABLED handler ends a wait in a fight
   follow = { id = f.id, presenter = sender, view = f.v == "all" and "all" or "session" }
+  vote = nil
   cardSerial = cardSerial + 1
   idleClock()
   if inCombat() then
@@ -387,18 +601,81 @@ local function onEnd(sender, f)
   if fromPresenter(sender, f) then Show.close() end
 end
 
+-- Remembers what to show next; true when it can be drawn now (not waiting out a fight).
+local function latest(c)
+  cardSerial = cardSerial + 1
+  idleClock()
+  follow.latest = c
+  if follow.waiting or inCombat() then
+    follow.waiting = true -- drawn when the fight is over
+    return false
+  end
+  return true
+end
+
+local function onVoteStart(sender, f)
+  if not fromPresenter(sender, f) or vote then return end -- one vote per show
+  local v = ns.ShowLogic.voteFromWire(f)
+  if not v then return end
+  vote = newVote(v.candidates, v.seconds, true)
+  if latest({ kind = "vote" }) then enterVote() end
+end
+
+-- Names from the wire, cleaned like the candidates a viewer got (ShowLogic names).
+local function wireName(s)
+  if type(s) ~= "string" then return nil end
+  return ns.Util.truncateUTF8(ns.Util.safeText(s), 24)
+end
+
+local function onBallot(sender, f)
+  if not vote or type(f) ~= "table" or f.id == nil or f.id ~= showIdNow() or not known(sender) then return end
+  if vote.escaped then
+    countVote(wireName(sender), wireName(f.c))
+  else
+    countVote(sender, f.c)
+  end
+end
+
+local function onResult(sender, f)
+  if not fromPresenter(sender, f) or not vote or vote.closed then return end
+  local r = ns.ShowLogic.resultFromWire(f)
+  if not r then return end
+  if r.skip then -- the presenter's end card follows
+    vote.closed = true
+    return
+  end
+  reveal(r.names, r.n, false)
+  if latest({ kind = "clown" }) then setPhase("clown") end
+end
+
 ns.Comm.on("AWS", function(s, f) ns.Log.safe(FEATURE, onStart, s, f) end)
 ns.Comm.on("AWC", function(s, f) ns.Log.safe(FEATURE, onCard, s, f) end)
 ns.Comm.on("AWX", function(s, f) ns.Log.safe(FEATURE, onEnd, s, f) end)
+ns.Comm.on("AWV", function(s, f) ns.Log.safe(FEATURE, onVoteStart, s, f) end)
+ns.Comm.on("AWB", function(s, f) ns.Log.safe(FEATURE, onBallot, s, f) end)
+ns.Comm.on("AWR", function(s, f) ns.Log.safe(FEATURE, onResult, s, f) end)
 
--- The fight is over: a viewer who waited opens (or redraws) at the latest card's reveal.
-function Show.fightOver()
-  if not follow or not follow.waiting or inCombat() then return end
+local FIGHT_RETRIES = 5
+
+-- The fight is over: a viewer who waited opens (or redraws) at the latest thing the presenter sent. The event can
+-- come a moment before the game stops saying "in combat": then it tries again each second, a few times.
+function Show.fightOver(tries)
+  if not follow or not follow.waiting then return end
+  if inCombat() then
+    tries = (tries or 0) + 1
+    local waiting = follow
+    if tries <= FIGHT_RETRIES then
+      C_Timer.After(1, function()
+        ns.Log.safe(FEATURE, function() if follow == waiting then Show.fightOver(tries) end end)
+      end)
+    end
+    return
+  end
   follow.waiting = false
   if not open then
     openViewer()
   elseif follow.latest then
-    showWireCard(follow.latest, true)
+    showLatest(follow.latest)
   end
 end
 
@@ -436,6 +713,7 @@ function Show.start(v)
   if showId then send("AWX", { id = showId }) end -- started again over a show the crew is following
   showId = nil
   follow = nil -- I was watching a friend's show: mine replaces it
+  vote = nil
   role = "presenter"
   cardSerial = cardSerial + 1 -- the old show's idle clock must not close this one
   open = true
@@ -456,6 +734,7 @@ function Show.close()
   open = false
   follow = nil
   role = nil
+  vote = nil
   generation = generation + 1
   cardSerial = cardSerial + 1
   phase = nil
@@ -466,8 +745,9 @@ function Show.close()
   if frame and wasOpen then frame:Hide() end
 end
 
--- Click or Space: before the reveal jump to it, at the reveal (or the "nobody" card) go on, at the end close.
--- A viewer's click only closes the end card.
+-- Click or Space: before the reveal jump to it, at the reveal (or the "nobody" card) go on (after the last award:
+-- the vote, when there is one), at the clown go to the end card, at the end close. The vote card only takes its
+-- buttons. A viewer's click only closes the end card.
 function Show.next()
   if not open then return end
   if role == "viewer" then
@@ -478,10 +758,46 @@ function Show.next()
     setPhase("reveal")
     sendCard(true)
   elseif phase == "reveal" or phase == "nobody" then
-    showCard(index + 1)
+    local nextIndex = index + 1
+    local c = cards[nextIndex]
+    if not vote and (not c or c.kind == "end") and startVote(nextIndex) then return end
+    showCard(nextIndex)
+  elseif phase == "clown" then
+    showCard(vote and vote.endIndex or index + 1)
   elseif phase == "end" then
     Show.close()
   end
+end
+
+-- A vote button: my vote, once (the presenter counts it at once; it is also sent so every screen counts it).
+function Show.vote(name)
+  if not open or phase ~= "vote" or not vote or vote.closed or vote.mine or not vote.me then return end
+  if type(name) ~= "string" or name == vote.me or not vote.isCandidate[name] then return end
+  vote.mine = name
+  send("AWB", { id = showIdNow(), c = name })
+  countVote(vote.me, name)
+  if phase == "vote" then draw() end
+end
+
+-- The presenter's Skip: no clown tonight, straight to the end card.
+function Show.skipVote()
+  if role ~= "presenter" or phase ~= "vote" or not vote or vote.closed then return end
+  vote.closed = true
+  send("AWR", { id = showId, k = "skip" })
+  showCard(vote.endIndex)
+end
+
+-- Tests: clicks the shown vote button with this name (or "Skip"); false when there is none.
+function Show.pressForTest(label)
+  local target
+  if label == "Skip" then
+    target = skipShown and skipButton or nil
+  else
+    for i, b in ipairs(buttons) do if onButton[i] == label then target = b end end
+  end
+  if not target then return false end
+  target:GetScript("OnClick")(target)
+  return true
 end
 
 function Show.stateForTest()
@@ -489,7 +805,17 @@ function Show.stateForTest()
   local a = c and c.award
   local s = { phase = phase, index = index, count = #cards, winners = {}, role = role, header = headerText,
     hint = hintText, line = lineText, number = numberText, more = c and c.more or nil }
-  if phase == "loading" then
+  if phase == "vote" and vote then
+    s.title, s.voted, s.picked, s.skip, s.buttons = VOTE_TITLE, votedText(), vote.mine, skipShown, {}
+    for i = 1, MAX_BUTTONS do
+      if onButton[i] then s.buttons[#s.buttons + 1] = onButton[i] end
+    end
+    s.left = secondsLeft()
+  elseif phase == "clown" then
+    local r = vote and vote.result or { names = {}, n = 0 }
+    s.title = #r.names == 0 and ns.ShowLogic.clownLine(r.names, r.n) or ns.ShowLogic.CLOWN_TITLE
+    s.text = ns.ShowLogic.clownLine(r.names, r.n)
+  elseif phase == "loading" then
     s.title, s.text = LOADING, LOADING
   elseif phase == "nobody" then
     s.title, s.text = NOBODY, NOBODY

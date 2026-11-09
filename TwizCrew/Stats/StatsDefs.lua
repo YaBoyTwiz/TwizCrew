@@ -178,3 +178,15 @@ ns.StatsDefs.AWARDS = {
     icon = "Interface\\Icons\\Spell_Holy_Resurrection",
     info = "Brought the most people back to life.", joke = "The crew's favorite sight after a wipe." },
 }
+
+-- Trophies that are not awards on the board: the crew's Clown of the Night vote (awards show, part 3).
+ns.StatsDefs.EXTRA_TROPHIES = {
+  { id = "clown", name = "Clown of the Night", icon = "Interface\\Icons\\INV_Misc_Bandana_03" },
+}
+
+-- The award or extra trophy with this id, or nil.
+function ns.StatsDefs.trophyDef(id)
+  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
+  for _, d in ipairs(ns.StatsDefs.EXTRA_TROPHIES) do if d.id == id then return d end end
+  return nil
+end

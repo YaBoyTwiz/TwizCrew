@@ -78,9 +78,7 @@ end
 
 BoardLogic.TROPHY_TAB = { id = "trophies", label = "Trophies", name = "Trophies" }
 
-local function awardDef(id)
-  for _, d in ipairs(ns.StatsDefs.AWARDS) do if d.id == id then return d end end
-end
+local function awardDef(id) return ns.StatsDefs.trophyDef(id) end -- awards and extra trophies
 
 -- One row per person with trophies: "7 trophies", their top awards by count, a tooltip with every award and streak.
 local function trophyRows(summary, ctx)

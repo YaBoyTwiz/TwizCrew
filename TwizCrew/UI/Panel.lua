@@ -25,7 +25,7 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
-  "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED" }
+  "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED" }
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
 local ARROW_SIZE = 26 -- big enough to read at a glance
 
@@ -142,7 +142,7 @@ local function computeTitles(view, sid)
 end
 
 -- titleOf(name) for the row models (nil = no titles). Cached until STATS_CHANGED, SESSION_CHANGED, a stats
--- setting change, a settings reset or a module switch.
+-- setting change, a settings reset, a module switch or a new Clown of the Night (CLOWN_CHANGED).
 local function titleOf()
   if not statsOn() then return nil end
   local view = ns.Modules.setting("stats", "titles")
@@ -151,11 +151,19 @@ local function titleOf()
   local sid = session and session.id
   local c = titleCache
   if not c or c.view ~= view or c.sid ~= sid then
-    c = { view = view, sid = sid, titles = computeTitles(view, sid) }
+    c = { view = view, sid = sid, titles = computeTitles(view, sid), clowns = {} }
+    -- the Clown of the Night (voted in the awards show) beats award titles until the next vote
+    local clown = ns.db and type(ns.db.stats) == "table" and ns.db.stats.clown
+    if type(clown) == "table" and type(clown.names) == "table" then
+      for _, name in ipairs(clown.names) do if type(name) == "string" then c.clowns[name] = true end end
+    end
     titleCache = c
   end
-  local titles = c.titles
-  return function(name) return titles[name] end
+  local titles, clowns = c.titles, c.clowns
+  return function(name)
+    if clowns[name] then return ns.ShowLogic.CLOWN_TITLE end
+    return titles[name]
+  end
 end
 
 local function inDungeon()
@@ -1664,7 +1672,7 @@ local function onEnable()
   if type(UnitAffectingCombat) == "function" then ok, fighting = pcall(UnitAffectingCombat, "player") end
   inCombat = ok and fighting and true or false
   titleCache = nil
-  for _, name in ipairs({ "STATS_CHANGED", "SESSION_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED" }) do
+  for _, name in ipairs({ "STATS_CHANGED", "SESSION_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "CLOWN_CHANGED" }) do
     ns.Bus.on(FEATURE, name, forgetTitles)
   end
   ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) if id == "stats" then forgetTitles() end end)

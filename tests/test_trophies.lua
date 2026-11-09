@@ -213,7 +213,7 @@ return {
         if msg and msg.type == "TRD" then r = msg.fields.r end
       end
       A.ok(r, "a digest was sent")
-      A.ok(#r <= 200, "at most 200 characters, got " .. #(r or ""))
+      A.eq(#ns.Codec.encode("TRD", { r = r }), 1, "one piece")
       A.ok(r:find("Averyveryverylongcharactername-1000000012", 1, true) == 1, "newest first")
       A.no(r:find("1000000001", 1, true), "the oldest are dropped")
       for sid in r:gmatch("[^,]+") do A.ok(recs[sid], "whole ids only: " .. sid) end
@@ -262,12 +262,15 @@ return {
     end,
     late_records_travel_marked = function(ns, A)
       local L = ns.TrophyLogic
-      local r = { sid = "Twiz-1000", start = 1000, people = { "Lurabe", "Twiz" }, winners = {}, late = true }
+      local r = { sid = "Twiz-1000", start = 1000, people = { "Lurabe", "Twiz" }, winners = {}, late = true,
+        e = 1731100500 }
       local f = L.toWire(r)
       A.eq(f.l, "1")
+      A.eq(f.e, "1731100500")
       A.eq(L.fromPieces(f), r)
-      r.late = nil
+      r.late, r.e = nil, nil
       A.eq(L.toWire(r).l, nil, "a full record has no l")
+      A.eq(L.toWire(r).e, nil, "nor e")
       A.eq(L.fromPieces(L.toWire(r)).late, nil)
     end,
     a_full_record_replaces_a_late_one = function(ns, A, W)
@@ -300,7 +303,8 @@ return {
           lk = "", ins = "0" })
       end
       local recs = ns.Trophies.records()
-      recs["Lurabe-500"] = { sid = "Lurabe-500", start = 500, people = { "Lurabe", "Twiz" }, winners = {}, late = true }
+      recs["Lurabe-500"] = { sid = "Lurabe-500", start = 500, people = { "Lurabe", "Twiz" }, winners = {}, late = true,
+        e = 100 }
       recs["Lurabe-400"] = { sid = "Lurabe-400", start = 400, people = { "Lurabe", "Twiz" }, winners = {} }
       local function asks(fn)
         local mark = #W.sent
@@ -313,8 +317,9 @@ return {
         end
         return out
       end
-      -- a friend whose copy is late too: no point asking
-      A.eq(asks(function() receive(W, ns, "Ginkan", "TRD", { r = "Lurabe-500,Lurabe-400", l = "Lurabe-500" }) end), {})
+      -- a friend whose copy is late too and no fresher: no point asking
+      A.eq(asks(function() receive(W, ns, "Ginkan", "TRD", { r = "Lurabe-500*100,Lurabe-400" }) end), {}, "same e")
+      A.eq(asks(function() receive(W, ns, "Ginkan", "TRD", { r = "Lurabe-500*50,Lurabe-400" }) end), {}, "older")
       A.eq(asks(function() receive(W, ns, "Lurabe", "TRD", { r = "Lurabe-500,Lurabe-400" }) end), { "Lurabe-500" },
         "late: asked; full: not")
       A.eq(asks(function() receive(W, ns, "Lurabe", "TRD", { r = "Lurabe-500,Lurabe-400" }) end), {}, "ask gap")
@@ -322,12 +327,12 @@ return {
       local mark = #W.sent
       ns.Trophies.sendDigest()
       W:advance(3)
-      local l
+      local r
       for i = mark + 1, #W.sent do
         local msg = ns.Codec.decode(W.sent[i].text)
-        if msg and msg.type == "TRD" then l = msg.fields.l end
+        if msg and msg.type == "TRD" then r = msg.fields.r end
       end
-      A.eq(l, "Lurabe-500")
+      A.eq(r, "Lurabe-500*100,Lurabe-400")
     end,
     the_digest_asks_for_three_at_a_time = function(ns, A, W)
       boot(W)
@@ -389,6 +394,162 @@ return {
         { id = "Other-2", start = 2, manual = false }, true)
       A.ok(ns.Trophies.records()[sid], "recorded before the wipe")
       A.eq(ns.StatsStore.get("session", "dt"), 0)
+    end,
+    ten_late_sessions_still_make_a_one_piece_digest = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      receive(W, ns, "Lurabe", "STATE", { ver = "0.1.22", cl = "MAGE", lv = "20", zn = "Elwynn Forest", sz = "",
+        lk = "", ins = "0" })
+      local recs = ns.Trophies.records()
+      for i = 1, 10 do
+        local sid = string.format("Lurabe-17311000%02d", i)
+        recs[sid] = { sid = sid, start = 1731100000 + i, people = { "Lurabe", "Twiz" }, winners = {}, late = true,
+          e = 1731109000 + i }
+      end
+      local mark = #W.sent
+      ns.Trophies.sendDigest()
+      W:advance(3)
+      local digests = {}
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "TRD" then digests[#digests + 1] = msg.fields end
+      end
+      A.eq(#digests, 1, "one message on the wire")
+      local fields = digests[1]
+      A.eq(#ns.Codec.encode("TRD", fields), 1, "exactly one piece")
+      A.ok(fields.r:find("Lurabe-1731100010*1731109010", 1, true) == 1, "newest first, with its e")
+      for _, x in ipairs(ns.TrophyLogic.parseDigest(fields.r)) do
+        A.ok(recs[x.sid] and x.late and x.e == recs[x.sid].e, "whole entries only: " .. x.sid)
+      end
+      -- a friend holding the same records (same freshness) sends it: nothing to ask
+      mark = #W.sent
+      receive(W, ns, "Lurabe", "TRD", fields)
+      W:advance(3)
+      for i = mark + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        A.ok(not (msg and msg.type == "TRQ"), "asked for " .. tostring(msg and msg.fields.s))
+      end
+    end,
+    the_digest_skips_malformed_entries = function(ns, A)
+      A.eq(ns.TrophyLogic.parseDigest("a-1,*5,b-2*,c-3*x,d-4*7,e*f*9"),
+        { { sid = "a-1" }, { sid = "d-4", late = true, e = 7 } })
+    end,
+    the_fresher_late_record_wins = function(ns, A)
+      local L = ns.TrophyLogic
+      local function rec(late, e, n)
+        local people = { "Ginkan", "Lurabe", "Twiz" }
+        for i = n + 1, 3 do people[i] = nil end
+        return { sid = "x-1", start = 1, people = people, winners = {}, late = late or nil, e = e }
+      end
+      A.ok(L.better(rec(true, 100, 3), rec(true, 200, 2)), "late vs late: higher e wins, even with fewer people")
+      A.no(L.better(rec(true, 200, 2), rec(true, 100, 3)), "lower e never wins")
+      A.no(L.better(rec(true, 100, 2), rec(true, 100, 2)), "same e, same people: keep mine")
+      A.ok(L.better(rec(true, 100, 2), rec(true, 100, 3)), "same e: more people wins")
+      A.ok(L.better(rec(true, 900, 3), rec(false, nil, 2)), "full beats late regardless of people or e")
+      A.no(L.better(rec(false, nil, 2), rec(true, 900, 3)), "late never beats full")
+      A.ok(L.better(rec(false, nil, 2), rec(false, nil, 3)), "full vs full: more people")
+      A.no(L.better(rec(false, nil, 3), rec(false, nil, 3)), "full vs full tie: keep mine")
+    end,
+    two_copies_with_late_records_settle_on_the_fresher = function(ns, A, W, H)
+      local tw, twNs = H.client("Twiz", { class = "DRUID" })
+      local lu, luNs = H.client("Lurabe", { class = "MAGE" })
+      H.link(tw, lu)
+      for _, X in ipairs({ tw, lu }) do
+        X:fire("ADDON_LOADED", "TwizCrew"); X:fire("PLAYER_LOGIN"); X:fire("PLAYER_ENTERING_WORLD")
+      end
+      H.advance(90)
+      local SID = "Ginkan-1731100000"
+      local function late(e, winner)
+        return { sid = SID, start = 1731100000, people = { "Ginkan", "Lurabe", "Twiz" },
+          winners = { corpse = { winner } }, late = true, e = e }
+      end
+      local function asks(X, xNs)
+        local n = 0
+        for _, m in ipairs(X.sent) do
+          local msg = xNs.Codec.decode(m.text)
+          if msg and msg.type == "TRQ" then n = n + 1 end
+        end
+        return n
+      end
+      local function exchange()
+        local a, b = asks(tw, twNs), asks(lu, luNs)
+        twNs.Trophies.sendDigest(); luNs.Trophies.sendDigest()
+        H.advance(10)
+        return { asks(tw, twNs) - a, asks(lu, luNs) - b }
+      end
+      -- same e: nobody asks
+      twNs.Trophies.records()[SID] = late(1731105000, "Twiz")
+      luNs.Trophies.records()[SID] = late(1731105000, "Lurabe")
+      A.eq(exchange(), { 0, 0 }, "equal e: no asks")
+      -- Lurabe stayed later: Twiz asks once and takes hers
+      luNs.Trophies.records()[SID] = late(1731107000, "Lurabe")
+      A.eq(exchange(), { 1, 0 }, "only the staler copy asks")
+      A.eq(twNs.Trophies.records()[SID], late(1731107000, "Lurabe"), "Twiz has the fresher one")
+      H.advance(200) -- past the ask gap
+      A.eq(exchange(), { 0, 0 }, "settled: no more asks")
+      -- a full record beats both, whichever copy has it
+      local full = { sid = SID, start = 1731100000, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Twiz" } } }
+      twNs.Trophies.records()[SID] = full
+      A.eq(exchange(), { 0, 1 }, "the late copy asks for the full one")
+      A.eq(luNs.Trophies.records()[SID], full)
+      H.advance(200)
+      A.eq(exchange(), { 0, 0 })
+      A.eq(twNs.Log.errors(10), {})
+      A.eq(luNs.Log.errors(10), {})
+    end,
+    a_late_record_is_as_fresh_as_my_last_moment_in_it = function(ns, A, W)
+      W:fire("ADDON_LOADED", "TwizCrew")
+      local wall = ns.wallclock()
+      local old = "Twiz-" .. (wall - 9000)
+      local left = wall - ns.Config.SESSION_RESUME - 60 -- when I was last in it
+      ns.db.stats = ns.db.stats or {}
+      ns.db.stats.session = { id = old, start = wall - 9000, manual = false, lastActive = left }
+      ns.db.stats.chars = { Twiz = { sid = old, s = { dt = 3, pt = 1900 }, a = { dt = 3, pt = 1900 } } }
+      ns.db.stats.crew = {
+        Lurabe = { sid = old, q = "1", s = { dt = 1, pt = 1900 }, a = { dt = 1, pt = 1900 }, at = left - 500 },
+      }
+      W:fire("PLAYER_LOGIN")
+      W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      local r = ns.Trophies.records()[old]
+      A.ok(r and r.late, "recorded late")
+      A.eq(r and r.e, left, "my last moment in it, not now")
+    end,
+    a_friends_later_numbers_make_it_fresher = function(ns, A, W)
+      W:fire("ADDON_LOADED", "TwizCrew")
+      local wall = ns.wallclock()
+      local old = "Twiz-" .. (wall - 9000)
+      local left = wall - ns.Config.SESSION_RESUME - 600
+      ns.db.stats = ns.db.stats or {}
+      ns.db.stats.session = { id = old, start = wall - 9000, manual = false, lastActive = left }
+      ns.db.stats.chars = { Twiz = { sid = old, s = { dt = 3, pt = 1900 }, a = { dt = 3, pt = 1900 } } }
+      ns.db.stats.crew = {
+        Lurabe = { sid = old, q = "1", s = { dt = 1, pt = 1900 }, a = { dt = 1, pt = 1900 }, at = left + 300 },
+        Ginkan = { sid = old, q = "1", s = { dt = 2, pt = 1900 }, a = { dt = 2, pt = 1900 }, at = left + 100 },
+      }
+      W:fire("PLAYER_LOGIN")
+      W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      local r = ns.Trophies.records()[old]
+      A.eq(r and r.e, left + 300, "Lurabe's numbers are the newest")
+    end,
+    stats_turned_back_on_records_the_missed_end_late = function(ns, A, W)
+      boot(W)
+      W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
+      local sid = ns.Session.current().id
+      W:advance(1900)
+      ns.Stats.count("dt", 3)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "1", s_dt = "1", s_pt = "1900" })
+      ns.Modules.setEnabled("stats", false)
+      ns.Session.newByHand() -- the session moves on while stats are off
+      A.eq(ns.Trophies.records()[sid], nil, "nothing while stats are off")
+      ns.Modules.setEnabled("stats", true)
+      local r = ns.Trophies.records()[sid]
+      A.ok(r, "recorded when stats came back on")
+      A.eq(r and r.late, true)
+      A.eq(r and r.people, { "Lurabe", "Twiz" }, "my numbers were still there")
+      A.eq(ns.StatsStore.get("session", "dt"), 0, "then wiped")
+      A.eq(ns.Log.errors(10), {})
     end,
     steals_need_new_leaders_who_share_nobody = function(ns, A)
       local L, S = ns.TrophyLogic, ns.StatsLogic

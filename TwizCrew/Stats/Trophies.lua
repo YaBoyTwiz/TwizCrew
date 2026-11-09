@@ -1,10 +1,13 @@
 -- Trophy case (Hall of Shame part 2): when a crew session ends, each award's winners get a trophy. Records live in
 -- db.stats.trophies[sid] (kept forever) and are swapped pull-only, like the calendar's diaries:
---   TRD  digest: r = the DIGEST_SIZE newest session ids I have (to everyone now and then, and to a friend coming online),
---        l = those of them whose record is late (saved at a login, maybe from numbers of someone who left early)
---   TRQ  "send me session s" (to one friend whose digest has a session I lack, or have only late and they don't)
---   TRP  one session's record (TrophyLogic.toWire), in pieces merged per sender and session until complete;
---        the first record of a session is kept unless one with more people comes, or it is late and the new one isn't
+--   TRD  digest: r = my newest session ids, newest first, "<sid>" for a full record and "<sid>*<e>" for a late one
+--        (saved at a login from the numbers I had; e = how fresh they are). Always one piece: the oldest are left out.
+--        Sent to everyone now and then, and to a friend coming online.
+--   TRQ  "send me session s" (to one friend whose digest has a record that would replace mine, see below)
+--   TRP  one session's record (TrophyLogic.toWire), in pieces merged per sender and session until complete.
+-- Which record of a session is kept (TrophyLogic.better): full beats late regardless of people; late never beats
+-- full; two late ones: the higher e wins; otherwise strictly more people wins (a tie keeps mine). A digest asks
+-- only for records that would win, so copies never ask each other in a loop.
 -- Runs under the feature id "trophies" (not a module): it follows the stats module (no records while it is off).
 local _, ns = ...
 
@@ -15,7 +18,6 @@ local FEATURE = "trophies"
 local L = ns.TrophyLogic
 
 local DIGEST_SIZE = 10
-local DIGEST_CHARS = 200 -- the digest's r is never longer
 local DIGEST_EVERY = 600 -- seconds between digests to everyone
 local FIRST_DIGEST = 25  -- after login
 local ASK_GAP = 120      -- seconds before asking for the same session again
@@ -42,15 +44,7 @@ local function add(r)
   local t = store()
   if not t or type(r) ~= "table" then return false end
   local old = t[r.sid]
-  if old ~= nil then
-    -- a full record beats a late one; a late one never beats a full one; otherwise more people wins
-    local better
-    if type(old) ~= "table" then better = true
-    elseif old.late and not r.late then better = true
-    elseif r.late and not old.late then better = false
-    else better = type(old.people) == "table" and #r.people > #old.people end
-    if not better then return false end
-  end
+  if old ~= nil and not L.better(old, r) then return false end
   t[r.sid] = r
   cache = nil
   ns.Log.add("info", "trophies: session %s %s (%d people%s)", r.sid, old ~= nil and "replaced" or "recorded",
@@ -59,16 +53,26 @@ local function add(r)
   return true
 end
 
+-- How fresh a late record's numbers are: the newest of my last moment in that session (saved before this login)
+-- and when each friend's numbers were heard. My own entry's at is "now", so it is left out.
+local function freshness(sid, entries)
+  local e = ns.Session and ns.Session.previousLastActive and ns.Session.previousLastActive(sid) or 0
+  for _, x in ipairs(entries) do
+    if not x.mine and type(x.at) == "number" and x.at > e then e = x.at end
+  end
+  return math.floor(e)
+end
+
 -- A session just ended (called by Stats before the session numbers are wiped). late: noticed at login, so my
--- numbers may be from when I left; a friend who stayed can send the full record later.
+-- numbers may be from when I left; a friend who stayed can send a better record later.
 function Trophies.sessionEnded(sid, late)
   if not on() or type(sid) ~= "string" or sid == "" then return end
   local have = Trophies.records()[sid]
-  if have and not (type(have) == "table" and have.late and not late) then return end
+  if type(have) == "table" and not have.late then return end -- a full one is never replaced from here
   local entries = ns.StatsStore.entries("session", sid)
   local r = L.record(sid, entries, ns.StatsLogic.awards(entries), ns.Config.COUCH_MIN_PLAYED)
   if r then
-    r.late = late and true or nil
+    if late then r.late, r.e = true, freshness(sid, entries) end
     add(r)
   end
 end
@@ -105,14 +109,28 @@ local function newest()
     if a.start ~= b.start then return a.start > b.start end
     return a.sid > b.sid
   end)
-  -- newest first; the oldest are left out when the list would grow past DIGEST_CHARS
-  local out, len = {}, -1
-  for i = 1, math.min(DIGEST_SIZE, #list) do
-    len = len + 1 + #list[i].sid
-    if len > DIGEST_CHARS then break end
-    out[i] = list[i].sid
-  end
+  local out = {}
+  for i = 1, math.min(DIGEST_SIZE, #list) do out[i] = list[i].sid end
   return out
+end
+
+-- The whole TRD fits one piece, nothing cut (a cut or split digest would be misread).
+local function onePiece(fields)
+  local out = ns.Codec.encode("TRD", fields)
+  local msg = #out == 1 and ns.Codec.decode(out[1])
+  return msg and msg.fields.r == fields.r or false
+end
+
+-- The digest's fields: newest first, the oldest dropped until it fits one piece. nil when I have none.
+function Trophies.digest()
+  local recs, items = Trophies.records(), {}
+  for _, sid in ipairs(newest()) do items[#items + 1] = L.digestEntry(sid, recs[sid]) end
+  while #items > 0 do
+    local fields = { r = table.concat(items, ",") }
+    if onePiece(fields) then return fields end
+    items[#items] = nil
+  end
+  return nil
 end
 
 local function sendTo(name, msgType, fields, opts)
@@ -125,13 +143,8 @@ end
 
 function Trophies.sendDigest(to)
   if not on() then return end
-  local ids = newest()
-  if #ids == 0 then return end
-  local recs, late = Trophies.records(), {}
-  for _, sid in ipairs(ids) do
-    if type(recs[sid]) == "table" and recs[sid].late then late[#late + 1] = sid end
-  end
-  sendTo(to, "TRD", { r = table.concat(ids, ","), l = #late > 0 and table.concat(late, ",") or nil })
+  local fields = Trophies.digest()
+  if fields then sendTo(to, "TRD", fields) end
 end
 
 local function known(sender)
@@ -142,15 +155,12 @@ end
 local function onDigest(sender, f)
   if not on() or not known(sender) or type(f) ~= "table" or type(f.r) ~= "string" then return end
   local mine = Trophies.records()
-  local theirLate = {}
-  if type(f.l) == "string" then for sid in f.l:gmatch("[^,]+") do theirLate[sid] = true end end
-  local count, asks = 0, 0
-  for sid in f.r:gmatch("[^,]+") do -- newest first
-    count = count + 1
-    if count > DIGEST_SIZE or asks >= ASKS_PER_DIGEST then break end
-    local have = mine[sid]
-    -- one I lack, or have only late while theirs is full
-    local want = have == nil or (type(have) == "table" and have.late and not theirLate[sid])
+  local asks = 0
+  for i, x in ipairs(L.parseDigest(f.r)) do -- newest first
+    if i > DIGEST_SIZE or asks >= ASKS_PER_DIGEST then break end
+    local sid, have = x.sid, mine[x.sid]
+    -- only when theirs would replace mine: I lack it, mine is late and theirs full, or both late and theirs fresher
+    local want = type(have) ~= "table" or (have.late and (not x.late or x.e > (tonumber(have.e) or 0)))
     if want and (not askedAt[sid] or ns.now() - askedAt[sid] >= ASK_GAP) then
       askedAt[sid] = ns.now()
       asks = asks + 1
@@ -166,7 +176,7 @@ local function onAsk(sender, f)
   local key = f.s .. ">" .. sender
   if sentAt[key] and ns.now() - sentAt[key] < SEND_GAP then return end
   sentAt[key] = ns.now()
-  sendTo(sender, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l" } })
+  sendTo(sender, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l", "e" } })
 end
 
 local function onRecord(sender, f)

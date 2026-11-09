@@ -1072,8 +1072,6 @@ function Panel.toolItems()
       checked = function() return rank("auto") and true or false end, onClick = flipRank("auto") } or nil,
     ns.RankUp and { label = "...with its own button on screen", icon = "Interface\\Icons\\INV_Misc_Rune_01",
       checked = function() return rank("showButton") and true or false end, onClick = flipRank("showButton") } or nil,
-    ns.SpellHelpers and { label = "Spell helpers (ranks, smart target)", icon = "Interface\\Icons\\Spell_Holy_HealingFocus",
-      onClick = function() ns.SpellHelpers.toggle() end } or nil,
     ns.Calendar and { label = "Crew calendar", icon = "Interface\\Icons\\INV_Scroll_03",
       onClick = function() ns.Calendar.toggle() end } or nil,
     ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",

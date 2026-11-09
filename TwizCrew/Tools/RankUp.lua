@@ -141,12 +141,7 @@ function RankUp.update(quiet)
     if quiet then pendingAuto = true else say("can't change your bars during a fight. Try again after it.") end
     return 0
   end
-  -- spells set to keep their rank (Spell helpers: "Newest rank" off) are left alone
-  local slots = {}
-  for _, s in ipairs(barSpells()) do
-    if not (ns.SpellHelpers and ns.SpellHelpers.keepsRank(s.name)) then slots[#slots + 1] = s end
-  end
-  local todo = RankUp.plan(slots, RankUp.bestRanks())
+  local todo = RankUp.plan(barSpells(), RankUp.bestRanks())
   local changed, failed = {}, 0
   for _, c in ipairs(todo) do
     if place(c.slot, c.id) then

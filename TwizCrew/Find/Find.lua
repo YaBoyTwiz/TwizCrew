@@ -292,7 +292,8 @@ local function onOnline(name)
 end
 
 -------------------------------------------------------------------------------------------------- running off
--- A group member who was right next to you and suddenly isn't: their arrow flashes red, a pop-up and a sound.
+-- A group member who was right next to you and suddenly isn't: their arrow flashes red and a pop-up shows (no sound).
+-- When we are the one who left, RAN_OFF fires instead (the stats count it for Wanderer).
 local runTracks, runUntil, selfTracks = {}, {}, {}
 
 function Find.isRunningOff(name)

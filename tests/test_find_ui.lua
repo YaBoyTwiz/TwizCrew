@@ -144,6 +144,8 @@ return {
       group(W)
       friend(ns, W, "Frostie")
       W.state.missing.UnitPosition = nil
+      local ran = {}
+      ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" }) -- 10 yards: right next to us
       W:advance(1.1)
       local played = {}
@@ -151,6 +153,7 @@ return {
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" }) -- 140 yards away a few seconds later
       W:advance(3)
       A.ok(ns.Find.isRunningOff("Frostie"), "running off")
+      A.eq(ran, {}, "RAN_OFF is only for us running off")
       A.eq(played, {}, "no sound (owner 2026-11-08: the flashing and the pop-up are enough)")
       local t = ns.Popups.textsForTest()
       A.eq(t[#t].text, "Frostie is running off!")
@@ -177,10 +180,28 @@ return {
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
       W:advance(3)
       A.eq(ran, { "Frostie" })
-      A.no(ns.Find.isRunningOff("Frostie"), "no alarm about Frostie: we moved, not them")
       A.eq(ns.StatsStore.get("session", "wd"), 1)
       W:advance(10)
       A.eq(ns.StatsStore.get("session", "wd"), 1, "once, until we're close again")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    walking_away_gives_no_alarm_about_them = function(ns, A, W)
+      boot(W)
+      group(W)
+      friend(ns, W, "Frostie")
+      local ran = {}
+      ns.Bus.on("test", "RAN_OFF", function(name) ran[#ran + 1] = name end)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(1.1)
+      local before = #ns.Popups.textsForTest()
+      W.state.map.y = 0.57 -- we walk away; Frostie stays
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(3)
+      A.eq(ran, { "Frostie" })
+      A.no(ns.Find.isRunningOff("Frostie"), "we moved, not them")
+      local t = ns.Popups.textsForTest()
+      for i = before + 1, #t do A.no(tostring(t[i].text):find("is running off!", 1, true), "no pop-up") end
       A.eq(ns.Log.errors(10), {})
     end,
 

@@ -202,14 +202,20 @@ end
 
 -- XP gained between two readings { level, xp, max }: the same level, or one ding (the rest of the old level plus
 -- the new xp). Anything else (first reading, several levels at once, odd numbers) is 0.
+-- Second result "settled": false when level and xp were read a tick apart (xp down at the same level, or a new
+-- level with the old xp); count 0 and keep the old baseline until the other one catches up.
 function L.xpGained(prev, cur)
-  if type(prev) ~= "table" or type(cur) ~= "table" then return 0 end
-  if not (isNumber(prev.level) and isNumber(prev.xp) and isNumber(cur.level) and isNumber(cur.xp)) then return 0 end
-  if cur.level == prev.level then return math.max(0, cur.xp - prev.xp) end
-  if cur.level == prev.level + 1 and isNumber(prev.max) and prev.max >= prev.xp then
-    return (prev.max - prev.xp) + math.max(0, cur.xp)
+  if type(prev) ~= "table" or type(cur) ~= "table" then return 0, true end
+  if not (isNumber(prev.level) and isNumber(prev.xp) and isNumber(cur.level) and isNumber(cur.xp)) then return 0, true end
+  if cur.level == prev.level then
+    if cur.xp < prev.xp then return 0, false end
+    return cur.xp - prev.xp, true
   end
-  return 0
+  if cur.level == prev.level + 1 and isNumber(prev.max) and prev.max >= prev.xp then
+    if cur.xp == prev.xp then return 0, false end
+    return (prev.max - prev.xp) + math.max(0, cur.xp), true
+  end
+  return 0, true
 end
 
 function L.isPull(me, members)

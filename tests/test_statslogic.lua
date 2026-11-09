@@ -305,6 +305,24 @@ return {
       A.eq(L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 11, xp = 50, max = 1200 }), 150, "the ding")
       A.eq(L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 10, xp = 100, max = 1000 }), 0, "never minus")
       A.eq(L.xpGained(nil, { level = 10, xp = 1, max = 1000 }), 0, "the first reading")
+      -- level and xp read a tick apart: wait, then count once
+      local function run(readings)
+        local base, total = readings[1], 0
+        for i = 2, #readings do
+          local g, settled = L.xpGained(base, readings[i])
+          total = total + g
+          if settled then base = readings[i] end
+        end
+        return total
+      end
+      A.eq(run({ { level = 10, xp = 900, max = 1000 }, { level = 11, xp = 900, max = 1200 },
+        { level = 11, xp = 50, max = 1200 } }), 150, "level first, xp later")
+      A.eq(run({ { level = 10, xp = 900, max = 1000 }, { level = 10, xp = 50, max = 1000 },
+        { level = 11, xp = 50, max = 1200 } }), 150, "xp first, level later")
+      local _, s1 = L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 11, xp = 900, max = 1200 })
+      local _, s2 = L.xpGained({ level = 10, xp = 900, max = 1000 }, { level = 10, xp = 50, max = 1000 })
+      A.no(s1, "unsettled: new level, old xp")
+      A.no(s2, "unsettled: xp down, same level")
       A.eq(L.xpGained({ level = 10, xp = 1, max = 1000 }, { level = 13, xp = 1, max = 2000 }), 0, "a jump: unknown")
     end,
 

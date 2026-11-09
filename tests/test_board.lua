@@ -81,7 +81,7 @@ return {
     end,
 
     tabs_show_one_category_at_a_time = function(ns, A)
-      local list = { { name = "Twiz", stats = { dt = 3, gn = 14 } } }
+      local list = { { name = "Twiz", stats = { dt = 3, gn = 14, pt = 1800 } } }
       local m = model(ns, "session", list)
       A.eq(#m.tabs, 5)
       A.eq(m.tabs[1], { id = "deaths", label = "Deaths", active = true })

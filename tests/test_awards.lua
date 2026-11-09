@@ -50,6 +50,7 @@ return {
       hello(W, ns, "Frostie")
       receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_rz = "2", a_rz = "2" })
       ns.Stats.count("dt", 7)
+      ns.Stats.count("pt", ns.Config.COUCH_MIN_PLAYED) -- 30 minutes played: Pauper takes part
       local mark = #W.sent
       ns.AwardsShow.start("session")
       A.ok(ns.AwardsShow.isOpen())
@@ -123,6 +124,11 @@ return {
 
     pauper_card_when_only_gold_is_known = function(ns, A, W)
       start(ns, W)
+      ns.AwardsShow.start("session")
+      W:advance(5)
+      A.eq(state(ns).phase, "nobody", "under 30 minutes played: no Pauper yet")
+      ns.AwardsShow.close()
+      ns.Stats.count("pt", ns.Config.COUCH_MIN_PLAYED)
       ns.AwardsShow.start("session")
       W:advance(5)
       local s = state(ns)
@@ -236,6 +242,7 @@ return {
       local S = ns.Session.current().id
       hello(W, ns, "Ho|ly")
       receive(W, ns, "Ho|ly", "STATS", { sid = S, q = "1", s_dt = "4", a_dt = "4" })
+      ns.Stats.count("pt", ns.Config.COUCH_MIN_PLAYED) -- Pauper takes part: the card after Corpse
       ns.AwardsShow.start("session")
       W:advance(5)
       local f = named.TwizCrewAwards

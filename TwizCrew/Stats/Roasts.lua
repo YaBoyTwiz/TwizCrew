@@ -360,16 +360,25 @@ end
 -- The Mock button: returns the text sent, or nil (too soon, nothing in the rotation, or not allowed).
 function Roasts.mock(target)
   if not Roasts.canMock(target) then return nil end
-  if not mockLimit:allow(target, ns.now()) then return nil end
+  if not mockLimit:ready(target, ns.now()) then return nil end
   local info = Roasts.mockInfo(target)
   local text
   for _ = 1, #Roasts.rotation() do -- skip lines that need something we don't know about them
     local line = nextLine()
-    if not line then return nil end
+    if not line then break end
     local t = cleanLine(Roasts.mockText(line, target, ns.playerName(), info))
     if t and not t:find("{%a+}") then text = t break end
   end
+  if not text then -- "only my own" left nothing usable: a built-in line instead
+    local lines = Roasts.MOCK_LINES
+    local start = math.random(#lines)
+    for i = 0, #lines - 1 do
+      local t = cleanLine(Roasts.mockText(lines[(start + i - 1) % #lines + 1], target, ns.playerName(), info))
+      if t and not t:find("{%a+}") then text = t break end
+    end
+  end
   if not text then return nil end
+  mockLimit:allow(target, ns.now()) -- the 10 s wait starts only now that a line was found
   local fields = { t = target, x = text }
   ns.Comm.send("MOCK", fields)
   showMock(ns.playerName(), fields)

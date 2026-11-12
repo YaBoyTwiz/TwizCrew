@@ -138,6 +138,10 @@ local function onAddon(prefix, text, chatType, sender)
     ns.Log.debug("ignored message from %s (%s)", sender, tostring(why))
     return
   end
+  if msg.protocol > ns.Config.PROTOCOL then
+    ns.Log.count("recv newer protocol")
+    return
+  end
   ns.Log.count("recv " .. tostring(msg.type))
   if ns.Log.chatDebug then ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType)) end
   ns.Log.safe(FEATURE, ns.Transport.heardFrom, raw, chatType)

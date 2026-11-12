@@ -194,6 +194,18 @@ return {
       near(A, get(ns, "session", "pt") - spt0, 70, 0.6, "played this session")
     end,
 
+    afk_time_counts_the_away_button_too = function(ns, A, W)
+      start(ns, W)
+      local af0 = get(ns, "all", "af") or 0
+      ns.Away.toggle() -- the AFK button: TwizCrew's own away state, the game's flag stays off
+      A.no(W.state.afk, "the game's AFK flag is not set")
+      W:advance(60)
+      near(A, (get(ns, "all", "af") or 0) - af0, 60, 0.6, "away via the button")
+      ns.Away.toggle()
+      W:advance(10)
+      near(A, (get(ns, "all", "af") or 0) - af0, 60, 0.6, "back: stops counting")
+    end,
+
     fall_death_counts = function(ns, A, W)
       local roasts = start(ns, W)
       W.state.falling = true

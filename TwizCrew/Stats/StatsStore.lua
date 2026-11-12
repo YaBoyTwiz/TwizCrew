@@ -51,13 +51,18 @@ function Store.add(key, n)
   if not KNOWN[key] or not isNumber(n) or n <= 0 then return end
   local rec = Store.mine()
   if not rec then return end
-  for _, t in ipairs({ rec.s, rec.a }) do
-    local cur = t[key]
-    if Defs.MIN_KEYS[key] then
-      if not isNumber(cur) or cur <= 0 or n < cur then t[key] = n end
-    else
-      t[key] = (isNumber(cur) and cur or 0) + n
-    end
+  local s, a = rec.s, rec.a -- both views, written out (no table per call)
+  local cur
+  if Defs.MIN_KEYS[key] then
+    cur = s[key]
+    if not isNumber(cur) or cur <= 0 or n < cur then s[key] = n end
+    cur = a[key]
+    if not isNumber(cur) or cur <= 0 or n < cur then a[key] = n end
+  else
+    cur = s[key]
+    s[key] = (isNumber(cur) and cur or 0) + n
+    cur = a[key]
+    a[key] = (isNumber(cur) and cur or 0) + n
   end
   if not Defs.TIME_KEYS[key] then isDirty = true end
 end

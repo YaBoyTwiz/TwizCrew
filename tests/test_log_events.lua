@@ -80,6 +80,29 @@ return {
       local f, err = ns.Log.safe("x", error, "bad")
       A.no(f); A.contains(err, "bad")
     end,
+    safe_with_the_games_xpcall_passes_arguments_on = function(ns, A, W)
+      -- The game's xpcall forwards extra arguments; plain Lua 5.1's does not. Load Log.lua again where it does.
+      local plainXpcall = xpcall
+      W.env.xpcall = function(f, handler, ...)
+        local args, count = { ... }, select("#", ...)
+        return plainXpcall(function() return f(unpack(args, 1, count)) end, handler)
+      end
+      local chunk = assert(loadfile("TwizCrew/Core/Log.lua"))
+      setfenv(chunk, W.env)
+      chunk("TwizCrew", ns)
+      local got = { ns.Log.safe("x", function(...) return ... end, 1, nil, 3) }
+      A.eq(select("#", ns.Log.safe("x", function() return 1, nil, 3 end)), 4, "true, 1, nil, 3")
+      A.ok(got[1]); A.eq(got[2], 1); A.eq(got[3], nil); A.eq(got[4], 3)
+      local seen
+      ns.Log.safe("x", function(a, b, c) seen = { a, b, c } end, "p", "q", "r")
+      A.eq(seen, { "p", "q", "r" }, "arguments reach the function")
+      local ok, err = ns.Log.safe("games", function() error("kaboom", 0) end)
+      A.eq(ok, false)
+      A.eq(err, "kaboom")
+      local last = ns.Log.lines()[#ns.Log.lines()]
+      A.contains(last, "ERROR")
+      A.contains(last, "games: kaboom")
+    end,
     count_and_counts = function(ns, A)
       ns.Log.count("a"); ns.Log.count("a"); ns.Log.count("b")
       A.eq(ns.Log.counts(), { a = 2, b = 1 })

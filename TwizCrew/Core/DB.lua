@@ -4,6 +4,10 @@ local ADDON, ns = ...
 local DB = {}
 ns.DB = DB
 
+-- Module ids that no longer exist: their saved settings are deleted. Any other unknown id is kept (a file that
+-- failed to load must not cost its module's settings).
+local REMOVED = { spellhelp = true }
+
 local function moduleDefaults(def)
   return { enabled = def.defaultEnabled ~= false, settings = ns.Util.copy(def.defaults or {}) }
 end
@@ -25,16 +29,12 @@ function DB.init(saved, defs)
     update = {}, -- the newest version a friend told us about (Update reminders); not a setting
     updateNotice = {}, -- { shown = newest version an update pop-up was shown for }: once per version; not a setting
   })
-  local known = {}
   for _, def in ipairs(defs or {}) do
-    known[def.id] = true
     local e = db.modules[def.id]
     if type(e) ~= "table" then e = {}; db.modules[def.id] = e end
     ns.Util.mergeDefaults(e, moduleDefaults(def))
   end
-  for id in pairs(db.modules) do
-    if not known[id] then db.modules[id] = nil end
-  end
+  for id in pairs(REMOVED) do db.modules[id] = nil end
   return db
 end
 

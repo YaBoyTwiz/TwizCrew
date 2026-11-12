@@ -4,6 +4,8 @@
 local function login(W)
   W:fire("ADDON_LOADED", "TwizCrew")
   W:fire("PLAYER_LOGIN")
+  -- the fake game has no mouse or keyboard: without this a copy goes idle-away after 3 minutes and counts AFK time
+  W.env.TwizCrewDB.modules.tags.settings.autoAway = false
   W:fire("PLAYER_ENTERING_WORLD")
 end
 

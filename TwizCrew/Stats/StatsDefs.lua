@@ -114,7 +114,8 @@ ns.StatsDefs.AWARDS = {
       return st.gn
     end,
     icon = "Interface\\Icons\\INV_Misc_Bag_10",
-    info = "Carries the least gold right now (needs at least 30 minutes played).",
+    info = "Carries the least gold right now (needs at least 30 minutes played). Any gold that leaves the bags "
+      .. "counts: mail, trades and auction bids too.",
     joke = "Checks the couch cushions for copper." },
   { id = "moneypit", tab = "loot", name = "Money Pit", unit = "money", -- new
     value = function(st)
@@ -123,7 +124,8 @@ ns.StatsDefs.AWARDS = {
       return lost
     end,
     icon = "Interface\\Icons\\INV_Misc_Coin_02",
-    info = "Lost the most gold (spent more than they made).", joke = "Gold goes in. Gold does not come out." },
+    info = "Lost the most gold (spent more than they made). Any gold that leaves the bags counts: mail, trades "
+      .. "and auction bids too.", joke = "Gold goes in. Gold does not come out." },
   { id = "broke", tab = "loot", name = "Broke", key = "rp", unit = "money",
     icon = "Interface\\Icons\\INV_Misc_Coin_01",
     info = "Paid the most for repairs.", joke = "The repair bot sends a thank-you card." },

@@ -49,9 +49,16 @@ return {
       setup(ns)
       A.eq(ns.DB.init(42, ns.Modules.list()).schema, 1)
       local db = ns.DB.init({ modules = { m1 = { enabled = "yes", settings = { scale = "big", position = 5 } }, gone = {} } }, ns.Modules.list())
-      A.eq(db.modules.m1.settings.scale, 1); A.eq(type(db.modules.m1.enabled), "boolean"); A.no(db.modules.gone)
+      A.eq(db.modules.m1.settings.scale, 1); A.eq(type(db.modules.m1.enabled), "boolean"); A.ok(db.modules.gone, "an unknown id is left alone")
       A.eq(db.modules.m1.settings.position.x, 40)
       A.eq(ns.DB.init({ modules = 7, crew = "x", log = 3 }, ns.Modules.list()).crew.channel, "TwizCrewHQ")
+    end,
+    unknown_module_settings_are_kept_but_removed_ones_go = function(ns, A)
+      setup(ns)
+      local db = ns.DB.init({ modules = { future = { enabled = false, settings = { a = 1 } }, spellhelp = { enabled = true } } },
+        ns.Modules.list())
+      A.eq(db.modules.future.settings.a, 1, "an id that is not registered survives")
+      A.no(db.modules.spellhelp, "a removed module is deleted")
     end,
     essentials_cannot_be_disabled = function(ns, A)
       attached(ns)

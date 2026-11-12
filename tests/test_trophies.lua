@@ -3,6 +3,7 @@
 local function boot(W)
   W:fire("ADDON_LOADED", "TwizCrew")
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.tags.settings.autoAway = false -- no mouse in the fake game: not idle-away (AFK time counts)
   W:fire("PLAYER_ENTERING_WORLD")
 end
 

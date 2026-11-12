@@ -51,18 +51,37 @@ local function isLive(d)
   return running and s ~= nil and s.on
 end
 
--- Runs f(...) for detector d; an error turns d off. Does nothing while d (or the module) is off.
-local function guard(d, f, ...)
-  if not isLive(d) then return end
-  local args, count = { ... }, select("#", ...)
-  local trace
-  local ok, err = xpcall(function() return f(unpack(args, 1, count)) end, function(e)
-    if type(debugstack) == "function" then trace = debugstack(2) end
-    return e
-  end)
+local trace -- the traceback of the error being handled (set by the handler, read right after)
+local function handler(e)
+  if type(debugstack) == "function" then trace = debugstack(2) end
+  return e
+end
+
+local function failed(d, ok, err)
   if ok then return end
   turnOff(d, "error", "error", tostring(err))
   if trace then ns.Log.add("debug", "stats_%s traceback: %s", d.id, (tostring(trace):gsub("\n", " < "))) end
+  trace = nil
+end
+
+-- The game's xpcall passes extra arguments on to the function (no closure per call); plain Lua 5.1 does not.
+local passesArgs = select(2, xpcall(function(a) return a end, function() end, 7)) == 7
+
+-- Runs f(...) for detector d; an error turns d off. Does nothing while d (or the module) is off.
+local guard
+if passesArgs then
+  function guard(d, f, ...)
+    if not isLive(d) then return end
+    trace = nil
+    return failed(d, xpcall(f, handler, ...))
+  end
+else
+  function guard(d, f, ...)
+    if not isLive(d) then return end
+    trace = nil
+    local args, count = { ... }, select("#", ...)
+    return failed(d, xpcall(function() return f(unpack(args, 1, count)) end, handler))
+  end
 end
 
 local function onEvent(d, event, f)
@@ -151,7 +170,8 @@ add({ id = "timers", label = "time AFK, dead and played",
   needs = function() return true end,
   tick = function(elapsed)
     api.count("pt", elapsed)
-    if plain(UnitIsAFK, "player") then api.count("af", elapsed) end
+    -- the game's AFK flag or TwizCrew's own away state (the AFK button, idle time): the same source as the AFK tag
+    if ns.Away and ns.Away.isAway() then api.count("af", elapsed) end
     if plain(UnitIsDeadOrGhost, "player") then api.count("ds", elapsed) end
   end })
 

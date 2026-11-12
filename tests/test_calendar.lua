@@ -580,6 +580,38 @@ return {
       A.ok(total < 40, "few sends: " .. total)
       for _, c in ipairs(list) do A.eq(c.ns.Log.errors(10), {}) end
     end,
+    five_copies_online_for_an_hour_never_ask_for_diaries_again = function(_, A, _, H)
+      local list = crewOf(H, { "Twiz", "Frostie", "Ginkan", "Holly", "Pewpew" })
+      H.advance(300) -- the first exchange
+      for _, X in ipairs(list) do
+        for _, Y in ipairs(list) do
+          A.ok(Y.ns.Diary.people()[X.ns.Diary.myId()], Y.ns.playerName() .. " has " .. X.ns.playerName() .. "'s diary")
+        end
+      end
+      local marks = marksOf(list)
+      H.advance(3600 - 300 + 15) -- an hour online, just past the last digests
+      local asks, diaries = 0, 0
+      for _, c in ipairs(list) do
+        asks = asks + #textsOf(c.W, "CALQ", marks[c.W])
+        diaries = diaries + #textsOf(c.W, "CALP", marks[c.W])
+      end
+      A.eq(asks, 0, "nobody asks for a diary again")
+      A.eq(diaries, 0, "nobody sends one")
+      -- and every copy shows every other's last hour (the digests carried it)
+      for _, X in ipairs(list) do
+        local id = X.ns.Diary.myId()
+        local own = X.ns.Diary.people()[id].days
+        for _, Y in ipairs(list) do
+          if Y ~= X then
+            local theirs = Y.ns.Diary.people()[id].days
+            for day, d in pairs(own) do
+              A.eq(theirs[day] and theirs[day].on, d.on, Y.ns.playerName() .. " sees " .. X.ns.playerName() .. "'s day")
+            end
+          end
+        end
+      end
+      for _, c in ipairs(list) do A.eq(c.ns.Log.errors(10), {}) end
+    end,
     every_calendar_message_fits_one_piece = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
@@ -633,12 +665,29 @@ return {
       for k = 1, 12 do p.alts[k .. ns.Util.truncateUTF8(w, 22)] = "ABCDEFGHIJKL" end
       for d = today - 29, today do p.days[d] = { on = maskOf(L, 0, 96), afk = maskOf(L, 0, 96) } end
       D.people()[id] = p
+      -- my own today and yesterday (in the digest) at their largest: every slot on and AFK
+      local me = D.people()[D.myId()]
+      for d = today - 1, today do me.days[d] = { on = maskOf(L, 0, 96), afk = maskOf(L, 0, 96) } end
       local before = #W.sent
       D.sendDigest()
       W:advance(5)
       local digests = textsOf(W, "CALD", before)
       A.eq(#digests, 1, "the digest: one piece")
       fits(digests, "the digest")
+      local f = ns.Codec.decode(digests[1]).fields
+      A.eq(f["d" .. today], maskOf(L, 0, 96) .. ":" .. maskOf(L, 0, 96), "today's slots")
+      A.ok(f["d" .. (today - 1)] and f.di == D.myId() and f.nb and f.nh, "yesterday's, whose, the note checksums")
+      -- at their largest: a 16-letter id, every bucket checksum and nh as long as they get, and a 16-letter person
+      f.di = "abcdefghijklmnoz"
+      f["p" .. f.di] = f["p" .. D.myId()]
+      f["p" .. D.myId()] = nil
+      local sums = {}
+      for k = 1, N.BUCKETS do sums[k] = "999999" end
+      f.nb = table.concat(sums, ".")
+      f.nh = "2147483646"
+      local largest = ns.Codec.encode("CALD", f)
+      A.eq(#largest, 1, "the largest digest is one piece")
+      fits(largest, "the largest digest")
       -- it arrives at a copy that never heard of that person: it asks
       D.people()[id] = nil
       before = #W.sent

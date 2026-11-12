@@ -13,7 +13,7 @@ function Boot.load()
   loaded = true
   ns.db = ns.DB.init(TwizCrewDB, ns.Modules.list())
   TwizCrewDB = ns.db
-  ns.Log.attach(ns.db.log)
+  ns.Log.attach(ns.db.log, ns.db.problems)
   ns.Modules.attach(ns.db)
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
     ns.Log.safe("comm", C_ChatInfo.RegisterAddonMessagePrefix, ns.Config.PREFIX)
@@ -27,12 +27,12 @@ function Boot.login()
   if not loaded then ns.Log.safe(FEATURE, Boot.load) end
   loggedIn = true
   ns.Log.safe("comm", ns.Comm.start)
-  ns.Log.safe("comm", ns.Crew.start)
-  ns.Log.safe("comm", ns.Self.start)
-  ns.Log.safe("comm", ns.LayerSensor.start)
-  ns.Log.safe("comm", ns.Away.start)
-  ns.Log.safe("comm", ns.Quest.start)
-  ns.Log.safe("roasts", ns.MockShow.start)
+  ns.Log.safe("crew", ns.Crew.start)
+  ns.Log.safe("self", ns.Self.start)
+  ns.Log.safe("layersensor", ns.LayerSensor.start)
+  ns.Log.safe("away", ns.Away.start)
+  ns.Log.safe("quest", ns.Quest.start)
+  ns.Log.safe("mockshow", ns.MockShow.start)
   ns.Log.safe("session", ns.Session.start)
   ns.Log.safe(FEATURE, ns.Modules.startAll)
   print("TwizCrew v" .. ns.VERSION .. " loaded. Type /tc for settings.")

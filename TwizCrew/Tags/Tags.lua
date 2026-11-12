@@ -115,13 +115,13 @@ function Away.start()
   started = true
   lastActive = ns.now()
   for _, event in ipairs(HARD_EVENTS) do
-    ns.Events.on("comm", event, function(unit)
+    ns.Events.on("away", event, function(unit)
       if event == "UNIT_SPELLCAST_SENT" and unit ~= "player" then return end
       Away.active(false)
     end)
   end
-  ns.Events.on("comm", "PLAYER_FLAGS_CHANGED", function() ns.Bus.fire("AWAY_CHANGED", Away.isAway()) end)
-  C_Timer.NewTicker(2, function() ns.Log.safe("comm", look) end)
+  ns.Events.on("away", "PLAYER_FLAGS_CHANGED", function() ns.Bus.fire("AWAY_CHANGED", Away.isAway()) end)
+  C_Timer.NewTicker(2, function() ns.Log.safe("away", look) end)
 end
 
 -- Your own tags as a set. Never includes LAYER: that one is worked out per friend by the layer module.

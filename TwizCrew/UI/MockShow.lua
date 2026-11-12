@@ -10,7 +10,8 @@ local _, ns = ...
 local MockShow = {}
 ns.MockShow = MockShow
 
-local FEATURE = "roasts"
+local FEATURE = "mockshow" -- own error id: a cosmetic bug here must not switch off the whole "roasts" module
+local MODULE = "roasts"
 local T = ns.Theme
 local C = T.COLOR
 
@@ -179,7 +180,7 @@ local function remember(name, unit)
 end
 
 local function lookAround()
-  if not ns.Modules.isEnabled(FEATURE) or ns.Modules.setting(FEATURE, "mockModel") == false or not ns.roster then
+  if not ns.Modules.isEnabled(MODULE) or ns.Modules.setting(MODULE, "mockModel") == false or not ns.roster then
     return
   end
   local now = ns.now()
@@ -393,12 +394,12 @@ function MockShow.show(name, text, opts)
   frame:SetHeight(bubbleH + 4 + MODEL_H)
   MockShow.lastSound = nil
   if opts.cheer then
-    if ns.Modules.setting(FEATURE, "mockSound") ~= false and type(PlaySound) == "function" then
+    if ns.Modules.setting(MODULE, "mockSound") ~= false and type(PlaySound) == "function" then
       local kit = type(SOUNDKIT) == "table" and (SOUNDKIT.LEVELUP or SOUNDKIT.LEVEL_UP) or nil
       pcall(PlaySound, kit or CHEER_SOUND, "Master")
       MockShow.lastSound = kit or CHEER_SOUND
     end
-  elseif ns.Modules.setting(FEATURE, "mockSound") ~= false then
+  elseif ns.Modules.setting(MODULE, "mockSound") ~= false then
     local race, sex
     local unit = (mode == "live") and (opts.unit or liveUnit(name)) or nil
     if unit then

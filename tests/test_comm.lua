@@ -903,10 +903,34 @@ return {
     end,
     sends_are_logged_for_debugging = function(ns, A, W)
       boot(ns, W)
+      ns.Log.chatDebug = true
       W:advance(6)
       ns.Comm.send("PING", {})
       W:advance(1)
       A.ok(logHas(ns, "DEBUG send PING via CHANNEL to 5"))
+    end,
+    chatter_is_counted_not_logged_while_debug_is_off = function(ns, A, W)
+      boot(ns, W)
+      W:advance(6)
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan") -- first sight of a name logs once
+      local before = #ns.Log.lines()
+      for i = 2, 50 do
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan")
+      end
+      A.eq(ns.Log.counts()["recv PING"], 50)
+      A.eq(#ns.Log.lines(), before, "no log line for received messages")
+      ns.Comm.send("PING", {})
+      W:advance(2)
+      A.ok(ns.Log.counts()["send PING"] >= 1)
+      for _, line in ipairs(ns.Log.lines()) do A.no(line:find("send PING", 1, true)) end
+    end,
+    refused_send_is_counted = function(ns, A, W)
+      boot(ns, W)
+      W:advance(60)
+      W.state.sendResult = 7
+      ns.Comm.send("PING", {})
+      W:advance(5)
+      A.ok(ns.Log.counts()["send failed"] >= 1)
     end,
     changing_crew_code_rejoins = function(ns, A, W)
       boot(ns, W)

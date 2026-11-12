@@ -4,7 +4,7 @@ local _, ns = ...
 local Crew = {}
 ns.Crew = Crew
 
-local FEATURE = "comm"
+local FEATURE = "crew"
 local STRANGER_HELLO_GAP = 30 -- seconds between HELLOs triggered by pings from the same unknown name
 
 local replyPending = false -- true while a jittered STATE reply is waiting (one shared reply: a STATE is a broadcast)

@@ -47,6 +47,43 @@ return {
       for i = 1, 3 do ns.Log.safe("panel", error, "x"); W:advance(61) end
       A.eq(broken, {})
     end,
+    errors_survive_600_debug_lines = function(ns, A)
+      ns.Log.attach({}, {})
+      ns.Log.add("error", "the one")
+      for i = 1, 600 do ns.Log.add("debug", "chatter %d", i) end
+      A.eq(#ns.Log.errors(1), 1)
+      A.contains(ns.Log.errors(1)[1], "the one")
+    end,
+    problems_ring_is_capped_and_repaired = function(ns, A)
+      local ring = { "[10:00:00] ERROR old", 5, {} }
+      ns.Log.attach({}, ring)
+      A.eq(ring, { "[10:00:00] ERROR old" })
+      for i = 1, 130 do ns.Log.add(i % 2 == 0 and "warn" or "error", "p%d", i) end
+      A.eq(#ns.Log.problems(), 100)
+      A.contains(ns.Log.problems()[100], "p130")
+      ns.Log.add("info", "not a problem")
+      A.eq(#ns.Log.problems(), 100)
+      A.no(ns.Log.problems()[100]:find("not a problem", 1, true))
+    end,
+    traceback_after_error_is_kept_in_the_ring = function(ns, A, W)
+      W.env.debugstack = function() return "line1\nline2" end
+      ns.Log.attach({}, {})
+      ns.Log.safe("x", error, "boom")
+      local p = ns.Log.problems()
+      A.eq(#p, 2)
+      A.contains(p[2], "x traceback: line1 < line2")
+    end,
+    safe_keeps_nil_in_the_middle = function(ns, A)
+      local ok, a, b, c = ns.Log.safe("x", function() return 1, nil, 3 end)
+      A.ok(ok); A.eq(a, 1); A.eq(b, nil); A.eq(c, 3)
+      A.eq(select("#", ns.Log.safe("x", function() return 1, nil, 3 end)), 4)
+      local f, err = ns.Log.safe("x", error, "bad")
+      A.no(f); A.contains(err, "bad")
+    end,
+    count_and_counts = function(ns, A)
+      ns.Log.count("a"); ns.Log.count("a"); ns.Log.count("b")
+      A.eq(ns.Log.counts(), { a = 2, b = 1 })
+    end,
     events_dispatch_and_off = function(ns, A, W)
       local count = 0
       ns.Events.on("a", "PLAYER_LOGIN", function() count = count + 1 end)

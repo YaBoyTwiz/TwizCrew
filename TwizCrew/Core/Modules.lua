@@ -15,6 +15,7 @@ local defs, byId = {}, {}
 local db
 local broken = {}     -- id -> true (this session only, never saved)
 local brokenList = {}
+local warnedUnknown = {} -- ids markBroken has already warned about
 local started = {}    -- id -> true while onEnable has run and onDisable has not
 
 local function isBlank(s) return type(s) ~= "string" or s:match("^%s*$") ~= nil end
@@ -182,7 +183,14 @@ end
 -- Session only: the saved "enabled" is left alone so the module comes back after /reload.
 function Modules.markBroken(id)
   local d = byId[id]
-  if not d then return end
+  if not d then
+    -- A part with its own error id (not a module): nothing to switch off.
+    if not warnedUnknown[id] then
+      warnedUnknown[id] = true
+      ns.Log.add("warn", "%s had repeated errors (not a module, kept running)", tostring(id))
+    end
+    return
+  end
   if d.tier == "essential" then
     ns.Log.add("warn", "%s kept running after errors (essential)", id)
     return
@@ -197,8 +205,24 @@ end
 
 function Modules.broken()
   local out = {}
-  for i, id in ipairs(brokenList) do out[i] = id end
+  for _, id in ipairs(brokenList) do
+    if broken[id] then out[#out + 1] = id end
+  end
   return out
 end
 
+-- Called by Log some time after a feature was marked broken: it gets another chance.
+function Modules.rearm(id)
+  local d = byId[id]
+  if not d or not broken[id] then return end
+  broken[id] = nil
+  for i, listed in ipairs(brokenList) do
+    if listed == id then table.remove(brokenList, i) break end
+  end
+  if Modules.isEnabled(id) then start(d) end
+  ns.Bus.fire("MODULE_TOGGLED", id, Modules.isEnabled(id))
+  ns.Log.add("info", "%s switched back on", id)
+end
+
 ns.Log.onBroken = Modules.markBroken
+ns.Log.onRearm = Modules.rearm

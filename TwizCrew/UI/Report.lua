@@ -129,36 +129,73 @@ local function statsLines(add)
   add("Stats sent " .. sent .. ", heard " .. heardText)
 end
 
+local function messagesLine()
+  local keys = {}
+  local counts = ns.Log.counts()
+  for key in pairs(counts) do keys[#keys + 1] = key end
+  if #keys == 0 then return "Messages this session: none" end
+  table.sort(keys)
+  local parts = {}
+  for i, key in ipairs(keys) do parts[i] = key .. " " .. counts[key] end
+  return "Messages this session: " .. table.concat(parts, ", ")
+end
+
 function Report.lines()
   local out = {}
   local function add(s) out[#out + 1] = s end
-  add("TwizCrew v" .. ns.VERSION .. ", interface " .. interface())
-  add(connection())
-  add(layer())
-  add("Class icons: " .. tostring(ns.ClassIcon.method()))
-  local broken = ns.Modules.broken()
-  add("Turned off after errors: " .. (#broken > 0 and table.concat(broken, ", ") or "none"))
-  statsLines(add)
-  add(ns.Updates.reportLine())
-  add(ns.MinimapButton.reportLine())
-  add(ns.TestTools.reportLine())
-  local ok, findLine = ns.Log.safe("find", ns.Find.reportLine)
-  add(ok and findLine or "Find the crew: report line failed")
-  crewLines(add)
-  add("Recent errors:")
-  local errors = ns.Log.errors(10)
-  if #errors == 0 then add("none") end
-  for _, e in ipairs(errors) do add(e) end
-  add("In-game checks:")
-  checkLines(add)
-  if ns.Transport.status().hideFailed then
-    add("Warning: the crew channel could not be taken out of the chat windows")
+  -- One failing section must not take the rest of the report with it.
+  local function section(name, fn)
+    local before = #out
+    local ok, err = pcall(fn)
+    if not ok then
+      for i = #out, before + 1, -1 do out[i] = nil end
+      add(name .. ": failed (" .. tostring(err) .. ")")
+    end
   end
-  local st = ns.Transport.status()
-  local names = st.members or {}
-  add("Crew in the channel: " .. (#names == 0 and "nobody seen" or table.concat(names, ", "))
-    .. " (member lists heard: " .. tostring(st.listsHeard or 0) .. ")")
-  add("Channel echoes heard: " .. tostring(ns.Comm.echoCount and ns.Comm.echoCount() or 0))
+  section("Version", function() add("TwizCrew v" .. ns.VERSION .. ", interface " .. interface()) end)
+  section("Connection", function() add(connection()) end)
+  section("Layer", function() add(layer()) end)
+  section("Class icons", function() add("Class icons: " .. tostring(ns.ClassIcon.method())) end)
+  section("Turned off after errors", function()
+    local broken = ns.Modules.broken()
+    add("Turned off after errors: " .. (#broken > 0 and table.concat(broken, ", ") or "none"))
+  end)
+  section("Stats", function() statsLines(add) end)
+  section("Updates", function() add(ns.Updates.reportLine()) end)
+  section("Minimap button", function() add(ns.MinimapButton.reportLine()) end)
+  section("Test tools", function() add(ns.TestTools.reportLine()) end)
+  section("Find the crew", function()
+    local ok, findLine = ns.Log.safe("find", ns.Find.reportLine)
+    add(ok and findLine or "Find the crew: report line failed")
+  end)
+  section("Crew", function() crewLines(add) end)
+  section("Messages", function() add(messagesLine()) end)
+  section("Recent errors", function()
+    add("Recent errors:")
+    local errors = ns.Log.errors(10)
+    if #errors == 0 then add("none") end
+    for _, e in ipairs(errors) do add(e) end
+  end)
+  section("Problems", function()
+    local list = ns.Log.problems()
+    add("Problems (newest " .. math.min(5, #list) .. " of " .. #list .. " kept):")
+    if #list == 0 then add("none") end
+    for i = math.max(1, #list - 4), #list do add(list[i]) end
+  end)
+  section("In-game checks", function()
+    add("In-game checks:")
+    checkLines(add)
+  end)
+  section("Channel", function()
+    if ns.Transport.status().hideFailed then
+      add("Warning: the crew channel could not be taken out of the chat windows")
+    end
+    local st = ns.Transport.status()
+    local names = st.members or {}
+    add("Crew in the channel: " .. (#names == 0 and "nobody seen" or table.concat(names, ", "))
+      .. " (member lists heard: " .. tostring(st.listsHeard or 0) .. ")")
+    add("Channel echoes heard: " .. tostring(ns.Comm.echoCount and ns.Comm.echoCount() or 0))
+  end)
   return out
 end
 

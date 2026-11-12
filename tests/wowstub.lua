@@ -210,7 +210,10 @@ local function build(W)
 
   -- clock and timers
   env.GetTime = function() return W.clock end
-  env.time = function() return math.floor(W.wall + W.clock) end
+  env.time = function(t) -- time({ year, month, day, hour, min }) reads a local date and time, like the game's
+    if type(t) == "table" then return os.time(t) end
+    return math.floor(W.wall + W.clock)
+  end
   env.date = function(fmt, t) return os.date(fmt, t or env.time()) end
   W.timers = {}
   local function addTimer(delay, fn, interval)

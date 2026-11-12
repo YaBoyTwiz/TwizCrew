@@ -7,7 +7,8 @@
 --   CALD  digest: p<id> = slots I know for that person over the last KEEP_DAYS days (to everyone every few
 --         minutes, and to a friend who just came online); di = my id and d<utcDay> = on[:afk] = my own slots
 --         today and yesterday (v0.1.23 ignores both), so friends see my evening without asking for my diary
---   CALQ  "send me person i" (to one friend whose digest shows more than I know; only ever pulled, never pushed)
+--   CALQ  "send me person i" (to one friend whose digest shows more than I know; only ever pulled, never pushed);
+--         n=1 = "send me your notes" (b = only these buckets: see Notes.lua)
 --   CALP  one person's diary: i = id, n = name, c = class, a = alts "Name:CLASS,...", d<utcDay> = on[:afk]
 -- Merging only ever adds slots (masks are OR-ed), so the order things arrive in never matters.
 local _, ns = ...
@@ -58,13 +59,38 @@ end
 
 local function today() return math.floor(now() / L.DAY) end
 
--- Seconds to add to UTC for this computer's local time, and today's local day number.
-function Diary.offset()
-  local t = now()
+-- Seconds to add to UTC for this computer's local time at moment t (now: Diary.offset), and today's local day number.
+local function offsetAt(t)
   local ok1, loc = pcall(date, "*t", t)
   local ok2, utc = pcall(date, "!*t", t)
   if ok1 and ok2 then return L.offsetFrom(loc, utc) end
   return 0
+end
+function Diary.offset() return offsetAt(now()) end
+
+-- The local offset on local day `day` (a clock change moves it: a day after the change is shown with its own
+-- offset, not today's). Taken at the day's noon, so the evening of the day a clock changes (at night) is right.
+-- Cached by day; the cache starts over when this computer's current offset changes.
+local offsets, offsetsFor = {}, nil
+function Diary.offsetOn(day)
+  local cur = Diary.offset()
+  if cur ~= offsetsFor then offsets, offsetsFor = {}, cur end
+  day = tonumber(day)
+  if not day then return cur end
+  local off = offsets[day]
+  if not off then
+    off = offsetAt(day * L.DAY + L.DAY / 2 - cur)
+    offsets[day] = off
+  end
+  return off
+end
+
+-- The UTC time of a local date and clock time (minutes after midnight), with that date's own offset.
+function Diary.utcOf(day, minutes)
+  local y, m, d = L.civil(day)
+  local ok, t = pcall(time, { year = y, month = m, day = d, hour = math.floor(minutes / 60), min = minutes % 60 })
+  if ok and type(t) == "number" then return t end
+  return day * L.DAY + minutes * 60 - Diary.offsetOn(day)
 end
 
 function Diary.localToday() return math.floor((now() + Diary.offset()) / L.DAY) end

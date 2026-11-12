@@ -425,6 +425,51 @@ return {
       A.eq(#list, 2); A.eq(list[2].t, "Raid", "sorted by time")
       A.eq(N.timeText(list[2], -5 * 3600), "5:30pm")
     end,
+    a_timed_note_keeps_its_time_after_a_clock_change = function(ns, A, W)
+      start(ns, W)
+      local L, N, D = ns.CalendarLogic, ns.Notes, ns.Diary
+      local today = math.floor(D.now() / 86400)
+      -- this computer's clock goes back an hour at 2am local on a day five days ahead (UTC-4 -> UTC-5)
+      local change = (today + 5) * 86400 + 6 * 3600
+      local function offAt(t) return t < change and -4 * 3600 or -5 * 3600 end
+      W.env.date = function(fmt, t)
+        t = t or W.env.time()
+        if fmt:sub(1, 1) == "!" then return os.date(fmt, t) end
+        return os.date("!" .. fmt, t + offAt(t))
+      end
+      W.env.time = function(tt)
+        if type(tt) ~= "table" then return math.floor(W.wall + W.clock) end
+        local loc = L.daysFrom(tt.year, tt.month, tt.day) * 86400 + (tt.hour or 12) * 3600 + (tt.min or 0) * 60
+        local utc = loc + 5 * 3600
+        if offAt(utc) ~= -5 * 3600 then utc = loc + 4 * 3600 end
+        return utc
+      end
+      A.eq(D.offset(), -4 * 3600, "before the change")
+      local before, after = D.localToday() + 1, D.localToday() + 6
+      -- a friend played 8pm-9pm (local, UTC-4) on the day before the change
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local s = math.floor(((before + 1) * 86400) / L.SLOT) -- 8pm at UTC-4 = midnight UTC
+      D.people().frost123 = { name = "Frostie", class = "MAGE", alts = {},
+        days = { [before + 1] = { on = maskOf(L, s % 96, s % 96 + 4) } } }
+      -- an "8pm" note made now for a day after the change
+      ns.Calendar.open()
+      ns.Calendar.openMaker({ day = after, minutes = 20 * 60 })
+      A.ok(ns.Calendar.saveMaker("Raid"))
+      local function shown(day)
+        ns.Calendar.openDay(day)
+        local n = ns.Calendar.lastNotes[1]
+        return n and N.timeText(n, D.offsetOn(day)), ns.Calendar.lastMarkers
+      end
+      A.eq({ shown(after) }, { "8pm", 1 }, "8pm on that day")
+      -- six days later, the clock has changed: still 8pm on that day, and the friend still played at 8pm
+      W.wall = W.wall + 6 * 86400
+      A.eq(D.offset(), -5 * 3600, "after the change")
+      A.eq({ shown(after) }, { "8pm", 1 }, "still 8pm on that day")
+      A.eq(#N.forDate(N.dateKey(L.civil(after))), 1, "on that date")
+      ns.Calendar.openDay(before)
+      A.eq(ns.Calendar.lastDay[1].runs, { { from = 80, to = 84, afk = false } }, "8pm-9pm, that day's own time")
+      A.eq(ns.Log.errors(10), {})
+    end,
     open_a_note_answer_and_comment = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

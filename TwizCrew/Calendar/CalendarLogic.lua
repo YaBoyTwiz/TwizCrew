@@ -154,7 +154,14 @@ function L.duration(minutes)
 end
 
 --------------------------------------------------------------------------------------------------- one local day
--- The state of a person in local slot j (0..95) of local day `day`: "on", "afk" or nil. off: local offset (s).
+-- The views take off = the local offset (seconds), or a function(day) giving each local day's own offset (a clock
+-- change moves it). The offset of local day `day`:
+local function dayOff(off, day)
+  if type(off) == "function" then return off(day) end
+  return off
+end
+
+-- The state of a person in local slot j (0..95) of local day `day`: "on", "afk" or nil. off: that day's offset (s).
 local function slotState(days, day, j, off)
   local t = day * L.DAY + j * L.SLOT - off -- UTC start of that local slot
   local s = math.floor(t / L.SLOT)
@@ -168,6 +175,7 @@ end
 -- people: { [id] = { name, class, days } }. Returns the people who played on local day `day`, most time first:
 -- { id, name, class, minutes, runs = { { from = slot, to = slot (exclusive), afk = bool } } }.
 function L.dayView(people, day, off)
+  off = dayOff(off, day)
   local out = {}
   for id, p in pairs(people or {}) do
     local runs, minutes, cur = {}, 0, nil
@@ -225,9 +233,10 @@ function L.week(people, first, off)
   for id, p in pairs(people or {}) do
     local mine, minutes = empty(), 0
     for w = 0, 6 do
+      local o = dayOff(off, first + w)
       for h = 0, 23 do
         local n = 0
-        for q = 0, 3 do if slotState(p.days, first + w, h * 4 + q, off) then n = n + 1 end end
+        for q = 0, 3 do if slotState(p.days, first + w, h * 4 + q, o) then n = n + 1 end end
         if n > 0 then
           mine[w][h] = n / 4
           grid[w][h] = grid[w][h] + n / 4
@@ -290,10 +299,11 @@ function L.usual(people, today, off, weeks)
     local any = false
     for day = first, today do
       local w = L.weekday(day)
+      local o = dayOff(off, day)
       for h = 0, 23 do
         local on = false
         for q = 0, 3 do
-          if slotState(p.days, day, h * 4 + q, off) then
+          if slotState(p.days, day, h * 4 + q, o) then
             on = true
             minutes = minutes + 15
             if w == 0 or w == 6 then weekendMin = weekendMin + 15 else weekdayMin = weekdayMin + 15 end

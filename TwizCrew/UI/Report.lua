@@ -461,6 +461,32 @@ function ACTIONS.death()
   end)
 end
 
+-- Offbuddy comes online (through the real path: the pop-up, the activity feed, the bar notice and the chat line).
+function ACTIONS.online()
+  ensureFakes()
+  popupHint("online", "Friends coming online")
+  local m = ns.roster:get(OFFBUDDY)
+  if m and m.online then inject(OFFBUDDY, "BYE", {}) end
+  local off = levelFields(20, 4000, 0)
+  off.cl, off.zn, off.sz, off.ins, off.ver = "DRUID", "Darkshore", "Auberdine", "0", ns.VERSION
+  expect("online", OFFBUDDY, function() inject(OFFBUDDY, "STATE", off) end)
+  panelHint()
+end
+
+-- Testbuddy congratulates you: the message a friend's Congrats button sends, through the real path (your character
+-- cheers, and the activity feed, the bar notice and the chat line show the words).
+function ACTIONS.congratsIn()
+  ensureFakes()
+  local me = ns.playerName()
+  local lines = ns.Roasts.CHEER_LINES
+  local text = ns.Roasts.mockText(lines[math.random(#lines)], me, BUDDY, ns.Roasts.mockInfo(me))
+  text = ns.Util.trim((text:gsub("{%a+}", "")))
+  if not ns.Modules.isEnabled("roasts") or ns.Modules.setting("roasts", "cheers") == false then
+    say("Live roasts or the Congrats button is off in /tc, so a congrats from a friend shows nothing.")
+  end
+  expect("congrats", BUDDY, function() inject(BUDDY, "MOCK", { t = me, x = text, k = "g" }) end)
+end
+
 function ACTIONS.layer()
   ensureFakes()
   local now = layerOf[BUDDY] == "different" and "same" or "different"
@@ -568,6 +594,10 @@ local function clear(quiet)
     if ns.Log.safe(TOOLS, removeFake, name) then any = true end
   end
   layerOf = {}
+  if ns.Feed then
+    local fed, hadFeed = ns.Log.safe(TOOLS, ns.Feed.removeFakes)
+    if fed and hadFeed then any = true end
+  end
   local ok, had = ns.Log.safe(TOOLS, ns.Version.clearTest)
   if ok and had then any = true end
   ok, had = ns.Log.safe(TOOLS, ns.Updates.clearTest)
@@ -634,6 +664,7 @@ end
 
 local COMMANDS = {
   fake = "fake", copy = "copy", ding = "ding", death = "death", layer = "layer", roast = "roast", clear = "clear",
+  online = "online", ["congrats in"] = "congratsIn",
   ["update reload"] = "updateReload", ["update restart"] = "updateRestart", walk = "walk",
   mock = "mockLive", ["mock live"] = "mockLive", ["mock icon"] = "mockIcon", cheer = "cheer", congrats = "cheer",
 }
@@ -645,6 +676,8 @@ TestTools.HELP = {
   "/tc test copy - a pretend friend made from your own numbers, to compare with your XP bar (again: removes it)",
   "/tc test ding - Testbuddy levels up: the level-up pop-up",
   "/tc test death - Testbuddy dies: the death pop-up",
+  "/tc test online - Offbuddy comes online: the online pop-up (or the bar notice while minimized) and a chat line",
+  "/tc test congrats in - Testbuddy congratulates you: your character cheers, and the words show in the feed",
   "/tc test layer - Testbuddy changes layer: the layer pop-up",
   "/tc test roast - a roast about Testbuddy",
   "/tc test update reload - pretend a friend has a newer version that a /reload loads",
@@ -687,6 +720,11 @@ ns.Modules.register({
       .. "pop-up, even right after logging in."),
     button("death", "Death pop-up", "Testbuddy dies: the death pop-up with the place, and a DEAD tag on the row for "
       .. "15 seconds."),
+    button("online", "Friend comes online", "Offbuddy comes online: the \"is online\" pop-up, or the notice on the "
+      .. "bar while the panel is minimized (with a peek at its row), the line in Recent activity and, if you turned "
+      .. "it on, the chat line. Press again to go offline and online again."),
+    button("congratsIn", "Congrats from a friend", "Testbuddy congratulates you, the way a friend's Congrats button "
+      .. "does: your character cheers, and what was said shows on the minimized bar, in Recent activity and in chat."),
     button("layer", "Layer pop-up", "Testbuddy moves to the other layer: \"back on your layer\" or \"on a different "
       .. "layer\", taking turns. Clicking the pop-up invites nobody."),
     button("roast", "Roast pop-up", "An orange roast about Testbuddy, a different one each press. Roasts about the "

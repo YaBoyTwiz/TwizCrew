@@ -233,7 +233,7 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "showXP",
+      A.eq(keys, { "minimized", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "showXP",
         "xpText", "xpTooltip",
         "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
@@ -498,19 +498,22 @@ return {
       local items = ns.Panel.menuItems()
       local labels = {}
       for i, item in ipairs(items) do labels[i] = item.label end
-      A.eq(labels, { "Show offline friends", "Lock position", "Row style: Full", "Hide during fights", "Set my status",
-        "Go AFK", "Open settings", "Hide panel" })
+      A.eq(labels, { "Show offline friends", "Lock position", "Minimize the panel", "Row style: Full", "Hide during fights",
+        "Set my status", "Go AFK", "Open settings", "Hide panel" })
       A.eq(items[1].checked(), false, "offline friends are behind the Offline bar by default")
       items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), true)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
-      items[3].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
-      items[4].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)
-      items[5].onClick()
-      items[6].onClick(); A.eq(ns.Away.isAway(), true, "Go AFK")
-      A.eq(ns.Panel.menuItems()[6].label, "I'm back")
-      items[6].onClick(); A.eq(ns.Away.isAway(), false, "and back")
-      items[7].onClick()
-      items[8].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
+      items[3].onClick(); A.eq(ns.Modules.setting("panel", "minimized"), true, "Minimize the panel")
+      A.eq(ns.Panel.menuItems()[3].label, "Restore the panel")
+      items[3].onClick(); A.eq(ns.Modules.setting("panel", "minimized"), false, "and restore it")
+      items[4].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
+      items[5].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)
+      items[6].onClick()
+      items[7].onClick(); A.eq(ns.Away.isAway(), true, "Go AFK")
+      A.eq(ns.Panel.menuItems()[7].label, "I'm back")
+      items[7].onClick(); A.eq(ns.Away.isAway(), false, "and back")
+      items[8].onClick()
+      items[9].onClick(); A.eq(ns.Modules.isEnabled("panel"), false)
       W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       ns.Modules.setEnabled("panel", true); W:advance(1)

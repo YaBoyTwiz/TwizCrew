@@ -37,6 +37,9 @@ local BASICS = {
   { id = "panel", key = "showOffline" },
   { id = "panel", key = "locked" },
   { id = "panel", key = "hideInCombat" },
+  { id = "panel", key = "minimized" },
+  { id = "panel", key = "peek" },
+  { id = "activity", key = "chat" },
   { module = "popups" },
   { id = "tags", key = "autoAway" },
   { id = "tags", key = "awayMinutes" },
@@ -53,7 +56,7 @@ local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "A
 
 -- Pictures next to module names and common options (where a picture says it faster than words).
 local MODULE_ICONS = {
-  panel = "Interface\\Icons\\Ability_Warrior_BattleShout", popups = "Interface\\Icons\\Spell_Holy_PowerInfusion",
+  panel = "Interface\\Icons\\Ability_Warrior_BattleShout", activity = "Interface\\Icons\\INV_Misc_Note_02", popups = "Interface\\Icons\\Spell_Holy_PowerInfusion",
   roasts = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", stats = "Interface\\Icons\\INV_Misc_Note_02",
   find = "Interface\\Icons\\Ability_Hunter_Pathfinding", calendar = "Interface\\Icons\\INV_Scroll_03",
   rankup = "Interface\\Icons\\Spell_Holy_SealOfWisdom", tags = "Interface\\Icons\\INV_Misc_Note_01",
@@ -65,6 +68,8 @@ local MODULE_ICONS = {
 local SETTING_ICONS = {
   ["panel:bgAlpha"] = "Interface\\Icons\\Spell_Shadow_Twilight", ["panel:scale"] = "Interface\\Icons\\INV_Misc_Spyglass_03",
   ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:fadeOut"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
+  ["panel:minimized"] = "Interface\\Icons\\INV_Misc_Spyglass_03", ["panel:peek"] = "Interface\\Icons\\Spell_Holy_MindVision",
+  ["activity:chat"] = "Interface\\Icons\\INV_Misc_Note_02",
   ["panel:showOffline"] = "Interface\\Icons\\Ability_Stealth", ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",
   ["panel:hideInCombat"] = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
   ["panel:showQuest"] = "Interface\\Icons\\INV_Misc_Note_02", ["panel:questRequests"] = "Interface\\Icons\\Spell_ChargePositive",
@@ -100,7 +105,7 @@ end
 -- The Advanced tab's sub-tabs: which modules each shows, in that order. A module not listed lands on Crew.
 -- "all" is the old single page with every section.
 local SUBTABS = {
-  { id = "panel", label = "Panel", modules = { "panel", "tags", "layer" } },
+  { id = "panel", label = "Panel", modules = { "panel", "activity", "tags", "layer" } },
   { id = "roasts", label = "Roasts", modules = { "roasts", "stats" } },
   { id = "popups", label = "Pop-ups", modules = { "popups", "updates" } },
   { id = "find", label = "Find", modules = { "find" } },

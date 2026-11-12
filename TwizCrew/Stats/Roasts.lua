@@ -137,6 +137,7 @@ local function handle(sender, f, own)
   if ns.Popups and ns.Popups.showRoast then ns.Popups.showRoast(text, ns.Config.ROAST_SECONDS) end
   if setting("sound") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
   ns.Log.add("info", "roast shown: %s about %s", kind, sender)
+  ns.Bus.fire("ROAST_SHOWN", sender, text) -- the activity feed records it (text is already safe to show)
 end
 
 local function maySend()
@@ -331,6 +332,8 @@ local function showMock(sender, f)
     return
   end
   if not mockShowLimit:allow(sender, ns.now()) then return end
+  -- the activity feed records it: who sent it, who it is about, the words (plain), congrats or mock
+  ns.Bus.fire("MOCK_SEEN", sender, type(f.t) == "string" and f.t or "", text, cheer)
   -- about ME from a friend: their character laughs at me (a mock) or cheers for me (congrats), if that's on
   if ns.MockShow and f.t and ns.isMe(f.t) and not ns.isMe(sender) and setting("mockModel") ~= false then
     shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)

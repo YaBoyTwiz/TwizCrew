@@ -33,10 +33,13 @@ UI\Theme.lua
 UI\Widgets.lua
 UI\ClassIcon.lua
 UI\PanelLogic.lua
+UI\FeedLogic.lua
 UI\Panel.lua
 UI\Changelog.lua
 UI\PopupLogic.lua
 UI\Popups.lua
+UI\Feed.lua
+UI\Recent.lua
 Stats\StatsDefs.lua
 Stats\StatsLogic.lua
 Stats\SessionLogic.lua

@@ -87,6 +87,24 @@ local function inGroup(name)
   return false
 end
 
+-- What a click on a level-up pop-up (congratulate) or a single "online" pop-up (whisper them) does. The minimized
+-- panel's bar notice calls the same (Popups.act). A fake (test tools) is never congratulated or whispered.
+local function act(kind, name)
+  if type(name) ~= "string" or ns.isTestName(name) then return false end
+  if kind == "levelup" then
+    if ns.Roasts and ns.Roasts.canCheer then ns.Roasts.cheer(name) return true end
+  elseif kind == "online" then
+    if type(ChatFrame_SendTell) == "function" then
+      ChatFrame_SendTell(name)
+      return true
+    elseif type(ChatFrame_OpenChat) == "function" then
+      ChatFrame_OpenChat("/w " .. name .. " ")
+      return true
+    end
+  end
+  return false
+end
+
 -- Runs on a real click only (an invite needs a hardware event); never called from a timer.
 local function click(f)
   local p = f.tcPopup
@@ -103,15 +121,8 @@ local function click(f)
     ns.Find.pointToMeet()
   elseif p.kind == "qshare" and ns.Quest and ns.Quest.shareFor then
     ns.Quest.shareFor(p.names[1], p.title)
-  elseif p.kind == "levelup" and ns.Roasts and ns.Roasts.canCheer and not ns.isTestName(p.names[1]) then
-    ns.Roasts.cheer(p.names[1])
-  elseif p.kind == "online" and #p.names == 1 and not ns.isTestName(p.names[1]) then
-    local name = p.names[1]
-    if type(ChatFrame_SendTell) == "function" then
-      ChatFrame_SendTell(name)
-    elseif type(ChatFrame_OpenChat) == "function" then
-      ChatFrame_OpenChat("/w " .. name .. " ")
-    end
+  elseif p.kind == "levelup" or (p.kind == "online" and #p.names == 1) then
+    act(p.kind, p.names[1])
   end
   close(f)
 end
@@ -309,7 +320,10 @@ end
 
 local function push(kind, name, extra)
   local ok, force = gate(kind, name)
-  if ok then logic:push(kind, name, ns.now(), extra, force) end
+  if not ok then return end
+  -- A minimized panel shows online, died and level-up on its bar instead (when that setting is on): no pop-up then.
+  if ns.Panel and ns.Panel.suppressesPopup and ns.Panel.suppressesPopup(kind, name) then return end
+  logic:push(kind, name, ns.now(), extra, force)
 end
 
 local function onRelation(name, old, new)
@@ -333,7 +347,7 @@ local function onOnline(name)
   if not setting("online") then return end
   local gone = offlineAt[name]
   offlineAt[name] = nil
-  if gone and ns.now() - gone < RELOG then return end
+  if gone and ns.now() - gone < RELOG and not ns.isTestName(name) then return end -- (a test button asks for its own)
   push("online", name)
 end
 
@@ -410,6 +424,7 @@ ns.Modules.register({
 
 local Popups = {}
 ns.Popups = Popups
+Popups.act = act
 
 -- Shows one roast line (already safe plain text) for `seconds` plus the fade, whether or not this module is on.
 -- Clicking it closes it.

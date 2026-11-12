@@ -81,5 +81,46 @@ return {
       q:pump(function(item) got[#got + 1] = item.text .. item.dest.to end)
       A.eq(got, { "c1b", "votea", "c2a" }, "the newest card goes after what was queued before it")
     end,
+    bulk_waits_behind_normal = function(ns, A)
+      local q = ns.Queue.new({ perSecond = 2, burst = 4, now = function() return 0 end })
+      q:push("b1", true); q:push("b2", true); q:push("b3", true)
+      q:push("live")
+      A.eq(q:size(), 4)
+      local got = {}
+      q:pump(function(item) got[#got + 1] = item end)
+      A.eq(got, { "live", "b1", "b2", "b3" }, "the normal one leaves first, bulk keeps its own order")
+      A.eq(q:size(), 0)
+    end,
+    live_item_overtakes_waiting_bulk = function(ns, A)
+      local now = 0
+      local q = ns.Queue.new({ perSecond = 2, burst = 1, now = function() return now end })
+      q:push("b1", true); q:push("b2", true)
+      local got = {}
+      local function send(item) got[#got + 1] = item end
+      q:pump(send)
+      q:push("live")
+      now = 1
+      q:pump(send)
+      A.eq(got, { "b1", "live" })
+      now = 2
+      q:pump(send)
+      A.eq(got, { "b1", "live", "b2" })
+    end,
+    replace_and_supersede_stay_in_their_lane = function(ns, A)
+      local q = ns.Queue.new({ perSecond = 2, burst = 4, now = function() return 0 end })
+      local dest = {}
+      q:replace("k", { text = "bulk1", dest = dest }, true)
+      q:replace("k", { text = "live1", dest = dest })
+      q:replace("k", { text = "bulk2", dest = dest }, true)
+      q:replace("k", { text = "live2", dest = dest })
+      A.eq(q:size(), 2)
+      q:supersede("s", { text = "sb1", dest = dest }, function(a, b) return a == b end, true)
+      q:supersede("s", { text = "sl1", dest = dest }, function(a, b) return a == b end)
+      q:supersede("s", { text = "sb2", dest = dest }, function(a, b) return a == b end, true)
+      q:supersede("s", { text = "sl2", dest = dest }, function(a, b) return a == b end)
+      local got = {}
+      q:pump(function(item) got[#got + 1] = item.text end)
+      A.eq(got, { "live2", "sl2", "bulk2", "sb2" })
+    end,
   },
 }

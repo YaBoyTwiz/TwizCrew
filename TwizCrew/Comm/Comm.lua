@@ -19,8 +19,8 @@ local started = false
 local pausedUntil = 0
 
 -- Kept back while the connection is being set up (R1), oldest dropped past PENDING_MAX.
-local function keep(text)
-  pending[#pending + 1] = text
+local function keep(text, bulk, msgType)
+  pending[#pending + 1] = { text = text, bulk = bulk, msgType = msgType }
   if #pending > PENDING_MAX then table.remove(pending, 1) end
 end
 
@@ -30,13 +30,13 @@ end
 
 -- key: waiting copies with this key (per destination) are dropped for the new one. sent: { left, fn }, counts the
 -- copies still waiting; fn runs when the last one has gone out.
-local function pushToDestinations(text, key, sent)
-  local dests = ns.Transport.destinations() -- may find the channel gone and start joining it again
-  if ns.Transport.isPending() then keep(text); return end
+local function pushToDestinations(text, key, sent, bulk, msgType)
+  local dests = ns.Transport.destinations(msgType) -- may find the channel gone and start joining it again
+  if ns.Transport.isPending() then keep(text, bulk, msgType); return end
   for _, dest in ipairs(dests) do
     local item = { text = text, dest = dest, sent = sent }
     if sent then sent.left = sent.left + 1 end
-    if key then queue:supersede(key, item, sameDest) else queue:push(item) end
+    if key then queue:supersede(key, item, sameDest, bulk) else queue:push(item, bulk) end
   end
 end
 
@@ -44,19 +44,21 @@ local function flushPending()
   if ns.Transport.isPending() or #pending == 0 then return end
   local texts = pending
   pending = {}
-  for _, text in ipairs(texts) do pushToDestinations(text) end
+  for _, text in ipairs(texts) do pushToDestinations(text.text, nil, nil, text.bulk, text.msgType) end
 end
 
+-- opts.bulk = true: the copies wait in the bulk lane, served only while no normal message is waiting (big swaps).
 -- opts.replace = a key (a show id, say): copies of an earlier msgType message with the same key that are still
 -- waiting are dropped, the new one goes out instead. opts.onSent = a function run once every copy has left the
 -- queue (at once when nothing was queued: the connection is still being set up, or there is nobody to send to).
 function Comm.send(msgType, fields, opts)
   local texts = ns.Codec.encode(msgType, fields or {}, opts)
   local replace = opts and opts.replace
+  local bulk = opts and opts.bulk
   local sent = opts and opts.onSent and { left = 0, fn = opts.onSent }
   for i, text in ipairs(texts) do
     local key = replace and (msgType .. ":" .. replace .. "#" .. i)
-    if ns.Transport.isPending() then keep(text) else pushToDestinations(text, key, sent) end
+    if ns.Transport.isPending() then keep(text, bulk, msgType) else pushToDestinations(text, key, sent, bulk, msgType) end
   end
   if sent and sent.left == 0 then ns.Log.safe(FEATURE, sent.fn) end
 end
@@ -67,7 +69,7 @@ function Comm.sendTo(name, msgType, fields, opts)
   local dest = ns.Transport.destinationFor(name)
   if not dest then return false end
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {}, opts)) do
-    queue:push({ text = text, dest = dest })
+    queue:push({ text = text, dest = dest }, opts and opts.bulk)
   end
   return true
 end
@@ -82,8 +84,9 @@ function Comm.sendGroup(msgType, fields, opts)
   if not dest then dest = g; groupDest[g.chatType] = g end
   local key = opts and opts.replace
   for i, text in ipairs(ns.Codec.encode(msgType, fields or {}, opts)) do
-    if key then queue:replace(key .. "#" .. i, { text = text, dest = dest })
-    else queue:push({ text = text, dest = dest }) end
+    local bulk = opts and opts.bulk
+    if key then queue:replace(key .. "#" .. i, { text = text, dest = dest }, bulk)
+    else queue:push({ text = text, dest = dest }, bulk) end
   end
   return true
 end
@@ -164,6 +167,17 @@ local function sendItem(item)
     -- The game is throttling us (or the channel was only just joined): keep the message at the front, wait a
     -- moment. Logged once per message, so a message kept for a while does not fill the log.
     pausedUntil = ns.now() + THROTTLE_PAUSE
+    item.tries = (item.tries or 0) + 1
+    if item.tries >= ns.Config.SEND_RETRY_MAX then
+      ns.Log.add("warn", "send to %s given up after %d tries", tostring(item.dest.target or item.dest.chatType),
+        item.tries)
+      local sent = item.sent
+      if sent then
+        sent.left = sent.left - 1
+        if sent.left == 0 then ns.Log.safe(FEATURE, sent.fn) end
+      end
+      return true -- dropped: the queue moves on
+    end
     if not item.waitLogged then
       item.waitLogged = true
       ns.Log.debug("send to %s has to wait, trying again soon", tostring(item.dest.target or item.dest.chatType))

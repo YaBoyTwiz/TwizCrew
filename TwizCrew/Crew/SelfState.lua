@@ -102,7 +102,7 @@ end
 
 -- Keys that never send a message on their own: they wait for the next UPDATE that goes out anyway (the XP
 -- percent, a fight starting or ending, a zone change...), so earning XP adds no messages.
-local RIDE_ALONG = { xc = true, rx = true }
+local RIDE_ALONG = { xc = true, rx = true, lk = true }
 
 local function onlyRideAlong(changes)
   for key in pairs(changes) do

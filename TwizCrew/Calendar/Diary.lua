@@ -190,7 +190,7 @@ function Diary.sendPerson(id, to)
   local f = personFields(id)
   if not f then return end
   sentAt[key] = t
-  sendTo(to, "CALP", f, { repeatKeys = { "i" } })
+  sendTo(to, "CALP", f, { repeatKeys = { "i" }, bulk = true })
 end
 
 local function known(sender)

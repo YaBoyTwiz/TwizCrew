@@ -58,6 +58,14 @@ local function loadFiles(W, ns, files)
     setfenv(chunk, W.env)
     chunk("TwizCrew", ns)
   end
+  -- In the real game automatic mode copies a message to the channel only after the channel delivered something
+  -- (or for a PING). Most tests are about what is sent, not about that rule, so they start as if it had delivered;
+  -- a test of the rule puts its own ns.Comm.echoCount back.
+  if ns.Comm and ns.Comm.echoCount then
+    local real = ns.Comm.echoCount
+    W.realEchoCount = real -- a test of the rule itself restores it: ns.Comm.echoCount = W.realEchoCount
+    ns.Comm.echoCount = function() return math.max(1, real()) end
+  end
 end
 
 -- Each client gets its own math.random: deterministic (seeded from the name) and independent of the others.

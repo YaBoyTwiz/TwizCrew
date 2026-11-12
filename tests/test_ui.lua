@@ -228,7 +228,9 @@ return {
       A.eq(ns.Report.lines()[2], "Connection: auto (channel TwizCrewHQ failed: sends to the channel were refused "
         .. "(result 7); down for 31 s; using whispers, next try in 30 s)")
       W.state.inGroup = true
-      W:advance(110)
+      W:advance(50) -- the retry joins again; the message waiting then was given up on after 10 tries
+      for _ = 1, 3 do ns.Comm.send("PING", {}) end -- refused again, so the channel counts as down again
+      W:advance(60)
       A.contains(ns.Report.lines()[2], "down for 2 min; using group chat and whispers, next try in")
     end,
 

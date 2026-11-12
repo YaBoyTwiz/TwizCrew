@@ -648,43 +648,62 @@ return {
     steals_are_merged_per_award = function(ns, A, W)
       local sid = oldSession(ns, W)
       local seen = watchNotices(ns)
+      -- every steal a check finds (award:thief), so each flip below is known to have been seen
+      local found, realSteals = {}, ns.TrophyLogic.steals
+      ns.TrophyLogic.steals = function(...)
+        local out = realSteals(...)
+        for _, st in ipairs(out) do found[#found + 1] = st.def.id .. ":" .. st.thieves[1] end
+        return out
+      end
+      local settle = function() W:advance(ns.Config.STATS_CHANGED_GAP) end -- her numbers settle: checked again
       -- stolen and taken back inside the minute: undone, nothing shown
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "5", s_jp = "50" })
+      settle()
       ns.Stats.count("dt", 3) -- 6
       ns.Steals.check()
+      A.eq(found, { "corpse:Lurabe", "corpse:Twiz" }, "both flips were seen")
       W:advance(61)
       ns.Steals.flush()
       A.eq(seen.n, 0, "two flips: undone")
       -- a steal that sticks: shown once
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "8", s_jp = "50" })
-      W:advance(ns.Config.STATS_CHANGED_GAP) -- her numbers settle
+      settle()
       ns.Steals.check()
       ns.Steals.flush()
       A.eq(seen.n, 1)
       A.eq(seen.title, "Lurabe just stole Professional Corpse from Twiz!")
-      -- three flips (me, her, me): one award, shown once, from the first victim
-      W:advance(61)
+      -- three flips (me, her, me): one award, shown once, from the first victim (the pop-up gap holds it meanwhile)
+      found = {}
       ns.Stats.count("dt", 3) -- 9
+      ns.Steals.check()
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "4", s_dt = "10", s_jp = "50" })
+      settle()
       ns.Stats.count("dt", 2) -- 11
       ns.Steals.check()
+      A.eq(found, { "corpse:Twiz", "corpse:Lurabe", "corpse:Twiz" }, "three flips were seen")
       W:advance(61)
       ns.Steals.flush()
       A.eq(seen.n, 2)
       A.eq(seen.title, "Twiz just stole Professional Corpse from Lurabe!")
       A.eq(seen.sub, "(11 deaths vs 10 deaths)  -  click to see")
       -- two different awards: one pop-up, each listed once
-      W:advance(61)
+      found = {}
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "5", s_dt = "12", s_jp = "50" }) -- corpse is hers
+      settle()
       ns.Stats.count("jp", 41) -- 51: bunny is mine
       ns.Stats.count("dt", 2) -- 13: corpse back to me...
-      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "6", s_dt = "14", s_jp = "50" }) -- ...and hers again
       ns.Steals.check()
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "6", s_dt = "14", s_jp = "50" }) -- ...and hers again
+      settle()
+      ns.Steals.check()
+      table.sort(found)
+      A.eq(found, { "bunny:Twiz", "corpse:Lurabe", "corpse:Lurabe", "corpse:Twiz" }, "every flip was seen")
       W:advance(61)
       ns.Steals.flush()
       A.eq(seen.n, 3)
       A.eq(seen.title, "2 crowns changed hands")
       A.eq(seen.sub, "Professional Corpse: Lurabe, Bunny Hopper: Twiz")
+      ns.TrophyLogic.steals = realSteals
       A.eq(ns.Log.errors(10), {})
     end,
     a_steal_waits_until_the_numbers_settle = function(ns, A, W)

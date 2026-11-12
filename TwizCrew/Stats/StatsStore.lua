@@ -12,6 +12,9 @@ for _, key in ipairs(Defs.KEYS) do KNOWN[key] = true end
 
 local isDirty = false -- a number other than time played changed since the last send
 local counter = 0     -- makes every snapshot's q different
+-- Keys my reset cleared (key -> true) and the session it happened in: until my session changes, every snapshot
+-- sends them as an explicit 0 (friends lay pieces over what they have, so a missing number would stay). Memory only.
+local zeroed, zeroedSid = {}, nil
 
 local function isNumber(v) return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge end
 
@@ -120,6 +123,13 @@ end
 function Store.resetMine()
   local rec = Store.mine()
   if not rec then return end
+  if zeroedSid ~= rec.sid then zeroed = {} end
+  for _, t in ipairs({ rec.s, rec.a }) do
+    for key, v in pairs(t) do
+      if KNOWN[key] and isNumber(v) and v > 0 then zeroed[key] = true end
+    end
+  end
+  zeroedSid = rec.sid
   rec.s, rec.a, rec.zs, rec.za = {}, {}, {}, {}
   isDirty = true
 end
@@ -127,14 +137,23 @@ end
 function Store.dirty() return isDirty end
 function Store.markSent() isDirty = false end
 
--- A copy of my numbers for sending: { sid, q, off, s, a }.
+-- A copy of my numbers for sending: { sid, q, off, s, a, zeros }. zeros (key -> true): numbers my reset cleared
+-- in this session, sent as 0 while they are still 0.
 function Store.snapshot(off)
   local rec = Store.mine() or { sid = "", s = {}, a = {} }
   counter = counter + 1
-  return {
+  local snap = {
     sid = rec.sid, q = tostring(ns.wallclock()) .. "-" .. counter, off = off and true or nil,
     s = copy(rec.s), a = copy(rec.a),
   }
+  if zeroedSid ~= nil and zeroedSid == rec.sid then
+    for key in pairs(zeroed) do
+      if snap.s[key] == nil then snap.s[key] = 0 end
+      if snap.a[key] == nil then snap.a[key] = 0 end
+    end
+    snap.zeros = zeroed
+  end
+  return snap
 end
 
 -- Only known keys with sane numbers (saved data may have been edited or written by a broken copy).
@@ -158,28 +177,13 @@ local function older(a, b)
   return ta < tb or (ta == tb and ca < cb)
 end
 
--- Per friend, this login only: got = the keys of snapshot q received so far ("s_dt" -> true), at = ns.now() of
--- their last piece (Steals waits for a whole snapshot).
-local heard = {}
+local heardAt = {} -- friend -> ns.now() of their last STATS piece, this login only (Steals waits for a whole snapshot)
 
-local function lay(into, from, got, prefix)
-  for key, v in pairs(from) do
-    into[key] = v
-    got[prefix .. key] = true
-  end
-end
-
--- Drops what snapshot got (complete by now) did not carry: a number that went back to 0 (a reset) is not sent.
-local function prune(t, got, prefix)
-  for key in pairs(t) do
-    if not got[prefix .. key] then t[key] = nil end
-  end
-end
-
--- A friend's STATS piece (decoded fields). A snapshot older than the saved one (by q) is ignored. A new snapshot's
--- pieces are laid over the saved numbers (no zeros while the rest is on its way); when the next snapshot starts,
--- what the last one did not carry is dropped. A new sid starts the session numbers fresh and keeps the old
--- session's in rec.prev (their STATS can arrive before the UPDATE that ends my session); all-time numbers are
+-- A friend's STATS piece (decoded fields). A snapshot older than the saved one (by q) is ignored, but only while
+-- the saved one is younger than STATS_OLDER_WINDOW s by my clock (q is the sender's clock, which may jump back).
+-- Pieces are laid over the saved numbers: nothing goes to zero while the rest of a snapshot is on its way (a
+-- number that went back to 0 comes as an explicit 0). A new sid starts the session numbers fresh and keeps the
+-- old session's in rec.prev (their STATS can arrive before the UPDATE that ends my session); all-time numbers are
 -- always laid over. "off" keeps their numbers but hides them until a new snapshot comes. Returns true when saved.
 function Store.applyWire(name, fields, wall)
   local snap = ns.StatsLogic.fromWire(fields)
@@ -188,32 +192,26 @@ function Store.applyWire(name, fields, wall)
   if not stats then return false end
   local rec = stats.crew[name]
   if type(rec) ~= "table" then rec = nil end
-  if rec and older(snap.q, rec.q) then return false end
-  local h = heard[name]
+  if rec and older(snap.q, rec.q) and isNumber(rec.at) and isNumber(wall) and wall >= rec.at
+    and wall - rec.at < ns.Config.STATS_OLDER_WINDOW then
+    return false
+  end
   if snap.off then
     if not rec then rec = { sid = snap.sid, s = {}, a = {} } end
     rec.off = true
   else
     if rec then rec.s, rec.a = clean(rec.s), clean(rec.a) else rec = { sid = snap.sid, s = {}, a = {} } end
     if rec.sid ~= snap.sid or rec.q ~= snap.q then -- a new snapshot (a later piece stays hidden if off came first)
-      if h and h.q ~= nil and h.q == rec.q then
-        prune(rec.s, h.got, "s_")
-        prune(rec.a, h.got, "a_")
-      end
       if rec.sid ~= snap.sid then
         if not rec.off then rec.prev = { sid = rec.sid, s = rec.s, at = rec.at } end
         rec.s = {}
       end
       rec.sid, rec.q, rec.off = snap.sid, snap.q, nil
-      h = { q = snap.q, got = {} }
-      heard[name] = h
     end
-    if not h then h = { got = {} }; heard[name] = h end -- snapshot begun before this login: nothing to drop later
-    lay(rec.s, snap.s, h.got, "s_")
-    lay(rec.a, snap.a, h.got, "a_")
+    for key, v in pairs(snap.s) do rec.s[key] = v end
+    for key, v in pairs(snap.a) do rec.a[key] = v end
   end
-  if not h then h = { got = {} }; heard[name] = h end
-  h.at = ns.now()
+  heardAt[name] = ns.now()
   rec.at = wall
   stats.crew[name] = rec
   return true
@@ -221,13 +219,13 @@ end
 
 -- Seconds since a friend's last STATS piece arrived (nil: none this login).
 function Store.heardAgo(name)
-  local h = heard[name]
-  return h and h.at and ns.now() - h.at or nil
+  local at = heardAt[name]
+  return at and ns.now() - at or nil
 end
 
 -- Drops a friend's saved numbers (they were forgotten, or expired).
 function Store.forgetCrew(name)
-  heard[name] = nil
+  heardAt[name] = nil
   local stats = root()
   if stats and stats.crew then stats.crew[name] = nil end
 end

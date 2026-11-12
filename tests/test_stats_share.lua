@@ -309,7 +309,7 @@ return {
       A.eq(rec.a, { dt = 10, jp = 4 }, "kept while off")
       receive(W, "Frostie", "STATS", { sid = S, q = "4", a_dt = "11" }, ns)
       A.eq(ns.db.stats.crew.Frostie.off, nil, "back on")
-      A.eq(ns.db.stats.crew.Frostie.a, { dt = 11 }, "what snapshot 2 did not carry is gone")
+      A.eq(ns.db.stats.crew.Frostie.a, { dt = 11, jp = 4 }, "laid over: what a piece does not carry stays")
     end,
 
     entries_filter_session_and_off = function(ns, A, W)
@@ -443,18 +443,67 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    a_number_the_last_snapshot_did_not_carry_is_dropped = function(ns, A, W)
+    a_lost_piece_sends_no_number_to_zero = function(ns, A, W)
       start(ns, W)
-      local S = "Frostie-1731100000"
-      receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-1", s_dt = "5", s_jp = "3", a_jp = "9" }, ns)
-      -- Frostie reset her numbers: her snapshot has no deaths or jumps any more
-      receive(W, "Frostie", "STATS", { sid = S, q = "1731100100-2", s_gn = "0", a_gn = "0" }, ns)
+      local S = ns.Session.current().id
+      for _, text in ipairs(pieces(ns, bigSnap(ns, S, "1731100000-1", 100))) do fireText(W, "Frostie", text) end
+      local second = pieces(ns, bigSnap(ns, S, "1731100300-2", 110))
+      A.ok(#second >= 3)
+      for i, text in ipairs(second) do
+        if i ~= 2 then fireText(W, "Frostie", text) end -- piece 2 is lost on the way
+      end
       local rec = ns.db.stats.crew.Frostie
-      A.eq(rec.s, { dt = 5, jp = 3, gn = 0 }, "laid over: a piece may still be on its way")
-      receive(W, "Frostie", "STATS", { sid = S, q = "1731100200-3", s_dt = "1" }, ns)
+      local before = { s = ns.Util.copy(rec.s), a = ns.Util.copy(rec.a) }
+      fireText(W, "Frostie", pieces(ns, bigSnap(ns, S, "1731100600-3", 120))[1]) -- the next snapshot starts
       rec = ns.db.stats.crew.Frostie
-      A.eq(rec.s, { dt = 1, gn = 0 }, "the next snapshot drops what the last one did not carry")
-      A.eq(rec.a, { gn = 0 })
+      for _, view in ipairs({ "s", "a" }) do
+        for key, v in pairs(before[view]) do
+          A.ok(type(rec[view][key]) == "number" and rec[view][key] >= v, view .. "_" .. key .. " kept, not zeroed")
+        end
+      end
+    end,
+
+    a_reset_reaches_friends_as_zeros = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      local function sendAs(name) -- my next snapshot, fired back in as if a friend sent it; returns its fields
+        local mark = #W.sent
+        ns.Stats.send()
+        W:advance(5)
+        local merged = {}
+        for i = mark + 1, #W.sent do
+          local msg = ns.Codec.decode(W.sent[i].text)
+          if msg and msg.type == "STATS" then
+            fireText(W, name, W.sent[i].text)
+            for k, v in pairs(msg.fields) do merged[k] = v end
+          end
+        end
+        return merged
+      end
+      ns.Stats.count("dt", 30)
+      ns.Stats.count("jp", 4)
+      sendAs("Frostie")
+      A.eq(ns.db.stats.crew.Frostie.s.dt, 30)
+      W.env.SlashCmdList.TWIZCREW("stats reset yes")
+      local f = sendAs("Frostie")
+      A.eq(f.s_dt, "0", "the cleared numbers go out as 0")
+      A.eq(f.a_jp, "0")
+      local rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s.dt, 0, "the friend shows the zeros")
+      A.eq(rec.s.jp, 0)
+      A.eq(rec.a.dt, 0)
+      A.eq(rec.a.jp, 0)
+      local corpse = ns.TrophyLogic.leaders(ns.StatsLogic.awards(ns.StatsStore.entries("session", S))).corpse
+      A.no(corpse and corpse[1] == "Frostie", "0 deaths wins nothing")
+      ns.Stats.count("jp", 2)
+      f = sendAs("Frostie")
+      A.eq(f.s_dt, "0", "every snapshot of this session still carries them")
+      A.eq(f.s_jp, "2")
+      ns.Session.newByHand()
+      f = sendAs("Frostie")
+      A.eq(f.s_dt, nil, "a new session: no more zeros")
+      A.eq(f.a_dt, nil)
+      A.eq(ns.Log.errors(10), {})
     end,
 
     an_older_snapshot_loses = function(ns, A, W)
@@ -474,6 +523,22 @@ return {
       receive(W, "Frostie", "STATS", { sid = "Frostie-1", q = "1731100200-1", s_dt = "50" }, ns)
       A.eq(ns.db.stats.crew.Frostie.sid, S)
       A.eq(ns.db.stats.crew.Frostie.s.dt, 9)
+      -- only inside the window: after it, the "older" one is taken (her clock may have gone back)
+      W:advance(ns.Config.STATS_OLDER_WINDOW + 1)
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-1", s_dt = "4" }, ns)
+      A.eq(ns.db.stats.crew.Frostie.s.dt, 4, "taken after the window")
+      A.eq(ns.db.stats.crew.Frostie.q, "1731100000-1")
+      -- a saved q far in the future blocks only inside the window
+      ns.db.stats.crew.Ginkan = { sid = S, q = "99999999999-1", s = { dt = 1 }, a = {}, at = ns.wallclock() }
+      receive(W, "Ginkan", "STATS", { sid = S, q = "1731100000-1", s_dt = "6" }, ns)
+      A.eq(ns.db.stats.crew.Ginkan.s.dt, 1, "inside the window")
+      W:advance(ns.Config.STATS_OLDER_WINDOW + 1)
+      receive(W, "Ginkan", "STATS", { sid = S, q = "1731100000-2", s_dt = "7" }, ns)
+      A.eq(ns.db.stats.crew.Ginkan.s.dt, 7, "a bad saved q does not block her for good")
+      -- a saved record with no receive time never blocks
+      ns.db.stats.crew.Lurabe = { sid = S, q = "99999999999-1", s = { dt = 1 }, a = {} }
+      receive(W, "Lurabe", "STATS", { sid = S, q = "1731100000-1", s_dt = "8" }, ns)
+      A.eq(ns.db.stats.crew.Lurabe.s.dt, 8)
     end,
 
     pieces_redraw_like_local_changes = function(ns, A, W)

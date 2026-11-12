@@ -415,6 +415,7 @@ function L.toWire(snap)
     f.off = "1"
     return f
   end
+  local zeros = type(snap.zeros) == "table" and snap.zeros or {} -- keys sent even at 0 (cleared by a reset)
   for _, prefix in ipairs({ "s", "a" }) do
     local src = snap[prefix]
     if type(src) == "table" then
@@ -422,7 +423,7 @@ function L.toWire(snap)
         local v = src[key]
         if isNumber(v) and v ~= math.huge then
           v = math.floor(v)
-          if v > 0 or (v == 0 and ns.StatsDefs.SET_KEYS[key]) then
+          if v > 0 or (v == 0 and (ns.StatsDefs.SET_KEYS[key] or zeros[key])) then
             f[prefix .. "_" .. key] = string.format("%.0f", v)
           end
         end

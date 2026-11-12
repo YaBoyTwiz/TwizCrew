@@ -145,8 +145,7 @@ local function digestFields()
     local n = L.total(Diary.people()[id].days, from)
     if n > 0 then f["p" .. id] = tostring(n) end
   end
-  local nh = ns.Notes and ns.Notes.hash()
-  if nh then f.nh = nh end
+  if ns.Notes then ns.Notes.digestFields(f) end
   return f
 end
 
@@ -211,11 +210,13 @@ local function onDigest(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
   local from = oldest()
   local people = Diary.people()
-  -- notes: a different checksum means they have notes (or deletions) we don't: ask for theirs
-  if ns.Notes and type(f.nh) == "string" and f.nh ~= ns.Notes.hash() then
+  -- notes: different checksums mean they have notes (or deletions) we don't: ask for theirs (only the buckets
+  -- that differ, when their digest says which)
+  local ask = ns.Notes and ns.Notes.askFor(f)
+  if ask then
     if not askedAt["notes"] or ns.now() - askedAt["notes"] >= ASK_GAP then
       askedAt["notes"] = ns.now()
-      sendTo(sender, "CALQ", { n = "1" })
+      sendTo(sender, "CALQ", ask)
     end
   end
   for k, v in pairs(f) do
@@ -237,7 +238,7 @@ end
 
 local function onAsk(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
-  if f.n == "1" and ns.Notes then ns.Notes.sendAll(sender) end
+  if f.n == "1" and ns.Notes then ns.Notes.sendAll(sender, f.b) end
   if type(f.i) == "string" and Diary.people()[f.i] then Diary.sendPerson(f.i, sender) end
 end
 

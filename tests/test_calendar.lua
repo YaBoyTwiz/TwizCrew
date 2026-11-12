@@ -51,6 +51,57 @@ local function hear(W, sender, list)
   for _, text in ipairs(list) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", sender) end
 end
 
+-- Copies of the addon (one per name), linked and logged in, in the game's real state (the channel delivers nothing:
+-- everything travels by whisper). Returns { { W =, ns = }, ... } in the order of names.
+local function crewOf(H, names)
+  local list, ws = {}, {}
+  for i, name in ipairs(names) do
+    local W, ns = H.client(name, { class = "MAGE" })
+    ns.Comm.echoCount = W.realEchoCount
+    list[i], ws[i] = { W = W, ns = ns }, W
+  end
+  H.link(unpack(ws))
+  for _, c in ipairs(list) do
+    c.W:fire("ADDON_LOADED", "TwizCrew"); c.W:fire("PLAYER_LOGIN"); c.W:fire("PLAYER_ENTERING_WORLD")
+  end
+  return list
+end
+
+-- The same `count` notes (each with a comment) written straight into every copy's saved data.
+local function sameNotes(list, count)
+  local L = list[1].ns.CalendarLogic
+  local today = math.floor(list[1].ns.Diary.now() / 86400)
+  for _, c in ipairs(list) do
+    for i = 1, count do
+      local key = "auth" .. (i % 4) .. "x-" .. (1790000000 + i)
+      c.ns.db.calendar.notes[key] = { d = c.ns.Notes.dateKey(L.civil(today + i % 20)), t = "Note " .. i, i = 1,
+        b = "Frostie", u = 1000 + i }
+      c.ns.db.calendar.replies[key .. "|c|gink4567-" .. (2000 + i)] = { n = key, v = "ok", b = "Ginkan", u = 2000 + i }
+    end
+  end
+end
+
+-- How many notes messages (a notes request, a note, a reply) each copy sent since `marks` ({ [W] = #W.sent }).
+local function notesTraffic(list, marks)
+  local total, asks = 0, {}
+  for _, c in ipairs(list) do
+    for i = marks[c.W] + 1, #c.W.sent do
+      local msg = c.ns.Codec.decode(c.W.sent[i].text)
+      if msg and (msg.type == "CALN" or msg.type == "CALR" or (msg.type == "CALQ" and msg.fields.n)) then
+        total = total + 1
+        if msg.type == "CALQ" then asks[#asks + 1] = msg.fields end
+      end
+    end
+  end
+  return total, asks
+end
+
+local function marksOf(list)
+  local m = {}
+  for _, c in ipairs(list) do m[c.W] = #c.W.sent end
+  return m
+end
+
 -- Words far longer than a note may be: "é" (2 bytes), "~" (3 bytes once escaped) and an emoji (4 bytes), with the
 -- bytes one letter takes as it travels.
 local LONG_WORDS = {
@@ -434,16 +485,100 @@ return {
     notes_checksums_trigger_a_swap = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
-      ns.Notes.add("2026-11-20", "Raid night", 3)
+      receive(ns, W, "Ginkan", "STATE", { cl = "WARRIOR" })
+      local buckets = {}
+      for i = 1, 8 do buckets[ns.Notes.bucketOf(ns.Notes.add("2026-11-2" .. i, "Raid night " .. i, 3))] = true end
+      A.ok(next(buckets, next(buckets)), "notes in several buckets")
+      W:advance(5)
+      -- a v0.1.23 digest (nh only): the old exchange, everything
       local before = #W.sent
       receive(ns, W, "Frostie", "CALD", { nh = "12345" })
       W:advance(1)
       local asks = sent(ns, W, "CALQ", before)
       A.eq(#asks, 1); A.eq(asks[1].fields.n, "1", "different notes: ask for theirs")
+      A.eq(asks[1].fields.b, nil, "everything (v0.1.23 reads no buckets)")
       before = #W.sent
       receive(ns, W, "Frostie", "CALQ", { n = "1" })
-      W:advance(3)
-      A.eq(#sent(ns, W, "CALN", before), 1, "they asked: all my notes go to them")
+      W:advance(10)
+      A.eq(#sent(ns, W, "CALN", before), 8, "they asked: all my notes go to them")
+      -- one answer a minute, whoever asks
+      before = #W.sent
+      receive(ns, W, "Ginkan", "CALQ", { n = "1" })
+      W:advance(10)
+      A.eq(#sent(ns, W, "CALN", before), 0, "Ginkan asks again at a later digest")
+      W:advance(45)
+      receive(ns, W, "Ginkan", "CALQ", { n = "1" })
+      W:advance(10)
+      A.eq(#sent(ns, W, "CALN", before), 8)
+      -- a digest from a new copy: only the buckets that differ
+      W:advance(130)
+      local mine = {}
+      before = #W.sent
+      ns.Diary.sendDigest()
+      W:advance(2)
+      local nb = sent(ns, W, "CALD", before)[1].fields.nb
+      local parts = ns.Util.split(nb, ".")
+      A.eq(#parts, 8, "one checksum per bucket")
+      for i, p in ipairs(parts) do mine[i] = p end
+      local b = next(buckets) -- a bucket with notes in it
+      mine[b] = "1"
+      before = #W.sent
+      receive(ns, W, "Frostie", "CALD", { nh = "12345", nb = table.concat(mine, ".") })
+      W:advance(1)
+      asks = sent(ns, W, "CALQ", before)
+      A.eq(#asks, 1); A.eq(asks[1].fields.b, tostring(b), "one bucket")
+      A.eq(asks[1].fields.n, "1", "(v0.1.23 would answer with everything)")
+      before = #W.sent
+      receive(ns, W, "Frostie", "CALQ", { n = "1", b = tostring(b) })
+      W:advance(10)
+      local want = 0
+      for key in pairs(ns.db.calendar.notes) do if ns.Notes.bucketOf(key) == b then want = want + 1 end end
+      local got = sent(ns, W, "CALN", before)
+      A.ok(want >= 1)
+      A.eq(#got, want, "only that bucket's notes")
+      for _, m in ipairs(got) do A.eq(ns.Notes.bucketOf(m.fields.k), b) end
+      A.eq(ns.Log.errors(10), {})
+    end,
+    two_copies_differing_by_one_note_swap_one_bucket = function(_, A, _, H)
+      local list = crewOf(H, { "Twiz", "Frostie" })
+      H.advance(120)
+      sameNotes(list, 24)
+      local tw, fr = list[1], list[2]
+      local extra = "frost123-1790000500"
+      fr.ns.db.calendar.notes[extra] = { d = tw.ns.db.calendar.notes["auth1x-1790000001"].d, t = "Extra", i = 1,
+        b = "Frostie", u = 5000 }
+      local b = fr.ns.Notes.bucketOf(extra)
+      local marks = marksOf(list)
+      H.advance(700) -- a digest each way
+      local _, asks = notesTraffic(list, marks)
+      A.ok(#asks >= 1, "a request")
+      for _, f in ipairs(asks) do A.eq(f.b, tostring(b), "exactly the one bucket that differs") end
+      for _, c in ipairs(list) do
+        for i = marks[c.W] + 1, #c.W.sent do
+          local msg = c.ns.Codec.decode(c.W.sent[i].text)
+          if msg.type == "CALN" then A.eq(c.ns.Notes.bucketOf(msg.fields.k), b, "only that bucket's notes") end
+          if msg.type == "CALR" then A.eq(c.ns.Notes.bucketOf(msg.fields.n), b, "and its replies") end
+        end
+      end
+      A.ok(tw.ns.db.calendar.notes[extra], "Twiz has the note now")
+      A.eq(tw.ns.Notes.hash(), fr.ns.Notes.hash())
+      A.eq(tw.ns.Log.errors(10), {}); A.eq(fr.ns.Log.errors(10), {})
+    end,
+    five_copies_repair_one_missing_note_with_few_sends = function(_, A, _, H)
+      local list = crewOf(H, { "Twiz", "Frostie", "Ginkan", "Holly", "Pewpew" })
+      H.advance(120)
+      sameNotes(list, 40)
+      local last = list[5]
+      local missing = "auth3x-1790000007"
+      last.ns.db.calendar.notes[missing] = nil
+      last.ns.db.calendar.replies[missing .. "|c|gink4567-2007"] = nil
+      local marks = marksOf(list)
+      H.advance(1300) -- two rounds of digests
+      local total = notesTraffic(list, marks)
+      A.ok(last.ns.db.calendar.notes[missing], "the missing note arrived")
+      for _, c in ipairs(list) do A.eq(c.ns.Notes.hash(), list[1].ns.Notes.hash(), "everyone agrees") end
+      A.ok(total < 40, "few sends: " .. total)
+      for _, c in ipairs(list) do A.eq(c.ns.Log.errors(10), {}) end
     end,
     every_calendar_message_fits_one_piece = function(ns, A, W)
       start(ns, W)

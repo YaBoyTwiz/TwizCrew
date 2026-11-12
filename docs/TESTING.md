@@ -618,6 +618,34 @@ out**, or `/tc test ...`) work for most of it without a friend.
 13. **Fade, lock, hide in fights** (all in Settings) still work with the panel minimized, and the notices stay fully
     visible when the panel is faded.
 
+## Hardening pass (2026-11-12)
+
+Nothing here is new to look at; these are fixes. None of it has run in the game. Riskiest first.
+
+1. **Does everything still load?** The release adds files, so **restart the game** (not `/reload`). Chat says
+   `TwizCrew v… loaded` once, and there is no red error. Open `/tc`, the calendar (`/tc cal`), the Recent window
+   (`/tc recent`), the test tools (`/tc test`) and right-click a row and the panel title: every window and menu that
+   was there before is still there. (The panel, the calendar and the test tools were split into more files.)
+2. **Dungeon:** go into a dungeon with a friend and fight. The panel stays, nothing says "hit a problem and turned
+   itself off", and after `/reload` `/tc report` shows no new lines under **Problems**.
+3. **`/tc report`:** it has a **Problems** part (empty is good) and a line `Messages this session: …` with counts.
+   If `send failed` is in that line with a number that keeps growing, tell Claude (the game may be throttling).
+4. **With a friend, both on the new version:** die, then come back to life. The DEAD tag shows and goes on their
+   screen. Stand in different zones for a few minutes: each other's zone stays right.
+5. **Stats board with a friend:** open the Hall of Shame while they play. Their numbers never jump to 0 and back,
+   and no "stole the crown" pop-up shows for a crown they did not really take.
+6. **Calendar with a friend:** write a note with accents or emoji that fills the box (it stops at about 100
+   letters, fewer with accents). It shows on their screen within a few seconds. Add a comment: same.
+7. **Mixed versions:** with one friend still on v0.1.23, you still see each other online, each other's stats and
+   notes. Note anything that only breaks in that mix.
+8. **Mock show:** `/tc test` → Try a mock, drag the pop-up somewhere, close it, try again: it opens where you left
+   it, and Live roasts stay on.
+9. **Scale:** `/tc` → change Scale. The panel grows or shrinks in place; its corner does not move.
+10. **Forget a friend:** right-click an offline friend → **Forget this friend**. They are gone from the Offline
+    list and the all-time board. `/tc forget Name` does the same. (If they log in again they come back.)
+11. **A module that broke comes back:** only if you ever see "…hit a problem and turned itself off": five minutes
+    later it should be working again without `/reload`. Tell Claude either way.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

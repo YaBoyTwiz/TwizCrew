@@ -221,6 +221,59 @@ Other players never see any of it. The messages are hidden addon messages, not c
   between copies. Unsure until tried in game: how the bar looks at the three row widths, whether `IsMouseOver` on the
   panel behaves for hover and peek, the glow, the missed number's placement.
 
+## Hardening pass (2026-11-12)
+
+- **Why:** the owner asked a newer Claude model to look over the whole addon and fix what it found. Review, plan and
+  every decision Claude took while building: `docs/superpowers/plans/2026-11-12-hardening.md` (plan) and the section
+  "Hardening pass" in `docs/TESTING.md` (what to check in game). Built on the local branch `hardening`, on top of the
+  minimize / activity feed work. **Not tested in game, not published.** The release needs `RESTART_SINCE` (files were
+  added and the `.toc` changed).
+- **On hold (owner, 2026-11-12: "lets not worry about the crew code part just yet"):** nothing checks that a sender
+  belongs to the crew. The channel name and password are in the public repository, so anyone on the realm who installs
+  TwizCrew shows up in the panel and can send mocks (their own words on a streamed screen), "update" notices and
+  calendar notes. Ideas when it comes back: a crew code each crew picks once, or accept only friends-list / group
+  members.
+- **Game values (the 2026-11-08 dungeon bug, everywhere):** one helper, `ns.Util.plain(fn, ...)`, reads game
+  functions (a secret or failing result becomes nil); a test (`test_lint`) fails when a file calls `UnitIsAFK`,
+  `IsInInstance`, `UnitAffectingCombat` and the like directly. Combat is read with `InCombatLockdown()` only.
+- **Log:** errors and warnings are also kept in their own list of 100 (`db.problems`, shown in `/tc report` under
+  "Problems"). The per-message send / recv lines are stored only while debug is on; `/tc report` shows counts per
+  message type instead. (Seen in the owner's saved log: 83% of the 500 lines were position messages, 15 minutes of
+  history.)
+- **A module that turned itself off comes back** after 5 minutes (10, 20, at most 30 on repeats). Crew, Self, Away,
+  Quest, LayerSensor, MockShow and MockEditor have their own error ids, so a bug in one no longer switches off a
+  whole feature.
+- **Messages:** bulk swaps (stats, trophies, calendar answers) wait in a second lane behind live messages. The copy
+  to the custom channel is sent only for PING until the channel has delivered something this session (on Forever it
+  never does). A send refused 20 times is dropped with a warning. The layer key no longer triggers a message by
+  itself. PING carries a short checksum of what I last sent; a friend whose copy of my state differs twice in a row
+  asks me for it once (`SREQ`), so a lost message repairs itself within about two minutes. The send rate stays 2 a
+  second (not known whether Forever throttles lower; `/tc report` counts refused sends).
+- **Forget a friend:** right-click an offline row, or `/tc forget Name`. Names not seen for 60 days are dropped at
+  login, with their stats.
+- **Stats:** a friend's numbers are laid over the stored ones piece by piece (no more zeros while a snapshot
+  arrives); an older snapshot arriving within 10 minutes of a newer one is ignored; a reset travels as explicit
+  zeros; "stole the crown" waits until a friend's numbers have settled; two different full trophy records for one
+  session end up the same everywhere (the smaller checksum wins).
+- **Calendar:** a note or comment is at most 100 bytes (accents and emoji count more), so it always fits one
+  message; at most 300 notes and 30 comments per note, the oldest kept; notes older than 90 days (UTC) do not count
+  anywhere. The digest carries 8 small checksums, and only the differing groups of notes are swapped; a friend still
+  on v0.1.23 is swapped with in full at most once an hour while nothing changed. Online friends' play time for today
+  and yesterday rides in the digest. Timed notes use the clock offset of their own date (clock changes).
+- **Files split (no behaviour change):** `UI/Panel.lua` → Panel, PanelRows, PanelHeader, PanelMenus, PanelMini;
+  `Calendar/CalendarUI.lua` → CalendarUI, CalendarMonth, CalendarDay, CalendarUsual, CalendarMaker; the test tools
+  moved from `UI/Report.lua` to `UI/TestTools.lua`.
+- **Small fixes:** dragging the mock show (it raised an error and three drags switched Live roasts off); changing
+  Scale no longer moves the panel; the Recent window opens in a fight; "running off" stays quiet for a dead friend,
+  a hearthstone or a flight; the Furniture award counts the panel's own AFK; settings of a module whose file failed
+  to load are no longer erased; the bar setting "instead of pop-ups" is off by default.
+- **Tests are stricter:** the stub knows the real method names of each kind of frame (a typo fails), refuses sends
+  over 255 bytes, and its secret values raise on use. Still open: most older tests run as if the custom channel
+  delivered messages (78 of them count that extra send); new tests run in the game's real state.
+- **Left alone on purpose (Claude's calls):** the channel join / retry code in `Comm/Transport.lua` (the one path
+  proven in game), the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
+  (still a full snapshot, so v0.1.23 copies keep showing all-time numbers).
+
 ## Website and Discord (on hold, owner 2026-11-11)
 
 - The owner wants TwizCrew tied to a website (a subfolder of twizgame.com first, movable to its own domain) and
@@ -299,7 +352,7 @@ Other players never see any of it. The messages are hidden addon messages, not c
   gone, and the running-off pop-up doesn't play the general pop-up sound either.
 
 - **Crew calendar, step 1 (2026-11-08, v0.1.16):** module "calendar" (Calendar/CalendarLogic.lua pure, Diary.lua
-  data and swaps, CalendarUI.lua window). Each copy writes its own diary: 15-minute slots online (and AFK) per UTC
+  data and swaps, CalendarUI.lua window, split 2026-11-12 into CalendarUI / Month / Day / Usual / Maker). Each copy writes its own diary: 15-minute slots online (and AFK) per UTC
   day, 30 days kept, keyed by a random id per WoW account (alts = one person). Swaps are pull-only: CALD digests
   (slots known per person) to everyone every 10 min and to a friend who comes online; whoever knows less asks once
   (CALQ) and gets CALP (one field per day, repeatKeys i). Masks merge by OR, so order never matters; nobody can write

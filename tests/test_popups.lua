@@ -118,6 +118,19 @@ return {
       A.eq(p.kind, "layer_diff"); A.eq(p.names, { "A", "B", "C" }); A.eq(p.invite, { "A", "B", "C" })
       A.no(pl:endQuiet({}))
     end,
+    online_popup_click_whispers_with_the_full_name = function(ns, A, W)
+      start(ns, W)
+      local told
+      W.env.ChatFrameUtil = { SendTell = function(name) told = name end }
+      ns.Transport.fullName = function(n) return n .. " Stormwind" end
+      W:advance(31)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest" })
+      W:advance(4)
+      A.eq(ns.Popups.visibleCount(), 1, "an online pop-up")
+      ns.Popups.clickForTest(1)
+      A.eq(told, "Frostie Stormwind")
+      A.eq(ns.Log.errors(10), {})
+    end,
     popups_end_to_end = function(ns, A, W)
       ready(ns, W)
       A.eq(ns.Popups.visibleCount(), 0)

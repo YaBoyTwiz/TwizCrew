@@ -30,10 +30,6 @@ end
 
 local shownLines = {} -- what the rows show now (test hook): { { line, ago, kind } }
 
-local function inFight()
-  return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
-end
-
 local function plain(s)
   return (tostring(s or ""):gsub("||", "\1"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("\1", "||"))
 end
@@ -136,15 +132,9 @@ function Recent.scroll(delta)
   draw()
 end
 
--- Opens the window (built now if this is the first time). Not in a fight: says so instead.
+-- Opens the window (built now if this is the first time).
 function Recent.open()
-  if not frame then
-    if inFight() then
-      print("TwizCrew: the recent activity window opens after the fight (the game does not let addons make new windows now).")
-      return false
-    end
-    build()
-  end
+  if not frame then build() end -- a plain frame: fine to build in a fight
   offset = 0
   draw()
   isOpen = true

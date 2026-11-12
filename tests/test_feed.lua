@@ -401,7 +401,7 @@ return {
       local d = ns.Modules.get("activity").defaults
       for key, value in pairs(d) do A.eq(ns.Modules.setting("activity", key), value, "activity." .. key) end
       A.eq(ns.Modules.setting("panel", "peek"), true); A.eq(ns.Modules.setting("panel", "peekSeconds"), 5)
-      A.eq(ns.Modules.setting("panel", "barHover"), false); A.eq(ns.Modules.setting("panel", "barInstead"), true)
+      A.eq(ns.Modules.setting("panel", "barHover"), false); A.eq(ns.Modules.setting("panel", "barInstead"), false, "pop-ups keep showing unless it is on")
       A.eq(ns.Modules.setting("panel", "minimized"), false)
       A.eq(#ns.Feed.entries(), 1, "the list is data, not a setting")
     end,
@@ -444,17 +444,14 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    recent_window_is_not_built_in_a_fight = function(ns, A, W)
+    recent_window_is_built_in_a_fight_too = function(ns, A, W)
       ready(W)
       W.env.InCombatLockdown = function() return true end
-      A.no(ns.Recent.open(), "no new window in a fight")
-      A.no(ns.Recent.isShown())
-      A.ok(printedLike(W, "after the fight"))
-      W.env.InCombatLockdown = function() return false end
-      A.ok(ns.Recent.open())
-      W.env.InCombatLockdown = function() return true end
+      A.ok(ns.Recent.open(), "a plain frame: fine to build in a fight")
+      A.ok(ns.Recent.isShown())
       ns.Recent.close()
-      A.ok(ns.Recent.open(), "built once: opening it again in a fight is fine")
+      A.ok(ns.Recent.open(), "and to open again")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     recent_command_and_menu_entry = function(ns, A, W)

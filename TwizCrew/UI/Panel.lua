@@ -64,9 +64,10 @@ local bar              -- the notice queue and the missed counter (FeedLogic.new
 local hoverOpen = false -- the mouse is on the minimized bar and "open while my mouse is on the bar" is on
 local peek             -- { name, untilT, held } while a friend's row is dropped open below the bar
 local barTicker
+local syncBarTicker -- (below) starts or stops the bar ticker to match what needs it
 local lastTickAt
 local rootHead
-local fullHeight, curHeight, curView = nil, nil, HEADER_HEIGHT, "full" -- see settle()
+local fullHeight, curHeight, curView = nil, HEADER_HEIGHT, "full" -- see settle()
 local noticeShown      -- the entry the bar shows now (test hook)
 local barTextNow = ""  -- the text on the bar's count spot now (test hook)
 
@@ -262,10 +263,7 @@ local function draggable(f)
 end
 
 ---------------------------------------------------------------------------------------------------------- look
-local function fadeTick(_, elapsed)
-  fadeElapsed = fadeElapsed + (tonumber(elapsed) or 0)
-  if fadeElapsed < 0.1 then return end
-  fadeElapsed = 0
+local function fadeStep()
   local over = false
   if root.IsMouseOver then over = root:IsMouseOver()
   elseif type(MouseIsOver) == "function" then over = MouseIsOver(root) end
@@ -273,14 +271,36 @@ local function fadeTick(_, elapsed)
   root:SetAlpha(over and 1 or clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
 end
 
+-- The raw handler only adds up the time; the safe wrapper runs once per 0.1 s step.
+local function fadeTick(_, elapsed)
+  fadeElapsed = fadeElapsed + (tonumber(elapsed) or 0)
+  if fadeElapsed < 0.1 then return end
+  fadeElapsed = 0
+  ns.Log.safe(FEATURE, fadeStep)
+end
+
+local appliedScale -- the scale the panel has now, to keep its corner still when the scale changes
+
 local function applyLook()
-  root:SetScale(clamp(setting("scale"), 0.5, 2, 1))
+  local newScale = clamp(setting("scale"), 0.5, 2, 1)
+  local oldScale = appliedScale
+  appliedScale = newScale
+  root:SetScale(newScale)
+  local pos = setting("position")
+  if oldScale and oldScale ~= newScale and type(pos) == "table" then
+    local x, y = Logic.rescalePosition(pos.x, pos.y, oldScale, newScale)
+    if x and y and (x ~= tonumber(pos.x) or y ~= tonumber(pos.y)) then
+      local moved = ns.Util.copy(pos)
+      moved.x, moved.y = round(x), round(y)
+      set("position", moved) -- (this runs applyLook again with the same scale)
+    end
+  end
   local alpha = clamp(setting("bgAlpha"), 0, 1, 0.8)
   T.setBackgroundAlpha(root, alpha)
   for _, r in ipairs(rowFrames) do T.setBackgroundAlpha(r, alpha) end
   applyPosition()
   if setting("fadeOut") then
-    script(root, "OnUpdate", fadeTick)
+    root:SetScript("OnUpdate", fadeTick)
     root:SetAlpha(clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
   else
     root:SetScript("OnUpdate", nil)
@@ -976,6 +996,7 @@ local function hide()
   end
   if tipRow then Panel.hideRowTip(tipRow) end
   shown = false
+  syncBarTicker()
   note = nil
   stopArrowTicker()
   Widgets.closeMenu()
@@ -1073,6 +1094,7 @@ local function redraw()
     root:SetSize(ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"] + 2 * PAD, HEADER_HEIGHT)
     root:Show()
     shown = true
+    syncBarTicker()
     settle(HEADER_HEIGHT)
     normalizeAnchor()
     return
@@ -1111,6 +1133,7 @@ local function redraw()
     root:SetSize(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD)
     root:Show()
     shown = true
+    syncBarTicker()
     settle(top + GAP + h + PAD)
     normalizeAnchor()
     return
@@ -1178,6 +1201,7 @@ local function redraw()
   root:SetSize(width + 2 * PAD, y + 2)
   root:Show()
   shown = true
+  syncBarTicker()
   settle(y + 2)
   normalizeAnchor()
 end
@@ -1414,12 +1438,6 @@ local function inMyGroup(name)
   return false
 end
 
-local function whisper(full)
-  if ChatFrameUtil and type(ChatFrameUtil.SendTell) == "function" then return call(ChatFrameUtil.SendTell, full) end
-  if type(ChatFrame_SendTell) == "function" then return call(ChatFrame_SendTell, full) end
-  if type(ChatFrame_OpenChat) == "function" then call(ChatFrame_OpenChat, "/w " .. full .. " ") end
-end
-
 local function inviteName(full)
   if C_PartyInfo and C_PartyInfo.InviteUnit then call(C_PartyInfo.InviteUnit, full)
   elseif type(InviteUnit) == "function" then call(InviteUnit, full) end
@@ -1444,7 +1462,7 @@ function Panel.rowMenu(m)
   end
   local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name
   if not m.offline then
-    items[#items + 1] = { label = "Whisper", onClick = function() whisper(full) end }
+    items[#items + 1] = { label = "Whisper", onClick = function() ns.Util.whisper(name) end }
     if not inMyGroup(name) then
       items[#items + 1] = { label = "Invite to group", onClick = function() inviteName(full) end }
     end
@@ -1978,7 +1996,8 @@ end
 
 local function needTicker()
   if not bar or not enabled then return false end
-  return bar:current() ~= nil or peek ~= nil or hoverOpen or (minimized() and setting("barHover") == true)
+  return bar:current() ~= nil or peek ~= nil or hoverOpen
+    or (shown and minimized() and setting("barHover") == true)
 end
 
 local function stopBarTicker()
@@ -2029,6 +2048,10 @@ startBarTicker = function()
   if C_Timer and C_Timer.NewTicker then
     barTicker = C_Timer.NewTicker(BAR_TICK, function() ns.Log.safe(FEATURE, barTick) end)
   end
+end
+
+syncBarTicker = function()
+  if needTicker() then startBarTicker() else stopBarTicker() end
 end
 
 -- Which news the bar shows: the pop-up kinds follow the pop-up switches (no point in news you turned off).
@@ -2091,8 +2114,9 @@ end
 -- A click on the notice on the bar: what clicking that pop-up does (a level-up: congratulate them; online: whisper
 -- them); anything else opens the recent activity list. The notice is then done.
 function Panel.noticeClicked()
-  local e = noticeShown or (bar and bar:current())
-  if not e or not bar then return end
+  if not bar then return end
+  local e = bar:current()
+  if not e or e ~= noticeShown then return end -- the notice drawn is not the one the bar holds now
   local raw = (tostring(e.who or ""):gsub("||", "|"))
   if e.kind == "levelup" then
     if not ns.isTestName(raw) then Panel.cheer({ tcModel = { name = raw } }) end
@@ -2126,6 +2150,7 @@ function Panel.headerButtonsForTest()
     hint = updateHintButton, title = versionButton, notice = noticeButton, head = rootHead }
 end
 function Panel.peekForTest() return peek end
+function Panel.barTickerForTest() return barTicker ~= nil end
 function Panel.viewForTest() return curView end
 function Panel.noticeForTest() return noticeShown end
 function Panel.miniButtonForTest() return miniButton end
@@ -2205,7 +2230,7 @@ ns.Modules.register({
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, sort = "online", showSelf = false,
-    minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = true,
+    minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
@@ -2225,9 +2250,9 @@ ns.Modules.register({
       info = "While the panel is minimized, holding your mouse on the title bar opens the whole panel, and it "
         .. "shrinks back when the mouse leaves. Off by default so the panel never opens by accident." },
     { key = "barInstead", label = "Show news on the bar, not as pop-ups", kind = "toggle",
-      info = "While the panel is minimized, the pop-ups for friends coming online, dying and leveling up are not "
-        .. "shown, because the bar already tells you. Turn it off to get both. Pop-ups work as always while the "
-        .. "panel is not minimized." },
+      info = "Pop-ups keep showing unless this is on. Turn it on and, while the panel is minimized, the pop-ups for "
+        .. "friends coming online, dying and leveling up are not shown, because the bar already tells you. "
+        .. "Pop-ups work as always while the panel is not minimized." },
     { key = "scale", label = "Scale", kind = "slider", min = 0.5, max = 2.0, step = 0.05, fmt = Widgets.percent,
       info = "Makes the whole panel bigger or smaller. 100% is the normal size." },
     { key = "bgAlpha", label = "Background opacity", kind = "slider", min = 0, max = 1, step = 0.05,

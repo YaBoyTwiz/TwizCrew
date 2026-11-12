@@ -122,3 +122,23 @@ function Util.plain(fn, ...)
   if type(fn) ~= "function" then return end
   return scrubIfOk(pcall(fn, ...))
 end
+
+-- Opens a whisper to a crew member: the full "Name Realm" when the transport knows one, through whichever chat
+-- function this game version has. Returns true when one existed.
+function Util.whisper(name)
+  if type(name) ~= "string" or name == "" then return false end
+  local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name
+  if ChatFrameUtil and type(ChatFrameUtil.SendTell) == "function" then
+    Util.plain(ChatFrameUtil.SendTell, full)
+    return true
+  end
+  if type(ChatFrame_SendTell) == "function" then
+    Util.plain(ChatFrame_SendTell, full)
+    return true
+  end
+  if type(ChatFrame_OpenChat) == "function" then
+    Util.plain(ChatFrame_OpenChat, "/w " .. full .. " ")
+    return true
+  end
+  return false
+end

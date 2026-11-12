@@ -211,6 +211,35 @@ local function laugh(model)
   try(model, "SetAnimation", anim)
 end
 
+-- Next to the crew panel: on its right, or on its left when there's no room on the right. Top middle of the
+-- screen when the panel is hidden.
+-- Where you dragged it last ({ point, x, y } from the screen's center), saved; nil = the default spot.
+local function saved()
+  local p = ns.db and ns.db.mockShowPos
+  if type(p) == "table" and type(p.point) == "string" and tonumber(p.x) and tonumber(p.y) then return p end
+end
+
+local function place()
+  frame:ClearAllPoints()
+  local p = saved()
+  if p then
+    frame:SetPoint(p.point, UIParent, "CENTER", tonumber(p.x), tonumber(p.y))
+    return "where you put it"
+  end
+  frame:SetPoint("LEFT", UIParent, "CENTER", SPOT_X, SPOT_Y)
+  return "beside center"
+end
+
+-- After a drag: remember the spot as an offset of the frame's center from the screen's center.
+local function savePosition()
+  local cx, cy = frame:GetCenter()
+  local ux, uy = UIParent:GetCenter()
+  cx, cy, ux, uy = tonumber(cx), tonumber(cy), tonumber(ux), tonumber(uy)
+  if not (cx and cy and ux and uy) then return end
+  if ns.db then ns.db.mockShowPos = { point = "CENTER", x = math.floor(cx - ux + 0.5), y = math.floor(cy - uy + 0.5) } end
+  place()
+end
+
 local function build()
   frame = T.frame("Button", "TwizCrewMockShow", UIParent)
   frame:SetSize(WIDTH, MODEL_H + 70)
@@ -260,7 +289,7 @@ local function build()
   frame:SetScript("OnDragStop", function(self)
     ns.Log.safe(FEATURE, function()
       self:StopMovingOrSizing()
-      remember()
+      savePosition()
       hideAt = ns.now() + SECONDS -- a fresh few seconds after moving it
       self:SetAlpha(1)
     end)
@@ -288,35 +317,6 @@ local function build()
     end)
   end)
   frame:Hide()
-end
-
--- Next to the crew panel: on its right, or on its left when there's no room on the right. Top middle of the
--- screen when the panel is hidden.
--- Where you dragged it last ({ point, x, y } from the screen's center), saved; nil = the default spot.
-local function saved()
-  local p = ns.db and ns.db.mockShowPos
-  if type(p) == "table" and type(p.point) == "string" and tonumber(p.x) and tonumber(p.y) then return p end
-end
-
-local function place()
-  frame:ClearAllPoints()
-  local p = saved()
-  if p then
-    frame:SetPoint(p.point, UIParent, "CENTER", tonumber(p.x), tonumber(p.y))
-    return "where you put it"
-  end
-  frame:SetPoint("LEFT", UIParent, "CENTER", SPOT_X, SPOT_Y)
-  return "beside center"
-end
-
--- After a drag: remember the spot as an offset of the frame's center from the screen's center.
-local function remember()
-  local cx, cy = frame:GetCenter()
-  local ux, uy = UIParent:GetCenter()
-  cx, cy, ux, uy = tonumber(cx), tonumber(cy), tonumber(ux), tonumber(uy)
-  if not (cx and cy and ux and uy) then return end
-  if ns.db then ns.db.mockShowPos = { point = "CENTER", x = math.floor(cx - ux + 0.5), y = math.floor(cy - uy + 0.5) } end
-  place()
 end
 
 -- Back to the default spot (Reset everything, /tc mock spot).

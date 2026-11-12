@@ -1,5 +1,5 @@
 -- The round TwizCrew button on the minimap's edge (essential "minimap") and the addon compartment entry.
--- Left-click: the settings window (like /tc). Right-click: show or hide the Crew panel. Drag: move it around the
+-- Left-click: the settings window (like /tc). Right-click: a menu (the Crew panel, a note, tools, settings). Drag: move it around the
 -- edge (the angle is saved when the drag ends). A small gold "!" while a friend has a newer TwizCrew (and Update
 -- reminders is on). Plain frames only, every script inside ns.Log.safe.
 -- The maths lives in UI/MinimapLogic.lua; the icon and starting angle in ns.Config (MINIMAP_ICON, MINIMAP_ANGLE).
@@ -238,8 +238,8 @@ end
 
 ns.Modules.register({
   id = FEATURE, name = "Minimap button", tier = "essential",
-  info = "A round TwizCrew button on the edge of the minimap. Left-click opens these settings, right-click shows "
-    .. "or hides the Crew panel. Drag it to move it around the minimap.",
+  info = "A round TwizCrew button on the edge of the minimap. Left-click opens these settings, right-click opens "
+    .. "a menu with the Crew panel, tools and settings. Drag it to move it around the minimap.",
   defaults = { show = true, angle = ns.Config.MINIMAP_ANGLE },
   settings = {
     { key = "show", label = "Show minimap button", kind = "toggle",

@@ -10,6 +10,7 @@ local T = ns.Theme
 local C = T.COLOR
 local Widgets = ns.Widgets
 local TICK, FADE = 0.5, 0.5
+local FADE_STEP = 0.05 -- how often a pop-up checks its fade (seconds)
 local WIDTH, HEIGHT, GAP, TOP = 270, 50, 4, -120
 local ROAST_WIDTH = 360 -- roast lines are longer; the title wraps onto a second line when needed
 local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", roast = "c46a00", levelup = "ffd100",
@@ -92,13 +93,7 @@ local function act(kind, name)
   if kind == "levelup" then
     if ns.Roasts and ns.Roasts.canCheer then ns.Roasts.cheer(name) return true end
   elseif kind == "online" then
-    if type(ChatFrame_SendTell) == "function" then
-      ChatFrame_SendTell(name)
-      return true
-    elseif type(ChatFrame_OpenChat) == "function" then
-      ChatFrame_OpenChat("/w " .. name .. " ")
-      return true
-    end
+    return ns.Util.whisper(name)
   end
   return false
 end
@@ -149,13 +144,20 @@ local function newFrame()
   Widgets.script(f, "OnClick", function(self) click(self) end, FEATURE)
   -- Only the fade is smooth; showing and hiding is decided by the ticker. A roast closes itself here once its
   -- time is over, so it also goes away while this module (and its ticker) is off.
-  Widgets.script(f, "OnUpdate", function(self)
-    if not self.tcShown then return end
-    local left = self.tcExpires - ns.now()
-    local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare")
-    if left <= 0 and own then close(self); return end
-    self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
-  end, FEATURE)
+  -- (the raw handler only adds up the time; the safe wrapper runs once per step)
+  local waited = 0
+  f:SetScript("OnUpdate", function(self, elapsed)
+    waited = waited + (tonumber(elapsed) or 0)
+    if waited < FADE_STEP then return end
+    waited = 0
+    ns.Log.safe(FEATURE, function()
+      if not self.tcShown then return end
+      local left = self.tcExpires - ns.now()
+      local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare")
+      if left <= 0 and own then close(self); return end
+      self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
+    end)
+  end)
   pool[#pool + 1] = f
   return f
 end

@@ -139,6 +139,31 @@ return {
       }, best)
       A.eq(plan, { { slot = 1, name = "Moonfire", from = 1, to = 5, id = 105 } })
     end,
+    rank_learned_burst_gives_one_scan_and_a_held_cursor_is_left_alone = function(ns, A, W)
+      start(ns, W)
+      local E = W.env
+      ns.Modules.set("rankup", "auto", true)
+      local scans, cleared, holding = 0, 0, false
+      E.GetNumSpellTabs = function() scans = scans + 1; return 0 end
+      E.HasAction = function() return false end
+      E.ClearCursor = function() cleared = cleared + 1 end
+      E.GetCursorInfo = function() return holding and "item" or nil end
+      E.InCombatLockdown = function() return false end
+      for _ = 1, 5 do W:fire("LEARNED_SPELL_IN_TAB") end
+      W:advance(2)
+      A.eq(scans, 1, "five events in a burst: one scan")
+      W:fire("LEARNED_SPELL_IN_TAB"); W:advance(2)
+      A.eq(scans, 2, "a later event scans again")
+      holding = true
+      local before = cleared
+      W:fire("LEARNED_SPELL_IN_TAB"); W:advance(2)
+      A.eq(scans, 2, "something on the cursor: the automatic run is skipped")
+      A.eq(cleared, before, "and the cursor is not cleared")
+      holding = false
+      W:fire("LEARNED_SPELL_IN_TAB"); W:advance(2)
+      A.eq(scans, 3, "the next trigger tries again")
+      A.eq(ns.Log.errors(10), {})
+    end,
     rank_update_swaps_old_ranks_on_the_bars = function(ns, A, W)
       start(ns, W)
       local E = W.env

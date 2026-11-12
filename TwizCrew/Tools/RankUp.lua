@@ -12,6 +12,7 @@ local MAX_SLOT = 180 -- every bar, including stance/form bars and the extra page
 
 local enabled = false
 local pendingAuto = false
+local learnedPending = false -- a scan is already waiting for the spellbook
 local button, learnFrame
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
@@ -141,6 +142,8 @@ function RankUp.update(quiet)
     if quiet then pendingAuto = true else say("can't change your bars during a fight. Try again after it.") end
     return 0
   end
+  -- the automatic run never takes something the player is holding on the cursor: skip it, the next trigger tries again
+  if quiet and type(GetCursorInfo) == "function" and ns.Util.plain(GetCursorInfo) ~= nil then return 0 end
   local todo = RankUp.plan(barSpells(), RankUp.bestRanks())
   local changed, failed = {}, 0
   for _, c in ipairs(todo) do
@@ -223,8 +226,13 @@ function RankUp.buttonShownForTest() return button ~= nil and enabled and settin
 ------------------------------------------------------------------------------------------------- module
 local function onLearned()
   if not enabled or not setting("auto") then return end
-  -- the spellbook updates a moment after the event
-  C_Timer.After(1, function() ns.Log.safe(FEATURE, RankUp.update, true) end)
+  -- the spellbook updates a moment after the event; a burst of events gives one scan
+  if learnedPending then return end
+  learnedPending = true
+  C_Timer.After(1, function()
+    learnedPending = false
+    ns.Log.safe(FEATURE, RankUp.update, true)
+  end)
 end
 
 local function onEnable()

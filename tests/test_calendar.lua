@@ -856,26 +856,114 @@ return {
       local N, L = ns.Notes, ns.CalendarLogic
       local today = math.floor(ns.Diary.now() / 86400)
       local date = N.dateKey(L.civil(today + 1))
-      local function key(i) return "a" .. string.format("%03d", i) .. "-1000" end
+      local function key(i) return "a" .. string.format("%03d", i) .. "-" .. (1000 + i) end
       for i = 0, 299 do ns.db.calendar.notes[key(i)] = { d = date, t = "n" .. i, i = 1, b = "Frostie", u = 1000 } end
       local full = N.hash()
       local function note(k, u) return { k = k, d = date, t = "new", i = "1", b = "Frostie", u = tostring(u or 1000) } end
-      receive(ns, W, "Frostie", "CALN", note("zzz-1"))
-      A.eq(ns.db.calendar.notes["zzz-1"], nil, "300 notes: a new one is refused")
+      receive(ns, W, "Frostie", "CALN", note("zzz-5000"))
+      A.eq(ns.db.calendar.notes["zzz-5000"], nil, "300 notes: a newer one is refused")
       A.eq(N.hash(), full)
       receive(ns, W, "Frostie", "CALN", note(key(7), 1001))
       A.eq(ns.db.calendar.notes[key(7)].t, "new", "a change to one it has is taken")
       A.eq(N.add(date, "mine", 1), nil, "my own new note is refused too")
-      -- a new note with a lower key than the last one counted is taken: every copy counts the same 300
+      -- a note older than the newest one counted is taken: every copy counts the same (oldest) 300
       receive(ns, W, "Frostie", "CALN", note("a0005-1"))
       A.ok(ns.db.calendar.notes["a0005-1"], "taken")
       local mine = N.hash()
       ns.db.calendar.notes[key(299)] = nil
-      A.eq(N.hash(), mine, "the note with the highest key no longer counts")
+      A.eq(N.hash(), mine, "the newest note no longer counts")
       ns.db.calendar.notes[key(299)] = { d = date, t = "n299", i = 1, b = "Frostie", u = 1000 }
       ns.Notes.prune()
       A.eq(ns.db.calendar.notes[key(299)], nil, "and pruning drops it")
       A.eq(N.hash(), mine)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    at_the_cap_the_oldest_are_kept_whoever_wrote_them = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      local today = math.floor(ns.Diary.now() / 86400)
+      local date = N.dateKey(L.civil(today + 1))
+      local function rec(t) return { d = date, t = t or "n", i = 1, b = "Frostie", u = 1000 } end
+      local function note(k) return { k = k, d = date, t = "new", i = "1", b = "Frostie", u = "1000" } end
+      local function fill(extra)
+        ns.db.calendar.notes = {}
+        for i = 1, 299 do ns.db.calendar.notes["mmm-" .. (1000 + i)] = rec() end
+        for k, v in pairs(extra or {}) do ns.db.calendar.notes[k] = v end
+      end
+      -- copy A: full, with an old note from an author whose id sorts last; a newer note from a low id is refused
+      fill({ ["zzz-500"] = rec() })
+      receive(ns, W, "Frostie", "CALN", note("aaa-2000"))
+      A.eq(ns.db.calendar.notes["aaa-2000"], nil, "the newest is refused, whoever wrote it")
+      local hashA = N.hash()
+      -- copy B heard them in the other order: it took the new one while it had room, then the old one
+      fill()
+      receive(ns, W, "Frostie", "CALN", note("aaa-2000"))
+      A.ok(ns.db.calendar.notes["aaa-2000"])
+      receive(ns, W, "Frostie", "CALN", note("zzz-500"))
+      A.ok(ns.db.calendar.notes["zzz-500"], "the old one is taken")
+      A.eq(N.hash(), hashA, "both count the oldest 300")
+      N.prune()
+      A.eq(ns.db.calendar.notes["aaa-2000"], nil, "the newest goes")
+      A.ok(ns.db.calendar.notes["zzz-500"])
+      -- my own note is never deleted by what arrives later (even an older note that pushes it out of the count)
+      local mine = ns.Diary.myId() .. "-1500"
+      fill({ [mine] = rec("mine") })
+      receive(ns, W, "Frostie", "CALN", note("aaa-3000"))
+      A.eq(ns.db.calendar.notes["aaa-3000"], nil, "newer than mine: refused")
+      receive(ns, W, "Frostie", "CALN", note("zzz-400"))
+      A.ok(ns.db.calendar.notes["zzz-400"], "older than mine: taken")
+      N.prune()
+      A.ok(ns.db.calendar.notes[mine], "mine is still there")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    numbers_that_cannot_travel_are_refused = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      local date = N.dateKey(L.civil(math.floor(ns.Diary.now() / 86400) + 1))
+      local bad = "-1.2345678901234e300"
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = date, t = "Raid", i = "1", u = bad })
+      A.eq(ns.db.calendar.notes["frost123-1000"], nil, "a note with a nonsense u")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = date, t = "Raid", i = "1", u = "12345678901" })
+      A.eq(ns.db.calendar.notes["frost123-1000"], nil, "11 digits")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = date, t = "Raid", i = "1.5", u = "1000",
+        a = "1790000000.25" })
+      local n = ns.db.calendar.notes["frost123-1000"]
+      A.ok(n, "a good one")
+      A.eq(n.at, nil, "a time that is not a whole number is dropped"); A.eq(n.i, 1)
+      receive(ns, W, "Frostie", "CALR", { r = "frost123-1000|c|frost123-1001", n = "frost123-1000", v = "hi", u = bad })
+      A.eq(next(ns.db.calendar.replies), nil, "a reply with a nonsense u")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    old_copies_are_not_asked_at_every_digest = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      for i = 1, 3 do ns.Notes.add("2026-11-2" .. i, "Raid " .. i, 3) end
+      W:advance(5)
+      -- Frostie runs v0.1.23 and keeps one record we don't count: its nh never matches ours, and it asks for
+      -- everything at every digest
+      local before = #W.sent
+      for i = 1, 6 do -- six digests, ten minutes apart
+        if i > 1 then W:advance(600) end
+        receive(ns, W, "Frostie", "CALD", { nh = "12345" })
+        receive(ns, W, "Frostie", "CALQ", { n = "1" })
+      end
+      W:advance(10)
+      A.eq(#sent(ns, W, "CALQ", before), 1, "one full pull from it in an hour")
+      A.eq(#sent(ns, W, "CALN", before), 3, "one full answer to it in an hour")
+      -- (still inside the hour) it adds a real note: its nh changes, we ask again at its next digest; we take it,
+      -- our notes changed, so its next request is answered again
+      W:advance(130)
+      before = #W.sent
+      receive(ns, W, "Frostie", "CALD", { nh = "67890" })
+      W:advance(2)
+      A.eq(#sent(ns, W, "CALQ", before), 1, "asked again")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = "2026-11-25", t = "New", i = "1", b = "Frostie",
+        u = "1000" })
+      receive(ns, W, "Frostie", "CALQ", { n = "1" })
+      W:advance(10)
+      A.eq(#sent(ns, W, "CALN", before), 4, "answered again, with its note too")
       A.eq(ns.Log.errors(10), {})
     end,
     notes_are_pruned_once_a_day_while_logged_in = function(ns, A, W)

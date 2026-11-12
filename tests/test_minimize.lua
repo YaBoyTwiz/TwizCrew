@@ -84,6 +84,20 @@ return {
       A.eq(L.barFixedY(50, 10, 24), 50, "never lifted")
     end,
 
+    rescale_position_keeps_the_corner_on_screen = function(ns, A)
+      local L = ns.PanelLogic
+      local x, y = L.rescalePosition(600, -300, 1.0, 1.5)
+      A.eq({ x, y }, { 400, -200 })
+      x, y = L.rescalePosition(100, 50, 2, 1)
+      A.eq({ x, y }, { 200, 100 })
+      x, y = L.rescalePosition(600, -300, nil, 1.5)
+      A.eq({ x, y }, { 600, -300 }, "no old scale: unchanged")
+      x, y = L.rescalePosition(600, -300, 0, 1.5)
+      A.eq({ x, y }, { 600, -300 }, "old scale zero: unchanged")
+      x, y = L.rescalePosition(600, -300, 1, 0)
+      A.eq({ x, y }, { 600, -300 }, "new scale zero: unchanged")
+    end,
+
     bar_text_and_labels = function(ns, A)
       local L = ns.PanelLogic
       A.eq(L.barText(nil, "2 of 3 online"), "2 of 3 online")
@@ -353,6 +367,77 @@ return {
       A.eq(told, "Frostie")
     end,
 
+    clicking_a_notice_that_is_no_longer_the_one_drawn_does_nothing = function(ns, A, W)
+      ready(W)
+      ns.Panel.toggleMinimized(); W:advance(1)
+      local told
+      W.env.ChatFrame_SendTell = function(name) told = name end
+      friend(W, ns, "Frostie")
+      W:advance(0.2)
+      local drawn = ns.Panel.noticeForTest()
+      A.ok(drawn, "a notice is drawn")
+      -- the bar moved on to another entry that has not been drawn yet
+      ns.Panel.barForTest():dismiss(ns.now())
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "14" })
+      ns.Panel.noticeClicked()
+      A.eq(told, nil, "no action")
+      A.ok(ns.Panel.noticeForTest() == drawn, "and nothing dismissed")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    online_notice_whisper_uses_the_full_name = function(ns, A, W)
+      ready(W)
+      ns.Panel.toggleMinimized(); W:advance(1)
+      local told
+      W.env.ChatFrameUtil = { SendTell = function(name) told = name end }
+      ns.Transport.fullName = function(n) return n .. " Stormwind" end
+      friend(W, ns, "Frostie")
+      W:advance(0.2)
+      ns.Panel.noticeButtonForTest()._scripts.OnClick()
+      A.eq(told, "Frostie Stormwind", "only ChatFrameUtil.SendTell exists: used with the full name")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    bar_hover_ticker_runs_only_while_shown_and_minimized = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "barHover", true)
+      A.no(ns.Panel.barTickerForTest(), "not minimized: no ticker")
+      ns.Panel.toggleMinimized(); W:advance(1)
+      A.ok(ns.Panel.barTickerForTest(), "minimized and shown: ticking")
+      ns.Modules.set("panel", "hideInCombat", true)
+      W:fire("PLAYER_REGEN_DISABLED"); W:advance(1)
+      A.no(ns.Panel.barTickerForTest(), "hidden: stopped")
+      W:fire("PLAYER_REGEN_ENABLED"); W:advance(1)
+      A.ok(ns.Panel.barTickerForTest(), "shown again: ticking again")
+      ns.Panel.toggleMinimized(); W:advance(1)
+      A.no(ns.Panel.barTickerForTest(), "restored: stopped")
+    end,
+
+    changing_the_scale_keeps_the_panel_corner_in_place = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "position", { point = "TOPLEFT", x = 600, y = -300 })
+      ns.Modules.set("panel", "scale", 1.5)
+      local p = ns.Modules.setting("panel", "position")
+      A.eq({ p.point, p.x, p.y }, { "TOPLEFT", 400, -200 })
+      ns.Modules.set("panel", "scale", 1.5)
+      p = ns.Modules.setting("panel", "position")
+      A.eq({ p.x, p.y }, { 400, -200 }, "same scale: unchanged")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    fade_enters_the_safe_wrapper_once_per_step_only = function(ns, A, W)
+      ready(W)
+      local h = root(ns)._scripts.OnUpdate
+      A.eq(type(h), "function", "fade is on by default")
+      local calls, safe = 0, ns.Log.safe
+      ns.Log.safe = function(...) calls = calls + 1; return safe(...) end
+      for _ = 1, 9 do h(root(ns), 0.01) end
+      A.eq(calls, 0, "frames inside the step cost no safe call")
+      h(root(ns), 0.02)
+      A.eq(calls, 1)
+      ns.Log.safe = safe
+    end,
+
     -------------------------------------------------------------------------------------------------- peek
     peek_opens_the_friends_row_then_closes = function(ns, A, W)
       ready(W)
@@ -479,6 +564,7 @@ return {
     -------------------------------------------------------------------------------------------------- pop-ups
     minimized_panel_replaces_online_died_levelup_popups = function(ns, A, W)
       ready(W)
+      ns.Modules.set("panel", "barInstead", true)
       ns.Panel.toggleMinimized(); W:advance(1)
       friend(W, ns, "Frostie")
       W:advance(4)

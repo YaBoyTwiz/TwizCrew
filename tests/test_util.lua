@@ -1,6 +1,17 @@
 return {
   files = { "Core/Init.lua", "Core/Util.lua" },
   tests = {
+    whisper_uses_the_first_chat_function_that_exists = function(ns, A, W)
+      A.no(ns.Util.whisper("Frostie"), "nothing to whisper with")
+      A.no(ns.Util.whisper(nil))
+      local got
+      W.env.ChatFrame_OpenChat = function(text) got = text end
+      A.ok(ns.Util.whisper("Frostie")); A.eq(got, "/w Frostie ")
+      W.env.ChatFrame_SendTell = function(name) got = "tell " .. name end
+      A.ok(ns.Util.whisper("Frostie")); A.eq(got, "tell Frostie")
+      W.env.ChatFrameUtil = { SendTell = function(name) got = "util " .. name end }
+      A.ok(ns.Util.whisper("Frostie")); A.eq(got, "util Frostie")
+    end,
     split_keeps_empty_fields = function(ns, A)
       A.eq(ns.Util.split("a^^b", "^"), { "a", "", "b" })
       A.eq(ns.Util.split("", "^"), { "" })

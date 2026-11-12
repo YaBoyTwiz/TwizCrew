@@ -137,6 +137,20 @@ return {
       ns.MockShow.hide()
       A.eq(ns.Log.errors(10), {})
     end,
+    drag_stop_saves_the_spot_without_an_error = function(ns, A, W)
+      start(ns, W)
+      W.env.SlashCmdList.TWIZCREW("test mock icon")
+      local f
+      for _, fr in ipairs(W.frames) do if fr._name == "TwizCrewMockShow" then f = fr end end
+      A.ok(f and f._scripts.OnDragStop, "the show has a drag handler")
+      -- the stub's frames have no real position: say where the show and the screen's center are
+      rawset(f, "GetCenter", function() return 1060, 490 end)
+      rawset(W.env.UIParent, "GetCenter", function() return 960, 540 end)
+      f._scripts.OnDragStop(f)
+      A.eq(ns.Log.errors(10), {}, "no error logged")
+      A.eq(ns.db.mockShowPos, { point = "CENTER", x = 100, y = -50 })
+      ns.MockShow.hide()
+    end,
     show_goes_away_by_itself = function(ns, A, W)
       start(ns, W)
       W.env.SlashCmdList.TWIZCREW("test mock icon")

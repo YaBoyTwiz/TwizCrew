@@ -107,6 +107,16 @@ function PanelLogic.timeToLevel(track, left, now)
   return seconds
 end
 
+-- A new scale keeps the panel's corner where it is on screen: the saved offsets are in scaled units, so they
+-- shrink when the scale grows. Unchanged when either scale is missing or zero.
+function PanelLogic.rescalePosition(x, y, oldScale, newScale)
+  x, y, oldScale, newScale = tonumber(x), tonumber(y), tonumber(oldScale), tonumber(newScale)
+  if not x or not y then return x, y end
+  if not oldScale or oldScale <= 0 or not newScale or newScale <= 0 then return x, y end
+  local k = oldScale / newScale
+  return x * k, y * k
+end
+
 -- "TwizCrew v0.1.5 (older than yours)" for the row tooltip; nil when we don't know their version.
 function PanelLogic.versionLine(ver)
   if type(ver) ~= "string" or ver == "" then return nil end

@@ -382,10 +382,29 @@ return {
     roster_names_are_used_when_present = function(ns, A, W)
       local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
       db.crew.extra = { "Frostie" }
-      ns.roster = { names = function() return { "Ginkan", "Frostie", "Twiz" } end }
+      ns.roster = { names = function() return { "Ginkan", "Frostie", "Twiz" } end, get = function() return { online = true } end }
       W:advance(16)
       A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Ginkan" },
         { chatType = "WHISPER", target = "Frostie" } })
+    end,
+    fallback_broadcast_whispers_online_roster_names_but_hello_goes_to_everyone = function(ns, A, W)
+      ns.Comm.echoCount = W.realEchoCount
+      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
+      db.crew.extra = { "Frostie" }
+      local online = { Ginkan = true }
+      ns.roster = { names = function() return { "Ginkan", "Lurabe", "Frostie" } end,
+        get = function(_, n) return { online = online[n] == true } end }
+      W:advance(16)
+      local function targets(msgType)
+        local out = {}
+        for _, d in ipairs(ns.Transport.destinations(msgType)) do out[#out + 1] = d.target end
+        return out
+      end
+      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" }, "online roster names and the extra names")
+      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" }, "a HELLO tries everyone")
+      ns.Modules.set("comm", "transport", "whisper")
+      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" })
+      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" })
     end,
     modes_pick_their_destinations = function(ns, A, W)
       local db = boot(ns, W)

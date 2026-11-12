@@ -104,6 +104,21 @@ end
 -- percent, a fight starting or ending, a zone change...), so earning XP adds no messages.
 local RIDE_ALONG = { xc = true, rx = true, lk = true }
 
+-- A short string that is the same on the sender and on a receiver holding every field the sender last sent: it
+-- covers the sorted keys of `fields` (the sender's last-sent table, or what a receiver collected) minus the
+-- ride-along keys, which are allowed to lag.
+function Self.digestOf(fields)
+  local keys = {}
+  for key, value in pairs(fields or {}) do
+    if not RIDE_ALONG[key] and type(value) == "string" then keys[#keys + 1] = key end
+  end
+  table.sort(keys)
+  for i, key in ipairs(keys) do keys[i] = key .. "=" .. fields[key] end
+  return ns.Util.checksum(table.concat(keys, "~"))
+end
+
+function Self.digest() return Self.digestOf(last) end
+
 local function onlyRideAlong(changes)
   for key in pairs(changes) do
     if not RIDE_ALONG[key] then return false end

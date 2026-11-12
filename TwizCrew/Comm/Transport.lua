@@ -493,6 +493,14 @@ function Transport.heardFrom(rawSender, chatType)
   end
 end
 
+-- Drops what we keep for a name: the channel member entry and the hidden-whisper memory.
+function Transport.forget(name)
+  local key, short = memberKey(name)
+  if key then members[key] = nil end
+  whispered[name] = nil
+  if short then whispered[short] = nil end
+end
+
 function Transport.members()
   local out = {}
   for _, key in ipairs(memberKeys()) do out[#out + 1] = members[key].name end
@@ -549,13 +557,17 @@ local function addWhisper(out, seen, name, skipGroup)
 end
 
 -- Names we may whisper: channel members, then (rosterToo) roster names, and the extra names from the settings.
-local function whisperNames(skipGroup, rosterToo, out)
+-- everyone: all roster names, not only the online ones (a HELLO is how offline friends are found again).
+local function whisperNames(skipGroup, rosterToo, out, everyone)
   out = out or {}
   local seen = {}
   for _, key in ipairs(memberKeys()) do addWhisper(out, seen, members[key].name, skipGroup) end
   if rosterToo ~= false and ns.roster and ns.roster.names then
     local ok, names = ns.Log.safe(FEATURE, function() return ns.roster:names() end)
-    if ok and type(names) == "table" then for _, n in ipairs(names) do addWhisper(out, seen, n, skipGroup) end end
+    if ok and type(names) == "table" then for _, n in ipairs(names) do
+      local m = ns.roster:get(n)
+      if everyone or (m and m.online) then addWhisper(out, seen, n, skipGroup) end
+    end end
   end
   for _, n in ipairs(crew().extra or {}) do addWhisper(out, seen, n, skipGroup) end
   return out
@@ -569,11 +581,11 @@ end
 -- The group (RAID or PARTY) as one destination, or nil when not in a group.
 function Transport.groupDestination() return groupDestination() end
 
-local function fallback()
+local function fallback(msgType)
   local out = {}
   local g = groupDestination()
   if g then out[1] = g end
-  return whisperNames(g ~= nil, true, out)
+  return whisperNames(g ~= nil, true, out, msgType == "HELLO")
 end
 
 -- A whisper to one crew member (nil when this mode does not whisper, or the name is ours).
@@ -601,7 +613,7 @@ function Transport.destinations(msgType)
     if state.joined and not state.failed then return { { chatType = "CHANNEL", target = state.index } } end
     return {}
   elseif m == "whisper" then
-    return whisperNames(false)
+    return whisperNames(false, true, nil, msgType == "HELLO")
   elseif m == "group" then
     local g = groupDestination()
     return g and { g } or {}
@@ -620,7 +632,7 @@ function Transport.destinations(msgType)
     end
     return out
   end
-  return fallback()
+  return fallback(msgType)
 end
 
 local function succeeded(result)

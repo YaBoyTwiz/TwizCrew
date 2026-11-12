@@ -80,6 +80,11 @@ end
 
 function L.newLimiter(gap)
   local l = { last = {} }
+  -- Would allow() say yes? (does not take the turn)
+  function l:ready(key, now)
+    local t = self.last[key]
+    return t == nil or now - t >= gap
+  end
   function l:allow(key, now)
     local t = self.last[key]
     if t ~= nil and now - t < gap then return false end

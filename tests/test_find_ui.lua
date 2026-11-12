@@ -150,7 +150,9 @@ return {
       W:advance(1.1)
       local played = {}
       W.env.PlaySound = function(k) played[#played + 1] = k end
-      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" }) -- 140 yards away a few seconds later
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8925", y = "-1000" }) -- running: 75 yards, then 140 (a step under MAX_RUN_SPEED)
+      W:advance(1)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" })
       W:advance(3)
       A.ok(ns.Find.isRunningOff("Frostie"), "running off")
       A.eq(ran, {}, "RAN_OFF is only for us running off")
@@ -164,6 +166,30 @@ return {
       W:advance(12)
       A.no(ns.Find.isRunningOff("Frostie"), "the alarm runs out")
       A.no(ns.Panel.rowAlarmForTest(rowIndex(ns, "Frostie")))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_friend_who_is_dead_or_a_ghost_does_not_set_off_the_alarm = function(ns, A, W)
+      boot(W)
+      group(W)
+      hear(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", sz = "Goldshire", ver = "0.1.0", tg = "DEAD" })
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(1.1)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8925", y = "-1000" })
+      W:advance(1)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8860", y = "-1000" })
+      W:advance(3)
+      A.no(ns.Find.isRunningOff("Frostie"), "a ghost walking off is not running off")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_friend_who_jumps_far_does_not_set_off_the_alarm = function(ns, A, W)
+      boot(W)
+      group(W)
+      friend(ns, W, "Frostie")
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8990", y = "-1000" })
+      W:advance(1.1)
+      hear(ns, W, "Frostie", "POS", { c = "0", x = "-8700", y = "-1000" }) -- 290 yards in about a second: a hearthstone
+      W:advance(3)
+      A.no(ns.Find.isRunningOff("Frostie"), "faster than MAX_RUN_SPEED: not a run")
       A.eq(ns.Log.errors(10), {})
     end,
     running_off_yourself_counts_for_wanderer = function(ns, A, W)

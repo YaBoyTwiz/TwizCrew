@@ -122,7 +122,18 @@ return {
       ns.Roasts.addMock("{name} the {class} fell over in {zone}.")
       ns.Modules.set("roasts", "ownOnly", true)
       A.eq(ns.Roasts.mock("Frostie"), "Frostie the Mage fell over in Duskwood.")
-      A.eq(ns.Roasts.mock("Nobody"), nil, "only that line, and it needs a zone we don't know")
+      local text = ns.Roasts.mock("Nobody")
+      A.ok(text and not text:find("{", 1, true), "own line unusable (needs a zone): a built-in line instead")
+    end,
+    mock_waits_only_after_a_line_was_found = function(ns, A, W)
+      start(ns, W)
+      local lines = ns.Roasts.MOCK_LINES
+      ns.Roasts.MOCK_LINES = { "{name} fell over in {zone}." } -- nothing usable for a stranger
+      A.no(ns.Roasts.mock("Nobody"), "no usable line")
+      ns.Roasts.MOCK_LINES = { "{name} fell over." }
+      A.ok(ns.Roasts.mock("Nobody"), "no wait was started by the empty try")
+      ns.Roasts.MOCK_LINES = lines
+      A.eq(ns.Log.errors(10), {})
     end,
     my_mocks_window = function(ns, A, W)
       start(ns, W)

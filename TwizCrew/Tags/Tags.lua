@@ -104,6 +104,7 @@ local function look()
   end
   local minutes = tonumber(ns.Modules.setting("tags", "awayMinutes")) or 3
   if ns.Modules.setting("tags", "autoAway") ~= false and not idle and lastActive
+    and not plain(UnitOnTaxi, "player")
     and ns.now() - lastActive >= minutes * 60 then
     idle = true
     changed("idle")

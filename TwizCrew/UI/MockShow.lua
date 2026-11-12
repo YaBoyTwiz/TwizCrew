@@ -240,6 +240,21 @@ local function savePosition()
   place()
 end
 
+-- The per-frame work while the show is up (one function, not one closure per frame).
+local function onUpdate(self)
+  if not hideAt then return end
+  local now = ns.now()
+  if current and (not self.tcNextLaugh or now >= self.tcNextLaugh) then
+    self.tcNextLaugh = now + 2.5 -- keep laughing (the animation ends after a couple of seconds)
+    laugh(current)
+  end
+  if now >= hideAt + FADE then
+    MockShow.hide()
+  elseif now >= hideAt then
+    self:SetAlpha(math.max(0, 1 - (now - hideAt) / FADE))
+  end
+end
+
 local function build()
   frame = T.frame("Button", "TwizCrewMockShow", UIParent)
   frame:SetSize(WIDTH, MODEL_H + 70)
@@ -301,21 +316,7 @@ local function build()
     GameTooltip:Show()
   end)
   frame:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  frame:SetScript("OnUpdate", function(self, elapsed)
-    ns.Log.safe(FEATURE, function()
-      if not hideAt then return end
-      local now = ns.now()
-      if current and (not self.tcNextLaugh or now >= self.tcNextLaugh) then
-        self.tcNextLaugh = now + 2.5 -- keep laughing (the animation ends after a couple of seconds)
-        laugh(current)
-      end
-      if now >= hideAt + FADE then
-        MockShow.hide()
-      elseif now >= hideAt then
-        self:SetAlpha(math.max(0, 1 - (now - hideAt) / FADE))
-      end
-    end)
-  end)
+  frame:SetScript("OnUpdate", function(self) ns.Log.safe(FEATURE, onUpdate, self) end)
   frame:Hide()
 end
 

@@ -518,6 +518,7 @@ end
 
 function ACTIONS.layer()
   ensureFakes()
+  if ns.Layer and ns.Layer.lookNow then ns.Layer.lookNow() end -- the fakes' first look, before the button's own news
   local now = layerOf[BUDDY] == "different" and "same" or "different"
   if not ns.Modules.isEnabled("layer") then say("the Layer tracker is turned off in /tc, so nothing shows.") end
   popupHint(now == "same" and "layerSame" or "layerDiff", now == "same" and "Back on my layer" or "Layer changes")
@@ -525,6 +526,7 @@ function ACTIONS.layer()
   layerTurn = layerTurn + 1
   expect(now == "same" and "layer_same" or "layer_diff", BUDDY, function()
     inject(BUDDY, "UPDATE", { lk = tostring(900 + layerTurn) }) -- any news makes the layer tracker look again
+    if ns.Layer and ns.Layer.lookNow then ns.Layer.lookNow() end -- now, while the pop-up is expected
   end)
 end
 

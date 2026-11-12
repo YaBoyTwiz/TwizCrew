@@ -485,6 +485,18 @@ return {
       W:fire("CHAT_MSG_ADDON", "TwizCrew", texts[1], "WHISPER", "Ginkan")
       A.eq(seen, { "Ginkan", "Elwynn Forest" })
     end,
+    receive_ignores_a_newer_protocol = function(ns, A, W)
+      boot(ns, W)
+      local n = 0
+      ns.Comm.on("PING", function() n = n + 1 end)
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "2^PING^", "CHANNEL", "Ginkan")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "99^PING^", "WHISPER", "Holybøi")
+      A.eq(n, 0, "a newer protocol is not handled")
+      A.eq(ns.Log.counts()["recv newer protocol"], 2)
+      A.no(ns.Log.counts()["recv PING"], "not counted as a PING")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
+      A.eq(n, 1, "the current protocol still works")
+    end,
     receive_dedupes_same_text_within_window = function(ns, A, W)
       boot(ns, W)
       local n = 0

@@ -446,6 +446,16 @@ return {
       W:advance(2)
       A.eq(ns.Self.lastSent().tg, "")
     end,
+    no_auto_away_on_a_flight_path = function(ns, A, W)
+      start(ns, W)
+      ns.Away.start()
+      W.state.taxi = true
+      W:advance(ns.Modules.setting("tags", "awayMinutes") * 60 + 30)
+      A.eq(ns.Away.isAway(), false, "watching the flight is not idle")
+      W.state.taxi = false
+      W:advance(4)
+      A.eq(ns.Away.isAway(), true, "after landing, the idle time still counts")
+    end,
     secret_answers_in_a_dungeon_count_as_unknown = function(ns, A, W)
       -- In a dungeon the game answers "AFK?", "dead?", "fighting?" and "flying?" with secret values an addon may not
       -- test (doing so errors; 3 errors in a minute turned the Crew panel off until /reload, owner 2026-11-08).

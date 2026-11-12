@@ -28,6 +28,15 @@ local ticker
 local enabled = false
 
 local function cfg() return ns.Config end
+
+-- Remembers a meet-up id; ids older than MEET_LIFE are dropped (a meet-up cannot come back after that anyway).
+local function rememberMeet(id)
+  local now = ns.now()
+  for old, at in pairs(meetIds) do
+    if now - at > ns.Config.MEET_LIFE then meetIds[old] = nil end
+  end
+  meetIds[id] = now
+end
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 
 local function changed() ns.Bus.fire("FIND_CHANGED") end
@@ -185,7 +194,7 @@ function Find.placeMeet(mapID, mx, my, audience)
     by = ns.playerName(), c = c, x = x, y = y, place = Where.placeName(mapID, mx, my) or "", audience = audience,
     expires = ns.now() + cfg().MEET_LIFE, mine = true,
   }
-  meetIds[meet.id] = true
+  rememberMeet(meet.id)
   sendMeet(meet)
   changed()
   return true
@@ -212,7 +221,7 @@ local function onMeet(sender, fields)
   end
   if type(fields.id) ~= "string" or fields.id == "" then return end
   if fields.clr == "1" then
-    meetIds[fields.id] = true
+    rememberMeet(fields.id)
     if meet and meet.id == fields.id then
       meet = nil
       closeMeetArrow()
@@ -232,7 +241,7 @@ local function onMeet(sender, fields)
   -- one we had before (replaced by a newer one, cleared, or over): its sender may still send it to newcomers, but
   -- it never takes the newest one's place here
   if meetIds[fields.id] then return end
-  meetIds[fields.id] = true
+  rememberMeet(fields.id)
   meet = {
     id = fields.id, by = sender, c = p.c, x = p.x, y = p.y, place = ns.Util.safeText(fields.p or ""),
     audience = audience, expires = now + left,
@@ -295,6 +304,7 @@ end
 -- A group member who was right next to you and suddenly isn't: their arrow flashes red and a pop-up shows (no sound).
 -- When we are the one who left, RAN_OFF fires instead (the stats count it for Wanderer).
 local runTracks, runUntil, selfTracks = {}, {}, {}
+local lastThem = {} -- name -> { c, x, y, at }: their position at the last look, to tell a teleport from a run
 local lastMe -- { c, x, y, at }: my position at the last look, to tell a teleport from a walk or a flight
 
 function Find.isRunningOff(name)
@@ -325,8 +335,19 @@ local function checkRunaways()
   local alarmOn = setting("runaway") ~= false
   for _, name in ipairs(ns.roster:names()) do
     local them = Find.positionOf(name)
+    local lastLook = lastThem[name]
+    lastThem[name] = them and { c = them.c, x = them.x, y = them.y, at = now } or nil
     if them then
-      if alarmOn then
+      -- dead or a ghost, or moved faster than any mount since the last look (hearthstone, flight, released ghost)
+      local member = ns.roster:get(name)
+      local skip = member ~= nil and member.tags ~= nil and member.tags.DEAD == true
+      if lastLook and not skip then
+        local moved = Logic.vector(lastLook, them)
+        skip = moved == nil or moved > c.MAX_RUN_SPEED * (now - lastLook.at)
+      end
+      if skip then
+        runTracks[name] = nil
+      elseif alarmOn then
         local track, alarm, dist = Logic.runaway(runTracks[name], me, them, ns.now(), opts)
         runTracks[name] = track
         if alarm then

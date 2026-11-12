@@ -333,6 +333,7 @@ return {
       ns.Bus.fire("MEMBER_DIED", "Frostie", "Westfall", "")
       W:advance(0.5)
       frostieMoves(ns, W)
+      W:advance(ns.Config.LAYER_RECOMPUTE_GAP + 0.1) -- the layer look runs, the pop-up is pending
       ns.Modules.setEnabled("popups", false)
       A.eq(ns.Popups.visibleCount(), 0)
       ns.Modules.setEnabled("popups", true)

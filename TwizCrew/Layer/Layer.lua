@@ -9,6 +9,7 @@ local FEATURE = "layer"
 local relations = {} -- name -> last computed relation
 local memory = {}    -- name -> { verdict, hiddenSince, scope } kept by LayerKey.judge
 local ticker
+local dirty, waiting = false, false -- events ask for a recompute; one runs at most every LAYER_RECOMPUTE_GAP s
 
 -- A value the game hides from addons (a "secret") counts as not known.
 local function readable(v)
@@ -118,6 +119,7 @@ local function describe(ev, unit)
 end
 
 local function recompute()
+  dirty = false
   if not ns.roster then return end
   local me, plates, now = mySide(), nameplateNames(), ns.now()
   for _, m in ipairs(ns.roster:members(true)) do -- fakes too (test tools: OTHER LAYER tag, layer pop-up)
@@ -132,12 +134,30 @@ local function recompute()
   end
 end
 
+local function flush()
+  waiting = false
+  if dirty then recompute() end
+end
+
+-- Events (nameplates come in dozens, friends' updates in bursts) only mark the look as out of date; a short timer
+-- then does one recompute for all of them. The 2 s ticker still looks regardless.
+local function request()
+  dirty = true
+  if waiting then return end
+  if not (C_Timer and C_Timer.After) then recompute(); return end
+  waiting = true
+  C_Timer.After(ns.Config.LAYER_RECOMPUTE_GAP, function() ns.Log.safe(FEATURE, flush) end)
+end
+
 -- After a loading screen or joining / leaving a group, we may be on another layer: start over.
 local function forget(reason)
   if next(memory) then ns.Log.add("info", "layer memory cleared (%s)", reason) end
   memory = {}
   recompute()
 end
+
+-- Looks right now (the test tools need the result before they go on).
+function Layer.lookNow() recompute() end
 
 function Layer.relationOf(name)
   if not ns.Modules.isEnabled(FEATURE) or not ns.roster then return "unknown" end
@@ -154,9 +174,8 @@ ns.Modules.register({
   id = "layer", name = "Layer tracker", tier = "module",
   info = "Tells you when a friend is on a different layer (they are close by on the map but the game hides them).",
   onEnable = function()
-    for _, event in ipairs({ "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED" }) do
-      ns.Bus.on(FEATURE, event, recompute)
-    end
+    for _, event in ipairs({ "MEMBER_UPDATED", "SELF_UPDATED" }) do ns.Bus.on(FEATURE, event, request) end
+    for _, event in ipairs({ "MEMBER_ONLINE", "MEMBER_OFFLINE" }) do ns.Bus.on(FEATURE, event, recompute) end
     local grouped = call(IsInGroup) and true or false
     ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", function() forget("loading screen") end)
     ns.Events.on(FEATURE, "GROUP_ROSTER_UPDATE", function()
@@ -168,7 +187,7 @@ ns.Modules.register({
         recompute()
       end
     end)
-    ns.Events.on(FEATURE, "NAME_PLATE_UNIT_ADDED", recompute)
+    ns.Events.on(FEATURE, "NAME_PLATE_UNIT_ADDED", request)
     if C_Timer and C_Timer.NewTicker then
       ticker = C_Timer.NewTicker(ns.Config.LAYER_LOOK_TICK, function() ns.Log.safe(FEATURE, recompute) end)
     end

@@ -228,6 +228,23 @@ return {
       A.eq(rel[2], { "Frostie", "different", "same" })
       A.eq(ns.Log.errors(10), {})
     end,
+    many_nameplate_events_make_one_recompute = function(ns, A, W)
+      start(ns, W)
+      local looks = 0
+      local members = ns.roster.members
+      ns.roster.members = function(...) looks = looks + 1; return members(...) end
+      for i = 1, 40 do W:fire("NAME_PLATE_UNIT_ADDED", "nameplate" .. (i % 5 + 1)) end
+      A.eq(looks, 0, "nothing runs inside the burst")
+      W:advance(ns.Config.LAYER_RECOMPUTE_GAP + 0.01)
+      A.eq(looks, 1, "one recompute for 40 events")
+      ns.Bus.fire("MEMBER_UPDATED", "Frostie"); ns.Bus.fire("SELF_UPDATED")
+      A.eq(looks, 1, "member and self updates wait too")
+      W:advance(ns.Config.LAYER_RECOMPUTE_GAP + 0.01)
+      A.ok(looks >= 2, "and then look")
+      local before = looks
+      W:advance(ns.Config.LAYER_LOOK_TICK)
+      A.ok(looks > before, "the 2 s ticker still looks")
+    end,
     ghost_is_not_another_layer = function(ns, A, W)
       start(ns, W)
       grouped(W, "party1", "Frostie", false)

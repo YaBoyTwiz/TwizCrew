@@ -5,6 +5,7 @@ local function boot(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.tags.settings.autoAway = false -- no mouse in the fake game: not idle-away after 3 minutes
   W:fire("PLAYER_ENTERING_WORLD")
 end
 

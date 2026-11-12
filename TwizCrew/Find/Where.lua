@@ -206,9 +206,9 @@ function Where.isGroupMember(name)
   if ns.isTestName(name) then
     return ns.TestTools ~= nil and type(ns.TestTools.inGroup) == "function" and ns.TestTools.inGroup(name) or false
   end
-  for _, fn in ipairs({ UnitInParty, UnitInRaid }) do
-    local yes = call(fn, name)
-    if not secret(yes) and yes then return true end
-  end
+  local inParty = call(UnitInParty, name)
+  if not secret(inParty) and inParty then return true end
+  local inRaid = call(UnitInRaid, name)
+  if not secret(inRaid) and inRaid then return true end
   return Where.unitFor(name) ~= nil
 end

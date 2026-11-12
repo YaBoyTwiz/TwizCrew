@@ -955,7 +955,7 @@ return {
       A.eq(ns.Transport.status().channel, "OtherHQ")
       A.ok(ns.Transport.status().joined)
     end,
-    a_refused_send_is_given_up_after_ten_tries = function(ns, A, W)
+    a_refused_send_is_given_up_after_the_retry_cap = function(ns, A, W)
       boot(ns, W)
       W:advance(6)
       W.state.sendResult = 3 -- "try again later", for good
@@ -964,8 +964,8 @@ return {
       ns.Comm.send("PING", { n = "2" })
       W:advance(8)
       A.eq(countLog(ns, "given up"), 0, "still trying")
-      W:advance(20)
-      A.eq(countLog(ns, "send to 5 given up after 10 tries"), 2, "one line per dropped message")
+      W:advance(45)
+      A.eq(countLog(ns, "send to 5 given up after " .. ns.Config.SEND_RETRY_MAX .. " tries"), 2, "one line per dropped message")
       A.eq(done, 1, "the sent callback ran for the dropped message")
       W.state.sendResult = 0
       local n = #W.sent

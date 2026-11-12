@@ -7,7 +7,9 @@
 -- at = a time (UTC seconds) for a timed note ("4:30pm"): everyone sees it at their own local time, on their own
 -- local date (which can be a different day than the author's).
 -- Messages: CALN = one note (to everyone when you add or delete one; to one friend when asked). The CALD digest
--- carries nh = a checksum of all notes; a different checksum means "ask for theirs" (CALQ n=1).
+-- carries nh = a checksum of all notes (v0.1.23 reads it: a different one means "ask for theirs", CALQ n=1) and
+-- nb = BUCKETS short checksums, one per bucket (a note and its replies fall in the bucket its key picks): a copy
+-- asks only for the buckets that differ (CALQ n=1 b=3,5) and the answer holds only those buckets.
 local _, ns = ...
 
 local Notes = {}
@@ -23,7 +25,8 @@ local MAX_REPLY_KEY = 50 -- a reply's key ("<note key>|c|<id>-<time>": 41 letter
 local MAX_NOTES = 300    -- live (not deleted) notes counted; deletion markers always count
 Notes.MAX_COMMENTS = 30  -- live comments counted per note
 local KEEP_DAYS = 90     -- past notes (and deletion markers) are kept this long
-local SEND_ALL_GAP = 60  -- seconds between "all my notes" to the same friend
+local ANSWER_GAP = 60    -- seconds between answers to "send me your notes", whoever asks
+Notes.BUCKETS = 8
 
 local B = "Interface\\Icons\\"
 Notes.ICONS = {
@@ -122,7 +125,7 @@ function Notes.dungeonImages(key)
     "Interface\\Glues\\LoadingScreens\\LoadScreen" .. d.lfg }
 end
 
-local sentAllAt = {}
+local answeredAt
 
 local function store()
   local db = ns.db
@@ -273,6 +276,10 @@ end
 local function noteCounts(_, n) return inWindow(n.d) end
 local function commentOf(noteKey) return function(k, r) return r.n == noteKey and isComment(k) end end
 
+-- The bucket (1 .. BUCKETS) of a note and its replies, picked by the note's key.
+local function bucketOf(noteKey) return ns.Util.hashNumber(noteKey) % Notes.BUCKETS + 1 end
+Notes.bucketOf = bucketOf
+
 -- A checksum of every note (and deletion) and reply that counts, so two copies can tell whether they have the same.
 -- (The same sum v0.1.23 makes over what it keeps.)
 function Notes.hash()
@@ -284,6 +291,59 @@ function Notes.hash()
   if #keys == 0 then return nil end
   table.sort(keys)
   return tostring(ns.Util.hashNumber(table.concat(keys, ";")))
+end
+
+-- One short checksum per bucket, as a list (an empty bucket: "0").
+local function bucketSums()
+  local notes, replies = counted()
+  local s, rs = store() or {}, Notes.replyStore() or {}
+  local lists = {}
+  for b = 1, Notes.BUCKETS do lists[b] = {} end
+  for key in pairs(notes) do table.insert(lists[bucketOf(key)], key .. ":" .. tostring(s[key].u or 0)) end
+  for key, _ in pairs(replies) do
+    table.insert(lists[bucketOf(rs[key].n)], key .. ":" .. tostring(rs[key].u or 0))
+  end
+  local out = {}
+  for b, list in ipairs(lists) do
+    table.sort(list)
+    out[b] = #list > 0 and ns.Util.checksum(table.concat(list, ";")) or "0"
+  end
+  return out
+end
+
+-- The digest's notes fields: nh and nb (none when nothing counts).
+function Notes.digestFields(f)
+  local nh = Notes.hash()
+  if not nh then return end
+  f.nh = nh
+  f.nb = table.concat(bucketSums(), ".")
+end
+
+-- What to ask a friend whose digest is f: CALQ fields, or nil when our notes are the same. A digest with nb asks only
+-- for the buckets that differ; one without (v0.1.23) is compared by nh and asks for everything.
+function Notes.askFor(f)
+  if type(f.nb) == "string" then
+    local theirs = ns.Util.split(f.nb, ".")
+    if #theirs == Notes.BUCKETS then
+      local mine, differ = bucketSums(), {}
+      for b = 1, Notes.BUCKETS do if theirs[b] ~= mine[b] then differ[#differ + 1] = b end end
+      if #differ == 0 then return nil end
+      return { n = "1", b = table.concat(differ, ",") }
+    end
+  end
+  if type(f.nh) == "string" and f.nh ~= Notes.hash() then return { n = "1" } end
+  return nil
+end
+
+-- The buckets a request asks for ({ [b] = true }), or nil for all (no b, as v0.1.23 asks, or nothing readable).
+local function asked(b)
+  if type(b) ~= "string" then return nil end
+  local out, any = {}, false
+  for part in b:gmatch("[^,]+") do
+    local n = tonumber(part)
+    if n and n >= 1 and n <= Notes.BUCKETS and n == math.floor(n) then out[n] = true; any = true end
+  end
+  return any and out or nil
 end
 
 ---------------------------------------------------------------------------------------------------- sending
@@ -306,13 +366,18 @@ local function send(key, to)
   end
 end
 
-function Notes.sendAll(to)
+-- Answers "send me your notes" (CALQ n=1): the notes and replies that count, only those of the buckets in b ("3,5")
+-- when it names any. At most one answer per ANSWER_GAP, whoever asks (later askers ask again at a later digest).
+function Notes.sendAll(to, b)
   local t = ns.now()
-  if sentAllAt[to] and t - sentAllAt[to] < SEND_ALL_GAP then return end
-  sentAllAt[to] = t
+  if answeredAt and t - answeredAt < ANSWER_GAP then return end
+  answeredAt = t
+  local only = asked(b)
   local notes, replies = counted()
-  for key in pairs(notes) do send(key, to) end -- (notes first: a reply is only taken once its note is there)
-  for key in pairs(replies) do Notes.sendReply(key, to) end
+  local rs = Notes.replyStore() or {}
+  -- (notes first: a reply is only taken once its note is there)
+  for key in pairs(notes) do if not only or only[bucketOf(key)] then send(key, to) end end
+  for key in pairs(replies) do if not only or only[bucketOf(rs[key].n)] then Notes.sendReply(key, to) end end
 end
 
 ------------------------------------------------------------------------------------------- replies to notes

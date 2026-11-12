@@ -124,6 +124,64 @@ return {
       noErrors(A, c.twNs, c.frNs)
     end,
 
+    a_snapshot_in_slow_pieces_steals_no_crown = function(_, A, _, H)
+      local c = twoFriends(H)
+      c.twNs.Comm.echoCount = c.tw.realEchoCount
+      c.frNs.Comm.echoCount = c.fr.realEchoCount
+      local frStore = c.frNs.StatsStore
+      local function setFrostie(base) -- Frostie leads every award Twiz is in, by a lot
+        local rec = frStore.mine()
+        for i, key in ipairs(c.frNs.StatsDefs.KEYS) do
+          rec.s[key] = base + i
+          rec.a[key] = key == "gn" and rec.s[key] or 10 * (base + i)
+        end
+      end
+      setFrostie(100)
+      c.frNs.Stats.send()
+      c.twNs.Stats.count("dt", 50)
+      c.twNs.Stats.count("jp", 50)
+      H.advance(905) -- past the first 15 minutes of the session
+      A.eq(c.twNs.db.stats.crew.Frostie.s.dt, frStore.get("session", "dt"), "Twiz has Frostie's numbers")
+      c.twNs.Steals.check() -- the baseline
+      local popups = {}
+      local notice = c.twNs.Popups.notice
+      c.twNs.Popups.notice = function(icon, title, ...)
+        popups[#popups + 1] = title
+        return notice(icon, title, ...)
+      end
+      -- Frostie's next snapshot is held on the way and arrives one piece every 2 s
+      local held, api = {}, c.fr.env.C_ChatInfo
+      local real = api.SendAddonMessage
+      api.SendAddonMessage = function(prefix, text, ...)
+        local result = real(prefix, text, ...)
+        if text:find("^%d+%^STATS%^") then
+          c.fr.sent[#c.fr.sent].result = 99 -- not delivered by the harness
+          local known = false
+          for _, t in ipairs(held) do if t == text then known = true end end
+          if not known then held[#held + 1] = text end
+        end
+        return result
+      end
+      setFrostie(105)
+      c.frNs.Stats.send()
+      H.advance(10)
+      api.SendAddonMessage = real
+      A.ok(#held >= 3, "the snapshot travels in pieces (" .. #held .. ")")
+      local sender = "Frostie-" .. c.fr.state.realm
+      for _, text in ipairs(held) do
+        c.tw:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", sender)
+        H.advance(2)
+      end
+      H.advance(70)
+      A.eq(c.twNs.db.stats.crew.Frostie.s.dt, 106, "the whole snapshot arrived")
+      A.eq(popups, {}, "no crown changed hands")
+      -- a real steal still shows
+      c.twNs.Stats.count("dt", 1000)
+      H.advance(70)
+      A.eq(popups, { "Twiz just stole Professional Corpse from Frostie!" })
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
     session_new_resets_both = function(_, A, _, H)
       local c = twoFriends(H)
       die(c.tw); die(c.fr)

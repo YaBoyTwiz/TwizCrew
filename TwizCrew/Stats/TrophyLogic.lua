@@ -155,8 +155,25 @@ function L.fromPieces(f)
   return { sid = f.s, start = tonumber(f.t), people = people, winners = winners, late = late, e = e }
 end
 
+-- A short checksum (a string) of a full record's content: session, start, people and winners, as the record reads
+-- after a trip over the wire (so the sender and the receiver of it get the same one).
+function L.checksum(r)
+  local ok, f = pcall(L.toWire, r) -- (saved data may be broken)
+  r = ok and L.fromPieces(f) or r
+  local people = type(r.people) == "table" and r.people or {}
+  local parts = { tostring(r.sid), tostring(tonumber(r.start) or 0), table.concat(people, ",") }
+  local ids = {}
+  for id, names in pairs(type(r.winners) == "table" and r.winners or {}) do
+    if type(id) == "string" and type(names) == "table" then ids[#ids + 1] = id end
+  end
+  table.sort(ids)
+  for _, id in ipairs(ids) do parts[#parts + 1] = id .. "=" .. table.concat(r.winners[id], ",") end
+  return ns.Util.checksum(table.concat(parts, "|"))
+end
+
 -- Does record r replace old? Full beats late (whatever the people); late never beats full; two late ones: the
--- fresher numbers (higher e) win; otherwise (same e, or both full) strictly more people wins.
+-- fresher numbers (higher e) win; otherwise (same e, or both full) strictly more people wins. Two full ones with
+-- as many people: the smaller checksum string wins, so every copy ends up with the same record.
 function L.better(old, r)
   if type(old) ~= "table" then return true end
   if type(r) ~= "table" then return false end
@@ -166,13 +183,34 @@ function L.better(old, r)
     local re, oe = tonumber(r.e) or 0, tonumber(old.e) or 0
     if re ~= oe then return re > oe end
   end
-  return type(old.people) == "table" and #(r.people or {}) > #old.people
+  if type(old.people) ~= "table" then return false end
+  local rn, on = #(r.people or {}), #old.people
+  if rn ~= on or r.late then return rn > on end
+  return L.checksum(r) < L.checksum(old)
 end
 
 -- One digest entry: "<sid>" for a full record, "<sid>*<e>" for a late one.
 function L.digestEntry(sid, r)
   if type(r) == "table" and r.late then return sid .. "*" .. math.floor(tonumber(r.e) or 0) end
   return sid
+end
+
+-- The same entry's part of the digest's c (v0.1.23 ignores c): "<people>.<checksum>" for a full record, "-" for a
+-- late one.
+function L.digestSum(r)
+  if type(r) ~= "table" or r.late or type(r.people) ~= "table" then return "-" end
+  return #r.people .. "." .. L.checksum(r)
+end
+
+-- A digest's c as a list in r's order: { n = people, sum = checksum } or false (late, or unreadable).
+function L.parseSums(text)
+  local out = {}
+  if type(text) ~= "string" then return out end
+  for item in text:gmatch("[^,]+") do
+    local n, sum = item:match("^(%d+)%.(%d+)$")
+    out[#out + 1] = n and { n = tonumber(n), sum = sum } or false
+  end
+  return out
 end
 
 -- A digest's r as a list of { sid, late, e }, in its order; malformed entries are skipped.

@@ -140,9 +140,10 @@ return {
         if msg and msg.type == "TRP" and msg.fields.s == "Lurabe-500" then sentRecord = true end
       end
       A.ok(sentRecord)
-      -- a second, different record for the same session is ignored
-      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire({ sid = "Lurabe-500", start = 500,
-        people = { "Lurabe", "Twiz" }, winners = { bunny = { "Lurabe" } } }))
+      -- a second, different record for the same session (as many people, a larger checksum) is ignored
+      local other = { sid = "Lurabe-500", start = 500, people = { "Lurabe", "Twiz" }, winners = { bunny = { "Lurabe" } } }
+      A.ok(ns.TrophyLogic.checksum(other) > ns.TrophyLogic.checksum(r))
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(other))
       A.eq(ns.Trophies.records()["Lurabe-500"].winners.bunny, { "Twiz" }, "the first one is kept")
     end,
     a_friend_starting_a_new_session_stays_in_the_old_record = function(ns, A, W)
@@ -179,23 +180,29 @@ return {
       local small = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Twiz" }, winners = { corpse = { "Twiz" } } }
       ns.Trophies.records()["Twiz-500"] = small
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy")
-      -- same number of people: mine stays
-      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire({ sid = "Twiz-500", start = 500,
-        people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }))
-      A.eq(ns.Trophies.records()["Twiz-500"], small, "a tie keeps mine")
-      A.eq(fired, 0)
+      -- same number of people: the smaller checksum wins (on every copy)
+      local tie = { sid = "Twiz-500", start = 500, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }
+      A.ok(ns.TrophyLogic.checksum(tie) < ns.TrophyLogic.checksum(small))
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(small))
+      A.eq(fired, 0, "the same record: nothing changes")
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(tie))
+      A.eq(ns.Trophies.records()["Twiz-500"], tie, "a tie: the smaller checksum wins")
+      A.eq(fired, 1)
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(small))
+      A.eq(ns.Trophies.records()["Twiz-500"], tie, "the larger checksum never comes back")
+      A.eq(fired, 1)
       -- more people: theirs replaces mine
       local big = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Lurabe", "Twiz" },
         winners = { corpse = { "Lurabe" } } }
       receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(big))
       A.eq(ns.Trophies.records()["Twiz-500"], big, "the fuller record wins")
-      A.eq(fired, 1)
+      A.eq(fired, 2)
       A.eq(ns.Trophies.lineFor("Twiz"), nil, "the summary was rebuilt")
       A.eq(ns.Trophies.lineFor("Lurabe"), "1 trophy")
-      -- fewer people: mine stays
-      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(small))
+      -- fewer people: mine stays, whatever the checksum
+      receive(W, ns, "Lurabe", "TRP", ns.TrophyLogic.toWire(tie))
       A.eq(ns.Trophies.records()["Twiz-500"], big, "fewer people: ignored")
-      A.eq(fired, 1)
+      A.eq(fired, 2)
     end,
     the_digest_stays_short = function(ns, A, W)
       boot(W)
@@ -449,7 +456,7 @@ return {
       A.ok(L.better(rec(true, 900, 3), rec(false, nil, 2)), "full beats late regardless of people or e")
       A.no(L.better(rec(false, nil, 2), rec(true, 900, 3)), "late never beats full")
       A.ok(L.better(rec(false, nil, 2), rec(false, nil, 3)), "full vs full: more people")
-      A.no(L.better(rec(false, nil, 3), rec(false, nil, 3)), "full vs full tie: keep mine")
+      A.no(L.better(rec(false, nil, 3), rec(false, nil, 3)), "full vs full, the same record: keep mine")
     end,
     two_copies_with_late_records_settle_on_the_fresher = function(ns, A, W, H)
       local tw, twNs = H.client("Twiz", { class = "DRUID" })
@@ -582,11 +589,13 @@ return {
       A.eq(ns.Steals.lastShown(), nil, "not in the first 15 minutes")
       W:advance(901)
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "5" })
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- her numbers settle
       ns.Steals.check()
       ns.Steals.flush()
       A.eq(ns.Steals.lastShown(), "Lurabe just stole Professional Corpse from Twiz!")
       -- two at once inside a minute: one pop-up for both
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "5", s_jp = "50" })
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- her numbers settle
       ns.Stats.count("jp", 60)
       ns.Stats.count("dt", 4) -- 7 deaths: back to me
       ns.Steals.check()
@@ -648,6 +657,7 @@ return {
       A.eq(seen.n, 0, "two flips: undone")
       -- a steal that sticks: shown once
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "3", s_dt = "8", s_jp = "50" })
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- her numbers settle
       ns.Steals.check()
       ns.Steals.flush()
       A.eq(seen.n, 1)
@@ -677,6 +687,71 @@ return {
       A.eq(seen.sub, "Professional Corpse: Lurabe, Bunny Hopper: Twiz")
       A.eq(ns.Log.errors(10), {})
     end,
+    a_steal_waits_until_the_numbers_settle = function(ns, A, W)
+      local sid = oldSession(ns, W)
+      local seen = watchNotices(ns)
+      W:advance(61)
+      receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "9", s_jp = "50" })
+      ns.Steals.check()
+      ns.Steals.flush()
+      A.eq(seen.n, 0, "numbers that just arrived: no steal yet")
+      W:advance(ns.Config.STATS_CHANGED_GAP + 0.5) -- checked again by itself once the gap has passed
+      ns.Steals.flush()
+      A.eq(seen.n, 1)
+      A.eq(seen.title, "Lurabe just stole Professional Corpse from Twiz!")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    two_full_records_of_one_session_converge = function(ns, A, W, H)
+      local tw, twNs = H.client("Twiz", { class = "DRUID" })
+      local lu, luNs = H.client("Lurabe", { class = "MAGE" })
+      H.link(tw, lu)
+      twNs.Comm.echoCount = tw.realEchoCount
+      luNs.Comm.echoCount = lu.realEchoCount
+      for _, X in ipairs({ tw, lu }) do
+        X:fire("ADDON_LOADED", "TwizCrew"); X:fire("PLAYER_LOGIN"); X:fire("PLAYER_ENTERING_WORLD")
+      end
+      H.advance(90)
+      local SID = "Ginkan-1731100000"
+      local function full(winner)
+        return { sid = SID, start = 1731100000, people = { "Ginkan", "Lurabe", "Twiz" },
+          winners = { corpse = { winner } } }
+      end
+      local function asks(X, xNs)
+        local n = 0
+        for _, m in ipairs(X.sent) do
+          local msg = xNs.Codec.decode(m.text)
+          if msg and msg.type == "TRQ" then n = n + 1 end
+        end
+        return n
+      end
+      local function exchange()
+        local a, b = asks(tw, twNs), asks(lu, luNs)
+        twNs.Trophies.sendDigest(); luNs.Trophies.sendDigest()
+        H.advance(10)
+        return { asks(tw, twNs) - a, asks(lu, luNs) - b }
+      end
+      local mine, hers = full("Twiz"), full("Lurabe") -- ended by hand on both: same people, other winners
+      twNs.Trophies.records()[SID] = mine
+      luNs.Trophies.records()[SID] = hers
+      local L = twNs.TrophyLogic
+      A.ok(L.checksum(mine) ~= L.checksum(hers), "the two records differ")
+      local winner = L.checksum(mine) < L.checksum(hers) and mine or hers
+      local n = exchange()
+      A.eq(n[1] + n[2], 1, "only the holder of the larger checksum asks")
+      A.eq(twNs.Trophies.records()[SID], winner, "the smaller checksum is kept on Twiz")
+      A.eq(luNs.Trophies.records()[SID], winner, "and on Lurabe")
+      H.advance(200) -- past the ask gap
+      A.eq(exchange(), { 0, 0 }, "settled: no more asks")
+      -- more people still beats fewer, whatever the checksums: nobody asks for the smaller record
+      local small = { sid = SID, start = 1731100000, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Twiz" } } }
+      twNs.Trophies.records()[SID] = small
+      H.advance(200)
+      local m = exchange()
+      A.eq(m[2], 0, "the fuller record never asks for the smaller one")
+      A.eq(luNs.Trophies.records()[SID], winner)
+      A.eq(twNs.Log.errors(10), {})
+      A.eq(luNs.Log.errors(10), {})
+    end,
     rates_and_right_now_awards_are_never_stolen = function(ns, A)
       local L, S = ns.TrophyLogic, ns.StatsLogic
       local before = { entry("Twiz", { gn = 100, pt = 3600, st = 1000, xt = 3600, xg = 100, mt = 5000 }),
@@ -702,6 +777,7 @@ return {
       W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       receive(W, ns, "Lurabe", "STATS", { sid = sid, q = "2", s_dt = "9", s_jp = "50" })
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- her numbers settle
       ns.Steals.check()
       ns.Steals.flush()
       A.eq(seen.n, 1)

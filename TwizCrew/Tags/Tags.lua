@@ -34,23 +34,9 @@ Tags.INFO = {
   AFK = "This player has marked themselves as away from the keyboard.",
 }
 
-local function hidden(v)
-  if v == nil or type(issecretvalue) ~= "function" then return false end
-  local ok, secret = pcall(issecretvalue, v)
-  return not ok or secret and true or false
-end
-
--- Calls a game function; nil when it's missing, errors, or answers with a secret value. In dungeons the game hides
--- "AFK?", "dead?", "fighting?" behind secret values, and even testing one is an error (it turned the Crew panel
--- off mid-dungeon, 2026-11-08), so a secret answer counts as "don't know".
-local function try(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b = pcall(fn, ...)
-  if not ok then return nil end
-  if hidden(a) then a = nil end
-  if hidden(b) then b = nil end
-  return a, b
-end
+-- In dungeons the game hides "AFK?", "dead?", "fighting?" behind secret values, and even testing one is an error (it
+-- turned the Crew panel off mid-dungeon, 2026-11-08), so a secret answer counts as "don't know" (plain gives nil).
+local plain = ns.Util.plain
 
 ------------------------------------------------------------------------------------------------------------- away
 -- You count as away (the AFK tag and a "zzz" on your portrait in friends' panels) when the game says so (/afk, or its own idle
@@ -68,12 +54,7 @@ local lastCursor, lastFacing
 local started = false
 
 local function readable(v)
-  if v == nil then return false end
-  if type(issecretvalue) == "function" then
-    local ok, secret = pcall(issecretvalue, v)
-    if not ok or secret then return false end
-  end
-  return true
+  return v ~= nil and not ns.Util.isSecret(v)
 end
 
 local function changed(reason)
@@ -90,7 +71,7 @@ function Away.active(soft)
 end
 
 function Away.isAway()
-  return chosen or idle or (try(UnitIsAFK, "player") and true or false)
+  return chosen or idle or (plain(UnitIsAFK, "player") and true or false)
 end
 
 -- The AFK button and "/tc afk": go away, or come back. Returns true when you are away afterwards (the game's own
@@ -106,17 +87,17 @@ function Away.toggle()
   return true
 end
 
-function Away.gameAFK() return try(UnitIsAFK, "player") and true or false end
+function Away.gameAFK() return plain(UnitIsAFK, "player") and true or false end
 
 local function look()
   -- the mouse moving or the camera turning counts as being here
-  local x, y = try(GetCursorPosition)
+  local x, y = plain(GetCursorPosition)
   if readable(x) and readable(y) then
     local key = math.floor(x) .. "," .. math.floor(y)
     if lastCursor and key ~= lastCursor then Away.active(true) end
     lastCursor = key
   end
-  local facing = try(GetPlayerFacing)
+  local facing = plain(GetPlayerFacing)
   if readable(facing) and type(facing) == "number" then
     if lastFacing and math.abs(facing - lastFacing) > 0.01 then Away.active(true) end
     lastFacing = facing
@@ -146,11 +127,11 @@ end
 -- Your own tags as a set. Never includes LAYER: that one is worked out per friend by the layer module.
 function Tags.detectSelf()
   local set = {}
-  if try(UnitIsDeadOrGhost, "player") then set.DEAD = true end
-  if try(UnitAffectingCombat, "player") then set.COMBAT = true end
-  local _, kind = try(IsInInstance)
+  if plain(UnitIsDeadOrGhost, "player") then set.DEAD = true end
+  if plain(UnitAffectingCombat, "player") then set.COMBAT = true end
+  local _, kind = plain(IsInInstance)
   if kind == "party" or kind == "raid" then set.DUNGEON = true end
-  if try(UnitOnTaxi, "player") then set.TAXI = true end
+  if plain(UnitOnTaxi, "player") then set.TAXI = true end
   if Away.isAway() then set.AFK = true end
   return set
 end

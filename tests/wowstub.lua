@@ -239,7 +239,7 @@ local function build(W)
   env.UIParent = newObject(W, "Frame", "UIParent")
   env.GameTooltip = newObject(W, "GameTooltip", "GameTooltip")
   env.SlashCmdList = {}
-  env.InCombatLockdown = function() return false end
+  env.InCombatLockdown = function() return W.state.combat == true end
 
   -- identity
   env.UnitName = function(unit)

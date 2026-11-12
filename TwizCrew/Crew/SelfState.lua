@@ -15,13 +15,8 @@ local EVENTS = {
 local last = {}        -- fields as last sent
 local scheduled = false
 
--- Calls a game function that might be missing or fail; returns its first two results or nil.
-local function try(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b = pcall(fn, ...)
-  if ok then return a, b end
-  return nil
-end
+-- Calls a game function that might be missing, fail or answer with a secret value: nil results then.
+local plain = ns.Util.plain
 
 local function copy(t)
   local out = {}
@@ -29,13 +24,9 @@ local function copy(t)
   return out
 end
 
--- A number we may do math on: nil when missing or secret (issecretvalue, combat rules), or not a real number.
+-- A number we may do math on (the value came through plain, so it is not secret): nil when missing or not a real number.
 local function readable(v)
   if v == nil then return nil end
-  if type(issecretvalue) == "function" then
-    local ok, secret = pcall(issecretvalue, v)
-    if not ok or secret then return nil end
-  end
   local n = tonumber(v)
   if n == nil or n ~= n or n == math.huge or n == -math.huge then return nil end
   return n
@@ -44,15 +35,15 @@ end
 -- xp (percent), xc (current XP), xm (XP needed for this level; "0" at max level), rx (rested XP; "0" if none).
 -- Unreadable numbers keep what was last sent, so a secret value never shows as a drop to 0.
 local function xpFields(level)
-  local xp, xpMax = readable((try(UnitXP, "player"))), readable((try(UnitXPMax, "player")))
+  local xp, xpMax = readable((plain(UnitXP, "player"))), readable((plain(UnitXPMax, "player")))
   if xp == nil or xpMax == nil then
     return { xp = last.xp or "0", xc = last.xc or "", xm = last.xm or "", rx = last.rx or "0" }
   end
-  local maxLevel = readable((try(GetMaxPlayerLevel)))
+  local maxLevel = readable((plain(GetMaxPlayerLevel)))
   if xpMax <= 0 or (maxLevel and maxLevel > 0 and level >= maxLevel) then
     return { xp = "0", xc = "0", xm = "0", rx = "0" }
   end
-  local rested = readable((try(GetXPExhaustion))) or 0
+  local rested = readable((plain(GetXPExhaustion))) or 0
   return {
     xp = tostring(math.floor(xp / xpMax * 100)),
     xc = tostring(math.floor(math.max(0, xp))),
@@ -62,12 +53,12 @@ local function xpFields(level)
 end
 
 function Self.gather()
-  local _, class = try(UnitClass, "player")
-  local level = tonumber((try(UnitLevel, "player"))) or 0
+  local _, class = plain(UnitClass, "player")
+  local level = tonumber((plain(UnitLevel, "player"))) or 0
   local x = xpFields(level)
-  local inInstance = try(IsInInstance)
-  local onTaxi = try(UnitOnTaxi, "player")
-  local subzone = try(GetSubZoneText) or ""
+  local inInstance = plain(IsInInstance)
+  local onTaxi = plain(UnitOnTaxi, "player")
+  local subzone = plain(GetSubZoneText) or ""
   if onTaxi then subzone = "On a flight path" end
   local tags = ns.Tags and ns.Tags.encode(ns.Tags.detectSelf()) or ""
   local layerKey = ns.LayerSensor and ns.LayerSensor.current() or ""
@@ -81,7 +72,7 @@ function Self.gather()
     xc = x.xc, -- level progress: raw numbers for the tooltip and the time-to-level estimate
     xm = x.xm,
     rx = x.rx,
-    zn = tostring(try(GetRealZoneText) or ""),
+    zn = tostring(plain(GetRealZoneText) or ""),
     sz = tostring(subzone),
     st = tostring(ns.db and ns.db.myStatus or ""),
     tg = tags,

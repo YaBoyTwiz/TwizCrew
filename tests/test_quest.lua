@@ -122,6 +122,20 @@ return {
       receive(ns, W, "Frostie", "UPDATE", { qc = "" })
       A.eq(ns.roster:get("Frostie").questComplete, false)
     end,
+    row_menu_builds_when_group_and_inspect_answers_are_secret = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves Across the Border", qo = "Pelt: 2/8" })
+      W:advance(1)
+      local hidden = W.secret()
+      for _, name in ipairs({ "UnitInParty", "UnitInRaid", "CanInspect" }) do
+        W.env[name] = function() return hidden end
+      end
+      local labels = {}
+      for _, it in ipairs(ns.Panel.rowMenu(ns.Panel.models()[1])) do labels[#labels + 1] = it.label end
+      A.eq(labels[1], "Whisper")
+      A.eq(labels[2], "Invite to group", "a secret answer is not 'already in my group'")
+      A.eq(ns.Log.errors(10), {})
+    end,
     ask_a_friend_to_share_their_quest = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves Across the Border", qo = "Pelt: 2/8" })

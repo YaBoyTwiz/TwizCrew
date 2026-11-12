@@ -92,3 +92,33 @@ function Util.ago(seconds)
   if seconds < 86400 then return math.floor(seconds / 3600) .. "h ago" end
   return math.floor(seconds / 86400) .. "d ago"
 end
+
+-- True when the game says v is a "secret" value (dungeon rules: no tests, math or comparing). False when the game has
+-- no issecretvalue. A failing check counts as secret.
+function Util.isSecret(v)
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, yes = pcall(issecretvalue, v)
+  if not ok then return true end
+  return yes == true
+end
+
+local function scrub(...)
+  local n = select("#", ...)
+  local out = {}
+  for i = 1, n do
+    local v = select(i, ...)
+    if not Util.isSecret(v) then out[i] = v end
+  end
+  return unpack(out, 1, n)
+end
+
+local function scrubIfOk(ok, ...)
+  if ok then return scrub(...) end
+end
+
+-- Calls fn(...) safely and returns its results with every secret one replaced by nil. Returns nothing when fn is not
+-- a function or raises. Every yes/no or number from a game call goes through here before it is tested.
+function Util.plain(fn, ...)
+  if type(fn) ~= "function" then return end
+  return scrubIfOk(pcall(fn, ...))
+end

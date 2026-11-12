@@ -227,6 +227,14 @@ return {
       A.eq(ns.Modules.setting("minimap", "angle"), 190, "nothing saved")
     end,
 
+    secret_minimap_shape_counts_as_round = function(ns, A, W)
+      local seen = record(W)
+      W.env.GetMinimapShape = function() return W.secret() end
+      boot(W)
+      local x = point(seen)
+      near(A, x, -73.86, "x")
+      A.eq(ns.Log.errors(10), {})
+    end,
     square_minimap_puts_it_on_the_edge = function(ns, A, W)
       local seen = record(W)
       W.state.minimapShape = "SQUARE"

@@ -7,21 +7,11 @@ local _, ns = ...
 local Where = {}
 ns.Where = Where
 
-local function call(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b, c, d = pcall(fn, ...)
-  if ok then return a, b, c, d end
-  return nil
-end
+local call = ns.Util.plain
 
 -- Asked before anything else is done with a value: a secret one can't even be compared (not with nil either) or
 -- tested for true / false.
-local function secret(v)
-  if type(issecretvalue) ~= "function" then return false end
-  local ok, s = pcall(issecretvalue, v)
-  if not ok then return true end
-  return s == true
-end
+local secret = ns.Util.isSecret
 
 -- A number we may do math on, else nil.
 local function num(v)

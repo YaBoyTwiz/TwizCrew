@@ -147,6 +147,14 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    a_secret_fight_answer_does_not_block_the_show = function(ns, A, W)
+      start(ns, W)
+      local hidden = W.secret()
+      W.env.UnitAffectingCombat = function() return hidden end
+      ns.AwardsShow.start("session")
+      A.eq(printedLine(W, "TwizCrew: the awards show waits until the fight is over."), false)
+      A.eq(ns.Log.errors(10), {})
+    end,
     show_refuses_in_fight_and_when_off = function(ns, A, W)
       start(ns, W)
       W.state.combat = true

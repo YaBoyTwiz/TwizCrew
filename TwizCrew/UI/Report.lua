@@ -35,8 +35,7 @@ local function duration(seconds)
 end
 
 local function fallbackName()
-  local ok, grouped = try(IsInGroup)
-  return (ok and grouped) and "group chat and whispers" or "whispers"
+  return ns.Util.plain(IsInGroup) and "group chat and whispers" or "whispers"
 end
 
 local function connection()
@@ -78,15 +77,8 @@ end
 
 -- Extra lines that answer the in-game checks of the test list (docs/TESTING.md) in one paste.
 local function checkLines(add)
-  -- a secret answer (dungeons) can't be tested: it reads as nil ("no")
-  local function open(v)
-    if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
-    return v
-  end
-  local function call(fn, ...)
-    local ok, a, b = try(fn, ...)
-    if ok then return open(a), open(b) end
-  end
+  -- a secret answer (dungeons) can't be tested: plain makes it nil ("no")
+  local call = ns.Util.plain
   local inInstance, kind = call(IsInInstance)
   add("Game says: flying " .. yes(call(UnitOnTaxi, "player")) .. ", away " .. yes(call(UnitIsAFK, "player"))
     .. ", in a dungeon " .. yes(inInstance) .. " (" .. tostring(kind or "none") .. "), fighting "

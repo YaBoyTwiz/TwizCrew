@@ -22,11 +22,8 @@ local hookFns = {}   -- hook name -> { detector, fn }
 
 local function fid(d) return "stats_" .. d.id end
 
-local function secret(v)
-  if type(issecretvalue) ~= "function" then return false end
-  local ok, yes = pcall(issecretvalue, v)
-  return (not ok) or (yes and true or false)
-end
+local secret = ns.Util.isSecret
+local plain = ns.Util.plain
 
 local function fn(name) return type(_G[name]) == "function" end
 
@@ -39,10 +36,7 @@ local function missingOf(...)
   return nil
 end
 
-local function call(f, ...)
-  if type(f) ~= "function" then return nil end
-  return f(...)
-end
+local call = plain
 
 local function turnOff(d, why, level, detail)
   local s = state[d.id]
@@ -98,13 +92,6 @@ local function add(d)
   return d
 end
 
--- A yes/no about you; a secret answer (dungeons: testing it is an error) counts as no.
-local function player(f)
-  local v = call(f, "player")
-  if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
-  return v
-end
-
 local function inDungeon()
   local inside, kind = call(IsInInstance)
   return (inside and (kind == "party" or kind == "raid")) and true or false
@@ -126,14 +113,14 @@ add({ id = "motion", label = "steps, riding and swimming",
   start = function() lastPos = nil end,
   tick = function(elapsed)
     if not countSteps() then lastPos = nil; return end
-    local bucket = Logic.motionBucket({ taxi = player(UnitOnTaxi), dead = player(UnitIsDeadOrGhost),
+    local bucket = Logic.motionBucket({ taxi = plain(UnitOnTaxi, "player"), dead = plain(UnitIsDeadOrGhost, "player"),
       mounted = call(IsMounted), swimming = call(IsSwimming) })
     local yards
     if fn("GetUnitSpeed") then
       local speed = GetUnitSpeed("player")
       yards = Logic.speedYards(speed, elapsed, secret(speed))
     elseif fn("UnitPosition") then
-      local y, x, _, instance = UnitPosition("player")
+      local y, x, _, instance = plain(UnitPosition, "player")
       local reading
       if not (secret(x) or secret(y) or secret(instance)) then
         reading = { x = x, y = y, instance = instance, t = ns.now() }
@@ -154,7 +141,7 @@ add({ id = "fall", label = "falling deaths",
   needs = function() local why = missingOf("IsFalling"); return why == nil, why end,
   start = function() fallStart = nil end,
   tick = function()
-    if not IsFalling() then fallStart = nil; return end
+    if not plain(IsFalling) then fallStart = nil; return end
     local now = ns.now()
     fallStart = fallStart or now
     if now - fallStart >= FALL_MIN then ctx.fallingAt = now end
@@ -164,15 +151,15 @@ add({ id = "timers", label = "time AFK, dead and played",
   needs = function() return true end,
   tick = function(elapsed)
     api.count("pt", elapsed)
-    if player(UnitIsAFK) then api.count("af", elapsed) end
-    if player(UnitIsDeadOrGhost) then api.count("ds", elapsed) end
+    if plain(UnitIsAFK, "player") then api.count("af", elapsed) end
+    if plain(UnitIsDeadOrGhost, "player") then api.count("ds", elapsed) end
   end })
 
 local readTarget -- set by the target detector, used again at death
 local confirmBreath -- set by the drown detector, used again at death
 
 local function alive()
-  if player(UnitIsDeadOrGhost) then return end
+  if plain(UnitIsDeadOrGhost, "player") then return end
   ctx.aliveAt = ns.now()
   api.alive()
 end
@@ -243,18 +230,16 @@ add({ id = "drown", label = "drowning deaths",
 -- atDeath: only forgets a dead target (a mob you killed earlier is not what killed you); the time of the last
 -- in-combat sighting is kept, so WEAK_WINDOW counts from then.
 readTarget = function(atDeath)
-  if not UnitExists("target") then return end
+  if not plain(UnitExists, "target") then return end
   if fn("UnitIsDead") then
-    local dead = UnitIsDead("target")
-    if secret(dead) or dead then
+    if plain(UnitIsDead, "target") ~= false then
       if atDeath then ctx.target = nil end
       return
     end
   end
   if atDeath then return end
-  if UnitIsPlayer("target") or not UnitCanAttack("player", "target") then return end
-  local fighting = UnitAffectingCombat("target")
-  if secret(fighting) or not fighting then return end
+  if plain(UnitIsPlayer, "target") ~= false or not plain(UnitCanAttack, "player", "target") then return end
+  if not plain(UnitAffectingCombat, "target") then return end
   local level, name = UnitLevel("target"), UnitName("target")
   if secret(level) or secret(name) or type(level) ~= "number" or type(name) ~= "string" then return end
   ctx.target = { level = level, name = name, at = ns.now() }
@@ -340,7 +325,7 @@ add({ id = "wipes", label = "wipes",
   start = function()
     local d = byId.wipes
     watch = watch or Logic.newWipeWatch(ns.Config.WIPE_WINDOW)
-    local function meAlive() if not player(UnitIsDeadOrGhost) then watch:alive(ns.playerName()) end end
+    local function meAlive() if not plain(UnitIsDeadOrGhost, "player") then watch:alive(ns.playerName()) end end
     onEvent(d, "PLAYER_DEAD", function()
       watch:dead(ns.playerName(), ns.now())
       checkWipe()
@@ -502,10 +487,8 @@ add({ id = "errors", label = "red error messages",
 local NEED_KEEP = 300
 local needed = {} -- item id -> when we rolled Need
 local function inGroup()
-  local v = call(IsInGroup)
-  if not secret(v) and v then return true end
-  v = call(IsInRaid)
-  return not secret(v) and v and true or false
+  if plain(IsInGroup) then return true end
+  return plain(IsInRaid) and true or false
 end
 
 add({ id = "ninja", label = "Need rolls won",
@@ -573,13 +556,13 @@ add({ id = "travel", label = "zones visited and flights",
   needs = function() local why = missingOf("GetRealZoneText", "UnitOnTaxi"); return why == nil, why end,
   start = function()
     local d = byId.travel
-    wasTaxi = player(UnitOnTaxi) and true or false -- logging in mid-flight is not a new flight
+    wasTaxi = plain(UnitOnTaxi, "player") and true or false -- logging in mid-flight is not a new flight
     onEvent(d, "ZONE_CHANGED_NEW_AREA", readZone)
     onEvent(d, "PLAYER_ENTERING_WORLD", readZone)
     readZone()
   end,
   tick = function()
-    local now = player(UnitOnTaxi) and true or false
+    local now = plain(UnitOnTaxi, "player") and true or false
     if now and not wasTaxi then api.count("fp", 1) end
     wasTaxi = now
   end })

@@ -441,6 +441,16 @@ return {
       A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0")
     end,
 
+    notice_ignores_a_secret_fight_answer = function(ns, A, W)
+      boot(W)
+      newerFriend(W, ns, "Frostie", "0.2.0", "0.1.0")
+      local hidden = W.secret()
+      W.env.UnitAffectingCombat = function() return hidden end
+      W:advance(31)
+      A.eq(ns.Updates.promptForTest().title, "Update available: v0.2.0", "only the lockdown counts as a fight")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     how_to_window_on_demand = function(ns, A, W)
       boot(W)
       A.eq(ns.Updates.showHowTo(), false, "nothing to update")

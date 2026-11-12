@@ -16,6 +16,7 @@ local leaders, leadersSid, present -- the last check's leaders, their session an
 local queue, order = {}, {} -- queued steals by award id, in the order they came
 local lastPopup, lastTitle
 local started = false
+local recheck = false -- a check waits for a friend's numbers to settle
 
 local function names(list) return table.concat(list, " & ") end
 
@@ -56,12 +57,37 @@ local function board()
   return session, ns.StatsLogic.awards(entries), byName, valueOf
 end
 
+-- Seconds until every friend on the board has had STATS_CHANGED_GAP s without a new STATS piece (their snapshot
+-- comes in pieces); nil when nobody's numbers are that fresh.
+local function settleIn(here)
+  local gap, wait = ns.Config.STATS_CHANGED_GAP, nil
+  for name, e in pairs(here) do
+    local ago = not e.mine and ns.StatsStore.heardAgo(name)
+    if ago and ago < gap and (not wait or gap - ago > wait) then wait = gap - ago end
+  end
+  return wait
+end
+
 -- Compares the session's leaders with the last check; queues steals once the session is old enough.
--- Nothing while my stats are off (and the first check after is a silent baseline).
+-- Nothing while my stats are off (and the first check after is a silent baseline). While a friend's numbers are
+-- still arriving it waits and checks again when they have settled.
 function Steals.check()
   if not statsOn() then reset(); return end
   local session, list, here, valueOf = board()
   if not session then return end
+  local wait = settleIn(here)
+  if wait then
+    if not recheck then
+      recheck = true
+      C_Timer.After(wait, function()
+        ns.Log.safe(FEATURE, function()
+          recheck = false
+          Steals.check()
+        end)
+      end)
+    end
+    return
+  end
   if leadersSid == session.id and ns.wallclock() - (session.start or 0) >= STEAL_AFTER then
     for _, s in ipairs(L.steals(leaders, list, valueOf, here, present)) do
       local q = queue[s.def.id]

@@ -59,6 +59,33 @@ local function find(list, name)
   for _, e in ipairs(list) do if e.name == name then return e end end
 end
 
+-- A snapshot's STATS pieces, as a copy sends them (one text per piece).
+local function pieces(ns, snap)
+  return ns.Codec.encode("STATS", ns.StatsLogic.toWire(snap), { repeatKeys = { "sid", "q", "off" } })
+end
+
+local function fireText(W, sender, text) W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender) end
+
+-- Every award's leaders on the board, both views: "session:<id>" / "all:<id>" -> names.
+local function leadersOf(ns, sid)
+  local out = {}
+  for _, view in ipairs({ "session", "all" }) do
+    local list = ns.StatsLogic.awards(ns.StatsStore.entries(view, sid))
+    for id, names in pairs(ns.TrophyLogic.leaders(list)) do out[view .. ":" .. id] = names end
+  end
+  return out
+end
+
+-- Every number of every key: base + i in both views (gold carried is the same in both).
+local function bigSnap(ns, sid, q, base)
+  local s, a = {}, {}
+  for i, key in ipairs(ns.StatsDefs.KEYS) do
+    s[key] = base + i
+    a[key] = key == "gn" and s[key] or 10 * (base + i)
+  end
+  return { sid = sid, q = q, s = s, a = a }
+end
+
 return {
   files = "toc",
   tests = {
@@ -255,6 +282,7 @@ return {
 
     friend_numbers_saved_and_replaced = function(ns, A, W)
       start(ns, W)
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- past the redraw gap of the session start
       local fired = 0
       ns.Bus.on("test", "STATS_CHANGED", function() fired = fired + 1 end)
       local S = "Frostie-1700000000"
@@ -272,16 +300,16 @@ return {
       A.eq(st.lastHeard.at, ns.wallclock())
       receive(W, "Frostie", "STATS", { sid = S, q = "2", a_dt = "10" }, ns)
       rec = ns.db.stats.crew.Frostie
-      A.eq(rec.a, { dt = 10 })
-      A.eq(rec.s, {})
+      A.eq(rec.a, { dt = 10, jp = 4 }, "a new snapshot is laid over the saved numbers")
+      A.eq(rec.s, { dt = 3 })
       -- off: numbers kept but marked
       receive(W, "Frostie", "STATS", { sid = S, q = "3", off = "1" }, ns)
       rec = ns.db.stats.crew.Frostie
       A.eq(rec.off, true)
-      A.eq(rec.a, { dt = 10 }, "kept while off")
+      A.eq(rec.a, { dt = 10, jp = 4 }, "kept while off")
       receive(W, "Frostie", "STATS", { sid = S, q = "4", a_dt = "11" }, ns)
       A.eq(ns.db.stats.crew.Frostie.off, nil, "back on")
-      A.eq(ns.db.stats.crew.Frostie.a, { dt = 11 })
+      A.eq(ns.db.stats.crew.Frostie.a, { dt = 11 }, "what snapshot 2 did not carry is gone")
     end,
 
     entries_filter_session_and_off = function(ns, A, W)
@@ -385,6 +413,93 @@ return {
       A.eq(sent[1].a_jp, "1")
       A.eq(sent[1].sid, ns.Session.current().id)
       A.no(ns.StatsStore.dirty(), "marked as sent")
+    end,
+
+    a_piece_is_laid_over_the_stored_numbers = function(ns, A, W)
+      start(ns, W)
+      local S = ns.Session.current().id
+      ns.Stats.count("dt", 300)
+      ns.Stats.count("jp", 5000)
+      for _, text in ipairs(pieces(ns, bigSnap(ns, S, "1731100000-1", 100))) do fireText(W, "Frostie", text) end
+      local before = leadersOf(ns, S)
+      A.ok(next(before) ~= nil, "the board has leaders")
+      local newer = bigSnap(ns, S, "1731100300-2", 110)
+      local texts = pieces(ns, newer)
+      A.ok(#texts >= 3, "the snapshot travels in pieces (" .. #texts .. ")")
+      fireText(W, "Frostie", texts[1])
+      A.eq(leadersOf(ns, S), before, "one piece moves no crown")
+      for i = 2, #texts do fireText(W, "Frostie", texts[i]) end
+      local rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s, newer.s, "complete: the session numbers are the new snapshot")
+      A.eq(rec.a, newer.a, "complete: the all-time numbers are the new snapshot")
+      -- a new session starts the session view fresh; all time is still laid over
+      local T = "Frostie-1731100400"
+      receive(W, "Frostie", "STATS", { sid = T, q = "1731100400-3", s_dt = "1", a_dt = "2000" }, ns)
+      rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s, { dt = 1 }, "new session: only its own numbers")
+      A.eq(rec.a.dt, 2000)
+      A.eq(rec.a.jp, newer.a.jp, "all time keeps what the piece did not carry")
+      A.eq(rec.prev.s, newer.s, "the old session's numbers are kept for its board")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    a_number_the_last_snapshot_did_not_carry_is_dropped = function(ns, A, W)
+      start(ns, W)
+      local S = "Frostie-1731100000"
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-1", s_dt = "5", s_jp = "3", a_jp = "9" }, ns)
+      -- Frostie reset her numbers: her snapshot has no deaths or jumps any more
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100100-2", s_gn = "0", a_gn = "0" }, ns)
+      local rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s, { dt = 5, jp = 3, gn = 0 }, "laid over: a piece may still be on its way")
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100200-3", s_dt = "1" }, ns)
+      rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s, { dt = 1, gn = 0 }, "the next snapshot drops what the last one did not carry")
+      A.eq(rec.a, { gn = 0 })
+    end,
+
+    an_older_snapshot_loses = function(ns, A, W)
+      start(ns, W)
+      local S = "Frostie-1731100000"
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100300-2", s_dt = "8", a_dt = "20" }, ns)
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-1", s_dt = "3", a_dt = "15" }, ns)
+      local rec = ns.db.stats.crew.Frostie
+      A.eq(rec.s, { dt = 8 }, "the late, older snapshot is ignored")
+      A.eq(rec.a, { dt = 20 })
+      A.eq(rec.q, "1731100300-2")
+      -- the same second: the counter decides (as numbers, 12 after 3)
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100300-12", s_dt = "9" }, ns)
+      receive(W, "Frostie", "STATS", { sid = S, q = "1731100300-3", s_dt = "1" }, ns)
+      A.eq(ns.db.stats.crew.Frostie.s.dt, 9)
+      -- an older one from another session loses too
+      receive(W, "Frostie", "STATS", { sid = "Frostie-1", q = "1731100200-1", s_dt = "50" }, ns)
+      A.eq(ns.db.stats.crew.Frostie.sid, S)
+      A.eq(ns.db.stats.crew.Frostie.s.dt, 9)
+    end,
+
+    pieces_redraw_like_local_changes = function(ns, A, W)
+      start(ns, W)
+      W:advance(ns.Config.STATS_CHANGED_GAP + 1)
+      local fired = 0
+      ns.Bus.on("test", "STATS_CHANGED", function() fired = fired + 1 end)
+      local S = ns.Session.current().id
+      for i = 1, 20 do
+        receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-" .. i, s_dt = tostring(i) }, ns)
+        W:advance(0.05)
+      end
+      W:advance(ns.Config.STATS_CHANGED_GAP + 1)
+      A.ok(fired >= 1 and fired <= 2, "STATS_CHANGED fired " .. fired .. " times for 20 pieces")
+      A.eq(find(ns.StatsStore.entries("session", S), "Frostie").stats, { dt = 20 }, "the last numbers are shown")
+      -- also while my own counting is off (friends' numbers are still shown)
+      ns.Modules.setEnabled("stats", false)
+      W:advance(ns.Config.STATS_CHANGED_GAP + 1)
+      fired = 0
+      for i = 21, 30 do
+        receive(W, "Frostie", "STATS", { sid = S, q = "1731100000-" .. i, s_dt = tostring(i) }, ns)
+        W:advance(0.05)
+      end
+      W:advance(ns.Config.STATS_CHANGED_GAP + 1)
+      A.eq(fired, 2, "one at once, one after the gap")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     big_snapshot_arrives_in_pieces = function(ns, A, W)

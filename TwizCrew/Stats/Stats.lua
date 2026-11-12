@@ -18,6 +18,7 @@ local WIRE_OPTS = { repeatKeys = { "sid", "q", "off" }, bulk = true }
 local enabled = false
 local lastFire       -- when STATS_CHANGED last fired
 local trailing = false
+local trailingHeard = false -- the trailing fire is for a friend's numbers
 local lastSent       -- wallclock of the last STATS we sent (nil = never)
 local lastHeard      -- { name, at = wallclock } of the last friend's STATS saved
 local lastRequest    -- session clock of our last STATSREQ
@@ -39,10 +40,13 @@ local function fireChanged()
 end
 
 -- STATS_CHANGED at most every STATS_CHANGED_GAP s (with one trailing fire), or at once when forced.
-local function changed(force)
+-- heard: a friend's numbers (shown while my own counting is off too), so the trailing fire happens anyway.
+local function changed(force, heard)
   local gap = ns.Config.STATS_CHANGED_GAP
   local now = ns.now()
+  if heard then trailingHeard = true end
   if force or not lastFire or now - lastFire >= gap then
+    trailingHeard = false
     fireChanged()
     return
   end
@@ -51,7 +55,8 @@ local function changed(force)
   C_Timer.After(gap - (now - lastFire), function()
     ns.Log.safe(FEATURE, function()
       trailing = false
-      if enabled then fireChanged() end
+      if enabled or trailingHeard then fireChanged() end
+      trailingHeard = false
     end)
   end)
 end
@@ -159,7 +164,7 @@ local function onStats(sender, fields)
   local wall = ns.wallclock()
   if not Store.applyWire(sender, fields, wall) then return end
   lastHeard = { name = sender, at = wall }
-  fireChanged()
+  changed(false, true) -- a snapshot comes in 3-4 pieces: redraw like local changes, not once per piece
 end
 
 local function onRequest()

@@ -2,12 +2,14 @@
 -- db.stats.trophies[sid] (kept forever) and are swapped pull-only, like the calendar's diaries:
 --   TRD  digest: r = my newest session ids, newest first, "<sid>" for a full record and "<sid>*<e>" for a late one
 --        (saved at a login from the numbers I had; e = how fresh they are). Always one piece: the oldest are left out.
---        Sent to everyone now and then, and to a friend coming online.
+--        Sent to everyone now and then, and to a friend coming online. c (newer copies; v0.1.23 ignores it):
+--        "<people>.<checksum>" per entry of r, in its order ("-" for a late one), for as many as still fit.
 --   TRQ  "send me session s" (to one friend whose digest has a record that would replace mine, see below)
 --   TRP  one session's record (TrophyLogic.toWire), in pieces merged per sender and session until complete.
 -- Which record of a session is kept (TrophyLogic.better): full beats late regardless of people; late never beats
--- full; two late ones: the higher e wins; otherwise strictly more people wins (a tie keeps mine). A digest asks
--- only for records that would win, so copies never ask each other in a loop.
+-- full; two late ones: the higher e wins; otherwise strictly more people wins; two full ones with as many people:
+-- the smaller checksum string wins (two late ones tied: mine stays). A digest asks only for records that would
+-- win, so copies never ask each other in a loop.
 -- Runs under the feature id "trophies" (not a module): it follows the stats module (no records while it is off).
 local _, ns = ...
 
@@ -138,16 +140,29 @@ end
 local function onePiece(fields)
   local out = ns.Codec.encode("TRD", fields)
   local msg = #out == 1 and ns.Codec.decode(out[1])
-  return msg and msg.fields.r == fields.r or false
+  return msg and msg.fields.r == fields.r and msg.fields.c == fields.c or false
 end
 
--- The digest's fields: newest first, the oldest dropped until it fits one piece. nil when I have none.
+-- The digest's fields: newest first, the oldest dropped until r fits one piece; then c (each record's people and
+-- checksum, in r's order) for as many of them as still fit. nil when I have none.
 function Trophies.digest()
-  local recs, items = Trophies.records(), {}
-  for _, sid in ipairs(newest()) do items[#items + 1] = L.digestEntry(sid, recs[sid]) end
+  local recs, items, sums = Trophies.records(), {}, {}
+  for _, sid in ipairs(newest()) do
+    items[#items + 1] = L.digestEntry(sid, recs[sid])
+    sums[#sums + 1] = L.digestSum(recs[sid])
+  end
   while #items > 0 do
     local fields = { r = table.concat(items, ",") }
-    if onePiece(fields) then return fields end
+    if onePiece(fields) then
+      for i = #sums, #items + 1, -1 do sums[i] = nil end
+      while #sums > 0 do
+        fields.c = table.concat(sums, ",")
+        if onePiece(fields) then return fields end
+        sums[#sums] = nil
+      end
+      fields.c = nil
+      return fields
+    end
     items[#items] = nil
   end
   return nil
@@ -175,12 +190,21 @@ end
 local function onDigest(sender, f)
   if not on() or not known(sender) or type(f) ~= "table" or type(f.r) ~= "string" then return end
   local mine = Trophies.records()
+  local list = L.parseDigest(f.r)
+  local _, items = f.r:gsub("[^,]+", "")
+  local sums = items == #list and L.parseSums(f.c) or {} -- in r's order (a v0.1.23 digest has none)
   local asks = 0
-  for i, x in ipairs(L.parseDigest(f.r)) do -- newest first
+  for i, x in ipairs(list) do -- newest first
     if i > DIGEST_SIZE or asks >= ASKS_PER_DIGEST then break end
     local sid, have = x.sid, mine[x.sid]
-    -- only when theirs would replace mine: I lack it, mine is late and theirs full, or both late and theirs fresher
+    -- only when theirs would replace mine: I lack it, mine is late and theirs full, both late and theirs fresher,
+    -- or both full with as many people and theirs has the smaller checksum
     local want = type(have) ~= "table" or (have.late and (not x.late or x.e > (tonumber(have.e) or 0)))
+    local sum = sums[i]
+    if not want and sum and not x.late and not have.late and type(have.people) == "table"
+      and sum.n == #have.people then
+      want = sum.sum < L.checksum(have)
+    end
     if want and (not askedAt[sid] or ns.now() - askedAt[sid] >= ASK_GAP) then
       askedAt[sid] = ns.now()
       asks = asks + 1

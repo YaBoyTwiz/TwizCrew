@@ -148,10 +148,39 @@ local function clean(t)
   return out
 end
 
--- A friend's STATS piece (decoded fields). A new (sid, q) replaces their record, the same (sid, q) merges the
--- piece in; "off" keeps their numbers but hides them until a new snapshot comes. A new sid keeps their old
--- session's numbers in rec.prev (their STATS can arrive before the UPDATE that ends my session).
--- Returns true when saved.
+-- q is "<sender's wallclock>-<counter>" (every copy, v0.1.23 too): is a older than b? Unreadable ones never are.
+local function older(a, b)
+  if type(a) ~= "string" or type(b) ~= "string" then return false end
+  local ta, ca = a:match("^(%d+)%-(%d+)$")
+  local tb, cb = b:match("^(%d+)%-(%d+)$")
+  if not ta or not tb then return false end
+  ta, ca, tb, cb = tonumber(ta), tonumber(ca), tonumber(tb), tonumber(cb)
+  return ta < tb or (ta == tb and ca < cb)
+end
+
+-- Per friend, this login only: got = the keys of snapshot q received so far ("s_dt" -> true), at = ns.now() of
+-- their last piece (Steals waits for a whole snapshot).
+local heard = {}
+
+local function lay(into, from, got, prefix)
+  for key, v in pairs(from) do
+    into[key] = v
+    got[prefix .. key] = true
+  end
+end
+
+-- Drops what snapshot got (complete by now) did not carry: a number that went back to 0 (a reset) is not sent.
+local function prune(t, got, prefix)
+  for key in pairs(t) do
+    if not got[prefix .. key] then t[key] = nil end
+  end
+end
+
+-- A friend's STATS piece (decoded fields). A snapshot older than the saved one (by q) is ignored. A new snapshot's
+-- pieces are laid over the saved numbers (no zeros while the rest is on its way); when the next snapshot starts,
+-- what the last one did not carry is dropped. A new sid starts the session numbers fresh and keeps the old
+-- session's in rec.prev (their STATS can arrive before the UPDATE that ends my session); all-time numbers are
+-- always laid over. "off" keeps their numbers but hides them until a new snapshot comes. Returns true when saved.
 function Store.applyWire(name, fields, wall)
   local snap = ns.StatsLogic.fromWire(fields)
   if not snap or type(name) ~= "string" or name == "" then return false end
@@ -159,25 +188,46 @@ function Store.applyWire(name, fields, wall)
   if not stats then return false end
   local rec = stats.crew[name]
   if type(rec) ~= "table" then rec = nil end
+  if rec and older(snap.q, rec.q) then return false end
+  local h = heard[name]
   if snap.off then
     if not rec then rec = { sid = snap.sid, s = {}, a = {} } end
     rec.off = true
-  elseif rec and rec.sid == snap.sid and rec.q == snap.q then -- a later piece (stays hidden if off came first)
-    rec.s, rec.a = clean(rec.s), clean(rec.a)
-    for key, v in pairs(snap.s) do rec.s[key] = v end
-    for key, v in pairs(snap.a) do rec.a[key] = v end
   else
-    local prev = rec and rec.prev
-    if rec and rec.sid ~= snap.sid and not rec.off then prev = { sid = rec.sid, s = rec.s, at = rec.at } end
-    rec = { sid = snap.sid, q = snap.q, s = snap.s, a = snap.a, prev = prev }
+    if rec then rec.s, rec.a = clean(rec.s), clean(rec.a) else rec = { sid = snap.sid, s = {}, a = {} } end
+    if rec.sid ~= snap.sid or rec.q ~= snap.q then -- a new snapshot (a later piece stays hidden if off came first)
+      if h and h.q ~= nil and h.q == rec.q then
+        prune(rec.s, h.got, "s_")
+        prune(rec.a, h.got, "a_")
+      end
+      if rec.sid ~= snap.sid then
+        if not rec.off then rec.prev = { sid = rec.sid, s = rec.s, at = rec.at } end
+        rec.s = {}
+      end
+      rec.sid, rec.q, rec.off = snap.sid, snap.q, nil
+      h = { q = snap.q, got = {} }
+      heard[name] = h
+    end
+    if not h then h = { got = {} }; heard[name] = h end -- snapshot begun before this login: nothing to drop later
+    lay(rec.s, snap.s, h.got, "s_")
+    lay(rec.a, snap.a, h.got, "a_")
   end
+  if not h then h = { got = {} }; heard[name] = h end
+  h.at = ns.now()
   rec.at = wall
   stats.crew[name] = rec
   return true
 end
 
+-- Seconds since a friend's last STATS piece arrived (nil: none this login).
+function Store.heardAgo(name)
+  local h = heard[name]
+  return h and h.at and ns.now() - h.at or nil
+end
+
 -- Drops a friend's saved numbers (they were forgotten, or expired).
 function Store.forgetCrew(name)
+  heard[name] = nil
   local stats = root()
   if stats and stats.crew then stats.crew[name] = nil end
 end

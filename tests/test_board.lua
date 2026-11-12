@@ -260,7 +260,7 @@ return {
       hello(W, ns, "Frostie")
       hello(W, ns, "Ginkan", "WARRIOR")
       receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_dt = "3", a_dt = "3" })
-      W:advance(1)
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- a friend's numbers redraw like my own changes (throttled)
       A.eq(modelByName(ns.Panel.models(), "Frostie").title, "Professional Corpse")
       local real, calls = ns.StatsStore.entries, 0
       ns.StatsStore.entries = function(...) calls = calls + 1; return real(...) end
@@ -270,7 +270,7 @@ return {
       end
       A.eq(calls, 0, "redraws without changes reuse the titles")
       receive(W, ns, "Ginkan", "STATS", { sid = S, q = "1", s_dt = "9", a_dt = "9" }) -- fires STATS_CHANGED
-      W:advance(0.1)
+      W:advance(ns.Config.STATS_CHANGED_GAP)
       A.eq(modelByName(ns.Panel.models(), "Ginkan").title, "Professional Corpse", "updated after STATS_CHANGED")
       A.eq(modelByName(ns.Panel.models(), "Frostie").title, nil)
       ns.Modules.set("stats", "titles", "all")
@@ -397,7 +397,7 @@ return {
       hello(W, ns, "Ginkan", "WARRIOR")
       ns.Stats.count("jp", 5)
       ns.Modules.set("panel", "showSelf", true)
-      W:advance(1)
+      W:advance(ns.Config.STATS_CHANGED_GAP) -- friends' numbers redraw like my own changes (throttled)
       A.eq(modelByName(ns.Panel.models(), "Frostie").title, "Professional Corpse")
       A.eq(modelByName(ns.Panel.models(), "Ginkan").title, nil, "other session")
       A.eq(modelByName(ns.Panel.models(), "Twiz").title, "Bunny Hopper", "my own row too")

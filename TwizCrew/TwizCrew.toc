@@ -35,6 +35,10 @@ UI\ClassIcon.lua
 UI\PanelLogic.lua
 UI\FeedLogic.lua
 UI\Panel.lua
+UI\PanelRows.lua
+UI\PanelHeader.lua
+UI\PanelMenus.lua
+UI\PanelMini.lua
 UI\Changelog.lua
 UI\PopupLogic.lua
 UI\Popups.lua

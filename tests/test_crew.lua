@@ -555,5 +555,86 @@ return {
       A.ok(aNs.roster:get("Frostie").tags.DEAD, "Frostie's tag is still DEAD on Twiz's side")
       A.ok(bNs.roster:get("Twiz").online)
     end,
+    digest_ignores_ride_along_keys_and_old_copies_never_mismatch = function(ns, A, W)
+      A.eq(ns.Self.digestOf({ zn = "A", xc = "1", rx = "2", lk = "x" }), ns.Self.digestOf({ zn = "A", xc = "9" }))
+      A.no(ns.Self.digestOf({ zn = "A" }) == ns.Self.digestOf({ zn = "B" }))
+      A.ok(#ns.Self.digestOf({ zn = "A" }) <= 6)
+      ns.Comm.echoCount = W.realEchoCount
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
+      local from = #W.sent
+      for _ = 1, 4 do receive(ns, W, "Frostie", "PING", {}); W:advance(61) end -- no "h": an old copy
+      for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ", "no SREQ for an old copy") end
+    end,
+    two_pings_with_a_wrong_digest_ask_once_and_sreq_is_answered = function(ns, A, W)
+      ns.Comm.echoCount = W.realEchoCount
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
+      local from = #W.sent
+      receive(ns, W, "Frostie", "PING", { h = "1" })
+      W:advance(5)
+      A.eq(#sentSince(ns, W, from), 0, "one mismatch is not enough")
+      receive(ns, W, "Frostie", "PING", { h = "2" })
+      W:advance(5)
+      local got = sentSince(ns, W, from)
+      A.eq(#got, 1); A.eq(got[1].type, "SREQ")
+      A.eq(W.sent[#W.sent].chatType, "WHISPER", "to the sender only")
+      for _ = 1, 3 do receive(ns, W, "Frostie", "PING", { h = "3" }) end
+      W:advance(5)
+      A.eq(#sentSince(ns, W, from), 1, "not again within a ping interval")
+      -- a matching digest clears the count
+      receive(ns, W, "Frostie", "PING", { h = ns.roster:digest("Frostie") })
+      -- SREQ is answered with the whole state to the asker only
+      from = #W.sent
+      receive(ns, W, "Frostie", "SREQ", {})
+      W:advance(5)
+      got = sentSince(ns, W, from)
+      A.eq(#got >= 1 and got[1].type, "STATE")
+      A.eq(W.sent[from + 1].chatType, "WHISPER")
+      noErrors(ns, A)
+    end,
+    forget_removes_an_offline_friend_everywhere = function(ns, A, W)
+      local db = start(ns, W)
+      db.crew.extra = { "Frostie", "Other" }
+      receive(ns, W, "Frostie", "STATE", { lv = "20" })
+      ns.StatsStore.applyWire("Frostie", { sid = "s1", q = "1", a_gn = "5" }, 100)
+      A.ok(db.stats.crew.Frostie, "saved numbers")
+      local removed = record(ns, "MEMBER_REMOVED")
+      local ok, why = ns.Crew.forget("Frostie")
+      A.no(ok); A.eq(why, "online right now")
+      A.ok(ns.roster:get("Frostie"), "an online friend stays")
+      receive(ns, W, "Frostie", "BYE", {})
+      A.ok(ns.Crew.forget("frostie"))
+      A.eq(ns.roster:get("Frostie"), nil)
+      A.eq(db.roster.Frostie, nil)
+      A.eq(db.crew.extra, { "Other" })
+      A.eq(db.stats.crew.Frostie, nil)
+      A.eq(#removed, 1); A.eq(removed[1][1], "Frostie")
+      A.no(ns.Crew.forget("Frostie"), "already gone")
+      local me, why2 = ns.Crew.forget("Twiz")
+      A.no(me); A.eq(why2, "that is you")
+      receive(ns, W, "Frostie", "STATE", { lv = "21" })
+      A.ok(ns.roster:get("Frostie"), "a friend who shows up again is added again")
+      noErrors(ns, A)
+    end,
+    prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      ns.db = db
+      ns.Modules.attach(db)
+      local day, now = 86400, ns.wallclock()
+      db.roster = { Old = { name = "Old", level = 5, lastSeen = now - 61 * day },
+        Recent = { name = "Recent", level = 5, lastSeen = now - 59 * day },
+        Undated = { name = "Undated", level = 5 } }
+      db.stats.crew.Old = { sid = "s", s = {}, a = {} }
+      db.stats.crew.Recent = { sid = "s", s = {}, a = {} }
+      ns.Comm.start()
+      ns.Crew.start()
+      A.eq(ns.roster:names(), { "Recent", "Undated" })
+      A.eq(db.roster.Old, nil)
+      A.eq(db.stats.crew.Old, nil)
+      A.ok(db.stats.crew.Recent)
+      A.eq(db.roster.Undated.lastSeen, now, "no saved time: today")
+      noErrors(ns, A)
+    end,
   },
 }

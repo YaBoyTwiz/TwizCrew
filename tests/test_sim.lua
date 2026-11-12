@@ -614,6 +614,54 @@ return {
       noErrors(A, tw2Ns, fr3Ns)
     end,
 
+    -- The game's real state: the channel delivers nothing, so everything below travels by whisper.
+    a_lost_update_is_repaired_after_two_pings = function(_, A, _, H)
+      local c = twoFriends(H)
+      c.twNs.Comm.echoCount = c.tw.realEchoCount
+      c.frNs.Comm.echoCount = c.fr.realEchoCount
+      H.advance(130)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], nil, "nothing lost, nothing asked")
+      -- every UPDATE of Frostie's that says she is dead is lost on the way to Twiz (the answer to a request is a STATE)
+      local api, lost = c.fr.env.C_ChatInfo, 0
+      local real = api.SendAddonMessage
+      api.SendAddonMessage = function(prefix, text, ...)
+        local result = real(prefix, text, ...)
+        if text:find("^1%^UPDATE%^") and text:find("tg=DEAD", 1, true) then
+          c.fr.sent[#c.fr.sent].result = 99
+          lost = lost + 1
+        end
+        return result
+      end
+      c.fr.state.dead = true
+      c.fr:fire("PLAYER_DEAD")
+      H.advance(3)
+      A.ok(lost >= 1, "the update was lost")
+      A.no(c.twNs.roster:get("Frostie").tags.DEAD, "Twiz still thinks she is alive")
+      H.advance(61) -- one PING: could be an update in flight, no question yet
+      A.eq(c.twNs.Log.counts()["sent SREQ"], nil, "one PING is not enough")
+      H.advance(61)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], 1, "the second PING in a row makes Twiz ask")
+      H.advance(5)
+      api.SendAddonMessage = real
+      A.ok(c.twNs.roster:get("Frostie").tags.DEAD, "Frostie's answer fixed the panel")
+      A.eq(c.frNs.Log.counts()["sent SREQ"], nil)
+      H.advance(300)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], 1, "repaired: no more questions")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+    with_no_loss_ten_pings_cause_no_state_request = function(_, A, _, H)
+      local c = twoFriends(H)
+      c.twNs.Comm.echoCount = c.tw.realEchoCount
+      c.frNs.Comm.echoCount = c.fr.realEchoCount
+      c.fr.state.zone = "Westfall"
+      c.fr:fire("ZONE_CHANGED_NEW_AREA")
+      H.advance(660)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], nil)
+      A.eq(c.frNs.Log.counts()["sent SREQ"], nil)
+      A.ok(c.twNs.Log.counts()["recv PING"] >= 10, "the pings did arrive")
+      noErrors(A, c.twNs, c.frNs)
+    end,
+
     no_errors_anywhere = function(_, A, _, H)
       local c = twoFriends(H, { wait = 1 })
       otherLayer(H, A, c)      -- needs the first 30 s (login quiet time) to pass inside the step

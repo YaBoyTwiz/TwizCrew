@@ -259,7 +259,7 @@ return {
       local M = ns.Panel.rowMenu
       local ME1, ME2, ME3 = "Me: set my status", "Me: go AFK", "Me: update my spell ranks" -- mine, on every row
       A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends", ME1, ME2, ME3 })
-      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", ME1, ME2, ME3 }, "offline")
+      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", "Forget this friend", ME1, ME2, ME3 }, "offline")
       W.state.groupMembers = { "Frostie" }
       A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends", ME1, ME2, ME3 }, "already grouped")
       W.state.groupMembers = {}

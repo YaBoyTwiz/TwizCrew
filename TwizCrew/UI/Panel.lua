@@ -25,7 +25,7 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
-  "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED" }
+  "MEMBER_REMOVED", "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED" }
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
 local ARROW_SIZE = 26 -- big enough to read at a glance
 
@@ -104,6 +104,7 @@ local MENU_ICONS = {
   { "^Congratulate", "Interface\\Icons\\INV_Misc_Gift_01" },
   { "^Mock", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01" },
   { "^Add to friends", "Interface\\Icons\\Spell_Holy_GreaterHeal" },
+  { "^Forget this friend", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_02" },
   { "set my status", "Interface\\Icons\\INV_Misc_Note_01" },
   { "^Set my status", "Interface\\Icons\\INV_Misc_Note_01" },
   { "AFK", "AFK_TAG" },
@@ -1505,6 +1506,13 @@ function Panel.rowMenu(m)
     end
   end
   items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
+  if m.offline then
+    items[#items + 1] = { label = "Forget this friend", onClick = function()
+      local ok, why = ns.Crew.forget(name)
+      if ok then print("TwizCrew: forgot " .. ns.Util.safeText(name) .. ".")
+      else print("TwizCrew: could not forget " .. ns.Util.safeText(name) .. " (" .. tostring(why) .. ").") end
+    end }
+  end
   -- my own things, on every row (my own row is off by default); later features for me go here too
   for _, it in ipairs(Panel.myItems()) do items[#items + 1] = it end
   return compact(items)

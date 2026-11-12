@@ -31,6 +31,7 @@ local HELP = {
   "/tc debug - turn technical chat messages on or off",
   "/tc add <name> - add a friend by name, used when the hidden channel does not work",
   "/tc remove <name> - take a name off that list",
+  "/tc forget <name> - drop an offline friend from the crew list for good",
   "/tc awards - the awards show for this session, great on stream",
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
@@ -84,15 +85,15 @@ local function addName(rest)
   say("added " .. safe .. ". If the hidden channel does not work, TwizCrew will whisper them directly.")
 end
 
-local function removeName(rest)
+local function forgetName(rest)
   local name = Commands.normalizeName(rest)
-  local list = extraList()
-  if not name then say("type a name after it, like /tc remove Frostie"); return end
-  if not list then return end
-  local i = findName(list, name)
-  if not i then say(ns.Util.safeText(name) .. " is not on your list."); return end
-  local removed = table.remove(list, i)
-  say("removed " .. ns.Util.safeText(removed) .. ".")
+  if not name then say("type a name after it, like /tc forget Frostie"); return end
+  local ok, why = ns.Crew.forget(name)
+  local safe = ns.Util.safeText(name)
+  if ok then say("forgot " .. safe .. ".")
+  elseif why == "that is you" then say("that's you.")
+  elseif why == "online right now" then say(safe .. " is online right now; try again when they are offline.")
+  else say(safe .. " is not on your list.") end
 end
 
 -- quiet: no "panel shown/hidden" line (the minimap button's right-click; the panel itself is the answer).
@@ -284,7 +285,8 @@ local ACTIONS = {
   report = function() ns.Report.show() end,
   debug = toggleDebug,
   add = addName,
-  remove = removeName,
+  remove = forgetName,
+  forget = forgetName,
   awards = awards,
   session = session,
   stats = stats,

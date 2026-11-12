@@ -85,7 +85,21 @@ local function trackXP(m, now)
 end
 
 function Roster.new(saved)
-  local r = setmetatable({ byName = {}, saved = saved or {} }, Roster)
+  local r = setmetatable({ byName = {}, saved = saved or {}, pruned = {} }, Roster)
+  local wall = ns.wallclock()
+  local limit = ns.Config.FORGET_AFTER_DAYS * 86400
+  local old = {}
+  for name, row in pairs(r.saved) do
+    if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then
+      if num(row.lastSeen) == nil then
+        row.lastSeen = wall -- no saved time yet: today counts, so nobody vanishes on the update
+      elseif wall - row.lastSeen > limit then
+        old[#old + 1] = name
+      end
+    end
+  end
+  table.sort(old)
+  for _, name in ipairs(old) do r.saved[name] = nil; r.pruned[#r.pruned + 1] = name end
   for name, row in pairs(r.saved) do
     if type(name) == "string" and name ~= "" and type(row) == "table" and not ns.isTestName(name) then
       r.byName[name] = {
@@ -136,6 +150,11 @@ function Roster:apply(name, fields, now, wall)
 
   if fields.xc ~= nil then trackXP(m, now) end
 
+  m.raw = m.raw or {} -- every field as received, for the digest (Self.digestOf)
+  for key, value in pairs(fields) do
+    if type(value) == "string" then m.raw[key] = value end
+  end
+
   m.online = true
   m.lastHeard = now
   m.lastSeen = wall
@@ -151,6 +170,12 @@ function Roster:apply(name, fields, now, wall)
     }
   end
   return m, changes, events
+end
+
+-- The digest of what we hold for `name` (compare with the "h" a PING carries).
+function Roster:digest(name)
+  local m = self.byName[name]
+  return ns.Self.digestOf(m and m.raw or {})
 end
 
 function Roster:heard(name, now, wall)
@@ -235,6 +260,15 @@ function Roster:remove(name)
   if not ns.isTestName(name) or not self.byName[name] then return false end
   self.byName[name] = nil
   if self.saved[name] ~= nil then self.saved[name] = nil end
+  return true
+end
+
+-- Takes a real friend who is offline out of the roster and the saved list. False for an online one.
+function Roster:forget(name)
+  local m = self.byName[name]
+  if not m or m.online then return false end
+  self.byName[name] = nil
+  self.saved[name] = nil
   return true
 end
 

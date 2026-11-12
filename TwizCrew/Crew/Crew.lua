@@ -11,6 +11,8 @@ local replyPending = false -- true while a jittered STATE reply is waiting (one 
 local helloAt = {}       -- name -> time we last said HELLO because of their PING
 local lastStrangerHello  -- time of the last HELLO sent because of any stranger's PING
 local started = false
+local mismatches = {}  -- name -> PINGs in a row whose digest differed from what we hold
+local sreqAt = {}      -- name -> time we last asked for their state
 
 local function noteVersion(name, ver, rs)
   if ns.Version and ns.Version.seen and type(ver) == "string" then ns.Version.seen(name, ver, rs) end
@@ -69,7 +71,7 @@ local function onHello(sender, fields)
   end)
 end
 
-local function onPing(sender)
+local function onPing(sender, fields)
   if not ns.roster:get(sender) then
     local now = ns.now()
     local nameOk = not helloAt[sender] or now - helloAt[sender] >= STRANGER_HELLO_GAP
@@ -84,6 +86,23 @@ local function onPing(sender)
   for _, e in ipairs(ns.roster:heard(sender, ns.now(), ns.wallclock())) do
     if e == "online" then ns.Bus.fire("MEMBER_ONLINE", sender) end
   end
+  -- The digest shows a lost message: two PINGs in a row that disagree (one may just have passed an update in
+  -- flight) make us ask for their whole state, at most once per ping interval. No "h" = an old copy: never a mismatch.
+  local h = type(fields) == "table" and fields.h
+  if type(h) ~= "string" then return end
+  if h == ns.roster:digest(sender) then mismatches[sender] = nil; return end
+  mismatches[sender] = (mismatches[sender] or 0) + 1
+  if mismatches[sender] < 2 then return end
+  local now = ns.now()
+  if sreqAt[sender] and now - sreqAt[sender] < ns.Config.PING_INTERVAL then return end
+  mismatches[sender] = nil
+  sreqAt[sender] = now
+  ns.Log.count("sent SREQ")
+  ns.Comm.sendTo(sender, "SREQ", {})
+end
+
+local function onSreq(sender)
+  ns.Comm.sendTo(sender, "STATE", ns.Self.fullState())
 end
 
 local function onBye(sender)
@@ -125,17 +144,53 @@ local function tidyNames(list)
   end
 end
 
+-- Takes a friend who is offline out of the roster, the extra names, the saved numbers and the whisper memory.
+-- Returns true when something was removed; otherwise false and a short reason (never you, never an online friend).
+function Crew.forget(name)
+  if type(name) ~= "string" or name == "" then return false, "no name" end
+  if ns.isMe(name) then return false, "that is you" end
+  local low = name:lower()
+  local row
+  for _, n in ipairs(ns.roster and ns.roster:names() or {}) do
+    if n:lower() == low then row = n end
+  end
+  if row then
+    local m = ns.roster:get(row)
+    if m and m.online then return false, "online right now" end
+  end
+  local crew = ns.db and ns.db.crew
+  local removed = false
+  if crew and type(crew.extra) == "table" then
+    for i = #crew.extra, 1, -1 do
+      local n = crew.extra[i]
+      if type(n) == "string" and n:lower() == low then table.remove(crew.extra, i); removed = true end
+    end
+  end
+  if row and ns.roster:forget(row) then removed = true end
+  if not removed then return false, "not on your list" end
+  local who = row or name
+  if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
+  ns.Transport.forget(who)
+  mismatches[who], sreqAt[who], helloAt[who] = nil, nil, nil
+  ns.Bus.fire("MEMBER_REMOVED", who)
+  return true
+end
+
 function Crew.start()
   if started then return end
   started = true
   ns.Log.safe(FEATURE, tidyNames, ns.db.roster)
   if type(ns.db.stats) == "table" then ns.Log.safe(FEATURE, tidyNames, ns.db.stats.crew) end
   ns.roster = ns.Roster.new(ns.db.roster)
+  for _, name in ipairs(ns.roster.pruned) do
+    if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
+  end
   ns.Comm.on("HELLO", onHello)
   ns.Comm.on("STATE", onState)
   ns.Comm.on("UPDATE", onState)
   ns.Comm.on("PING", onPing)
   ns.Comm.on("BYE", onBye)
+  ns.Comm.on("SREQ", onSreq)
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", sayGoodbye)
   -- The channel works again after sends were refused: friends there may never have heard our login HELLO.
   ns.Bus.on(FEATURE, "CHANNEL_BACK", function()
@@ -155,7 +210,7 @@ function Crew.start()
     end)
   end)
   C_Timer.NewTicker(ns.Config.PING_INTERVAL, function()
-    ns.Log.safe(FEATURE, ns.Comm.send, "PING", {})
+    ns.Log.safe(FEATURE, ns.Comm.send, "PING", { h = ns.Self.digest() })
   end)
   C_Timer.NewTicker(ns.Config.OFFLINE_TICK, function()
     ns.Log.safe(FEATURE, function()

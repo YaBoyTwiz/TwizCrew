@@ -18,6 +18,13 @@ function Util.split(s, sep)
   end
 end
 
+-- A short checksum of a string (at most 6 digits).
+function Util.checksum(s)
+  local h = 0
+  for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
+  return tostring(h % 1000000)
+end
+
 function Util.trim(s)
   return (string.gsub(s, "^%s*(.-)%s*$", "%1"))
 end

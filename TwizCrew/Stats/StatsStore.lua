@@ -176,6 +176,12 @@ function Store.applyWire(name, fields, wall)
   return true
 end
 
+-- Drops a friend's saved numbers (they were forgotten, or expired).
+function Store.forgetCrew(name)
+  local stats = root()
+  if stats and stats.crew then stats.crew[name] = nil end
+end
+
 local function statsOn()
   return ns.Modules.isEnabled("stats")
 end

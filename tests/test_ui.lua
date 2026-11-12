@@ -87,6 +87,20 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    forget_command_drops_an_offline_friend = function(ns, A, W)
+      boot(W)
+      ns.db.roster.Frostie = { name = "Frostie", level = 5, lastSeen = ns.wallclock() }
+      ns.roster = ns.Roster.new(ns.db.roster)
+      tc(W, "forget frostie")
+      A.eq(ns.roster:get("Frostie"), nil)
+      A.eq(ns.db.roster.Frostie, nil)
+      ns.roster:apply("Ginkan", {}, 1, 1)
+      tc(W, "forget Ginkan")
+      A.ok(ns.roster:get("Ginkan"), "online: kept")
+      tc(W, "forget twiz")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     debug_toggles = function(ns, A, W)
       boot(W)
       tc(W, "debug")

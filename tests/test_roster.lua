@@ -1,5 +1,5 @@
 return {
-  files = { "Core/Init.lua", "Core/Util.lua", "Crew/Roster.lua" },
+  files = { "Core/Init.lua", "Core/Util.lua", "Crew/Roster.lua", "Crew/SelfState.lua" },
   tests = {
     apply_new_member = function(ns, A)
       local saved = {}
@@ -157,9 +157,9 @@ return {
       A.eq(r:clearSession("Nobody"), {})
     end,
     saved_members_start_offline = function(ns, A)
-      local r = ns.Roster.new({ Stabz = { class = "ROGUE", level = 9, lastSeen = 500 }, junk = 5, [3] = {} })
+      local r = ns.Roster.new({ Stabz = { class = "ROGUE", level = 9, lastSeen = ns.wallclock() - 500 }, junk = 5, [3] = {} })
       local m = r:get("Stabz")
-      A.eq(m.online, false); A.eq(m.class, "ROGUE"); A.eq(m.level, 9); A.eq(m.lastSeen, 500); A.eq(m.name, "Stabz")
+      A.eq(m.online, false); A.eq(m.class, "ROGUE"); A.eq(m.level, 9); A.eq(m.lastSeen, ns.wallclock() - 500); A.eq(m.name, "Stabz")
       A.eq(r:names(), { "Stabz" })
       local _, _, ev = r:apply("Stabz", { lv = "10" }, 1, 600)
       A.eq(ev, { "online" })
@@ -225,6 +225,35 @@ return {
       A.no(r:remove("Ginkan")); A.ok(r:get("Ginkan")); A.ok(saved.Ginkan)
       A.ok(r:remove("Testbuddy (test)")); A.eq(r:get("Testbuddy (test)"), nil)
       A.eq(r:names(true), { "Ginkan" })
+    end,
+    digest_follows_what_was_received_not_the_ride_along_keys = function(ns, A)
+      local r = ns.Roster.new({})
+      r:apply("Ginkan", { zn = "A", lv = "5", xc = "10" }, 1, 1)
+      A.eq(r:digest("Ginkan"), ns.Self.digestOf({ zn = "A", lv = "5", xc = "99", lk = "7" }))
+      r:apply("Ginkan", { zn = "B" }, 2, 2)
+      A.eq(r:digest("Ginkan"), ns.Self.digestOf({ zn = "B", lv = "5" }))
+      A.eq(r:digest("Nobody"), ns.Self.digestOf({}))
+    end,
+    forget_takes_out_offline_rows_only = function(ns, A)
+      local saved = {}
+      local r = ns.Roster.new(saved)
+      r:apply("Ginkan", { lv = "5" }, 1, 1)
+      A.no(r:forget("Ginkan"), "online")
+      r:gone("Ginkan")
+      A.ok(r:forget("Ginkan"))
+      A.eq(r:get("Ginkan"), nil); A.eq(saved.Ginkan, nil)
+      A.no(r:forget("Ginkan"))
+    end,
+    load_prunes_rows_older_than_the_forget_limit = function(ns, A)
+      local now, day = ns.wallclock(), 86400
+      local limit = ns.Config.FORGET_AFTER_DAYS
+      local saved = { Old = { lastSeen = now - (limit + 1) * day }, Edge = { lastSeen = now - (limit - 1) * day },
+        Undated = {} }
+      local r = ns.Roster.new(saved)
+      A.eq(r:names(), { "Edge", "Undated" })
+      A.eq(r.pruned, { "Old" })
+      A.eq(saved.Old, nil)
+      A.eq(saved.Undated.lastSeen, now)
     end,
   },
 }

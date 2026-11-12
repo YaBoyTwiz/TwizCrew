@@ -6,6 +6,7 @@ local Codec = {}
 ns.Codec = Codec
 
 local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BYE = true,
+  SREQ = true, -- "send me your whole state" (an old copy drops it as an unknown type)
   STATS = true, STATSREQ = true, ROAST = true, UPDREQ = true, MOCK = true,
   POS = true, MEET = true, -- find the crew: a group member's position, a meet-up
   QREQ = true, -- "please share this quest with me" (t = who should share, q = the quest title)

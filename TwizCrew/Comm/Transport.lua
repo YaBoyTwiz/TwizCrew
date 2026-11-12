@@ -187,7 +187,7 @@ end
 
 -- A name from the game's member list or a notice: colours, links and the owner / moderator marks taken off.
 local function cleanName(s)
-  if type(s) ~= "string" or (issecretvalue and issecretvalue(s)) then return nil end
+  if type(s) ~= "string" or ns.Util.isSecret(s) then return nil end
   s = s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
   s = s:gsub("^[%s%*@%+]+", ""):gsub("%s+$", "")
   if s == "" or s:find("[%[%]|,]") then return nil end
@@ -197,7 +197,7 @@ end
 -- "[*Frostie Snow, @Ginkan Pebble, Twiz]" (the text of CHAT_MSG_CHANNEL_LIST) -> { "Frostie Snow", ... }
 function Transport.parseList(text)
   local out = {}
-  if type(text) ~= "string" or (issecretvalue and issecretvalue(text)) then return out end
+  if type(text) ~= "string" or ns.Util.isSecret(text) then return out end
   text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H.-|h%[?(.-)%]?|h", "%1")
   for piece in (text .. ","):gmatch("(.-),") do
     local name = cleanName((piece:gsub("^%s*%[", ""):gsub("%]%s*$", "")))
@@ -473,7 +473,7 @@ end
 
 -- "No player named 'X' is currently playing." after a whisper to a member: they are gone.
 local function onSystem(message)
-  if type(message) ~= "string" or (issecretvalue and issecretvalue(message)) then return end
+  if type(message) ~= "string" or ns.Util.isSecret(message) then return end
   local pattern = ERR_CHAT_PLAYER_NOT_FOUND_S or "No player named '%s' is currently playing."
   for _, key in ipairs(memberKeys()) do
     local m = members[key]
@@ -532,9 +532,8 @@ function Transport.rejoin()
 end
 
 local function inGroup(a, b)
-  local ok, yes = pcall(UnitInParty, a)
-  if ok and yes then return true end
-  if b and b ~= a then ok, yes = pcall(UnitInParty, b); return ok and yes and true or false end
+  if ns.Util.plain(UnitInParty, a) then return true end
+  if b and b ~= a then return ns.Util.plain(UnitInParty, b) and true or false end
   return false
 end
 
@@ -563,8 +562,8 @@ local function whisperNames(skipGroup, rosterToo, out)
 end
 
 local function groupDestination()
-  if IsInRaid() then return { chatType = "RAID" } end
-  if IsInGroup() then return { chatType = "PARTY" } end
+  if ns.Util.plain(IsInRaid) then return { chatType = "RAID" } end
+  if ns.Util.plain(IsInGroup) then return { chatType = "PARTY" } end
 end
 
 -- The group (RAID or PARTY) as one destination, or nil when not in a group.

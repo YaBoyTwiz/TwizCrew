@@ -82,9 +82,7 @@ local function invite(name)
 end
 
 local function inGroup(name)
-  if type(UnitInParty) == "function" and UnitInParty(name) then return true end
-  if type(UnitInRaid) == "function" and UnitInRaid(name) then return true end
-  return false
+  return (ns.Util.plain(UnitInParty, name) or ns.Util.plain(UnitInRaid, name)) and true or false
 end
 
 -- What a click on a level-up pop-up (congratulate) or a single "online" pop-up (whisper them) does. The minimized

@@ -88,12 +88,8 @@ end
 ------------------------------------------------------------------------------------------------- my own diary
 local function iAmAway()
   if ns.Away and ns.Away.isAway and ns.Away.isAway() then return true end
-  if type(UnitIsAFK) == "function" then
-    local ok, v = pcall(UnitIsAFK, "player")
-    -- a secret answer (dungeons) can't even be compared: it counts as "not away"
-    if ok and not (type(issecretvalue) == "function" and issecretvalue(v)) and v == true then return true end
-  end
-  return false
+  -- a secret answer (dungeons) can't even be compared: plain makes it nil, which counts as "not away"
+  return ns.Util.plain(UnitIsAFK, "player") == true
 end
 
 -- Marks "online now" (and AFK) in my diary. t: a time for tests.

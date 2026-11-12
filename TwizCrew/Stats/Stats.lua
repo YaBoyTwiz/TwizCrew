@@ -94,11 +94,7 @@ end
 function Stats.died()
   if not enabled then return end
   local ctx = ns.Detectors.ctx
-  local level = type(UnitLevel) == "function" and UnitLevel("player") or nil
-  if type(issecretvalue) == "function" then
-    local ok, isSecret = pcall(issecretvalue, level)
-    if not ok or isSecret then level = nil end
-  end
+  local level = ns.Util.plain(UnitLevel, "player")
   local r = Logic.classifyDeath({
     now = ns.now(), fallingAt = ctx.fallingAt, breathRunning = ctx.breathRunning,
     breathStoppedAt = ctx.breathStoppedAt, target = ctx.target, myLevel = level, aliveAt = ctx.aliveAt,

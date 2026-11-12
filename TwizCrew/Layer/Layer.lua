@@ -12,20 +12,10 @@ local ticker
 
 -- A value the game hides from addons (a "secret") counts as not known.
 local function readable(v)
-  if v == nil then return false end
-  if type(issecretvalue) == "function" then
-    local ok, secret = pcall(issecretvalue, v)
-    if not ok or secret then return false end
-  end
-  return true
+  return v ~= nil and not ns.Util.isSecret(v)
 end
 
-local function call(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b, c, d = pcall(fn, ...)
-  if not ok then return nil end
-  return a, b, c, d
-end
+local call = ns.Util.plain
 
 local function unitName(unit)
   local name = call(UnitName, unit)
@@ -77,9 +67,8 @@ local function distanceTo(unit)
 end
 
 local function mySide()
-  local zone, inInstance
-  if type(GetRealZoneText) == "function" then zone = GetRealZoneText() end
-  if type(IsInInstance) == "function" then inInstance = select(1, IsInInstance()) end
+  local zone = call(GetRealZoneText)
+  local inInstance = call(IsInInstance)
   return { zn = zone, ins = inInstance and true or false, online = true }
 end
 

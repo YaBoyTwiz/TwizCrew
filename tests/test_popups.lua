@@ -150,6 +150,18 @@ return {
       A.eq(ns.Popups.visibleCount(), 0)
       A.eq(layerShows(ns), {})
     end,
+    clicking_the_layer_popup_invites_when_the_group_answers_are_secret = function(ns, A, W)
+      ready(ns, W)
+      frostieMoves(ns, W); W:advance(4)
+      local invited = {}
+      W.env.C_PartyInfo = { InviteUnit = function(n) invited[#invited + 1] = n end }
+      local hidden = W.secret()
+      W.env.UnitInParty = function() return hidden end
+      W.env.UnitInRaid = function() return hidden end
+      ns.Popups.clickForTest(1)
+      A.eq(invited, { "Frostie" }, "a secret answer is not 'already in my group'")
+      A.eq(ns.Log.errors(10), {})
+    end,
     different_unknown_different_shows_once = function(ns, A, W)
       ready(ns, W)
       frostieMoves(ns, W); W:advance(4)

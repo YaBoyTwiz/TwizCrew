@@ -28,14 +28,12 @@ local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
 -- A secret value (Midnight rules) can be shown but not used in maths: treat it as unknown.
 local function readable(v)
-  if type(issecretvalue) == "function" and issecretvalue(v) then return nil end
+  if ns.Util.isSecret(v) then return nil end
   return v
 end
 
 local function minimapShape()
-  if type(GetMinimapShape) ~= "function" then return "ROUND" end
-  local ok, shape = pcall(GetMinimapShape)
-  return ok and readable(shape) or "ROUND"
+  return ns.Util.plain(GetMinimapShape) or "ROUND"
 end
 
 local function place(angle)

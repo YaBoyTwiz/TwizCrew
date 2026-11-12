@@ -143,6 +143,32 @@ return {
         p:close()
       end
     end,
+    -- A yes/no from these game calls may be secret inside dungeons (testing it raises), so they are only ever passed to
+    -- ns.Util.plain (`plain(UnitIsAFK, "player")`), never called with `(` outside Core/Util.lua.
+    game_reads_go_through_plain = function(ns, A)
+      local names = { "UnitIsAFK", "UnitIsDeadOrGhost", "UnitIsDead", "UnitIsGhost", "UnitAffectingCombat",
+        "UnitOnTaxi", "UnitExists", "UnitIsPlayer", "UnitCanAttack", "UnitIsVisible", "UnitInParty", "UnitInRaid",
+        "UnitPosition", "UnitIsConnected", "IsInInstance", "IsInGroup", "IsInRaid", "IsMounted", "IsSwimming",
+        "IsFalling", "IsResting" }
+      for _, f in ipairs(tocFiles()) do
+        if f ~= "Core\\Util.lua" then
+          local n = 0
+          for line in strip(readFile("TwizCrew/" .. f:gsub("\\", "/")), false):gmatch("[^\n]*") do
+            n = n + 1
+            for _, name in ipairs(names) do
+              local from = 1
+              while true do
+                local s, e = line:find("%f[%w_]" .. name .. "%s*%(", from)
+                if not s then break end
+                local before = s > 1 and line:sub(s - 1, s - 1) or ""
+                A.ok(before == "." or before == ":", f .. ":" .. n .. " calls " .. name .. " directly: use ns.Util.plain")
+                from = e + 1
+              end
+            end
+          end
+        end
+      end
+    end,
     -- Find the crew: the game has one waypoint and one super-tracked target, and QuestMaster, OpenMap and Questie use
     -- them. TwizCrew draws its own arrow and icons and never touches those.
     never_touches_the_games_waypoint = function(ns, A)

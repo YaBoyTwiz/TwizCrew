@@ -45,6 +45,38 @@ return {
       A.eq(ns.Util.ago(7200), "2h ago")
       A.eq(ns.Util.ago(3 * 86400), "3d ago")
     end,
+    plain_passes_results_through_in_position = function(ns, A)
+      local function f(...) return ... end
+      A.eq(select("#", ns.Util.plain(f, 1, "a", true, nil)), 4)
+      local a, b, c, d = ns.Util.plain(f, 1, "a", true, nil)
+      A.eq({ a, b, c, d }, { 1, "a", true, nil })
+      A.eq(select("#", ns.Util.plain(f, 1, nil, 3)), 3, "a nil in the middle survives")
+      A.eq(select(3, ns.Util.plain(f, 1, nil, 3)), 3)
+    end,
+    plain_replaces_secret_results_with_nil = function(ns, A, W)
+      local hidden = W.secret()
+      local x, y, z = ns.Util.plain(function() return 1, hidden, 3 end)
+      A.eq({ x, y, z }, { 1, nil, 3 })
+      A.eq(select("#", ns.Util.plain(function() return 1, hidden, 3 end)), 3)
+    end,
+    plain_returns_nothing_when_fn_raises_or_is_missing = function(ns, A)
+      A.eq(select("#", ns.Util.plain(function() error("boom") end)), 0)
+      A.eq(select("#", ns.Util.plain(nil)), 0)
+      A.eq(select("#", ns.Util.plain("x")), 0)
+    end,
+    isSecret_follows_issecretvalue = function(ns, A, W)
+      local hidden = W.secret()
+      A.eq(ns.Util.isSecret(hidden), true)
+      A.eq(ns.Util.isSecret(5), false)
+      A.eq(ns.Util.isSecret(nil), false)
+      W.env.issecretvalue = nil
+      A.eq(ns.Util.isSecret(5), false, "no issecretvalue in the game")
+      A.eq(ns.Util.isSecret(hidden), false)
+    end,
+    plain_without_issecretvalue_passes_everything = function(ns, A, W)
+      W.env.issecretvalue = nil
+      A.eq(ns.Util.plain(function() return 7 end), 7)
+    end,
     init_reads_version_and_player = function(ns, A)
       A.eq(ns.VERSION, "0.1.0")
       A.eq(ns.playerName(), "Twiz")

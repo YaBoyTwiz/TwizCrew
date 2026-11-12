@@ -66,10 +66,7 @@ local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
 -- A yes from a game function; an error or a secret answer counts as no.
 local function yes(fn, ...)
-  if type(fn) ~= "function" then return false end
-  local ok, v = pcall(fn, ...)
-  if not ok or (type(issecretvalue) == "function" and issecretvalue(v)) then return false end
-  return v and true or false
+  return ns.Util.plain(fn, ...) and true or false
 end
 
 local function inCombat()

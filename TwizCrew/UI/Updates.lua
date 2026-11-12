@@ -26,7 +26,6 @@ local testShown       -- the test tools' pretend version a pop-up was shown for:
 
 local function inFight()
   if type(InCombatLockdown) == "function" and InCombatLockdown() then return true end
-  if type(UnitAffectingCombat) == "function" and UnitAffectingCombat("player") then return true end
   return false
 end
 

@@ -137,7 +137,7 @@ function Commands.binding(what)
   elseif what == "settings" then ns.Settings.toggle()
   elseif what == "mock" then
     local name = type(UnitName) == "function" and UnitName("target") or nil
-    local dead = type(UnitIsDeadOrGhost) == "function" and UnitIsDeadOrGhost("target")
+    local dead = ns.Util.plain(UnitIsDeadOrGhost, "target")
     if type(name) ~= "string" or not (ns.roster and ns.roster:get(name)) or not dead then
       say("target a dead crew friend to mock them.")
     elseif not ns.Roasts.canMock(name) then

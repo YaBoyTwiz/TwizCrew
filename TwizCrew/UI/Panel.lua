@@ -193,9 +193,8 @@ local function titleOf()
 end
 
 local function inDungeon()
-  if type(IsInInstance) ~= "function" then return false end
-  local ok, _, kind = pcall(IsInInstance)
-  return ok and (kind == "party" or kind == "raid")
+  local _, kind = ns.Util.plain(IsInInstance)
+  return kind == "party" or kind == "raid"
 end
 
 ---------------------------------------------------------------------------------------------------------- position
@@ -1401,11 +1400,7 @@ local function buildStatusBox()
 end
 
 -------------------------------------------------------------------------------------------------------- row menu
-local function call(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a = pcall(fn, ...)
-  if ok then return a end
-end
+local call = ns.Util.plain
 
 -- Is this friend in my group? The game's name check, else their name in my party / raid slots (Forever's name
 -- check can miss them).
@@ -2160,9 +2155,7 @@ local function onEnable()
     if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.3 then ns.Modules.set(FEATURE, "fadeAlpha", 0.35) end
   end
   if not root then build() end
-  local ok, fighting = false, false
-  if type(UnitAffectingCombat) == "function" then ok, fighting = pcall(UnitAffectingCombat, "player") end
-  inCombat = ok and fighting and true or false
+  inCombat = ns.Util.plain(InCombatLockdown) and true or false
   titleCache = nil
   for _, name in ipairs({ "STATS_CHANGED", "SESSION_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "CLOWN_CHANGED" }) do
     ns.Bus.on(FEATURE, name, forgetTitles)

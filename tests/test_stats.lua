@@ -726,13 +726,25 @@ return {
 
     erroring_tick_turns_off_alone = function(ns, A, W)
       start(ns, W)
-      W.env.IsFalling = function() error("bad fall") end
+      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
+      W.env.UnitLevel = function() error("bad level") end
       W.state.speed = 7
       for _ = 1, 20 do W:advance(0.5) end
-      A.eq(statusOf(ns, "fall").why, "error")
+      A.eq(statusOf(ns, "target").why, "error")
       A.eq(#ns.Log.errors(10), 1)
       A.ok(get(ns, "all", "st") > 0, "steps still count")
       A.ok(statusOf(ns, "motion").on)
+    end,
+
+    -- reads that go through the shared helper turn a failing game call into "unknown", not into a detector error
+    failing_game_reads_count_as_unknown = function(ns, A, W)
+      start(ns, W)
+      W.env.IsFalling = function() error("bad fall") end
+      W.env.IsMounted = function() error("bad mount") end
+      W.state.speed = 7
+      for _ = 1, 20 do W:advance(0.5) end
+      A.eq(#ns.Log.errors(10), 0)
+      A.ok(statusOf(ns, "fall").on, "still on")
     end,
 
     module_off_stops_counting = function(ns, A, W)

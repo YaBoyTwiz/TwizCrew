@@ -11,20 +11,11 @@ local TITLE_MAX, OBJ_MAX, OBJECTIVES = 40, 120, 3
 local current          -- questID we decided you're on
 local counts = {}      -- questID -> "n/m;n/m" of its objectives last time we looked (to see which one moved)
 
-local function call(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b, c, d, e, f, g, h = pcall(fn, ...)
-  if not ok then return nil end
-  return a, b, c, d, e, f, g, h
-end
+local call = ns.Util.plain
 
+-- For fields of a table the game returned (the table is plain, its fields may be secret).
 local function readable(v)
-  if v == nil then return false end
-  if type(issecretvalue) == "function" then
-    local ok, secret = pcall(issecretvalue, v)
-    if not ok or secret then return false end
-  end
-  return true
+  return v ~= nil and not ns.Util.isSecret(v)
 end
 
 local function QLog() return type(C_QuestLog) == "table" and C_QuestLog or {} end -- looked up each time
@@ -61,7 +52,7 @@ local function objectives(q)
     end
     return out
   end
-  local n = tonumber(call(GetNumQuestLeaderBoards, q.index)) or 0
+  local n = tonumber((call(GetNumQuestLeaderBoards, q.index))) or 0
   for j = 1, n do
     local text, _, done = call(GetQuestLogLeaderBoard, j, q.index)
     if readable(text) and text and text ~= "" then out[#out + 1] = { text = text, done = done and true or false } end

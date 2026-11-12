@@ -22,11 +22,7 @@ FeedLogic.CHAT_KEY = { online = "chatOnline", offline = "chatOffline", died = "c
   congrats = "chatCongrats", mock = "chatMock", roast = "chatRoast" }
 
 ---------------------------------------------------------------------------------------------------------- text
-local function secret(v)
-  if type(issecretvalue) ~= "function" then return false end
-  local ok, yes = pcall(issecretvalue, v)
-  return not ok or yes == true
-end
+local function secret(v) return ns.Util.isSecret(v) end
 
 -- Plain text from anything: "" for a secret value or a non-string; control characters out; at most `max` letters.
 -- Not yet escaped (see safe).

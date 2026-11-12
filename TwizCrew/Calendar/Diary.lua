@@ -5,7 +5,8 @@
 --
 -- Messages (all small; each day travels as its own field, so long diaries split cleanly into several pieces):
 --   CALD  digest: p<id> = slots I know for that person over the last KEEP_DAYS days (to everyone every few
---         minutes, and to a friend who just came online)
+--         minutes, and to a friend who just came online); di = my id and d<utcDay> = on[:afk] = my own slots
+--         today and yesterday (v0.1.23 ignores both), so friends see my evening without asking for my diary
 --   CALQ  "send me person i" (to one friend whose digest shows more than I know; only ever pulled, never pushed)
 --   CALP  one person's diary: i = id, n = name, c = class, a = alts "Name:CLASS,...", d<utcDay> = on[:afk]
 -- Merging only ever adds slots (masks are OR-ed), so the order things arrive in never matters.
@@ -139,11 +140,21 @@ local function sharedIds()
   return out
 end
 
+-- A day as it travels: "on" or "on:afk".
+local function dayText(d) return d.afk and L.clean(d.afk) and (d.on .. ":" .. d.afk) or d.on end
+
 local function digestFields()
   local from, f = oldest(), {}
   for _, id in ipairs(sharedIds()) do
     local n = L.total(Diary.people()[id].days, from)
     if n > 0 then f["p" .. id] = tostring(n) end
+  end
+  if setting("share") ~= false then
+    local me = Diary.people()[Diary.myId()]
+    for day = today() - 1, today() do
+      local d = me and me.days[day]
+      if type(d) == "table" and L.clean(d.on) then f["d" .. day] = dayText(d); f.di = Diary.myId() end
+    end
   end
   if ns.Notes then ns.Notes.digestFields(f) end
   return f
@@ -181,9 +192,7 @@ local function personFields(id)
   if #keep > 0 then f.a = table.concat(keep, ",") end
   local from = oldest()
   for day, d in pairs(p.days) do
-    if day >= from and L.clean(d.on) then
-      f["d" .. day] = d.afk and L.clean(d.afk) and (d.on .. ":" .. d.afk) or d.on
-    end
+    if day >= from and L.clean(d.on) then f["d" .. day] = dayText(d) end
   end
   return f
 end
@@ -206,10 +215,56 @@ local function known(sender)
     and ns.roster:get(sender) ~= nil
 end
 
+-- Merges the d<utcDay> = on[:afk] fields of f for days first..last into person p (masks are OR-ed). Returns true
+-- when any arrived.
+local function mergeDays(p, f, first, last)
+  local changed = false
+  for k, v in pairs(f) do
+    local day = type(k) == "string" and tonumber(k:match("^d(%d+)$"))
+    if day and day >= first and day <= last and type(v) == "string" then
+      local on, afk = v:match("^([^:]+):?(.*)$")
+      on, afk = L.clean(on), L.clean(afk)
+      if on then
+        local d = p.days[day]
+        if type(d) ~= "table" then d = {}; p.days[day] = d end
+        d.on = L.merge(d.on, on)
+        if afk then d.afk = L.merge(d.afk, afk) end
+        changed = true
+      end
+    end
+  end
+  return changed
+end
+
+-- Slots on in the days of `days` (a { [day] = true } set): in a stored record, or in the d<day> fields of a message.
+local function slotsIn(record, days)
+  local n = 0
+  for day in pairs(days) do local d = record[day]; if type(d) == "table" then n = n + L.count(d.on) end end
+  return n
+end
+local function slotsSent(f, days)
+  local n = 0
+  for day in pairs(days) do
+    local v = f["d" .. day]
+    local on = type(v) == "string" and L.clean(v:match("^([^:]+)"))
+    if on then n = n + L.count(on) end
+  end
+  return n
+end
+
 local function onDigest(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
   local from = oldest()
   local people = Diary.people()
+  -- the sender's own slots of today and yesterday: merged at once, and left out of the comparison below, so a friend
+  -- who is online (their diary grows every 15 minutes) is not asked for their whole diary at every digest. Only for
+  -- someone we already know: a new friend is asked for their diary as before.
+  local who = type(f.di) == "string" and f.di ~= Diary.myId() and people[f.di]
+  local recent
+  if type(who) == "table" and type(who.name) == "string" then
+    recent = { [today() - 1] = true, [today()] = true }
+    if mergeDays(who, f, today() - 1, today()) then ns.Bus.fire("CALENDAR_CHANGED") end
+  end
   -- notes: different checksums mean they have notes (or deletions) we don't: ask for theirs (only the buckets
   -- that differ, when their digest says which)
   local ask = ns.Notes and ns.Notes.askFor(f)
@@ -224,6 +279,10 @@ local function onDigest(sender, f)
     local theirs = tonumber(v)
     if id and theirs then
       local mine = people[id] and L.total(people[id].days, from) or 0
+      if recent and id == f.di then
+        theirs = theirs - slotsSent(f, recent)
+        mine = mine - slotsIn(people[id].days, recent)
+      end
       -- they know more: ask them (once per person for a while, whoever offers it first). Nobody pushes diaries
       -- unasked, so a friend logging in doesn't get the same diary from everyone at once.
       if theirs > mine and id ~= Diary.myId() then
@@ -253,23 +312,7 @@ local function onPerson(sender, f)
   if type(f.a) == "string" then
     for name, class in f.a:gmatch("([^,:]+):(%u+)") do p.alts[ns.Util.truncateUTF8(name, 24)] = class end
   end
-  local from = oldest()
-  local changed = false
-  for k, v in pairs(f) do
-    local day = type(k) == "string" and tonumber(k:match("^d(%d+)$"))
-    if day and day >= from and day <= today() + 1 and type(v) == "string" then
-      local on, afk = v:match("^([^:]+):?(.*)$")
-      on, afk = L.clean(on), L.clean(afk)
-      if on then
-        local d = p.days[day]
-        if type(d) ~= "table" then d = {}; p.days[day] = d end
-        d.on = L.merge(d.on, on)
-        if afk then d.afk = L.merge(d.afk, afk) end
-        changed = true
-      end
-    end
-  end
-  if changed then ns.Bus.fire("CALENDAR_CHANGED") end
+  if mergeDays(p, f, oldest(), today() + 1) then ns.Bus.fire("CALENDAR_CHANGED") end
 end
 
 ns.Comm.on("CALD", function(s, f) ns.Log.safe(FEATURE, onDigest, s, f) end)

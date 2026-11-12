@@ -185,7 +185,11 @@ local function build()
   box:SetAutoFocus(false)
   if box.SetFontObject then box:SetFontObject(T.FONT.small) end
   if box.SetTextInsets then box:SetTextInsets(6, 6, 0, 0) end
-  if box.SetMaxLetters then box:SetMaxLetters(120) end
+  script(box, "OnTextChanged", function(self) -- stops at what one message can carry
+    local text = self:GetText()
+    local fit = ns.Notes.fitWords(text)
+    if fit ~= text then self:SetText(fit) end
+  end)
   script(box, "OnEnterPressed", function() reply() end)
   script(box, "OnEscapePressed", function(self) self:ClearFocus() end)
   local send = Widgets.button(frame, "Comment", function() reply() end, nil, FEATURE)
@@ -290,3 +294,4 @@ function NoteView.commentForTest(text)
   rawset(box, "GetText", function() return text end)
   reply()
 end
+function NoteView.boxForTest() return box end

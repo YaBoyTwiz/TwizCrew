@@ -14,7 +14,12 @@ local Notes = {}
 ns.Notes = Notes
 
 local FEATURE = "calendar"
-local MAX_TEXT = 120
+-- Sizes, so a note or a reply always travels as one message (255 bytes) a receiver takes: the words of a note or a
+-- comment are counted in bytes as they travel (after the codec's escaping), a name too; keys have a longest length.
+Notes.MAX_BYTES = 100
+local NAME_BYTES = 24
+local MAX_KEY = 24       -- a note's key ("<author id>-<created>": 19 letters as this addon makes them)
+local MAX_REPLY_KEY = 50 -- a reply's key ("<note key>|c|<id>-<time>": 41 letters)
 local MAX_NOTES = 300
 local KEEP_DAYS = 90     -- past notes (and deletion markers) are kept this long
 local SEND_ALL_GAP = 60  -- seconds between "all my notes" to the same friend
@@ -135,10 +140,26 @@ local function dayOfKey(key)
 end
 Notes.dayOfKey = dayOfKey
 
+-- The words of a note or a comment: one line, at most MAX_BYTES as they travel (cut on whole letters); nil if empty.
 local function clean(text)
   text = ns.Util.trim(tostring(text or "")):gsub("[%c]", " ")
   if text == "" then return nil end
-  return ns.Util.truncateUTF8(text, MAX_TEXT)
+  return ns.Codec.fit(text, Notes.MAX_BYTES)
+end
+
+-- What an edit box may hold: at most MAX_BYTES as it travels.
+function Notes.fitWords(text) return ns.Codec.fit(tostring(text or ""), Notes.MAX_BYTES) end
+
+-- A name as it is kept and sent (made safe to show, at most NAME_BYTES as it travels), or nil.
+local function cleanName(name)
+  if type(name) ~= "string" then return nil end
+  return ns.Codec.fit(name, NAME_BYTES)
+end
+
+-- A class ("MAGE"), or nil.
+local function cleanClass(c)
+  if type(c) ~= "string" or #c > 12 or not c:match("^%u+$") then return nil end
+  return c
 end
 
 function Notes.iconTexture(i)
@@ -197,10 +218,11 @@ function Notes.hash()
 end
 
 ---------------------------------------------------------------------------------------------------- sending
+-- A note as it travels: cut again, so a note an older version saved (longer words) still fits one message.
 local function fields(key, n)
-  return { k = key, d = n.d, t = n.x and "" or n.t, i = tostring(n.i or 1), b = n.b, c = n.c,
-    u = tostring(n.u or 0), x = n.x and "1" or nil, a = type(n.at) == "number" and tostring(n.at) or nil,
-    g = n.g }
+  return { k = key, d = n.d, t = n.x and "" or (clean(n.t) or ""), i = tostring(n.i or 1), b = cleanName(n.b),
+    c = cleanClass(n.c), u = tostring(n.u or 0), x = n.x and "1" or nil,
+    a = type(n.at) == "number" and tostring(n.at) or nil, g = DUNGEON[n.g] and n.g or nil }
 end
 
 local function send(key, to)
@@ -240,7 +262,10 @@ function Notes.replyStore()
 end
 
 local function replyFields(key, r)
-  return { r = key, n = r.n, v = r.x and "" or r.v, b = r.b, c = r.c, u = tostring(r.u or 0), x = r.x and "1" or nil }
+  local v = r.x and "" or r.v
+  if not r.x and key:find("|c|", 1, true) then v = clean(v) or "" end
+  return { r = key, n = r.n, v = v, b = cleanName(r.b), c = cleanClass(r.c), u = tostring(r.u or 0),
+    x = r.x and "1" or nil }
 end
 
 function Notes.sendReply(key, to)
@@ -342,9 +367,9 @@ function Notes.repliesFor(noteKey)
 end
 
 function Notes.receiveReply(sender, f)
-  if type(f) ~= "table" or type(f.r) ~= "string" or #f.r > 80 then return end
+  if type(f) ~= "table" or type(f.r) ~= "string" or #f.r > MAX_REPLY_KEY then return end
   local noteKey, letter = f.r:match("^(%w+%-%d+)|(%a)|%w+")
-  if not noteKey or noteKey ~= f.n or not LETTER_KIND[letter] then return end
+  if not noteKey or noteKey ~= f.n or #noteKey > MAX_KEY or not LETTER_KIND[letter] then return end
   local u = tonumber(f.u)
   if not u then return end
   local s = Notes.replyStore()
@@ -358,8 +383,8 @@ function Notes.receiveReply(sender, f)
     if letter == "c" then v = clean(v); if not v then return end end
     if letter == "s" then v = "1" end
   end
-  s[f.r] = { n = noteKey, v = v, b = type(f.b) == "string" and ns.Util.truncateUTF8(ns.Util.safeText(f.b), 24) or "?",
-    c = type(f.c) == "string" and f.c:match("^%u+$") and f.c or nil, u = u, x = deleted or nil }
+  s[f.r] = { n = noteKey, v = v, b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?",
+    c = cleanClass(f.c), u = u, x = deleted or nil }
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
@@ -399,7 +424,7 @@ end
 function Notes.receive(sender, f)
   if type(f) ~= "table" then return end
   local key = f.k
-  if type(key) ~= "string" or not key:match("^%w+%-%d+$") or #key > 40 then return end
+  if type(key) ~= "string" or not key:match("^%w+%-%d+$") or #key > MAX_KEY then return end
   if not dayOfKey(f.d) then return end
   local u = tonumber(f.u)
   if not u then return end
@@ -410,11 +435,11 @@ function Notes.receive(sender, f)
   local deleted = f.x == "1"
   local text = deleted and "" or clean(f.t)
   if not deleted and not text then return end
-  local class = type(f.c) == "string" and f.c:match("^%u+$") and f.c or nil
+  local class = cleanClass(f.c)
   local at = tonumber(f.a)
   if at and math.abs(at - ns.Diary.now()) > 10 * 365 * 86400 then at = nil end -- nonsense times are dropped
   s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(f.i) or 1)),
-    b = type(f.b) == "string" and ns.Util.truncateUTF8(ns.Util.safeText(f.b), 24) or "?", c = class, u = u,
+    b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?", c = class, u = u,
     x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil }
   ns.Bus.fire("CALENDAR_CHANGED")
 end

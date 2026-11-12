@@ -939,7 +939,11 @@ local function buildMaker()
   maker.box:SetAutoFocus(false)
   if maker.box.SetFontObject then maker.box:SetFontObject(T.FONT.small) end
   if maker.box.SetTextInsets then maker.box:SetTextInsets(6, 6, 0, 0) end
-  if maker.box.SetMaxLetters then maker.box:SetMaxLetters(120) end
+  script(maker.box, "OnTextChanged", function(self) -- stops at what one message can carry
+    local text = self:GetText()
+    local fit = ns.Notes.fitWords(text)
+    if fit ~= text then self:SetText(fit) end
+  end)
   script(maker.box, "OnEnterPressed", function() Calendar.saveMaker() end)
   script(maker.box, "OnEscapePressed", function(self) self:ClearFocus() end)
   local hint = T.text(maker, T.FONT.small, C.muted)
@@ -991,6 +995,7 @@ function Calendar.saveMaker(text)
 end
 
 function Calendar.makerForTest() return mk end
+function Calendar.makerBoxForTest() return maker and maker.box end
 function Calendar.setMakerForTest(k, v) mk[k] = v; drawMaker() end
 
 local function build()

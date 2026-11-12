@@ -32,18 +32,26 @@ local function header(msgType)
   return ns.Config.PROTOCOL .. "^" .. msgType .. "^"
 end
 
+-- The bytes a value takes as it travels (escaped).
+function Codec.size(value) return #escape(value) end
+
+-- The longest start of `value` (whole letters, never half a UTF-8 letter) that takes at most `room` bytes once
+-- escaped, as it travels.
+function Codec.fit(value, room)
+  if #escape(value) <= room then return value end
+  local lo, hi = 0, #value -- chars <= bytes; find the most characters that fit
+  while lo < hi do
+    local mid = math.ceil((lo + hi) / 2)
+    if #escape(ns.Util.truncateUTF8(value, mid)) <= room then lo = mid else hi = mid - 1 end
+  end
+  return ns.Util.truncateUTF8(value, lo)
+end
+
 -- Largest escaped "k=v" that fits in `room` bytes, cutting v on whole letters; nil if even "k=" does not fit.
 local function fitEntry(ek, value, room)
   local prefix = ek .. "="
   if #prefix > room then return nil end
-  local full = prefix .. escape(value)
-  if #full <= room then return full end
-  local lo, hi = 0, #value -- chars <= bytes; find the most characters that fit
-  while lo < hi do
-    local mid = math.ceil((lo + hi) / 2)
-    if #prefix + #escape(ns.Util.truncateUTF8(value, mid)) <= room then lo = mid else hi = mid - 1 end
-  end
-  return prefix .. escape(ns.Util.truncateUTF8(value, lo))
+  return prefix .. escape(Codec.fit(value, room - #prefix))
 end
 
 -- Zone, instance and layer key go first, so they always arrive together in the first piece (a friend's layer

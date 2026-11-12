@@ -53,9 +53,13 @@ end
 
 local function reply()
   local text = box and box:GetText()
-  if shownKey and ns.Notes.comment(shownKey, text) then
+  local key, why
+  if shownKey then key, why = ns.Notes.comment(shownKey, text) end
+  if key then
     box:SetText("")
     box:ClearFocus()
+  elseif why == "full" then
+    print("TwizCrew: this note has " .. ns.Notes.MAX_COMMENTS .. " comments, the most it can take.")
   else
     print("TwizCrew: type a comment first.")
   end

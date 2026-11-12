@@ -20,7 +20,8 @@ Notes.MAX_BYTES = 100
 local NAME_BYTES = 24
 local MAX_KEY = 24       -- a note's key ("<author id>-<created>": 19 letters as this addon makes them)
 local MAX_REPLY_KEY = 50 -- a reply's key ("<note key>|c|<id>-<time>": 41 letters)
-local MAX_NOTES = 300
+local MAX_NOTES = 300    -- live (not deleted) notes counted; deletion markers always count
+Notes.MAX_COMMENTS = 30  -- live comments counted per note
 local KEEP_DAYS = 90     -- past notes (and deletion markers) are kept this long
 local SEND_ALL_GAP = 60  -- seconds between "all my notes" to the same friend
 
@@ -215,18 +216,62 @@ local function inWindow(dateKey, today)
   return day ~= nil and day >= (today or utcToday()) - KEEP_DAYS
 end
 
+local function isComment(key) return key:find("|c|", 1, true) ~= nil end
+
+-- Caps: only the first MAX_NOTES live notes count, and the first MAX_COMMENTS live comments of a note, in key order
+-- (so every copy picks the same ones, whatever order things arrived in). Deletion markers always count.
+local function capped(keys, records, max, out)
+  table.sort(keys)
+  local live = 0
+  for _, key in ipairs(keys) do
+    if records[key].x then out[key] = true
+    elseif live < max then live = live + 1; out[key] = true end
+  end
+end
+
 -- The notes and replies that count: two sets { [key] = true }.
 local function counted()
   local today = utcToday()
+  local s, rs = store() or {}, Notes.replyStore() or {}
   local notes, replies = {}, {}
-  for key, n in pairs(store() or {}) do
-    if type(n) == "table" and inWindow(n.d, today) then notes[key] = true end
+  local keys = {}
+  for key, n in pairs(s) do
+    if type(n) == "table" and inWindow(n.d, today) then keys[#keys + 1] = key end
   end
-  for key, r in pairs(Notes.replyStore() or {}) do
-    if type(r) == "table" and notes[r.n] then replies[key] = true end
+  capped(keys, s, MAX_NOTES, notes)
+  local comments = {} -- note key -> its comments' keys
+  for key, r in pairs(rs) do
+    if type(r) == "table" and notes[r.n] then
+      if isComment(key) then
+        comments[r.n] = comments[r.n] or {}
+        table.insert(comments[r.n], key)
+      else
+        replies[key] = true
+      end
+    end
   end
+  for _, list in pairs(comments) do capped(list, rs, Notes.MAX_COMMENTS, replies) end
   return notes, replies
 end
+
+-- Is there room for a new live record with this key? Fewer than `max` live ones with a lower key are stored among
+-- `records` that `same` picks (so it would count everywhere that has what we have).
+local function room(records, key, max, same)
+  local lower = 0
+  for k, r in pairs(records) do
+    if type(r) == "table" and not r.x and k < key and same(k, r) then lower = lower + 1 end
+  end
+  return lower < max
+end
+
+local function liveCount(records, same)
+  local n = 0
+  for k, r in pairs(records) do if type(r) == "table" and not r.x and same(k, r) then n = n + 1 end end
+  return n
+end
+
+local function noteCounts(_, n) return inWindow(n.d) end
+local function commentOf(noteKey) return function(k, r) return r.n == noteKey and isComment(k) end end
 
 -- A checksum of every note (and deletion) and reply that counts, so two copies can tell whether they have the same.
 -- (The same sum v0.1.23 makes over what it keeps.)
@@ -342,11 +387,13 @@ function Notes.rsvp(noteKey, status)
   return true
 end
 
+-- Returns the comment's key, or nil (and "full" when the note has MAX_COMMENTS comments).
 function Notes.comment(noteKey, text)
   text = clean(text)
   if not text then return nil end
   local s, key, r = myReply(noteKey, "c", "-" .. ns.Diary.now())
   if not s then return nil end
+  if liveCount(s, commentOf(noteKey)) >= Notes.MAX_COMMENTS then return nil, "full" end
   while s[key] do key = key .. "x" end
   r.v = text
   put(s, key, r)
@@ -404,6 +451,9 @@ function Notes.receiveReply(sender, f)
   local old = s[f.r]
   if old and (old.u or 0) >= u then return end
   local deleted = f.x == "1"
+  if not old and not deleted and letter == "c" and not room(s, f.r, Notes.MAX_COMMENTS, commentOf(noteKey)) then
+    return
+  end
   local v = deleted and "" or f.v
   if not deleted then
     if letter == "r" and not RSVP[v] then return end
@@ -417,13 +467,14 @@ end
 
 ---------------------------------------------------------------------------------------------------- changes
 -- Adds a note on a date for me (at: a time in UTC seconds, for a timed note; dungeon: a Notes.DUNGEONS key, its
--- name is the text when none was typed). Returns its key, or nil.
+-- name is the text when none was typed). Returns its key, or nil (and "full" when MAX_NOTES notes are kept).
 function Notes.add(dateKey, text, icon, at, dungeon)
   if not DUNGEON[dungeon] then dungeon = nil end
   text = clean(text) or (dungeon and DUNGEON[dungeon].name) or nil
   if not text or not dayOfKey(dateKey) then return nil end
   local s = store()
   if not s then return nil end
+  if liveCount(s, noteCounts) >= MAX_NOTES then return nil, "full" end
   local me = ns.Diary.myId()
   local now = ns.Diary.now()
   local key = me .. "-" .. now
@@ -460,6 +511,7 @@ function Notes.receive(sender, f)
   local old = s[key]
   if old and (old.u or 0) >= u then return end
   local deleted = f.x == "1"
+  if not old and not deleted and not room(s, key, MAX_NOTES, noteCounts) then return end
   local text = deleted and "" or clean(f.t)
   if not deleted and not text then return end
   local class = cleanClass(f.c)
@@ -471,8 +523,8 @@ function Notes.receive(sender, f)
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
--- What no longer counts goes away: old notes and old deletion markers, replies whose note is gone or old.
--- At login and once a day while logged in.
+-- What no longer counts goes away: old notes and old deletion markers, notes and comments past the caps, replies
+-- whose note is gone. At login and once a day while logged in.
 function Notes.prune()
   local s, rs = store(), Notes.replyStore()
   if not s or not rs then return end

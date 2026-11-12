@@ -593,7 +593,8 @@ function Transport.destinationFor(name)
   return out[1]
 end
 
-function Transport.destinations()
+-- msgType (optional) decides the channel copy in automatic mode: see below.
+function Transport.destinations(msgType)
   local m = mode()
   if usesChannel(m) then checkChannel() end
   if m == "channel" then
@@ -608,13 +609,15 @@ function Transport.destinations()
     if IsInGuild() then return { { chatType = "GUILD" } } end
   end
   if state.joined and not state.failed then
-    -- The group (when grouped), a whisper to each channel member outside it, and one copy to the channel in case
-    -- the game delivers it again. The receiver drops the second copy of the same message.
+    -- The group (when grouped), a whisper to each channel member outside it, and, for a PING or once the channel
+    -- has delivered something this session, one copy to the channel. The receiver drops the second copy.
     local out = {}
     local g = groupDestination()
     if g then out[1] = g end
     whisperNames(g ~= nil, false, out)
-    out[#out + 1] = { chatType = "CHANNEL", target = state.index }
+    if msgType == "PING" or ns.Comm.echoCount() > 0 then
+      out[#out + 1] = { chatType = "CHANNEL", target = state.index }
+    end
     return out
   end
   return fallback()

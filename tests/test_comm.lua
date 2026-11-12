@@ -955,5 +955,44 @@ return {
       A.eq(ns.Transport.status().channel, "OtherHQ")
       A.ok(ns.Transport.status().joined)
     end,
+    a_refused_send_is_given_up_after_ten_tries = function(ns, A, W)
+      boot(ns, W)
+      W:advance(6)
+      W.state.sendResult = 3 -- "try again later", for good
+      local done = 0
+      ns.Comm.send("PING", { n = "1" }, { onSent = function() done = done + 1 end })
+      ns.Comm.send("PING", { n = "2" })
+      W:advance(8)
+      A.eq(countLog(ns, "given up"), 0, "still trying")
+      W:advance(20)
+      A.eq(countLog(ns, "send to 5 given up after 10 tries"), 2, "one line per dropped message")
+      A.eq(done, 1, "the sent callback ran for the dropped message")
+      W.state.sendResult = 0
+      local n = #W.sent
+      ns.Comm.send("PING", { n = "3" })
+      W:advance(2)
+      A.eq(#W.sent, n + 1, "the queue moved on")
+      A.contains(W.sent[#W.sent].text, "n=3")
+    end,
+    channel_copy_only_for_ping_or_after_an_echo = function(ns, A, W)
+      withList(W)
+      boot(ns, W)
+      ns.Comm.echoCount = W.realEchoCount -- the real rule, not the tests' default
+      W:advance(6)
+      list(W, "Twiz, Frostie Snow, Ginkan Pebble, Chaos Deathbringr, Lurabe Moon")
+      A.eq(#ns.Transport.members(), 4)
+      local function sendsFor(msgType)
+        local n = #W.sent
+        ns.Comm.send(msgType, {})
+        W:advance(5)
+        return #W.sent - n
+      end
+      A.eq(sendsFor("UPDATE"), 4, "no echo yet: the four whispers only")
+      A.eq(sendsFor("PING"), 5, "a PING also tries the channel")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz")
+      A.eq(ns.Comm.echoCount(), 1)
+      A.eq(sendsFor("UPDATE"), 5, "the channel has delivered: the copy goes out for every type")
+      noErrors(ns, A)
+    end,
   },
 }

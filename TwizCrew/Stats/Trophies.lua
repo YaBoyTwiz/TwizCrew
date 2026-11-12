@@ -196,7 +196,7 @@ local function onAsk(sender, f)
   local key = f.s .. ">" .. sender
   if sentAt[key] and ns.now() - sentAt[key] < SEND_GAP then return end
   sentAt[key] = ns.now()
-  sendTo(sender, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l", "e" } })
+  sendTo(sender, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l", "e" }, bulk = true })
 end
 
 local function onRecord(sender, f)

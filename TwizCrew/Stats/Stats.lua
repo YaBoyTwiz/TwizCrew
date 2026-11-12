@@ -13,7 +13,7 @@ local Logic = ns.StatsLogic
 local Store = ns.StatsStore
 
 local SHARE = "stats_share" -- friends' messages run under their own id: a broken one never trips "stats"
-local WIRE_OPTS = { repeatKeys = { "sid", "q", "off" } }
+local WIRE_OPTS = { repeatKeys = { "sid", "q", "off" }, bulk = true }
 
 local enabled = false
 local lastFire       -- when STATS_CHANGED last fired

@@ -77,7 +77,7 @@ local function onPing(sender)
     if nameOk and globalOk then
       helloAt[sender] = now
       lastStrangerHello = now
-      ns.Comm.send("HELLO", hello())
+      if ns.Comm.sendTo(sender, "HELLO", hello()) then ns.Comm.sendTo(sender, "STATE", ns.Self.fullState()) end
     end
     return
   end

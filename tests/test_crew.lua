@@ -128,6 +128,25 @@ return {
       A.eq(msgs[1].fields, { tg = "COMBAT", xc = "104", rx = "296" })
       noErrors(ns, A)
     end,
+    layer_key_alone_sends_nothing_and_rides_along = function(ns, A, W)
+      start(ns, W)
+      ns.LayerSensor.start()
+      ns.Self.refresh("test"); W:advance(2)
+      local n = #W.sent
+      W.state.guids.mouseover = "Creature-0-1-0-111-299-01"
+      for _ = 1, 2 do W:fire("UPDATE_MOUSEOVER_UNIT") end
+      W:advance(3)
+      A.eq(ns.LayerSensor.current(), "111")
+      A.eq(#sentSince(ns, W, n), 0, "a new layer key alone sends no UPDATE")
+      W.state.combat = true                    -- a fight starts: the tag goes out, the key with it
+      W:fire("PLAYER_REGEN_DISABLED"); W:advance(3)
+      local ups = {}
+      for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "UPDATE" then ups[#ups + 1] = m end end
+      A.eq(#ups, 1)
+      A.eq(ups[1].fields.tg, "COMBAT")
+      A.eq(ups[1].fields.lk, "111", "lk rides along")
+      noErrors(ns, A)
+    end,
     level_up_sends_level_and_numbers_together = function(ns, A, W)
       start(ns, W)
       W.state.xp, W.state.xpMax = 950, 1000
@@ -426,7 +445,7 @@ return {
       receive(ns, W, "Stranger", "PING", {})
       W:advance(2)
       local msgs = sentSince(ns, W, n)
-      A.eq(#msgs, 1); A.eq(msgs[1].type, "HELLO")
+      A.eq(#msgs, 2); A.eq(msgs[1].type, "HELLO"); A.eq(msgs[2].type, "STATE") -- to the asker only
       -- a second ping soon after does not make us send again
       W:advance(5)
       n = #W.sent
@@ -504,6 +523,37 @@ return {
       W:fire("PLAYER_LOGOUT")
       local msgs = sentSince(ns, W, n)
       A.eq(#msgs, 1); A.eq(msgs[1].type, "BYE")
+    end,
+    ping_from_a_stranger_is_answered_to_that_sender_only = function(ns, A, W, H)
+      local a, aNs = H.client("Twiz")
+      local b, bNs = H.client("Frostie", { class = "MAGE" })
+      local c, cNs = H.client("Ginkan", { class = "ROGUE" })
+      H.link(a, b, c)
+      for _, w in ipairs({ a, b, c }) do
+        w:fire("ADDON_LOADED", "TwizCrew"); w:fire("PLAYER_LOGIN"); w:fire("PLAYER_ENTERING_WORLD")
+      end
+      H.advance(15)
+      b.state.dead = true
+      b:fire("PLAYER_DEAD")
+      H.advance(40) -- past the gap between answers to strangers
+      A.ok(aNs.roster:get("Frostie").tags.DEAD, "Twiz sees Frostie's DEAD tag")
+      A.ok(aNs.roster:get("Ginkan"), "Twiz knows Ginkan")
+      aNs.roster.byName["Ginkan"] = nil -- from Twiz's side Ginkan is now a stranger
+      aNs.roster.saved["Ginkan"] = nil
+      local fromA = 0
+      bNs.Comm.on("HELLO", function(sender) if sender == "Twiz" then fromA = fromA + 1 end end)
+      bNs.Comm.on("STATE", function(sender) if sender == "Twiz" then fromA = fromA + 1 end end)
+      local heardAtC = {}
+      cNs.Comm.on("HELLO", function(sender) heardAtC[#heardAtC + 1] = "HELLO" end)
+      cNs.Comm.on("STATE", function(sender) heardAtC[#heardAtC + 1] = "STATE" end)
+      cNs.Comm.send("PING", {})
+      H.advance(6)
+
+      A.eq(fromA, 0, "Frostie hears nothing new from Twiz")
+      A.eq(heardAtC, { "HELLO", "STATE" }, "Ginkan gets the answer")
+      A.ok(bNs.roster:get("Twiz"), "Frostie still knows Twiz")
+      A.ok(aNs.roster:get("Frostie").tags.DEAD, "Frostie's tag is still DEAD on Twiz's side")
+      A.ok(bNs.roster:get("Twiz").online)
     end,
   },
 }

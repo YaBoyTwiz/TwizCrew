@@ -208,7 +208,8 @@ local function send(key, to)
   if not n then return end
   local f = fields(key, n)
   if to then
-    if not ns.Comm.sendTo(to, "CALN", f) then ns.Comm.send("CALN", f) end
+    local o = { bulk = true } -- an answer to a request: behind live messages
+    if not ns.Comm.sendTo(to, "CALN", f, o) then ns.Comm.send("CALN", f, o) end
   else
     ns.Comm.send("CALN", f)
   end
@@ -247,7 +248,8 @@ function Notes.sendReply(key, to)
   if not r then return end
   local f = replyFields(key, r)
   if to then
-    if not ns.Comm.sendTo(to, "CALR", f) then ns.Comm.send("CALR", f) end
+    local o = { bulk = true }
+    if not ns.Comm.sendTo(to, "CALR", f, o) then ns.Comm.send("CALR", f, o) end
   else
     ns.Comm.send("CALR", f)
   end

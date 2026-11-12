@@ -176,6 +176,10 @@ return {
       start(ns, W)
       seeMouseover(W, "Creature-0-1-0-111-299-01")
       W:advance(2)
+      A.no(ns.Self.lastSent().lk == "111", "lk alone sends nothing: it rides along with the next update")
+      W.state.combat = true -- a fight starts: this update carries lk with it
+      W:fire("PLAYER_REGEN_DISABLED")
+      W:advance(2)
       local found
       for _, s in ipairs(W.sent) do
         local m = ns.Codec.decode(s.text)
@@ -184,6 +188,8 @@ return {
       A.ok(found, "lk 111 was sent")
       W:advance(ns.Config.LAYER_STALE_AFTER + 40)
       A.no(ns.LayerSensor.current())
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
       W:advance(2)
       A.eq(ns.Self.lastSent().lk, "")
     end,

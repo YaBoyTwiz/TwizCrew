@@ -155,6 +155,59 @@ return {
           settings = { { key = "go", label = "Go", kind = "button", onClick = function() end } } })
       end, "info")
     end,
+    init_builds_problems_ring = function(ns, A)
+      setup(ns)
+      A.eq(ns.DB.init(nil, ns.Modules.list()).problems, {})
+    end,
+    breaker_switches_module_back_on_after_rearm_time = function(ns, A, W)
+      local db, calls = attached(ns)
+      ns.Modules.startAll()
+      A.eq(calls.enable, 1)
+      local fired = {}
+      ns.Bus.on("t", "MODULE_TOGGLED", function(id, on) fired[#fired + 1] = id .. tostring(on) end)
+      for i = 1, 3 do ns.Log.safe("m1", error, "x") end
+      A.no(ns.Modules.isEnabled("m1"))
+      A.eq(ns.Modules.broken(), { "m1" })
+      A.eq(calls.disable, 1)
+      W:advance(299)
+      A.no(ns.Modules.isEnabled("m1"))
+      W:advance(2)
+      A.ok(ns.Modules.isEnabled("m1"))
+      A.eq(calls.enable, 2)
+      A.eq(ns.Modules.broken(), {})
+      A.eq(fired, { "m1false", "m1true" })
+      local last = ns.Log.lines()[#ns.Log.lines()]
+      A.contains(last, "INFO m1 switched back on")
+      -- the second break takes twice as long
+      for i = 1, 3 do ns.Log.safe("m1", error, "x") end
+      A.no(ns.Modules.isEnabled("m1"))
+      W:advance(599)
+      A.no(ns.Modules.isEnabled("m1"))
+      W:advance(2)
+      A.ok(ns.Modules.isEnabled("m1"))
+      A.eq(calls.enable, 3)
+    end,
+    rearm_leaves_a_module_the_owner_switched_off_alone = function(ns, A, W)
+      local db, calls = attached(ns)
+      ns.Modules.startAll()
+      for i = 1, 3 do ns.Log.safe("m1", error, "x") end
+      ns.Modules.setEnabled("m1", false)
+      W:advance(301)
+      A.no(ns.Modules.isEnabled("m1"))
+      A.eq(calls.enable, 1)
+    end,
+    errors_under_a_part_id_do_not_switch_modules_off = function(ns, A)
+      attached(ns)
+      ns.Modules.register({ id = "roasts", name = "Roasts", tier = "module", info = "R." })
+      ns.Modules.startAll()
+      for i = 1, 3 do ns.Log.safe("mockshow", error, "x") end
+      for i = 1, 3 do ns.Log.safe("mockshow", error, "x") end
+      A.ok(ns.Modules.isEnabled("roasts"))
+      A.eq(ns.Modules.broken(), {})
+      local warns = 0
+      for _, l in ipairs(ns.Log.lines()) do if l:find("WARN mockshow", 1, true) then warns = warns + 1 end end
+      A.eq(warns, 1)
+    end,
     init_builds_stats_and_reset_keeps_it = function(ns, A)
       setup(ns)
       local db = ns.DB.init(nil, ns.Modules.list())

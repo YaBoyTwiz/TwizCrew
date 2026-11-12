@@ -5,7 +5,8 @@ local _, ns = ...
 local MockEditor = {}
 ns.MockEditor = MockEditor
 
-local FEATURE = "roasts"
+local FEATURE = "mockeditor" -- own error id: a cosmetic bug here must not switch off the whole "roasts" module
+local MODULE = "roasts"
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local WIDTH, PAD = 440, 14
@@ -117,8 +118,8 @@ local function build()
 
   ownOnly = Widgets.toggle(frame, "Only use my own mocks", "The Mock button picks only from your mocks (once you "
     .. "have at least one), not the built-in ones.",
-    function() return ns.Modules.setting(FEATURE, "ownOnly") end,
-    function(v) ns.Modules.set(FEATURE, "ownOnly", v) MockEditor.refresh() end)
+    function() return ns.Modules.setting(MODULE, "ownOnly") end,
+    function(v) ns.Modules.set(MODULE, "ownOnly", v) MockEditor.refresh() end)
   ownOnly:SetPoint("TOPLEFT", edit, "BOTTOMLEFT", 0, -8)
   ownOnly:SetWidth(WIDTH - 2 * PAD)
 

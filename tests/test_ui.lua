@@ -133,6 +133,23 @@ return {
       A.eq(ns.Modules.setting("panel", "scale"), 1.5)
     end,
 
+    report_survives_a_failing_section_and_lists_problems_and_messages = function(ns, A, W)
+      boot(W)
+      ns.Updates.reportLine = function() error("kaboom") end
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan")
+      for i = 1, 7 do ns.Log.add("warn", "problem %d", i) end
+      local text = table.concat(ns.Report.lines(), "\n")
+      A.contains(text, "Updates: failed (")
+      A.contains(text, "kaboom")
+      A.contains(text, "Class icons:")
+      A.contains(text, "Crew in the channel:")
+      A.contains(text, "Messages this session: ")
+      A.contains(text, "recv PING 1")
+      A.contains(text, "WARN problem 7")
+      A.contains(text, "WARN problem 3")
+      A.no(text:find("WARN problem 2", 1, true))
+    end,
+
     report_lines_cover_health = function(ns, A, W)
       boot(W)
       local lines = ns.Report.lines()

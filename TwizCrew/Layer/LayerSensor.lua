@@ -1,10 +1,10 @@
--- Own layer key from the NPCs you look at. Always runs (sharing is essential): feature id "comm".
+-- Own layer key from the NPCs you look at. Always runs (sharing is essential): feature id "layersensor".
 local _, ns = ...
 
 local Sensor = {}
 ns.LayerSensor = Sensor
 
-local FEATURE = "comm"
+local FEATURE = "layersensor"
 local tracker
 local observations, secretSkipped = 0, 0
 local lastGroup = false

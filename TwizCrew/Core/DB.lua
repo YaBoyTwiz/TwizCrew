@@ -17,6 +17,7 @@ function DB.init(saved, defs)
     crew = { channel = ns.Config.DEFAULT_CHANNEL, password = ns.Config.DEFAULT_PASSWORD, extra = {} },
     roster = {},
     log = {},
+    problems = {}, -- the ERROR and WARN lines, kept apart from the rolling log
     myStatus = "",
     myMocks = {}, -- your own roasts for the Mock button (kept by Reset everything)
     stats = { chars = {}, crew = {}, session = {} },

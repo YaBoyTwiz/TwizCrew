@@ -286,12 +286,12 @@ ns.Comm.on("QREQ", function(sender, fields) ns.Log.safe("panel", onRequest, send
 function Quest.start()
   if Quest.started then return end
   Quest.started = true
-  ns.Events.on("comm", "QUEST_ACCEPTED", function(a, b)
+  ns.Events.on("quest", "QUEST_ACCEPTED", function(a, b)
     Quest.accepted(tonumber(b) or tonumber(a)) -- classic: (logIndex, questID); modern: (questID)
     ns.Self.refresh("quest")
   end)
   -- only events every game version has (registering an unknown one is an error)
   for _, e in ipairs({ "QUEST_LOG_UPDATE", "QUEST_WATCH_UPDATE", "QUEST_TURNED_IN" }) do
-    ns.Events.on("comm", e, function() ns.Self.refresh("quest") end)
+    ns.Events.on("quest", e, function() ns.Self.refresh("quest") end)
   end
 end

@@ -138,7 +138,8 @@ local function onAddon(prefix, text, chatType, sender)
     ns.Log.debug("ignored message from %s (%s)", sender, tostring(why))
     return
   end
-  ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType))
+  ns.Log.count("recv " .. tostring(msg.type))
+  if ns.Log.chatDebug then ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType)) end
   ns.Log.safe(FEATURE, ns.Transport.heardFrom, raw, chatType)
   dispatch(sender, msg)
 end
@@ -165,8 +166,13 @@ local function sendItem(item)
     end
     return false
   end
-  ns.Log.debug("send %s via %s to %s%s", tostring(item.text:match("^%d+%^(%u+)%^") or "?"),
-    tostring(item.dest.chatType), tostring(item.dest.target or "-"), ok and "" or " failed")
+  local kind = tostring(item.text:match("^%d+%^(%u+)%^") or "?")
+  ns.Log.count("send " .. kind)
+  if not ok then ns.Log.count("send failed") end
+  if ns.Log.chatDebug then
+    ns.Log.debug("send %s via %s to %s%s", kind, tostring(item.dest.chatType),
+      tostring(item.dest.target or "-"), ok and "" or " failed")
+  end
   local sent = item.sent
   if sent then
     sent.left = sent.left - 1

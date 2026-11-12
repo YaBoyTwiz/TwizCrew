@@ -108,8 +108,7 @@ return {
       start(ns, W)
       seeMouseover(W, "Creature-0-1-0-111-299-01")
       A.eq(ns.LayerSensor.current(), "111")
-      W.state.secret["Creature-0-1-0-222-299-01"] = true
-      seeMouseover(W, "Creature-0-1-0-222-299-01")
+      seeMouseover(W, W.secret())
       A.eq(ns.LayerSensor.current(), "111")
       A.eq(ns.LayerSensor.info().secretSkipped, 2)
       A.eq(ns.Log.errors(10), {})

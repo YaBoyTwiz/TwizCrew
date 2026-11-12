@@ -440,8 +440,7 @@ return {
       -- test (doing so errors; 3 errors in a minute turned the Crew panel off until /reload, owner 2026-11-08).
       start(ns, W)
       ns.Away.start()
-      local hidden = {}
-      W.state.secret[hidden] = true
+      local hidden = W.secret()
       W.state.afk, W.state.dead, W.state.combat, W.state.taxi = hidden, hidden, hidden, hidden
       W.state.inInstance, W.state.instanceType = true, "party"
       A.eq(ns.Away.isAway(), false, "a secret AFK answer is not 'away'")

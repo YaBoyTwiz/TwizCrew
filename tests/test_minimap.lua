@@ -16,13 +16,14 @@ local function record(W)
     local f = create(kind, name, parent, ...)
     if name ~= BUTTON then return f end
     seen.button = f
+    local makeTexture = f.CreateTexture
     rawset(f, "tcParent", parent)
     rawset(f, "SetPoint", function(self, ...) rawset(self, "tcPoint", { ... }) end)
     rawset(f, "Show", function(self) rawset(self, "tcShown", true) end)
     rawset(f, "Hide", function(self) rawset(self, "tcShown", false) end)
     rawset(f, "IsShown", function(self) return rawget(self, "tcShown") == true end)
-    rawset(f, "CreateTexture", function()
-      local t = create()
+    rawset(f, "CreateTexture", function(self, ...)
+      local t = makeTexture(self, ...)
       rawset(t, "SetTexture", function(self, path) rawset(self, "tcPath", path) end)
       rawset(t, "GetTexture", function(self)
         local path = rawget(self, "tcPath")

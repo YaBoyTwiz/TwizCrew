@@ -358,20 +358,17 @@ return {
 
     secret_values_are_not_counted = function(ns, A, W)
       local roasts = start(ns, W)
-      W.state.speed = 7
-      W.state.secret[7] = true
+      W.state.speed = W.secret()
       W:advance(10)
       A.eq(get(ns, "all", "st"), 0, "secret speed")
       W.state.level = 20
-      W.state.secret[3] = true
-      W.state.units.target = { name = "Kobold Miner", level = 3, hostile = true, combat = true }
+      W.state.units.target = { name = "Kobold Miner", level = W.secret(), hostile = true, combat = true }
       W:fire("PLAYER_TARGET_CHANGED")
       die(W)
       A.eq(get(ns, "all", "dw"), 0, "secret target level")
       A.eq(get(ns, "all", "dt"), 1)
       A.eq(roasts, {})
-      W.state.secret[8690] = true
-      W:fire("UNIT_SPELLCAST_SUCCEEDED", "player", "x", 8690)
+      W:fire("UNIT_SPELLCAST_SUCCEEDED", "player", "x", W.secret())
       A.eq(get(ns, "all", "hs"), 0, "secret spell id")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -793,8 +790,7 @@ return {
       W.state.money = 8000
       W:advance(1) -- the tick notices too
       A.eq(get(ns, "session", "mg"), 500)
-      local hidden = {}
-      W.state.secret[hidden] = true
+      local hidden = W.secret()
       W.state.money = hidden
       W:advance(1)
       A.eq(get(ns, "session", "gn"), 8000, "a secret amount is skipped")
@@ -872,8 +868,7 @@ return {
       W:fire("CHAT_MSG_EMOTE", "flexes", "Twiz")
       W:fire("CHAT_MSG_TEXT_EMOTE", "Ginkan laughs.", "Ginkan")
       A.eq(get(ns, "session", "em"), 2)
-      W.state.secret["Twiz"] = true
-      W:fire("CHAT_MSG_PARTY", "hidden", "Twiz")
+      W:fire("CHAT_MSG_PARTY", "hidden", W.secret())
       A.eq(get(ns, "session", "ch"), 2, "a secret sender is not counted")
       local function keeps(t, text)
         for k, v in pairs(t) do

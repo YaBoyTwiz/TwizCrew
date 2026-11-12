@@ -5,24 +5,191 @@
 -- Later tasks add fakes in the clearly marked section inside build().
 local Stub = {}
 
-local function permissive(W)
-  local obj = { _events = {}, _scripts = {} }
+-- Strict widgets. Every object has a type ("Frame", "Button", "Texture", ...) and answers only the method names the
+-- real game has for that type; any other name raises "<Type> has no method <name>" when it is read (a typo such as
+-- SetPonit fails the test instead of the game). Names only the addon probes for (`if f.SetBackdrop then`) answer nil
+-- when absent, like the game. Only real WoW API names go in these lists.
+local function names(text)
+  local set = {}
+  for n in text:gmatch("%S+") do set[n] = true end
+  return set
+end
+local function union(...)
+  local out = {}
+  for _, set in ipairs({ ... }) do for k in pairs(set) do out[k] = true end end
+  return out
+end
+
+local REGION = names([[SetPoint ClearAllPoints SetAllPoints GetPoint GetNumPoints SetSize SetWidth SetHeight GetWidth
+  GetHeight GetSize Show Hide IsShown IsVisible SetShown SetAlpha GetAlpha SetParent GetParent SetScale GetScale
+  GetEffectiveScale GetLeft GetRight GetTop GetBottom GetCenter GetRect IsMouseOver SetIgnoreParentAlpha
+  SetIgnoreParentScale GetName GetObjectType IsObjectType SetID GetID]])
+local FRAME = union(REGION, names([[SetFrameStrata GetFrameStrata SetFrameLevel GetFrameLevel SetToplevel IsToplevel
+  Raise Lower EnableMouse IsMouseEnabled EnableMouseWheel IsMouseWheelEnabled EnableKeyboard IsKeyboardEnabled
+  SetMovable IsMovable SetResizable IsResizable SetResizeBounds StartMoving StartSizing StopMovingOrSizing
+  RegisterForDrag SetClampedToScreen IsClampedToScreen SetClampRectInsets SetUserPlaced IsUserPlaced
+  SetDontSavePosition GetDontSavePosition RegisterEvent UnregisterEvent UnregisterAllEvents IsEventRegistered
+  RegisterUnitEvent SetScript GetScript HookScript HasScript CreateTexture CreateFontString CreateAnimationGroup
+  SetPropagateKeyboardInput GetChildren GetRegions GetNumChildren GetNumRegions SetHitRectInsets SetAttribute
+  GetAttribute SetFixedFrameStrata SetFixedFrameLevel SetMouseClickEnabled SetMouseMotionEnabled
+  SetPassThroughButtons GetBoundsRect]]))
+local BACKDROP = names("SetBackdrop GetBackdrop SetBackdropColor GetBackdropColor SetBackdropBorderColor GetBackdropBorderColor ClearBackdrop")
+local TEXTURE = union(REGION, names([[SetTexture GetTexture SetTexCoord GetTexCoord SetVertexColor GetVertexColor
+  SetColorTexture SetBlendMode GetBlendMode SetDrawLayer GetDrawLayer SetDesaturated IsDesaturated SetAtlas GetAtlas
+  SetRotation GetRotation SetGradient SetMask SetSnapToPixelGrid SetTexelSnappingBias SetHorizTile SetVertTile
+  GetTexelSnappingBias]]))
+local FONTSTRING = union(REGION, names([[SetText GetText SetFormattedText GetStringWidth GetStringHeight
+  GetUnboundedStringWidth GetWrappedWidth SetFontObject GetFontObject SetFont GetFont SetJustifyH GetJustifyH
+  SetJustifyV GetJustifyV SetTextColor GetTextColor SetShadowColor GetShadowColor SetShadowOffset GetShadowOffset
+  SetSpacing GetSpacing SetWordWrap CanWordWrap SetNonSpaceWrap CanNonSpaceWrap SetMaxLines GetMaxLines SetDrawLayer
+  GetDrawLayer SetAlphaGradient GetNumLines SetIndentedWordWrap IsTruncated]]))
+local BUTTON = union(FRAME, names([[SetText GetText SetNormalTexture GetNormalTexture SetPushedTexture
+  GetPushedTexture SetHighlightTexture GetHighlightTexture SetDisabledTexture GetDisabledTexture SetNormalAtlas
+  SetPushedAtlas SetHighlightAtlas SetDisabledAtlas SetNormalFontObject SetHighlightFontObject SetDisabledFontObject
+  SetFontString GetFontString Enable Disable IsEnabled SetEnabled Click RegisterForClicks
+  SetMotionScriptsWhileDisabled SetPushedTextOffset GetTextWidth GetTextHeight SetButtonState GetButtonState
+  LockHighlight UnlockHighlight]]))
+local EDITBOX = union(FRAME, names([[SetText GetText SetFontObject GetFontObject SetFont GetFont SetTextColor
+  GetTextColor SetTextInsets GetTextInsets SetMaxLetters GetMaxLetters SetMaxBytes GetMaxBytes SetAutoFocus
+  IsAutoFocus SetFocus ClearFocus HasFocus HighlightText SetMultiLine IsMultiLine SetPassword IsPassword SetNumeric
+  IsNumeric SetNumber GetNumber SetCursorPosition GetCursorPosition Insert SetBlinkSpeed SetJustifyH GetJustifyH
+  SetJustifyV GetJustifyV SetSpacing GetSpacing GetNumLetters SetCountInvisibleLetters SetHistoryLines
+  AddHistoryLine SetAltArrowKeyMode SetShadowColor SetShadowOffset]]))
+local SLIDER = union(FRAME, names([[SetValue GetValue SetMinMaxValues GetMinMaxValues SetValueStep GetValueStep
+  SetObeyStepOnDrag GetObeyStepOnDrag SetOrientation GetOrientation SetThumbTexture GetThumbTexture Enable Disable
+  IsEnabled SetEnabled SetStepsPerPage GetStepsPerPage]]))
+local STATUSBAR = union(FRAME, names([[SetValue GetValue SetMinMaxValues GetMinMaxValues SetStatusBarTexture
+  GetStatusBarTexture SetStatusBarColor GetStatusBarColor SetOrientation GetOrientation SetFillStyle GetFillStyle
+  SetReverseFill GetReverseFill SetRotatesTexture]]))
+local SCROLLFRAME = union(FRAME, names([[SetScrollChild GetScrollChild SetVerticalScroll GetVerticalScroll
+  SetHorizontalScroll GetHorizontalScroll GetVerticalScrollRange GetHorizontalScrollRange UpdateScrollChildRect]]))
+local MODEL = union(FRAME, names([[SetUnit SetModel GetModel SetCreature SetDisplayInfo SetPosition GetPosition
+  SetFacing GetFacing SetCamera SetModelScale GetModelScale SetPortraitZoom RefreshUnit ClearModel SetRotation
+  SetLight SetAnimation SetPaused IsPaused SetDoBlend SetCustomCamera SetCameraPosition SetCameraTarget]]))
+local COOLDOWN = union(FRAME, names([[SetCooldown SetCooldownDuration Clear SetReverse GetReverse SetDrawEdge
+  SetDrawSwipe SetDrawBling SetHideCountdownNumbers SetSwipeColor SetSwipeTexture SetEdgeTexture GetCooldownTimes
+  GetCooldownDuration Pause Resume IsPaused SetUseCircularEdge SetCountdownFont]]))
+local ANIMATION = names([[SetDuration GetDuration SetOrder GetOrder SetStartDelay GetStartDelay SetEndDelay
+  GetEndDelay SetSmoothing GetSmoothing Play Pause Stop Finish IsPlaying IsDone IsPaused IsDelaying GetProgress
+  GetElapsed SetScript GetScript HookScript SetTarget GetTarget SetParent GetParent GetName GetObjectType
+  SetFromAlpha SetToAlpha SetChange SetOffset SetScale SetScaleFrom SetScaleTo SetDegrees SetOrigin SetOrderBy
+  SetTarget]])
+local ANIMATIONGROUP = union(ANIMATION, names("CreateAnimation SetLooping GetLooping SetToFinalAlpha GetAnimations SetLoopState"))
+
+local TYPES = {
+  Frame = FRAME, Button = BUTTON, EditBox = EDITBOX, Slider = SLIDER, StatusBar = STATUSBAR,
+  ScrollFrame = SCROLLFRAME, PlayerModel = MODEL, Cooldown = COOLDOWN, Texture = TEXTURE, FontString = FONTSTRING,
+  AnimationGroup = ANIMATIONGROUP, Animation = ANIMATION,
+  DressUpModel = union(MODEL, names("Undress Dress TryOn GetItemTransmogInfo")),
+  CheckButton = union(BUTTON, names("SetChecked GetChecked SetCheckedTexture GetCheckedTexture SetDisabledCheckedTexture")),
+  GameTooltip = union(FRAME, names([[SetOwner GetOwner AddLine AddDoubleLine SetText ClearLines NumLines SetHyperlink
+    IsOwned FadeOut SetPadding AppendText SetUnit SetAnchorType SetMinimumWidth]])),
+  Minimap = union(FRAME, names("GetZoom SetZoom GetZoomLevels GetPingPosition PingLocation SetMaskTexture")),
+  ScrollingMessageFrame = union(FRAME, names("AddMessage Clear GetNumMessages SetMaxLines SetFading SetJustifyH SetFontObject")),
+}
+local FRAME_LIKE = names("Frame Button EditBox Slider StatusBar ScrollFrame PlayerModel DressUpModel Cooldown CheckButton GameTooltip Minimap ScrollingMessageFrame")
+-- every real method name of any type: a real name this type lacks answers nil (the addon probes with `if f.Name then`
+-- and a call fails like in the game); a name no type has is a typo and raises "<Type> has no method <name>"
+local ALL = {}
+for _, set in pairs(TYPES) do for k in pairs(set) do ALL[k] = true end end
+for k in pairs(BACKDROP) do ALL[k] = true end
+
+local newObject
+
+local function callArgs(...) return { n = select("#", ...), ... } end
+
+-- implementations that keep state; every other whitelisted method is a no-op (Get* answers 0, Is* answers false)
+local IMPL = {
+  RegisterEvent = function(self, e) self._events[e] = true end,
+  UnregisterEvent = function(self, e) self._events[e] = nil end,
+  UnregisterAllEvents = function(self) self._events = {} end,
+  IsEventRegistered = function(self, e) return self._events[e] == true end,
+  SetScript = function(self, name, fn) self._scripts[name] = fn end,
+  GetScript = function(self, name) return self._scripts[name] end,
+  HookScript = function(self, name, fn) self._scripts["hook:" .. name] = fn end,
+  HasScript = function() return true end,
+  Show = function(self) self._shown = true end,
+  Hide = function(self) self._shown = false end,
+  SetShown = function(self, on) self._shown = on and true or false end,
+  IsShown = function(self) return self._shown end,
+  IsVisible = function(self)
+    if not self._shown then return false end
+    local p = self._parent
+    if p == nil then return true end
+    return p:IsVisible()
+  end,
+  SetParent = function(self, parent) self._parent = parent end,
+  GetParent = function(self) return self._parent end,
+  GetName = function(self) return self._name end,
+  GetObjectType = function(self) return self._type end,
+  IsObjectType = function(self, t) return t == self._type or (FRAME_LIKE[self._type] and t == "Frame") or false end,
+  SetText = function(self, text) self._text = text end,
+  GetText = function(self) return self._text or "" end,
+  SetFormattedText = function(self, fmt, ...) self._text = string.format(fmt, ...) end,
+  SetAlpha = function(self, a) self._alpha = a end,
+  GetAlpha = function(self) return self._alpha end,
+  SetScale = function(self, s) self._scale = s end,
+  GetScale = function(self) return self._scale end,
+  SetWidth = function(self, w) self._w = w end,
+  SetHeight = function(self, h) self._h = h end,
+  SetSize = function(self, w, h) self._w, self._h = w, h end,
+  GetWidth = function(self) return self._w or 0 end,
+  GetHeight = function(self) return self._h or 0 end,
+  GetSize = function(self) return self._w or 0, self._h or 0 end,
+  SetPoint = function(self, ...) self._points[#self._points + 1] = callArgs(...) end,
+  ClearAllPoints = function(self) self._points = {} end,
+  SetAllPoints = function(self, rel) self._points = { callArgs("TOPLEFT", rel, "TOPLEFT", 0, 0), callArgs("BOTTOMRIGHT", rel, "BOTTOMRIGHT", 0, 0) } end,
+  GetNumPoints = function(self) return #self._points end,
+  GetPoint = function(self, i)
+    local p = self._points[i or 1]
+    if not p then return nil end
+    return p[1], p[2], p[3], p[4] or 0, p[5] or 0
+  end,
+  GetFrameLevel = function(self) return self._level or 1 end,
+  SetFrameLevel = function(self, l) self._level = l end,
+  CreateTexture = function(self, name) return newObject(self._W, "Texture", name, self) end,
+  CreateFontString = function(self, name) return newObject(self._W, "FontString", name, self) end,
+  CreateAnimationGroup = function(self, name) return newObject(self._W, "AnimationGroup", name, self) end,
+  CreateAnimation = function(self, _, name) return newObject(self._W, "Animation", name, self) end,
+  SetValue = function(self, v) self._value = v end,
+  GetValue = function(self) return self._value or 0 end,
+  SetEnabled = function(self, on) self._enabled = on and true or false end,
+  Enable = function(self) self._enabled = true end,
+  Disable = function(self) self._enabled = false end,
+  IsEnabled = function(self) return self._enabled ~= false end,
+  SetFocus = function(self) self._focus = true end,
+  ClearFocus = function(self) self._focus = false end,
+  HasFocus = function(self) return self._focus == true end,
+  SetTexture = function(self, t) self._texture = t end,
+  GetTexture = function(self) return self._texture end,
+  SetVerticalScroll = function(self, v) self._vscroll = v end,
+  GetVerticalScroll = function(self) return self._vscroll or 0 end,
+  SetScrollChild = function(self, c) self._scrollChild = c end,
+  GetScrollChild = function(self) return self._scrollChild end,
+  GetEffectiveScale = function(self) return self._scale or 1 end,
+}
+
+local function typeMethods(typ, template)
+  local base = TYPES[typ]
+  if template == "BackdropTemplate" and FRAME_LIKE[typ] then return union(base, BACKDROP) end
+  return base
+end
+
+function newObject(W, typ, name, parent, template)
+  local allowed = typeMethods(typ, template)
+  if not allowed then error("CreateFrame: unknown frame type '" .. tostring(typ) .. "'", 3) end
+  local obj = { _W = W, _type = typ, _name = name, _parent = parent, _events = {}, _scripts = {}, _points = {},
+    _shown = true, _alpha = 1, _scale = 1 }
   return setmetatable(obj, { __index = function(t, k)
-    if k == "RegisterEvent" then
-      return function(self, e) self._events[e] = true end
-    elseif k == "UnregisterEvent" then
-      return function(self, e) self._events[e] = nil end
-    elseif k == "SetScript" then
-      return function(self, name, fn) self._scripts[name] = fn end
-    elseif k == "GetScript" then
-      return function(self, name) return self._scripts[name] end
-    elseif type(k) == "string" and k:sub(1, 6) == "Create" then
-      return function() return permissive(W) end
-    elseif type(k) == "string" and k:sub(1, 2) == "Is" then
-      return function() return false end
-    elseif type(k) == "string" and k:sub(1, 3) == "Get" then
-      return function() return 0 end
+    if type(k) ~= "string" then return nil end
+    if not allowed[k] then
+      if ALL[k] or not k:match("^[A-Z]") then return nil end
+      return function() error(typ .. " has no method " .. k, 2) end
     end
+    local impl = IMPL[k]
+    if impl then return impl end
+    if k:sub(1, 3) == "Get" then return function() return 0 end end
+    if k:sub(1, 2) == "Is" then return function() return false end end
     return function() end
   end })
 end
@@ -60,13 +227,17 @@ local function build(W)
 
   -- frames
   W.frames = {}
-  env.CreateFrame = function()
-    local f = permissive(W)
+  env.CreateFrame = function(typ, name, parent, template)
+    if not FRAME_LIKE[typ] then
+      error("CreateFrame: unknown frame type '" .. tostring(typ) .. "'", 2)
+    end
+    local f = newObject(W, typ, name, parent, template)
     W.frames[#W.frames + 1] = f
     return f
   end
-  env.UIParent = permissive(W)
-  env.GameTooltip = permissive(W)
+  env.BackdropTemplateMixin = {}
+  env.UIParent = newObject(W, "Frame", "UIParent")
+  env.GameTooltip = newObject(W, "GameTooltip", "GameTooltip")
   env.SlashCmdList = {}
   env.InCombatLockdown = function() return false end
 
@@ -112,6 +283,9 @@ local function build(W)
   env.C_ChatInfo = {
     RegisterAddonMessagePrefix = function(prefix) W.state.prefix = prefix; return true end,
     SendAddonMessage = function(prefix, text, chatType, target)
+      if type(text) == "string" and #text > 255 then
+        error("SendAddonMessage: message is " .. #text .. " bytes, the game allows 255", 2)
+      end
       local result = sendResultFor(chatType, target)
       W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target, result = result }
       return result
@@ -139,7 +313,7 @@ local function build(W)
   env.ChatFrame_AddMessageEventFilter = function(event, fn)
     W.messageFilters[#W.messageFilters + 1] = { event = event, fn = fn }
   end
-  for i = 1, 10 do env["ChatFrame" .. i] = permissive(W) end
+  for i = 1, 10 do env["ChatFrame" .. i] = newObject(W, "ScrollingMessageFrame", "ChatFrame" .. i) end
   env.IsInGroup = function() return W.state.inGroup or false end
   env.IsInRaid = function() return W.state.inRaid or false end
   env.IsInGuild = function() return W.state.inGuild or false end
@@ -330,7 +504,7 @@ local function build(W)
   -- minimap; st.cursor = { x, y } in screen pixels; st.minimapShape = what GetMinimapShape answers (nil = "ROUND").
   st.minimap = { width = 140, height = 140, x = 500, y = 400, scale = 1 }
   st.cursor = { x = 0, y = 0 }
-  local minimap = permissive(W)
+  local minimap = newObject(W, "Minimap", "Minimap")
   rawset(minimap, "GetWidth", function() return st.minimap.width end)
   rawset(minimap, "GetHeight", function() return st.minimap.height end)
   rawset(minimap, "GetCenter", function() return st.minimap.x, st.minimap.y end)
@@ -404,8 +578,8 @@ local function build(W)
   fakes.GetCVar = function(name) return st.cvars[name] end
   fakes.IsControlKeyDown = function() return st.ctrl and true or false end
   W.mapClickHandlers = {}
-  local worldMap = permissive(W)
-  local canvas = permissive(W)
+  local worldMap = newObject(W, "Frame", "WorldMapFrame")
+  local canvas = newObject(W, "Frame")
   rawset(canvas, "GetWidth", function() return 1000 end)
   rawset(canvas, "GetHeight", function() return 667 end)
   rawset(worldMap, "IsShown", function() return st.worldMap.shown and true or false end)
@@ -445,6 +619,23 @@ function Stub.new()
   local W = { clock = 1000, wall = 1700000000 - 1000, printed = {}, sent = {},
     state = { player = "Twiz", realm = "Realm", version = "0.1.0" } }
   W.env = build(W)
+
+  -- A real secret value: an opaque userdata that raises on math, comparison, concatenation, calls, indexing and
+  -- length, like the game's secret values inside dungeons. issecretvalue() is true for it. Call W.secret().
+  local SECRET_OPS = { "__add", "__sub", "__mul", "__div", "__mod", "__pow", "__unm", "__concat", "__lt", "__le",
+    "__eq", "__call", "__index", "__newindex", "__len" }
+  -- one function per operator, shared by all secrets: Lua 5.1 only tries __eq / __lt when both sides share it
+  local SECRET_FN = {}
+  for _, op in ipairs(SECRET_OPS) do
+    SECRET_FN[op] = function() error("attempt to use a secret value (" .. op .. ")", 2) end
+  end
+  function W.secret()
+    local value = newproxy(true)
+    local mt = getmetatable(value)
+    for _, op in ipairs(SECRET_OPS) do mt[op] = SECRET_FN[op] end
+    W.state.secret[value] = true
+    return value
+  end
 
   function W:advance(seconds)
     local target = self.clock + seconds

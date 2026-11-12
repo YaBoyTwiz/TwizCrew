@@ -88,10 +88,9 @@ return {
       A.ok(me, "UnitPosition is the fallback")
       near(A, me.x, -9000)
       near(A, me.y, -1000)
-      W.state.secret[-9000] = true
+      W.state.pos.y = W.secret()
       A.eq(ns.Where.me(), nil, "a secret number is unknown")
-      W.state.facing = 1.5
-      W.state.secret[1.5] = true
+      W.state.facing = W.secret()
       A.eq(ns.Where.facing(), nil, "secret facing")
       W.state.missing.GetPlayerFacing = true
       A.eq(ns.Where.facing(), nil, "no facing function")
@@ -242,7 +241,7 @@ return {
       hear(ns, W, "Frostie", "POS", { c = "0", x = "-8900", y = "-1000" })
       W.state.units.party1.pos = { y = -8800, x = -1000, instance = 0 } -- UnitPosition: north first
       A.eq(ns.Find.arrowFor("Frostie").text, "200 yd")
-      W.state.secret[-8800] = true
+      W.state.units.party1.pos.y = W.secret()
       A.eq(ns.Find.arrowFor("Frostie").text, "100 yd", "secret: their last message")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -423,8 +422,7 @@ return {
 
     -- A secret answer is never tested for true / false: secret "in a group" counts as not in a group.
     secret_group_answers_count_as_unknown = function(ns, A, W)
-      local secret = {}
-      W.state.secret[secret] = true
+      local secret = W.secret()
       W.state.inGroup = secret
       A.no(ns.Where.inGroup(), "secret: not known to be in a group")
       W.state.inGroup = true

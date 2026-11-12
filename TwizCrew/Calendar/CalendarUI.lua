@@ -201,7 +201,7 @@ local function buildMonth()
       local _, m, d = L.civil(self.tcDay)
       GameTooltip:SetText(L.WEEKDAYS[L.weekday(self.tcDay) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
       for _, n in ipairs(self.tcNotes or {}) do
-        local when = ns.Notes.timeText(n, ns.Diary.offset())
+        local when = ns.Notes.timeText(n, ns.Diary.offsetOn(self.tcDay))
         GameTooltip:AddLine("|T" .. ns.Notes.iconTexture(n.i) .. ":14|t " .. (when and (when .. "  ") or "")
           .. ns.Util.safeText(n.t), 1, 0.9, 0.5, true)
       end
@@ -603,9 +603,9 @@ end
 
 local FIT_COLOR = { low = "9d9d9d", ok = "40ff40", high = "ff4040" }
 
--- "UTC-5", "UTC+5:30"
-local function zoneName()
-  local off = ns.Diary.offset()
+-- "UTC-5", "UTC+5:30" (off: an offset, default now's)
+local function zoneName(off)
+  off = tonumber(off) or ns.Diary.offset()
   local sign = off < 0 and "-" or "+"
   off = math.abs(off)
   local h, m = math.floor(off / 3600), math.floor((off % 3600) / 60)
@@ -982,7 +982,7 @@ function Calendar.saveMaker(text)
   if not maker then return end
   text = text or maker.box:GetText()
   if mk.kind ~= "note" and not mk.dungeon then print("TwizCrew: pick the " .. mk.kind .. " first."); return end
-  local at = mk.minutes and (mk.day * L.DAY + mk.minutes * 60 - ns.Diary.offset()) or nil
+  local at = mk.minutes and ns.Diary.utcOf(mk.day, mk.minutes) or nil -- (with that date's own offset)
   local icon = mk.icon
   if mk.kind ~= "note" and icon == 1 then icon = mk.kind == "raid" and 3 or 2 end
   local key, why = ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon)
@@ -1045,7 +1045,6 @@ local function drawTabs()
 end
 
 local function drawMonth()
-  local off = ns.Diary.offset()
   local today = ns.Diary.localToday()
   monthPane.label:SetText(L.MONTHS[shownMonth] .. " " .. shownYear)
   local everyone = people()
@@ -1053,6 +1052,7 @@ local function drawMonth()
     local c = cells[i]
     c.tcDay = cell.day
     c.num:SetText(cell.d)
+    local off = ns.Diary.offsetOn(cell.day) -- each day its own (a clock change moves it)
     local list = cell.day <= today and L.dayView(everyone, cell.day, off) or {}
     c.tcPeople = list
     local notes = ns.Notes.forDate(ns.Notes.dateKey(cell.y, cell.m, cell.d))
@@ -1200,7 +1200,7 @@ function Calendar.dayRowForTest(i)
 end
 
 local function drawDay()
-  local off = ns.Diary.offset()
+  local off = ns.Diary.offsetOn(shownDay) -- this day's own (a clock change moves it)
   local y, m, d = L.civil(shownDay)
   dayPane.label:SetText(L.WEEKDAYS[L.weekday(shownDay) + 1] .. ", " .. L.MONTHS[m] .. " " .. d .. ", " .. y)
   local list = L.dayView(people(), shownDay, off)
@@ -1234,7 +1234,7 @@ local function drawDay()
     end
   end
   if shownDay == ns.Diary.localToday() then
-    local minutes = ((ns.Diary.now() + off) % L.DAY) / 60
+    local minutes = ((ns.Diary.now() + ns.Diary.offset()) % L.DAY) / 60
     dayPane.nowLine:ClearAllPoints()
     dayPane.nowLine:SetPoint("TOP", dayPane, "TOPLEFT", AXIS_X + BAR_W * minutes / 1440, -46)
     dayPane.nowLine:Show()
@@ -1283,7 +1283,7 @@ local function drawDay()
           local note = self.tcNote
           if not GameTooltip or not note then return end
           GameTooltip:SetOwner(self, "ANCHOR_TOP")
-          GameTooltip:SetText(tostring(ns.Notes.timeText(note, ns.Diary.offset())) .. " (your time)")
+          GameTooltip:SetText(tostring(ns.Notes.timeText(note, ns.Diary.offsetOn(shownDay))) .. " (your time)")
           GameTooltip:AddLine(ns.Util.safeText(note.t), 1, 1, 1, true)
           GameTooltip:AddLine("by " .. colored(note.b, note.c), 0.8, 0.8, 0.8)
           GameTooltip:Show()
@@ -1311,7 +1311,7 @@ end
 
 local function drawUsual()
   local everyone = people()
-  local today, off = ns.Diary.localToday(), ns.Diary.offset()
+  local today, off = ns.Diary.localToday(), ns.Diary.offsetOn -- each day its own offset
   local u = L.usual(everyone, today, off, 4)
   Calendar.lastUsual = u
   -- the people picked: only their hours (one person: in their class color; each square = how many of the last

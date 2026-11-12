@@ -211,7 +211,7 @@ function NoteView.refresh()
   if not frame or not shownKey then return end
   local n = note(shownKey)
   if not n then frame:Hide(); return end
-  local off = ns.Diary.offset()
+  local off = ns.Notes.offsetFor(n) -- its own day's (a clock change moves it)
   local dg = n.g and ns.Notes.dungeon(n.g)
   local text = ns.Util.safeText(n.t or "")
   if dg then
@@ -239,7 +239,7 @@ function NoteView.refresh()
     whenText = L.WEEKDAYS[L.weekday(day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d
   end
   local t = ns.Notes.timeText(n, off)
-  if t then whenText = whenText .. "  \194\183  " .. t .. " your time (" .. ns.Calendar.zoneName() .. ")" end
+  if t then whenText = whenText .. "  \194\183  " .. t .. " your time (" .. ns.Calendar.zoneName(off) .. ")" end
   meta:SetText(whenText .. "  \194\183  by " .. colored(n.b, n.c))
   -- answers
   local r = ns.Notes.repliesFor(shownKey)

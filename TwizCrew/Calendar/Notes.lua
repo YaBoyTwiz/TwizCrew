@@ -177,11 +177,11 @@ function Notes.isMine(note)
     and note.key:sub(1, #me + 1) == me .. "-"
 end
 
--- The notes on a date ("2026-11-08") for someone whose local time is UTC + off seconds: notes without a time
--- first (oldest first), then timed ones by time. Deleted ones are left out.
+-- The notes on a date ("2026-11-08") for someone whose local time is UTC + off seconds (default: that day's own
+-- offset): notes without a time first (oldest first), then timed ones by time. Deleted ones are left out.
 function Notes.forDate(dateKey, off)
   local day = dayOfKey(dateKey)
-  off = tonumber(off) or (ns.Diary and ns.Diary.offset and ns.Diary.offset()) or 0
+  off = tonumber(off) or (day and ns.Diary and ns.Diary.offsetOn and ns.Diary.offsetOn(day)) or 0
   local out = {}
   for key, n in pairs(store() or {}) do
     local on
@@ -200,6 +200,13 @@ function Notes.forDate(dateKey, off)
     return tostring(a.key) < tostring(b.key)
   end)
   return out
+end
+
+-- The local offset to show a timed note with: its own day's.
+function Notes.offsetFor(n)
+  local cur = ns.Diary.offset()
+  if type(n) ~= "table" or type(n.at) ~= "number" then return cur end
+  return ns.Diary.offsetOn(math.floor((n.at + cur) / ns.CalendarLogic.DAY))
 end
 
 -- "4:30pm" for a timed note in local time (UTC + off), or nil.
@@ -232,19 +239,20 @@ local function capped(keys, records, max, out)
   end
 end
 
--- The notes and replies that count: two sets { [key] = true }.
+-- The notes and replies that count: two sets { [key] = true }. (Keys longer than a receiver takes, which only an
+-- older version could have kept, never count.)
 local function counted()
   local today = utcToday()
   local s, rs = store() or {}, Notes.replyStore() or {}
   local notes, replies = {}, {}
   local keys = {}
   for key, n in pairs(s) do
-    if type(n) == "table" and inWindow(n.d, today) then keys[#keys + 1] = key end
+    if type(n) == "table" and #key <= MAX_KEY and inWindow(n.d, today) then keys[#keys + 1] = key end
   end
   capped(keys, s, MAX_NOTES, notes)
   local comments = {} -- note key -> its comments' keys
   for key, r in pairs(rs) do
-    if type(r) == "table" and notes[r.n] then
+    if type(r) == "table" and #key <= MAX_REPLY_KEY and notes[r.n] then
       if isComment(key) then
         comments[r.n] = comments[r.n] or {}
         table.insert(comments[r.n], key)

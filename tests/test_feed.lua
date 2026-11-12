@@ -82,10 +82,10 @@ return {
       local r = ns.FeedLogic.entry("roast", "F", { text = "F ate a ||cff pipe" }, 1)
       A.eq(r.text, "F ate a ||cff pipe")
       -- a secret value (combat rules) becomes empty text, never an error
-      W.state.secret["hidden"] = true
-      A.eq(ns.FeedLogic.clean("hidden"), "")
+      local hidden = W.secret()
+      A.eq(ns.FeedLogic.clean(hidden), "")
       A.eq(ns.FeedLogic.clean(42), "")
-      A.eq(ns.FeedLogic.entry("congrats", "F", { dir = "in", words = "hidden" }, 1).line, "F congratulated you")
+      A.eq(ns.FeedLogic.entry("congrats", "F", { dir = "in", words = hidden }, 1).line, "F congratulated you")
     end,
 
     list_keeps_the_newest_fifty = function(ns, A)

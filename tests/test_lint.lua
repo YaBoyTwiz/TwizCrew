@@ -64,6 +64,20 @@ local function strip(src, keepStrings)
   return table.concat(out)
 end
 
+-- A luac that can list byte code: luac5.1 on the PATH, else the one built in tools/lua-5.1.5.
+local function findLuac()
+  for _, cmd in ipairs({ "luac5.1", "tools/lua-5.1.5/src/luac" }) do
+    local p = io.popen(cmd .. " -v 2>&1")
+    local out = p:read("*a")
+    p:close()
+    if out:find("Lua 5.1", 1, true) then return cmd end
+  end
+end
+
+local function globalAllowed(name)
+  return name == "TwizCrewDB" or name:match("^SLASH_") or name:match("^BINDING_") or name:match("^TwizCrew_")
+end
+
 return {
   files = {},
   tests = {
@@ -109,6 +123,24 @@ return {
         A.no(bare:find("//", 1, true), f .. " uses //")
         local withStrings = strip(src, true)
         A.no(withStrings:find('SLASH_[%w_]*%s*=%s*["\']/twiz["\']'), f .. " registers /twiz")
+      end
+    end,
+    -- The addon's only globals are TwizCrewDB, the slash command and binding names and the TwizCrew_ functions: a
+    -- forgotten `local` shows up as a SETGLOBAL in the compiled code.
+    no_stray_global_writes = function(ns, A)
+      local luac = findLuac()
+      if not luac then
+        print("  (no_stray_global_writes skipped: no luac found; build tools/lua-5.1.5 or install luac5.1)")
+        return
+      end
+      for _, f in ipairs(tocFiles()) do
+        local path = "TwizCrew/" .. f:gsub("\\", "/")
+        local p = io.popen(luac .. " -l -p " .. path .. " 2>&1")
+        for line in p:lines() do
+          local name = line:match("SETGLOBAL.-;%s*(%S+)")
+          A.ok(not name or globalAllowed(name), path .. " writes the global " .. tostring(name))
+        end
+        p:close()
       end
     end,
     -- Find the crew: the game has one waypoint and one super-tracked target, and QuestMaster, OpenMap and Questie use

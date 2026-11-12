@@ -5,6 +5,7 @@ local Stub = dofile("tests/wowstub.lua")
 
 local A = {}
 local function deepEq(a, b)
+  if a == b then return true end
   if type(a) ~= type(b) then return false end
   if type(a) ~= "table" then return a == b end
   for k, v in pairs(a) do if not deepEq(v, b[k]) then return false end end

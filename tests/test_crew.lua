@@ -108,8 +108,7 @@ return {
       start(ns, W)
       W.state.xp, W.state.xpMax = 40, 100
       ns.Self.refresh("test"); W:advance(2)
-      W.state.xp = 55
-      W.state.secret[55] = true
+      W.state.xp = W.secret()
       local f = ns.Self.gather()
       A.eq({ f.xp, f.xc, f.xm }, { "40", "40", "100" }, "a secret value counts as unknown")
       noErrors(ns, A)

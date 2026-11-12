@@ -615,6 +615,29 @@ return {
     end,
 
     -- The game's real state: the channel delivers nothing, so everything below travels by whisper.
+    in_fallback_mode_friends_who_marked_each_other_offline_find_each_other_after_a_ping = function(_, A, _, H)
+      local c = twoFriends(H, { state = { channelJoinFails = true }, wait = 20 })
+      c.twNs.Comm.echoCount = c.tw.realEchoCount
+      c.frNs.Comm.echoCount = c.fr.realEchoCount
+      c.twNs.db.crew.extra = { "Frostie" }
+      c.frNs.db.crew.extra = { "Twiz" }
+      c.twNs.Comm.send("HELLO", {})
+      c.frNs.Comm.send("HELLO", {})
+      H.advance(10)
+      A.ok(c.twNs.roster:get("Frostie") and c.frNs.roster:get("Twiz"), "they met by whisper")
+      c.twNs.db.crew.extra, c.frNs.db.crew.extra = {}, {} -- from now on only the roster says who to whisper
+      H.advance(25) -- let what is still queued go out and arrive first
+      c.twNs.Transport.forget("Frostie") -- (a whisper made them channel members too)
+      c.frNs.Transport.forget("Twiz")
+      c.twNs.roster:gone("Frostie")
+      c.frNs.roster:gone("Twiz")
+      A.no(c.twNs.roster:get("Frostie").online)
+      A.no(c.frNs.roster:get("Twiz").online)
+      H.advance(61)
+      A.ok(c.twNs.roster:get("Frostie").online, "Twiz hears Frostie's PING again")
+      A.ok(c.frNs.roster:get("Twiz").online, "Frostie hears Twiz's PING again")
+      noErrors(A, c.twNs, c.frNs)
+    end,
     a_lost_update_is_repaired_after_two_pings = function(_, A, _, H)
       local c = twoFriends(H)
       c.twNs.Comm.echoCount = c.tw.realEchoCount

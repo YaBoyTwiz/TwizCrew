@@ -387,7 +387,7 @@ return {
       A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Ginkan" },
         { chatType = "WHISPER", target = "Frostie" } })
     end,
-    fallback_broadcast_whispers_online_roster_names_but_hello_goes_to_everyone = function(ns, A, W)
+    fallback_broadcast_whispers_online_roster_names_but_hello_and_ping_go_to_everyone = function(ns, A, W)
       ns.Comm.echoCount = W.realEchoCount
       local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
       db.crew.extra = { "Frostie" }
@@ -402,9 +402,11 @@ return {
       end
       A.eq(targets("UPDATE"), { "Ginkan", "Frostie" }, "online roster names and the extra names")
       A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" }, "a HELLO tries everyone")
+      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie" }, "so does a PING: it is how offline friends are found")
       ns.Modules.set("comm", "transport", "whisper")
       A.eq(targets("UPDATE"), { "Ginkan", "Frostie" })
       A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" })
+      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie" })
     end,
     modes_pick_their_destinations = function(ns, A, W)
       local db = boot(ns, W)

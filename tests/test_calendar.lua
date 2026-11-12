@@ -578,6 +578,77 @@ return {
       A.eq(next(twNs.db.calendar.replies), nil, "nor its comment")
       A.eq(twNs.Log.errors(10), {}); A.eq(frNs.Log.errors(10), {})
     end,
+    comments_past_the_cap_do_not_split_checksums = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      A.eq(N.MAX_COMMENTS, 30)
+      local today = math.floor(ns.Diary.now() / 86400)
+      local nk = "frost123-1000"
+      ns.db.calendar.notes[nk] = { d = N.dateKey(L.civil(today + 1)), t = "Raid", i = 3, b = "Frostie", u = 1000 }
+      local function comment(k) -- comment k (01 .. 32), keys in that order
+        return { r = nk .. "|c|gink4567-" .. (2000 + k), n = nk, v = "words " .. k, b = "Ginkan", c = "WARRIOR",
+          u = tostring(2000 + k) }
+      end
+      -- copy A (an older version) holds 31 comments on the note
+      for k = 1, 31 do
+        local f = comment(k)
+        ns.db.calendar.replies[f.r] = { n = nk, v = f.v, b = "Ginkan", u = 2000 + k }
+      end
+      local hashA = N.hash()
+      -- copy B hears them one by one, the lowest key last: it applies the cap
+      ns.db.calendar.replies = {}
+      receive(ns, W, "Ginkan", "STATE", { cl = "WARRIOR" })
+      for k = 2, 31 do receive(ns, W, "Ginkan", "CALR", comment(k)) end
+      A.eq(#N.repliesFor(nk).comments, 30, "30 taken")
+      receive(ns, W, "Ginkan", "CALR", comment(32))
+      A.eq(#N.repliesFor(nk).comments, 30, "a 31st is refused")
+      receive(ns, W, "Ginkan", "CALR", comment(1))
+      A.eq(N.hash(), hashA, "the same 30 count on both copies (the lowest keys)")
+      A.eq(N.comment(nk, "me too"), nil, "my own 31st is refused too")
+      A.eq(N.hash(), hashA)
+      A.ok(ns.NoteView.open(nk))
+      ns.NoteView.commentForTest("me too")
+      A.contains(W.printed[#W.printed], "the most it can take", "and the window says why")
+      ns.NoteView.close()
+      -- an update to a comment it has is still taken (its author deletes two; 31 were kept): room again
+      for _, k in ipairs({ 5, 6 }) do
+        local f = comment(k)
+        f.x, f.v, f.u = "1", "", "3000"
+        receive(ns, W, "Ginkan", "CALR", f)
+        A.ok(ns.db.calendar.replies[f.r].x, "the deletion is taken")
+      end
+      A.ok(N.comment(nk, "me too"), "room for mine")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    notes_past_the_cap_do_not_split_checksums = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      local today = math.floor(ns.Diary.now() / 86400)
+      local date = N.dateKey(L.civil(today + 1))
+      local function key(i) return "a" .. string.format("%03d", i) .. "-1000" end
+      for i = 0, 299 do ns.db.calendar.notes[key(i)] = { d = date, t = "n" .. i, i = 1, b = "Frostie", u = 1000 } end
+      local full = N.hash()
+      local function note(k, u) return { k = k, d = date, t = "new", i = "1", b = "Frostie", u = tostring(u or 1000) } end
+      receive(ns, W, "Frostie", "CALN", note("zzz-1"))
+      A.eq(ns.db.calendar.notes["zzz-1"], nil, "300 notes: a new one is refused")
+      A.eq(N.hash(), full)
+      receive(ns, W, "Frostie", "CALN", note(key(7), 1001))
+      A.eq(ns.db.calendar.notes[key(7)].t, "new", "a change to one it has is taken")
+      A.eq(N.add(date, "mine", 1), nil, "my own new note is refused too")
+      -- a new note with a lower key than the last one counted is taken: every copy counts the same 300
+      receive(ns, W, "Frostie", "CALN", note("a0005-1"))
+      A.ok(ns.db.calendar.notes["a0005-1"], "taken")
+      local mine = N.hash()
+      ns.db.calendar.notes[key(299)] = nil
+      A.eq(N.hash(), mine, "the note with the highest key no longer counts")
+      ns.db.calendar.notes[key(299)] = { d = date, t = "n299", i = 1, b = "Frostie", u = 1000 }
+      ns.Notes.prune()
+      A.eq(ns.db.calendar.notes[key(299)], nil, "and pruning drops it")
+      A.eq(N.hash(), mine)
+      A.eq(ns.Log.errors(10), {})
+    end,
     notes_are_pruned_once_a_day_while_logged_in = function(ns, A, W)
       start(ns, W)
       local N, L = ns.Notes, ns.CalendarLogic

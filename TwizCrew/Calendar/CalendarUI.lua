@@ -985,8 +985,10 @@ function Calendar.saveMaker(text)
   local at = mk.minutes and (mk.day * L.DAY + mk.minutes * 60 - ns.Diary.offset()) or nil
   local icon = mk.icon
   if mk.kind ~= "note" and icon == 1 then icon = mk.kind == "raid" and 3 or 2 end
-  if not ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon) then
-    print("TwizCrew: type a few words for the note first.")
+  local key, why = ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon)
+  if not key then
+    print(why == "full" and "TwizCrew: the calendar is full (300 notes). Old notes go after 90 days."
+      or "TwizCrew: type a few words for the note first.")
     return
   end
   maker:Hide()

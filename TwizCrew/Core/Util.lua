@@ -18,11 +18,16 @@ function Util.split(s, sep)
   end
 end
 
--- A short checksum of a string (at most 6 digits).
-function Util.checksum(s)
+-- A number hash of a string (0 .. 2147483646): the loop every checksum here uses.
+function Util.hashNumber(s)
   local h = 0
   for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
-  return tostring(h % 1000000)
+  return h
+end
+
+-- A short checksum of a string (at most 6 digits).
+function Util.checksum(s)
+  return tostring(Util.hashNumber(s) % 1000000)
 end
 
 function Util.trim(s)

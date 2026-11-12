@@ -534,6 +534,69 @@ return {
       A.ok(alts >= 1, "alts arrive")
       A.eq(ns.Log.errors(10), {})
     end,
+    a_pruned_note_stays_pruned_and_checksums_agree = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz", { class = "DRUID" })
+      local fr, frNs = H.client("Frostie", { class = "MAGE" })
+      twNs.Comm.echoCount, frNs.Comm.echoCount = tw.realEchoCount, fr.realEchoCount
+      H.link(tw, fr)
+      for _, X in ipairs({ tw, fr }) do
+        X:fire("ADDON_LOADED", "TwizCrew"); X:fire("PLAYER_LOGIN"); X:fire("PLAYER_ENTERING_WORLD")
+      end
+      H.advance(90)
+      local L = twNs.CalendarLogic
+      local today = math.floor(twNs.Diary.now() / 86400)
+      local key = twNs.Notes.add(twNs.Notes.dateKey(L.civil(today + 2)), "Raid night", 3)
+      H.advance(5)
+      A.ok(frNs.db.calendar.notes[key], "Frostie has the note")
+      -- Twiz's copy pruned a 91-day-old note (and its comment); Frostie's still has them
+      local old = "frost123-1000"
+      local note = { d = twNs.Notes.dateKey(L.civil(today - 91)), t = "Long ago", i = 1, b = "Frostie", u = 1000 }
+      frNs.db.calendar.notes[old] = note
+      frNs.db.calendar.replies[old .. "|c|frost123-1001"] = { n = old, v = "old words", b = "Frostie", u = 1001 }
+      A.eq(twNs.Notes.hash(), frNs.Notes.hash(), "the same checksum: neither counts what is outside")
+      local before = { [tw] = #tw.sent, [fr] = #fr.sent }
+      H.advance(700) -- a digest each way
+      local digests = #textsOf(tw, "CALD", before[tw]) + #textsOf(fr, "CALD", before[fr])
+      A.ok(digests >= 2, "digests went both ways")
+      local asks = 0
+      for _, X in ipairs({ tw, fr }) do
+        for _, text in ipairs(textsOf(X, "CALQ", before[X])) do
+          if twNs.Codec.decode(text).fields.n then asks = asks + 1 end
+        end
+      end
+      A.eq(asks, 0, "nobody asks for notes")
+      -- Frostie (an older version, say) sends it anyway: Twiz's copy does not take it back
+      local NoteFields = { k = old, d = note.d, t = note.t, i = "1", b = "Frostie", u = "1000" }
+      for _, text in ipairs(frNs.Codec.encode("CALN", NoteFields)) do
+        tw:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", "Frostie-" .. fr.state.realm)
+      end
+      for _, text in ipairs(frNs.Codec.encode("CALR", { r = old .. "|c|frost123-1001", n = old, v = "old words",
+        b = "Frostie", u = "1001" })) do
+        tw:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", "Frostie-" .. fr.state.realm)
+      end
+      A.eq(twNs.db.calendar.notes[old], nil, "not taken back")
+      A.eq(next(twNs.db.calendar.replies), nil, "nor its comment")
+      A.eq(twNs.Log.errors(10), {}); A.eq(frNs.Log.errors(10), {})
+    end,
+    notes_are_pruned_once_a_day_while_logged_in = function(ns, A, W)
+      start(ns, W)
+      local N, L = ns.Notes, ns.CalendarLogic
+      local today = math.floor(ns.Diary.now() / 86400)
+      ns.db.calendar.notes["frost123-1000"] = { d = N.dateKey(L.civil(today - 90)), t = "Edge", i = 1, u = 1000 }
+      ns.db.calendar.replies["frost123-1000|s|gink4567"] = { n = "frost123-1000", v = "1", u = 1001 }
+      ns.db.calendar.replies["zzz-1|s|gink4567"] = { n = "zzz-1", v = "1", u = 1001 } -- its note is missing
+      A.ok(N.hash(), "90 days old still counts")
+      local h = N.hash()
+      ns.db.calendar.replies["zzz-1|s|gink4567"] = nil
+      A.eq(N.hash(), h, "a reply without its note does not count")
+      ns.db.calendar.replies["zzz-1|s|gink4567"] = { n = "zzz-1", v = "1", u = 1001 }
+      local untilMidnight = (today + 1) * 86400 - ns.Diary.now()
+      W:advance(untilMidnight + 700) -- past UTC midnight and the next digest
+      A.eq(ns.db.calendar.notes["frost123-1000"], nil, "91 days old now: gone without logging out")
+      A.eq(next(ns.db.calendar.replies), nil, "with its replies (and the one without a note)")
+      A.eq(N.hash(), nil)
+      A.eq(ns.Log.errors(10), {})
+    end,
     edit_boxes_stop_at_the_limit = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

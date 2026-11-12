@@ -281,20 +281,26 @@ end
 
 local appliedScale -- the scale the panel has now, to keep its corner still when the scale changes
 
-local function applyLook()
+-- Only the player changing the scale setting moves the saved corner (a reset brings its own position).
+local function rescaleSavedPosition()
   local newScale = clamp(setting("scale"), 0.5, 2, 1)
   local oldScale = appliedScale
-  appliedScale = newScale
-  root:SetScale(newScale)
   local pos = setting("position")
   if oldScale and oldScale ~= newScale and type(pos) == "table" then
     local x, y = Logic.rescalePosition(pos.x, pos.y, oldScale, newScale)
     if x and y and (x ~= tonumber(pos.x) or y ~= tonumber(pos.y)) then
       local moved = ns.Util.copy(pos)
       moved.x, moved.y = round(x), round(y)
-      set("position", moved) -- (this runs applyLook again with the same scale)
+      appliedScale = newScale -- (saving runs applyLook, which must not rescale again)
+      set("position", moved)
     end
   end
+end
+
+local function applyLook()
+  local newScale = clamp(setting("scale"), 0.5, 2, 1)
+  appliedScale = newScale
+  root:SetScale(newScale)
   local alpha = clamp(setting("bgAlpha"), 0, 1, 0.8)
   T.setBackgroundAlpha(root, alpha)
   for _, r in ipairs(rowFrames) do T.setBackgroundAlpha(r, alpha) end
@@ -2326,6 +2332,7 @@ ns.Modules.register({
   onEnable = onEnable,
   onDisable = onDisable,
   onSettingChanged = function(key)
+    if root and key == "scale" then rescaleSavedPosition() end
     if root and LOOK_KEYS[key] then applyLook() end
     if key == "minimized" then Panel.minimizedChanged() end
     if key == "barHover" and enabled then

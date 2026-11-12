@@ -69,6 +69,17 @@ end
 return {
   files = "toc",
   tests = {
+    reset_everything_keeps_the_default_position_after_a_scale_change = function(ns, A, W)
+      start(ns, W)
+      local default = ns.Modules.get("panel").defaults.position
+      ns.Modules.set("panel", "scale", 1.5)
+      ns.Modules.resetAll()
+      local p = ns.Modules.setting("panel", "position")
+      A.eq({ p.point, p.x, p.y }, { default.point, default.x, default.y })
+      A.eq(ns.Modules.setting("panel", "scale"), 1.0)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     rows_full_model = function(ns, A)
       local rows = ns.PanelLogic.rows({ member({ status = "LF |cffDeadmines" }) }, {}, never, true, 0, WALL)
       A.eq(#rows, 1)

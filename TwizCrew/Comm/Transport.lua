@@ -557,7 +557,7 @@ local function addWhisper(out, seen, name, skipGroup)
 end
 
 -- Names we may whisper: channel members, then (rosterToo) roster names, and the extra names from the settings.
--- everyone: all roster names, not only the online ones (a HELLO is how offline friends are found again).
+-- everyone: all roster names, not only the online ones (a HELLO or PING is how offline friends are found again).
 local function whisperNames(skipGroup, rosterToo, out, everyone)
   out = out or {}
   local seen = {}
@@ -585,7 +585,7 @@ local function fallback(msgType)
   local out = {}
   local g = groupDestination()
   if g then out[1] = g end
-  return whisperNames(g ~= nil, true, out, msgType == "HELLO")
+  return whisperNames(g ~= nil, true, out, (msgType == "HELLO" or msgType == "PING"))
 end
 
 -- A whisper to one crew member (nil when this mode does not whisper, or the name is ours).
@@ -613,7 +613,7 @@ function Transport.destinations(msgType)
     if state.joined and not state.failed then return { { chatType = "CHANNEL", target = state.index } } end
     return {}
   elseif m == "whisper" then
-    return whisperNames(false, true, nil, msgType == "HELLO")
+    return whisperNames(false, true, nil, (msgType == "HELLO" or msgType == "PING"))
   elseif m == "group" then
     local g = groupDestination()
     return g and { g } or {}

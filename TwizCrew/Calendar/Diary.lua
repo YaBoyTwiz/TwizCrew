@@ -293,11 +293,12 @@ local function onDigest(sender, f)
   end
   -- notes: different checksums mean they have notes (or deletions) we don't: ask for theirs (only the buckets
   -- that differ, when their digest says which)
-  local ask = ns.Notes and ns.Notes.askFor(f)
+  local ask = ns.Notes and ns.Notes.askFor(f, sender)
   if ask then
     if not askedAt["notes"] or ns.now() - askedAt["notes"] >= ASK_GAP then
       askedAt["notes"] = ns.now()
       sendTo(sender, "CALQ", ask)
+      ns.Notes.asked(sender, f, ask)
     end
   end
   for k, v in pairs(f) do

@@ -26,6 +26,10 @@ local MAX_NOTES = 300    -- live (not deleted) notes counted; deletion markers a
 Notes.MAX_COMMENTS = 30  -- live comments counted per note
 local KEEP_DAYS = 90     -- past notes (and deletion markers) are kept this long
 local ANSWER_GAP = 60    -- seconds between answers to "send me your notes", whoever asks
+-- An older copy (its digest has no nb) checksums everything it keeps, so its nh can differ from ours for good (a
+-- note it has not pruned yet, say): ask it for everything, and answer its "everything", at most once this often
+-- while nothing changed (its nh / our notes).
+Notes.OLD_PEER_GAP = 3600
 Notes.BUCKETS = 8
 
 local B = "Interface\\Icons\\"
@@ -126,6 +130,7 @@ function Notes.dungeonImages(key)
 end
 
 local answeredAt
+local pulledFrom, answeredFull = {}, {} -- name -> { nh = their nh, at = time } / { hash = our nh, at = time }
 
 local function store()
   local db = ns.db
@@ -228,10 +233,19 @@ end
 
 local function isComment(key) return key:find("|c|", 1, true) ~= nil end
 
--- Caps: only the first MAX_NOTES live notes count, and the first MAX_COMMENTS live comments of a note, in key order
--- (so every copy picks the same ones, whatever order things arrived in). Deletion markers always count.
+-- Caps: only the oldest MAX_NOTES live notes count, and the oldest MAX_COMMENTS live comments of a note: ordered by
+-- the creation number in the key (the digits after its last "-"), then by the whole key, an order every copy shares
+-- (so every copy picks the same ones, whatever order things arrived in, and the newest are the ones refused).
+-- Deletion markers always count.
+local function created(key) return tonumber(key:match("%-(%d+)x*$")) or math.huge end
+local function before(a, b)
+  local ca, cb = created(a), created(b)
+  if ca ~= cb then return ca < cb end
+  return a < b
+end
+
 local function capped(keys, records, max, out)
-  table.sort(keys)
+  table.sort(keys, before)
   local live = 0
   for _, key in ipairs(keys) do
     if records[key].x then out[key] = true
@@ -265,14 +279,14 @@ local function counted()
   return notes, replies
 end
 
--- Is there room for a new live record with this key? Fewer than `max` live ones with a lower key are stored among
--- `records` that `same` picks (so it would count everywhere that has what we have).
+-- Is there room for a new live record with this key? Fewer than `max` live ones that come before it (older) are
+-- stored among `records` that `same` picks (so it would count everywhere that has what we have).
 local function room(records, key, max, same)
-  local lower = 0
+  local older = 0
   for k, r in pairs(records) do
-    if type(r) == "table" and not r.x and k < key and same(k, r) then lower = lower + 1 end
+    if type(r) == "table" and not r.x and before(k, key) and same(k, r) then older = older + 1 end
   end
-  return lower < max
+  return older < max
 end
 
 local function liveCount(records, same)
@@ -327,9 +341,10 @@ function Notes.digestFields(f)
   f.nb = table.concat(bucketSums(), ".")
 end
 
--- What to ask a friend whose digest is f: CALQ fields, or nil when our notes are the same. A digest with nb asks only
--- for the buckets that differ; one without (v0.1.23) is compared by nh and asks for everything.
-function Notes.askFor(f)
+-- What to ask friend `sender` whose digest is f: CALQ fields, or nil when our notes are the same. A digest with nb
+-- asks only for the buckets that differ; one without (v0.1.23) is compared by nh and asks for everything (at most
+-- once per OLD_PEER_GAP while their nh stays the same).
+function Notes.askFor(f, sender)
   if type(f.nb) == "string" then
     local theirs = ns.Util.split(f.nb, ".")
     if #theirs == Notes.BUCKETS then
@@ -339,8 +354,17 @@ function Notes.askFor(f)
       return { n = "1", b = table.concat(differ, ",") }
     end
   end
-  if type(f.nh) == "string" and f.nh ~= Notes.hash() then return { n = "1" } end
+  if type(f.nh) == "string" and f.nh ~= Notes.hash() then
+    local p = sender and pulledFrom[sender]
+    if p and p.nh == f.nh and ns.now() - p.at < Notes.OLD_PEER_GAP then return nil end -- nothing new since
+    return { n = "1" }
+  end
   return nil
+end
+
+-- The ask from askFor went out: an ask for everything is remembered with their nh.
+function Notes.asked(sender, f, ask)
+  if type(sender) == "string" and ask and not ask.b then pulledFrom[sender] = { nh = f.nh, at = ns.now() } end
 end
 
 -- The buckets a request asks for ({ [b] = true }), or nil for all (no b, as v0.1.23 asks, or nothing readable).
@@ -375,12 +399,18 @@ local function send(key, to)
 end
 
 -- Answers "send me your notes" (CALQ n=1): the notes and replies that count, only those of the buckets in b ("3,5")
--- when it names any. At most one answer per ANSWER_GAP, whoever asks (later askers ask again at a later digest).
+-- when it names any. At most one answer per ANSWER_GAP, whoever asks (later askers ask again at a later digest); an
+-- answer with everything (no b: an older copy asks so) to the same friend at most once per OLD_PEER_GAP unless our
+-- notes changed since.
 function Notes.sendAll(to, b)
   local t = ns.now()
+  local only = asked(b)
+  local mine = not only and Notes.hash()
+  local last = not only and answeredFull[to]
+  if last and last.hash == mine and t - last.at < Notes.OLD_PEER_GAP then return end -- answered, nothing changed
   if answeredAt and t - answeredAt < ANSWER_GAP then return end
   answeredAt = t
-  local only = asked(b)
+  if not only then answeredFull[to] = { hash = mine, at = t } end
   local notes, replies = counted()
   local rs = Notes.replyStore() or {}
   -- (notes first: a reply is only taken once its note is there)
@@ -511,11 +541,17 @@ function Notes.repliesFor(noteKey)
   return out
 end
 
+-- A number as it may travel: a whole number of at most 10 digits (a server time), or nil.
+local function int10(v)
+  if type(v) ~= "string" or #v > 10 or not v:match("^%d+$") then return nil end
+  return tonumber(v)
+end
+
 function Notes.receiveReply(sender, f)
   if type(f) ~= "table" or type(f.r) ~= "string" or #f.r > MAX_REPLY_KEY then return end
   local noteKey, letter = f.r:match("^(%w+%-%d+)|(%a)|%w+")
   if not noteKey or noteKey ~= f.n or #noteKey > MAX_KEY or not LETTER_KIND[letter] then return end
-  local u = tonumber(f.u)
+  local u = int10(f.u)
   if not u then return end
   local s = Notes.replyStore()
   if not s then return end
@@ -577,7 +613,7 @@ function Notes.receive(sender, f)
   local key = f.k
   if type(key) ~= "string" or not key:match("^%w+%-%d+$") or #key > MAX_KEY then return end
   if not inWindow(f.d) then return end -- (also: a real date)
-  local u = tonumber(f.u)
+  local u = int10(f.u)
   if not u then return end
   local s = store()
   if not s then return end
@@ -588,9 +624,9 @@ function Notes.receive(sender, f)
   local text = deleted and "" or clean(f.t)
   if not deleted and not text then return end
   local class = cleanClass(f.c)
-  local at = tonumber(f.a)
+  local at = int10(f.a)
   if at and math.abs(at - ns.Diary.now()) > 10 * 365 * 86400 then at = nil end -- nonsense times are dropped
-  s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(f.i) or 1)),
+  s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, math.floor(tonumber(f.i) or 1))),
     b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?", c = class, u = u,
     x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil }
   ns.Bus.fire("CALENDAR_CHANGED")
@@ -598,10 +634,20 @@ end
 
 -- What no longer counts goes away: old notes and old deletion markers, notes and comments past the caps, replies
 -- whose note is gone. At login and once a day while logged in.
+-- My own notes and comments inside the window are kept even past a cap (an older record that arrives late can push
+-- them out of the count): they don't count, so no checksum changes, and they count again once there is room.
 function Notes.prune()
   local s, rs = store(), Notes.replyStore()
   if not s or not rs then return end
   local notes, replies = counted()
-  for key in pairs(s) do if not notes[key] then s[key] = nil end end
-  for key in pairs(rs) do if not replies[key] then rs[key] = nil end end
+  local me = ns.Diary.myId()
+  for key, n in pairs(s) do
+    local own = type(n) == "table" and key:find("^" .. me .. "%-") ~= nil and inWindow(n.d)
+    if not notes[key] and not own then s[key] = nil end
+  end
+  for key, r in pairs(rs) do
+    local own = type(r) == "table" and isComment(key) and type(r.n) == "string" and s[r.n] ~= nil
+      and key:find("|c|" .. me .. "-", 1, true) ~= nil and inWindow(s[r.n].d)
+    if not replies[key] and not own then rs[key] = nil end
+  end
 end

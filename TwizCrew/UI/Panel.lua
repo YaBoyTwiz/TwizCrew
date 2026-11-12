@@ -55,9 +55,32 @@ local ticker
 local arrowTicker -- turns the visible row arrows between redraws (Find the crew)
 local redraws = 0
 local fadeElapsed = 0
+-- Minimize (the header bar alone), the notices on that bar, and the peek. See PanelLogic.view and FeedLogic.newBar.
+local FL = ns.FeedLogic
+local NOTICE_SECONDS, NOTICE_SHORT, NOTICE_QUEUE = 6, 3, 8 -- a notice stays 6 s (3 s when others wait), 8 wait at most
+local FLASH_SECONDS, BAR_TICK = 1.6, 0.1
+local gearButton, miniButton, missedButton, noticeButton, updateHintButton, flashTex
+local bar              -- the notice queue and the missed counter (FeedLogic.newBar), made when the panel starts
+local hoverOpen = false -- the mouse is on the minimized bar and "open while my mouse is on the bar" is on
+local peek             -- { name, untilT, held } while a friend's row is dropped open below the bar
+local barTicker
+local lastTickAt
+local rootHead
+local fullHeight, curHeight, curView = nil, nil, HEADER_HEIGHT, "full" -- see settle()
+local noticeShown      -- the entry the bar shows now (test hook)
+local barTextNow = ""  -- the text on the bar's count spot now (test hook)
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 local function set(key, value) return ns.Modules.set(FEATURE, key, value) end
+local function minimized() return setting("minimized") == true end
+
+-- The panel's own menus go through here, so we know which frame the shared menu (the minimap button, the calendar and
+-- the meet map use it too) hangs from.
+local menuAnchor
+local function openMenu(anchor, items)
+  menuAnchor = anchor
+  return Widgets.menu(anchor, items)
+end
 local function script(frame, name, fn) Widgets.script(frame, name, fn, FEATURE) end
 
 local function clamp(v, lo, hi, fallback)
@@ -87,6 +110,9 @@ local MENU_ICONS = {
   { "spell ranks", "Interface\\Icons\\Spell_Holy_SealOfWisdom" },
   { "^Show offline", "Interface\\Icons\\Ability_Stealth" },
   { "^Lock position", "Interface\\Icons\\INV_Misc_Key_03" },
+  { "^Minimize", "Interface\\Icons\\INV_Misc_Spyglass_03" },
+  { "^Restore", "Interface\\Icons\\INV_Misc_Spyglass_03" },
+  { "^Recent activity", "Interface\\Icons\\INV_Misc_Note_02" },
   { "^Row style", "Interface\\Icons\\INV_Fabric_Linen_01" },
   { "^Hide during fights", "Interface\\Icons\\Ability_Warrior_DefensiveStance" },
   { "^Open settings", "Interface\\Icons\\Trade_Engineering" },
@@ -177,8 +203,11 @@ local function applyPosition()
   if moving then return end -- never re-anchor while the player is dragging it
   local p = setting("position")
   if type(p) ~= "table" or not POINTS[p.point] then p = ns.Modules.get(FEATURE).defaults.position end
+  local y = tonumber(p.y) or 0
+  -- a panel that grows up and is minimized keeps its bar still while a peek or the mouse opens it taller
+  if p.point == "BOTTOMLEFT" and p.mini == true and minimized() then y = Logic.barFixedY(y, curHeight, HEADER_HEIGHT) end
   root:ClearAllPoints()
-  root:SetPoint(p.point, UIParent, p.point, tonumber(p.x) or 0, tonumber(p.y) or 0)
+  root:SetPoint(p.point, UIParent, p.point, tonumber(p.x) or 0, y)
 end
 
 -- Where the panel is now, anchored at the corner that matches the grow direction (top-left for down,
@@ -190,7 +219,11 @@ local function currentPosition()
     if type(v) ~= "number" or v ~= v then return nil end
   end
   if s <= 0 or u <= 0 then return nil end
-  if setting("grow") == "up" then return { point = "BOTTOMLEFT", x = round(left), y = round(bottom) } end
+  if setting("grow") == "up" then
+    -- minimized, the saved y is the bar's (the bottom of a bar-sized panel), whatever view is open now
+    local y = minimized() and Logic.barSavedY(bottom, curHeight, HEADER_HEIGHT) or bottom
+    return { point = "BOTTOMLEFT", x = round(left), y = round(y), mini = minimized() or nil }
+  end
   return { point = "TOPLEFT", x = round(left), y = round(top - uiTop * u / s) }
 end
 
@@ -237,6 +270,7 @@ local function fadeTick(_, elapsed)
   local over = false
   if root.IsMouseOver then over = root:IsMouseOver()
   elseif type(MouseIsOver) == "function" then over = MouseIsOver(root) end
+  if bar and (bar:current() or peek or hoverOpen) then over = true end -- a notice or a peek must be seen
   root:SetAlpha(over and 1 or clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
 end
 
@@ -418,7 +452,7 @@ local function createRow()
   r.xpSpark:SetSize(10, 18)
   r.pills = {}
   script(r, "OnMouseUp", function(self, button)
-    if button == "RightButton" and self.tcModel then Widgets.menu(self, Panel.rowMenu(self.tcModel)) end
+    if button == "RightButton" and self.tcModel then openMenu(self, Panel.rowMenu(self.tcModel)) end
   end)
   draggable(r)
   script(r, "OnEnter", function(self) Panel.showRowTip(self) end)
@@ -755,32 +789,144 @@ local function drawAfkButton()
   if away then afkButton.glow:Show() else afkButton.glow:Hide() end
 end
 
-local function drawHeader(s)
+-- Width of a header text: the game's own measure, else a roomy guess (so a guess never hides an overlap).
+local function headerWidth(fs, text)
+  local w = fs.GetStringWidth and fs:GetStringWidth()
+  if type(w) ~= "number" or w ~= w or w <= 0 then w = #text * 6.5 end
+  return w
+end
+
+-- What gives way, in order, when the full header is too narrow: the version, the long count ("2 of 3 online" ->
+-- "2/3"), then the buttons whose actions are also in the right-click menu: AFK, calendar (the wrench menu), settings.
+-- The minimize button, the wrench and the count always stay.
+local FIT_STEPS = {
+  { version = true, short = false, afk = true, cal = true, gear = true },
+  { version = false, short = false, afk = true, cal = true, gear = true },
+  { version = false, short = true, afk = true, cal = true, gear = true },
+  { version = false, short = true, afk = false, cal = true, gear = true },
+  { version = false, short = true, afk = false, cal = false, gear = true },
+  { version = false, short = true, afk = false, cal = false, gear = false },
+}
+local fitNow = {} -- what the last full header kept (test hook)
+
+local function drawHeader(s, view)
+  view = view or "full"
+  local mini = view ~= "full"
   drawAfkButton()
   if grip then grip:SetAlpha(setting("locked") and 0.3 or 0.9) end
   titleVersion = Logic.titleVersion(s.rowStyle, ns.VERSION)
   versionText:SetText(titleVersion)
-  -- Narrow rows (compact, tiny): make the header fit so the AFK button never sits on the title. First the version
-  -- goes, then "2 of 3 online" becomes "2/3".
+  if miniButton then
+    miniButton.icon:SetTexture(minimized() and "Interface\\Buttons\\UI-PlusButton-Up"
+      or "Interface\\Buttons\\UI-MinusButton-Up")
+  end
+  -- minimized, a small gold "!" says an update is waiting (the update line itself is hidden then)
+  local hintShown = mini and updateText() ~= nil
+  if updateHintButton then
+    if hintShown then updateHintButton:Show() else updateHintButton:Hide() end
+  end
+  local missed = mini and bar and bar.missed or 0
+  local missedShown = missed > 0
+  if missedButton then
+    missedButton:ClearAllPoints()
+    missedButton:SetPoint("RIGHT", hintShown and updateHintButton or miniButton, "LEFT", -4, 0)
+    if missedShown then
+      missedButton.text:SetText(Logic.missedText(missed))
+      missedButton:Show()
+    else
+      missedButton:Hide()
+    end
+  end
+  local notice = mini and bar and bar:current() or nil
+  noticeShown = notice
+  local noticeLine = notice and ns.Feed and ns.Feed.coloredLine(notice) or nil
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style] + 2 * PAD
-  local right = (PAD - 2) + 16 + 4 + 16 + 4 + 16 + 6 + 6 + 16 + 6 -- gear, tools, calendar, gaps, AFK, gap
-  local left = (PAD - 2) + 16 + 4 + textWidth(titleText, "TwizCrew")
-  local function fits(count, withVersion)
-    local used = left + right + textWidth(countText, count)
-    if withVersion and titleVersion ~= "" then used = used + 4 + textWidth(versionText, titleVersion) end
-    return used <= width
-  end
+  local B = T.icon(16)
   local count = header
-  if fits(header, true) then
-    versionText:Show()
+  local step
+  if mini then
+    -- the bar alone keeps the title, the count (or the notice), the missed number, the "!" and the minimize button
+    for _, b in ipairs({ gearButton, toolsButton, calButton, afkButton }) do if b then b:Hide() end end
+    local right = (PAD - 2) + B + 6 + (hintShown and (B + 4) or 0) + (missedShown and (T.icon(18) + 4) or 0) + 6
+    local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
+    local function fitsMini(c, withVersion)
+      local used = left + right + headerWidth(countText, c)
+      if withVersion and titleVersion ~= "" then used = used + 4 + headerWidth(versionText, titleVersion) end
+      return used <= width
+    end
+    if noticeLine then
+      versionText:Hide() -- the notice needs the room
+    elseif fitsMini(header, true) then
+      versionText:Show()
+    else
+      versionText:Hide()
+      if not fitsMini(header, false) and headerShort then count = headerShort end
+    end
+    countText:ClearAllPoints()
+    countText:SetPoint("RIGHT", missedShown and missedButton or (hintShown and updateHintButton or miniButton), "LEFT",
+      -6, 0)
+    if noticeLine then countText:SetPoint("LEFT", titleText, "RIGHT", 8, 0) end
   else
-    versionText:Hide()
-    if not fits(header, false) and headerShort then count = headerShort end
+    -- the full header: take the first step that fits, measured with the buttons' real size
+    local function used(st, c)
+      local right = (PAD - 2) + B + 4 + (st.gear and (B + 4) or 0) + B + (st.cal and (4 + B) or 0) + 6
+        + headerWidth(countText, c) + (st.afk and (6 + B) or 0)
+      local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
+        + ((st.version and titleVersion ~= "") and (4 + headerWidth(versionText, titleVersion)) or 0)
+      return left + right
+    end
+    for i, st in ipairs(FIT_STEPS) do
+      step = st
+      if used(st, st.short and headerShort or header) <= width or i == #FIT_STEPS then
+        fitNow = { step = i, used = used(st, st.short and headerShort or header), width = width }
+        break
+      end
+    end
+    count = step.short and headerShort or header
+    if step.version and titleVersion ~= "" then versionText:Show() else versionText:Hide() end
+    local function vis(b, on) if b then if on then b:Show() else b:Hide() end end end
+    vis(gearButton, step.gear); vis(calButton, step.cal); vis(afkButton, step.afk); vis(toolsButton, true)
+    fitNow.afk, fitNow.cal, fitNow.gear = step.afk, step.cal, step.gear
+    -- the chain from the right: minimize, settings, wrench, calendar, count, AFK (a hidden one is skipped)
+    toolsButton:ClearAllPoints()
+    toolsButton:SetPoint("RIGHT", step.gear and gearButton or miniButton, "LEFT", -4, 0)
+    calButton:ClearAllPoints()
+    calButton:SetPoint("RIGHT", toolsButton, "LEFT", -4, 0)
+    countText:ClearAllPoints()
+    countText:SetPoint("RIGHT", step.cal and calButton or toolsButton, "LEFT", -6, 0)
   end
-  countText:SetText(count)
-  updateLine = updateText()
+  -- the title's click area ends where the title or its version ends, so it never reaches the notice or the count
+  if versionButton then
+    versionButton:ClearAllPoints()
+    versionButton:SetPoint("TOPLEFT", titleText, "TOPLEFT", -2, 3)
+    local last = versionText:IsShown() and versionText or titleText
+    versionButton:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT", 2, -3)
+  end
+  if countText.SetJustifyH then countText:SetJustifyH("RIGHT") end
+  if countText.SetWordWrap then countText:SetWordWrap(false) end
+  T.textColor(countText, noticeLine and C.text or C.muted)
+  barTextNow = Logic.barText(noticeLine, count)
+  countText:SetText(barTextNow)
+  if noticeButton then
+    if noticeLine then
+      noticeButton:ClearAllPoints()
+      noticeButton:SetPoint("TOPLEFT", countText, "TOPLEFT", 0, 3)
+      noticeButton:SetPoint("BOTTOMRIGHT", countText, "BOTTOMRIGHT", 3, -3)
+      noticeButton:Show()
+    else
+      noticeButton:Hide()
+    end
+  end
   local top = HEADER_HEIGHT
+  if mini then
+    updateLine, newsLine = nil, nil
+    updateBar:Hide()
+    newsBar:Hide()
+    if tabBar then tabBar:Hide() end
+    return top
+  end
+  updateLine = updateText()
   if updateLine then
     updateBar.text:SetText(updateLine)
     updateBar:Show()
@@ -836,6 +982,34 @@ local function hide()
   Widgets.closeMenu()
 end
 
+-- After every resize. Remembers the height. A panel that grows up is anchored at its bottom corner, which is the bar's
+-- bottom only while minimized. The saved position says which of the two its y means (`mini = true` = the bar's), so
+-- whatever happened while the panel was off, the next draw converts it once and nothing drifts. The full panel's last
+-- height is kept in ns.db.panelFullHeight (it survives a /reload) for the conversion to the bar.
+local function settle(height)
+  curHeight = height
+  local now = minimized() and "mini" or "full"
+  if now == "full" then
+    fullHeight = height
+    if ns.db then ns.db.panelFullHeight = height end
+  end
+  if setting("grow") ~= "up" then return end
+  local p = setting("position")
+  if type(p) ~= "table" or p.point ~= "BOTTOMLEFT" or moving then return end
+  local savedMini = p.mini == true
+  if savedMini ~= (now == "mini") then
+    local y = tonumber(p.y) or 0
+    if now == "mini" then
+      local fh = fullHeight or (ns.db and tonumber(ns.db.panelFullHeight))
+      if fh then y = Logic.yAfterMinimize(y, fh, HEADER_HEIGHT) end
+    else
+      y = Logic.yAfterRestore(y, height, HEADER_HEIGHT)
+    end
+    set("position", { point = p.point, x = p.x, y = round(y), mini = (now == "mini") or nil })
+  end
+  if now == "mini" then applyPosition() end
+end
+
 local function redraw()
   redraws = redraws + 1
   if not root or not enabled then return end
@@ -848,12 +1022,25 @@ local function redraw()
     return
   end
 
+  -- minimized: just the bar ("mini"), the bar and one friend's row ("peek"), or all of it while the mouse is on the
+  -- bar and that is allowed ("full")
+  local peekMember = peek and ns.roster and ns.roster:get(peek.name) or nil
+  local view = Logic.view({ minimized = minimized(), hover = hoverOpen and s.barHover == true,
+    peek = peekMember ~= nil and bar ~= nil, inCombat = inCombat })
+  curView = view
   local members = ns.roster and ns.roster:sorted(s.sort, relationOf) or {}
   if s.showSelf and ns.Self then
     table.insert(members, 1, Logic.selfMember(ns.playerName(), ns.Self.lastSent()))
   end
+  local rowSettings = s
+  if view == "peek" then
+    members = { peekMember }
+    rowSettings = {}
+    for k, v in pairs(s) do rowSettings[k] = v end
+    rowSettings.showOffline = true
+  end
   local hidden
-  models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+  models, hidden = Logic.rows(members, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
     titleOf(), ns.maxLevel())
   local now = ns.now()
   for _, m in ipairs(models) do
@@ -869,13 +1056,31 @@ local function redraw()
       end
     end
   end
-  entries = Logic.entries(models, hidden, s.showOffline ~= false)
+  entries = view == "peek" and models or Logic.entries(models, hidden, s.showOffline ~= false)
   header = Logic.headerText(online, total)
   headerShort = (online or 0) .. "/" .. (total or 0)
   countText:SetText(header)
 
-  local top = drawHeader(s)
-  if statsOn() then
+  local top = drawHeader(s, view)
+  if view == "mini" then
+    for _, r in ipairs(rowFrames) do r:Hide() end
+    if tipRow then Panel.hideRowTip(tipRow) end
+    offBar:Hide(); offBarShown = false
+    noteText:Hide(); note = nil
+    if ns.Board then ns.Log.safe("board", ns.Board.hide) end
+    if tabBar then tabBar:Hide() end
+    visibleRows = 0
+    stopArrowTicker()
+    root:SetSize(ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"] + 2 * PAD, HEADER_HEIGHT)
+    root:Show()
+    shown = true
+    settle(HEADER_HEIGHT)
+    normalizeAnchor()
+    return
+  end
+  if view == "peek" then
+    if tabBar then tabBar:Hide() end
+  elseif statsOn() then
     crewTab:SetActive(tab == "crew")
     shameTab:SetActive(tab == "shame")
     tabBar:Show()
@@ -884,7 +1089,7 @@ local function redraw()
     tabBar:Hide()
   end
 
-  if tab == "shame" then
+  if tab == "shame" and view == "full" then
     for _, r in ipairs(rowFrames) do r:Hide() end
     offBar:Hide(); offBarShown = false
     if tipRow then Panel.hideRowTip(tipRow) end
@@ -907,14 +1112,16 @@ local function redraw()
     root:SetSize(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD)
     root:Show()
     shown = true
+    settle(top + GAP + h + PAD)
     normalizeAnchor()
     return
   end
   if ns.Board then ns.Log.safe("board", ns.Board.hide) end
 
   local max = ns.Config.PANEL_MAX_ROWS
-  local first, last = Logic.window(#entries, offset, max)
-  offset, firstRow = first - 1, first
+  local first, last = Logic.window(#entries, view == "peek" and 0 or offset, max)
+  if view ~= "peek" then offset = first - 1 end -- (a peek never moves the player's scroll)
+  firstRow = first
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style]
   local alpha = clamp(s.bgAlpha, 0, 1, 0.8)
@@ -954,7 +1161,9 @@ local function redraw()
   updateArrowTicker()
 
   note = nil
-  if #entries == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
+  if view == "peek" then
+    -- no note under a peeked row
+  elseif #entries == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
   elseif #entries == 1 and entries[1].bar then note = "Nobody else is online right now."
   elseif #entries > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #entries .. ")" end
   if note then
@@ -970,6 +1179,7 @@ local function redraw()
   root:SetSize(width + 2 * PAD, y + 2)
   root:Show()
   shown = true
+  settle(y + 2)
   normalizeAnchor()
 end
 
@@ -1076,6 +1286,8 @@ function Panel.toolItems()
       onClick = function() ns.Calendar.toggle() end } or nil,
     ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
       onClick = function() ns.MockEditor.open() end } or nil,
+    ns.Recent and { label = "Recent activity", icon = "Interface\\Icons\\INV_Misc_Note_02",
+      onClick = function() ns.Recent.open() end } or nil,
     ns.Recap and { label = "Today's recap", icon = "Interface\\Icons\\INV_Misc_Book_11",
       onClick = function() ns.Recap.show() end } or nil,
     ns.Changelog and { label = "What's new", icon = "Interface\\Icons\\INV_Misc_Book_09",
@@ -1092,6 +1304,7 @@ function Panel.menuItems()
   return compact {
     { label = "Show offline friends", checked = isOn("showOffline"), onClick = flip("showOffline") },
     { label = "Lock position", checked = isOn("locked"), onClick = flip("locked") },
+    { label = Logic.miniLabel(minimized()), onClick = function() Panel.toggleMinimized() end },
     { label = "Row style: " .. choiceLabel("rowStyle", setting("rowStyle")),
       onClick = function() set("rowStyle", NEXT_STYLE[setting("rowStyle")] or "full") end },
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
@@ -1360,12 +1573,13 @@ local function build()
   script(root, "OnMouseWheel", function(_, delta) Panel.scroll(delta) end)
 
   local head = CreateFrame("Frame", nil, root)
+  rootHead = head
   head:SetPoint("TOPLEFT", root, "TOPLEFT", 0, 0)
   head:SetPoint("TOPRIGHT", root, "TOPRIGHT", 0, 0)
   head:SetHeight(HEADER_HEIGHT)
   draggable(head)
   script(head, "OnMouseUp", function(self, button)
-    if button == "RightButton" then Widgets.menu(self, Panel.menuItems()) end
+    if button == "RightButton" then openMenu(self, Panel.menuItems()) end
   end)
   -- a move handle so it's obvious the panel can be dragged; hovering the header shows the move cursor and a tip
   grip = head:CreateTexture(nil, "ARTWORK")
@@ -1397,18 +1611,91 @@ local function build()
   versionButton:SetPoint("TOPLEFT", title, "TOPLEFT", -2, 3)
   versionButton:SetPoint("BOTTOMRIGHT", versionText, "BOTTOMRIGHT", 2, -3)
   draggable(versionButton)
-  script(versionButton, "OnClick", function() if ns.Changelog then ns.Changelog.toggle() end end)
+  script(versionButton, "OnMouseUp", function(_, button)
+    if button == "RightButton" then openMenu(head, Panel.menuItems()) end
+  end)
+  -- (minimized, the title brings the panel back instead: the What's new line is hidden then)
+  script(versionButton, "OnClick", function()
+    if minimized() then Panel.toggleMinimized() elseif ns.Changelog then ns.Changelog.toggle() end
+  end)
   script(versionButton, "OnEnter", function(self)
     if not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:SetText("TwizCrew v" .. tostring(ns.VERSION))
-    GameTooltip:AddLine("Click to see what's new in each version", 1, 1, 1)
+    GameTooltip:AddLine(minimized() and "Click to bring the whole panel back" or "Click to see what's new in each version",
+      1, 1, 1)
     GameTooltip:Show()
   end)
   script(versionButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  -- a soft glow over the bar that flashes when a notice arrives while minimized
+  flashTex = head:CreateTexture(nil, "BACKGROUND")
+  flashTex:SetAllPoints(head)
+  T.color(flashTex, C.title, 1)
+  flashTex:SetAlpha(0)
+  -- the minimize button, at the far right of the bar: minus = minimize, plus = restore
+  miniButton = CreateFrame("Button", nil, head)
+  miniButton:SetSize(T.icon(16), T.icon(16))
+  miniButton:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
+  miniButton.icon = miniButton:CreateTexture(nil, "ARTWORK")
+  miniButton.icon:SetAllPoints(miniButton)
+  miniButton.icon:SetTexture("Interface\\Buttons\\UI-MinusButton-Up")
+  local miniHl = miniButton:CreateTexture(nil, "HIGHLIGHT")
+  miniHl:SetAllPoints(miniButton)
+  T.color(miniHl, C.white, 0.25)
+  script(miniButton, "OnClick", function() Panel.toggleMinimized() end)
+  script(miniButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(Logic.miniLabel(minimized()))
+    GameTooltip:AddLine(minimized() and "Click to bring the whole panel back (or /tc mini)."
+      or "Click to shrink the panel to just this bar (or /tc mini). It tells you about news on the bar.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(miniButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  -- a small gold "!" while minimized and an update is waiting: click = how to update
+  updateHintButton = CreateFrame("Button", nil, head)
+  updateHintButton:SetSize(T.icon(12), T.icon(16))
+  updateHintButton:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
+  updateHintButton.text = T.readable(T.text(updateHintButton, T.FONT.normal, C.title))
+  updateHintButton.text:SetPoint("CENTER", updateHintButton, "CENTER", 0, 0)
+  updateHintButton.text:SetText("!")
+  script(updateHintButton, "OnClick", function() ns.Log.safe("updates", ns.Updates.showHowTo) end)
+  script(updateHintButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("An update is waiting", T.rgb(C.title))
+    GameTooltip:AddLine("Click for how to update. The update line is hidden while the panel is minimized.", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  script(updateHintButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  updateHintButton:Hide()
+  -- the number of news items missed while minimized: click = the recent activity list
+  missedButton = CreateFrame("Button", nil, head)
+  missedButton:SetSize(T.icon(18), T.icon(14))
+  missedButton:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
+  missedButton.bg = missedButton:CreateTexture(nil, "BACKGROUND")
+  missedButton.bg:SetAllPoints(missedButton)
+  T.color(missedButton.bg, "b3261e", 0.9)
+  missedButton.text = T.readable(T.text(missedButton, T.FONT.small, C.white))
+  missedButton.text:SetPoint("CENTER", missedButton, "CENTER", 0, 0)
+  local missedHl = missedButton:CreateTexture(nil, "HIGHLIGHT")
+  missedHl:SetAllPoints(missedButton)
+  T.color(missedHl, C.white, 0.25)
+  script(missedButton, "OnClick", function() Panel.missedClicked() end)
+  script(missedButton, "OnEnter", function(self)
+    if not GameTooltip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText("Missed while minimized")
+    GameTooltip:AddLine("Click to see what happened (or /tc recent). Opening the panel clears this number.", 1, 1, 1,
+      true)
+    GameTooltip:Show()
+  end)
+  script(missedButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  missedButton:Hide()
   local gear = CreateFrame("Button", nil, head)
+  gearButton = gear
   gear:SetSize(T.icon(16), T.icon(16))
-  gear:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
+  gear:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
   local gearIcon = gear:CreateTexture(nil, "ARTWORK")
   gearIcon:SetAllPoints(gear)
   gearIcon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
@@ -1437,7 +1724,7 @@ local function build()
   local toolsHl = toolsButton:CreateTexture(nil, "HIGHLIGHT")
   toolsHl:SetAllPoints(toolsButton)
   T.color(toolsHl, C.white, 0.25)
-  script(toolsButton, "OnClick", function(self) Widgets.menu(self, Panel.toolItems()) end)
+  script(toolsButton, "OnClick", function(self) openMenu(self, Panel.toolItems()) end)
   script(toolsButton, "OnEnter", function(self)
     if not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -1493,6 +1780,22 @@ local function build()
   end)
   script(afkButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   drawAfkButton()
+  -- the news on a minimized bar: click = what clicking that pop-up would do (congratulate, whisper)
+  noticeButton = CreateFrame("Button", nil, head)
+  draggable(noticeButton)
+  script(noticeButton, "OnClick", function() Panel.noticeClicked() end)
+  script(noticeButton, "OnMouseUp", function(self, button) -- the bar's options still open from the notice
+    if button == "RightButton" then openMenu(head, Panel.menuItems()) end
+  end)
+  script(noticeButton, "OnEnter", function(self)
+    if not GameTooltip or not noticeShown then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(noticeShown.kind == "levelup" and "Click to congratulate them"
+      or noticeShown.kind == "online" and "Click to whisper them" or "Click to open the recent activity list")
+    GameTooltip:Show()
+  end)
+  script(noticeButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  noticeButton:Hide()
 
   updateBar = CreateFrame("Button", nil, root)
   if updateBar.SetIgnoreParentAlpha then updateBar:SetIgnoreParentAlpha(true) end -- important: never faded
@@ -1645,6 +1948,197 @@ end
 function Panel.arrowTickerForTest() return arrowTicker ~= nil end
 function Panel.rowAlarmForTest(i) local r = rowFrames[i]; return r ~= nil and rawget(r, "tcAlarm") == true end
 
+---------------------------------------------------------------------------------------------------------- minimize
+-- Is the mouse on the panel (or on one of our menus, which hang off it)?
+local function mouseOverPanel()
+  if not root then return false end
+  if root.IsMouseOver then
+    local ok, over = pcall(root.IsMouseOver, root)
+    if ok and over == true then return true end
+  elseif type(MouseIsOver) == "function" then
+    local ok, over = pcall(MouseIsOver, root)
+    if ok and over == true then return true end
+  end
+  -- an open menu counts only when it was opened from the panel
+  local menu = type(TwizCrewMenu) == "table" and TwizCrewMenu or nil
+  if menu and menuAnchor and menu.IsShown then
+    local ok, shownNow = pcall(menu.IsShown, menu)
+    if not (ok and shownNow == true) then return false end
+    local got, _, rel = pcall(menu.GetPoint, menu, 1)
+    if got and rel ~= nil then return rel == menuAnchor end
+    return true -- cannot tell which frame it hangs from
+  end
+  return false
+end
+
+local startBarTicker -- (below)
+
+-- A notice's friend: their row drops open under the bar for a few seconds (never in a fight).
+local function startPeek(e)
+  if not e or not setting("peek") or inCombat then return end
+  local raw = (tostring(e.who or ""):gsub("||", "|"))
+  if not (ns.roster and ns.roster:get(raw)) then return end
+  peek = { name = raw, untilT = ns.now() + clamp(setting("peekSeconds"), 1, 30, 5) }
+end
+
+local function needTicker()
+  if not bar or not enabled then return false end
+  return bar:current() ~= nil or peek ~= nil or hoverOpen or (minimized() and setting("barHover") == true)
+end
+
+local function stopBarTicker()
+  lastTickAt = nil
+  if barTicker then barTicker:Cancel(); barTicker = nil end
+end
+
+-- Ten times a second while something is going on: the notice queue and its flash, the peek, the mouse on the bar.
+local function barTick()
+  if not bar or not enabled then stopBarTicker(); return end
+  local now = ns.now()
+  local dt = lastTickAt and math.max(0, math.min(now - lastTickAt, 1)) or 0
+  lastTickAt = now
+  local changed = false
+  -- the mouse is on the peeked friend's row: that notice (and row) stay until it leaves, so a click on Congrats
+  -- always goes to the friend the bar and the row show
+  if peek and mouseOverPanel() then bar:delay(dt) end
+  local cur, moved = bar:tick(now)
+  if moved then
+    changed = true
+    if cur then startPeek(cur) end -- the next notice's friend
+  end
+  if flashTex then
+    local age = cur and bar:flashAge(now) or nil
+    local a = 0
+    if age and age < FLASH_SECONDS then a = 0.5 * (1 - age / FLASH_SECONDS) end
+    flashTex:SetAlpha(a)
+  end
+  if peek then
+    local over = mouseOverPanel()
+    if over then peek.held = true end
+    if inCombat or (now >= peek.untilT and not over) then peek = nil; changed = true end
+  end
+  local want = minimized() and setting("barHover") == true
+  if want then
+    local over = mouseOverPanel()
+    if over ~= hoverOpen then hoverOpen = over and true or false; changed = true end
+  elseif hoverOpen then
+    hoverOpen = false
+    changed = true
+  end
+  if changed then requestRedraw() end
+  if not needTicker() then stopBarTicker() end
+end
+
+startBarTicker = function()
+  if barTicker or not needTicker() then return end
+  if C_Timer and C_Timer.NewTicker then
+    barTicker = C_Timer.NewTicker(BAR_TICK, function() ns.Log.safe(FEATURE, barTick) end)
+  end
+end
+
+-- Which news the bar shows: the pop-up kinds follow the pop-up switches (no point in news you turned off).
+local POPUP_SWITCH = { online = "online", died = "death", levelup = "levelUp" }
+local function noticeWanted(e)
+  local key = POPUP_SWITCH[e.kind]
+  if not key then return true end
+  return ns.Modules.isEnabled("popups") and ns.Modules.setting("popups", key) == true
+end
+
+-- The activity feed recorded something (FEED_ADDED). While minimized: a notice on the bar (and a peek), and one more
+-- missed.
+function Panel.onFeed(e)
+  if not enabled or not bar or not minimized() or type(e) ~= "table" then return end
+  -- no bar on screen (hidden in a fight, when alone, in a dungeon) or the panel is open under the mouse: the pop-up
+  -- was shown, so the bar neither shows it nor counts it as missed
+  if not shown or curView == "full" then return end
+  if not FL.isNoticeKind(e) or not noticeWanted(e) then return end
+  bar:addMissed()
+  local started, promoted = bar:push(e, ns.now())
+  if promoted then startPeek(promoted) elseif started then startPeek(e) end
+  startBarTicker()
+  requestRedraw()
+end
+
+-- Is this pop-up (the pop-ups module's kind: online, death, levelup) replaced by the bar right now? Only while the
+-- bar is on screen and shows notices, and the player left "show these on the bar instead of pop-ups" on.
+function Panel.suppressesPopup(popupKind, name)
+  return FL.suppressesPopup(popupKind, {
+    feedTakes = ns.Feed ~= nil and ns.Feed.willTake(popupKind, name) or false,
+    minimized = minimized(),
+    barShown = enabled and shown and ns.Feed ~= nil and ns.Modules.isEnabled("activity") and curView ~= "full",
+    setting = setting("barInstead") == true,
+  })
+end
+
+-- Minimize or restore; returns whether the panel is minimized now. Saved with the other settings.
+function Panel.toggleMinimized()
+  local now = not minimized()
+  set("minimized", now)
+  return now
+end
+
+function Panel.isMinimized() return minimized() end
+
+-- The "minimized" setting changed (from the button, /tc mini, the key, the settings window or a reset).
+function Panel.minimizedChanged()
+  if not minimized() then -- restored: whatever was missed is on the panel again
+    if bar then bar:clear(); bar:clearMissed() end
+    peek, hoverOpen = nil, false
+    if flashTex then flashTex:SetAlpha(0) end
+    stopBarTicker()
+  end
+  if enabled then
+    startBarTicker()
+    requestRedraw()
+  end
+end
+
+-- A click on the notice on the bar: what clicking that pop-up does (a level-up: congratulate them; online: whisper
+-- them); anything else opens the recent activity list. The notice is then done.
+function Panel.noticeClicked()
+  local e = noticeShown or (bar and bar:current())
+  if not e or not bar then return end
+  local raw = (tostring(e.who or ""):gsub("||", "|"))
+  if e.kind == "levelup" then
+    if not ns.isTestName(raw) then Panel.cheer({ tcModel = { name = raw } }) end
+  elseif e.kind == "online" then
+    if ns.Popups and ns.Popups.act then ns.Popups.act("online", raw) end
+  elseif ns.Recent then
+    ns.Recent.open()
+  end
+  local nextEntry = bar:dismiss(ns.now())
+  if not (peek and mouseOverPanel()) then -- (never swap the row under the mouse)
+    if nextEntry then startPeek(nextEntry) else peek = nil end
+  end
+  startBarTicker()
+  requestRedraw()
+end
+
+-- A click on the missed number: the recent activity list (which counts as having seen them).
+function Panel.missedClicked()
+  if ns.Recent and ns.Recent.open() and bar then
+    bar:clearMissed()
+    requestRedraw()
+  end
+end
+
+function Panel.barForTest() return bar end
+function Panel.barTextForTest() return barTextNow end
+function Panel.titleButtonForTest() return versionButton end
+function Panel.headerFitForTest() return fitNow end
+function Panel.headerButtonsForTest()
+  return { mini = miniButton, gear = gearButton, tools = toolsButton, cal = calButton, afk = afkButton,
+    hint = updateHintButton, title = versionButton, notice = noticeButton, head = rootHead }
+end
+function Panel.peekForTest() return peek end
+function Panel.viewForTest() return curView end
+function Panel.noticeForTest() return noticeShown end
+function Panel.miniButtonForTest() return miniButton end
+function Panel.missedButtonForTest() return missedButton end
+function Panel.noticeButtonForTest() return noticeButton end
+function Panel.rootForTest() return root end
+function Panel.hoverOpenForTest() return hoverOpen end
+
 local function onEnable()
   enabled = true
   if ns.Changelog then ns.Changelog.checkFresh() end -- before the marks below: a new install has no "new" line
@@ -1682,7 +2176,10 @@ local function onEnable()
     -- the button goes away by itself after a few minutes
     if C_Timer and C_Timer.After then C_Timer.After(CHEER_FOR + 1, function() ns.Log.safe(FEATURE, requestRedraw) end) end
   end)
-  ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() inCombat = true; requestRedraw() end)
+  bar = FL.newBar({ seconds = NOTICE_SECONDS, short = NOTICE_SHORT, max = NOTICE_QUEUE })
+  peek, hoverOpen = nil, false
+  ns.Bus.on(FEATURE, "FEED_ADDED", Panel.onFeed)
+  ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() inCombat = true; peek = nil; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() inCombat = false; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", requestRedraw)
   if C_Timer and C_Timer.NewTicker then
@@ -1690,10 +2187,13 @@ local function onEnable()
   end
   applyLook()
   redraw()
+  startBarTicker()
 end
 
 local function onDisable()
   enabled = false
+  stopBarTicker()
+  peek, hoverOpen = nil, false
   if ticker then ticker:Cancel(); ticker = nil end
   hide()
 end
@@ -1712,10 +2212,29 @@ ns.Modules.register({
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, sort = "online", showSelf = false,
+    minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = true,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
   settings = {
+    { key = "minimized", label = "Minimize the panel", kind = "toggle",
+      info = "Shrinks the panel to just its title bar, so it takes almost no room on your screen. News from your "
+        .. "crew (someone comes online, dies, levels up, congratulates or mocks you) shows on the bar for a few "
+        .. "seconds, and a small number counts what you missed. Click the minus button on the bar, its title, or "
+        .. "type /tc mini to bring the whole panel back. Resetting settings also brings it back." },
+    { key = "peek", label = "Peek at the friend", kind = "toggle",
+      info = "While the panel is minimized, when news comes in, the panel drops open under the bar for a few "
+        .. "seconds and shows only that friend's row (with the Congrats button after a level-up), then closes "
+        .. "again. Keep your mouse on it to keep it open. It never opens during a fight." },
+    { key = "peekSeconds", label = "How long to peek", kind = "slider", min = 2, max = 15, step = 1, parent = "peek",
+      info = "How many seconds the friend's row stays open under the bar." },
+    { key = "barHover", label = "Open while my mouse is on the bar", kind = "toggle",
+      info = "While the panel is minimized, holding your mouse on the title bar opens the whole panel, and it "
+        .. "shrinks back when the mouse leaves. Off by default so the panel never opens by accident." },
+    { key = "barInstead", label = "Show news on the bar, not as pop-ups", kind = "toggle",
+      info = "While the panel is minimized, the pop-ups for friends coming online, dying and leveling up are not "
+        .. "shown, because the bar already tells you. Turn it off to get both. Pop-ups work as always while the "
+        .. "panel is not minimized." },
     { key = "scale", label = "Scale", kind = "slider", min = 0.5, max = 2.0, step = 0.05, fmt = Widgets.percent,
       info = "Makes the whole panel bigger or smaller. 100% is the normal size." },
     { key = "bgAlpha", label = "Background opacity", kind = "slider", min = 0, max = 1, step = 0.05,
@@ -1790,5 +2309,11 @@ ns.Modules.register({
   onDisable = onDisable,
   onSettingChanged = function(key)
     if root and LOOK_KEYS[key] then applyLook() end
+    if key == "minimized" then Panel.minimizedChanged() end
+    if key == "barHover" and enabled then
+      if not setting("barHover") then hoverOpen = false end
+      startBarTicker()
+      requestRedraw()
+    end
   end,
 })

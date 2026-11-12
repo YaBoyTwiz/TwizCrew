@@ -408,8 +408,8 @@ crew never sees them, nothing is saved, and they are gone after **Clear test stu
 defaults** or `/reload`. Pretend names always end in **(test)**. No restart needed (no new files).
 
 1. **Where they are.** `/tc`, scroll to the bottom: a section **Try it out**, a line **Test tools** "only on your
-   screen" with an (i), then ten buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
-   pop-up**, **Layer pop-up**, **Roast pop-up**, **Update notice (reload)**, **Update notice (restart)**,
+   screen" with an (i), then twelve buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
+   pop-up**, **Layer pop-up**, **Roast pop-up**, **Friend comes online**, **Congrats from a friend**, **Update notice (reload)**, **Update notice (restart)**,
    **Walking buddy**, **Clear test stuff**. `/tc test` in chat lists the same as commands (`/tc test fake`,
    `/tc test ding`...).
 2. **No chat spam, no invites.** While you use them, chat should never say "No player named … is currently playing",
@@ -566,6 +566,57 @@ first** (this update added files, so `/reload` is not enough). Turn on Lua error
    during the next 15 minutes gets it a few seconds after logging in.
 6. **Clearing:** right-click the icon on the map (or `/tc meet clear`): it goes away for everyone.
 7. **Dungeon:** go into a dungeon together: no arrows inside, no errors.
+
+## Minimize, activity feed, peek and chat lines
+
+New in the version after 0.1.23 (not released yet). **Needs a game restart** (three new files, a new key binding):
+copy the addon in and restart the game, a `/reload` is not enough. Riskiest first. Pretend events (`/tc`, **Try it
+out**, or `/tc test ...`) work for most of it without a friend.
+
+1. **Does it still load?** No red errors at login, and the panel looks as before (one more small minus button at the
+   far right of the title bar). In **Compact** and **Tiny** row styles the title bar must not overlap: the AFK button
+   must not sit on top of "TwizCrew". Tell Claude which style looks cramped.
+2. **Minimize.** Click the minus button on the title bar: the panel becomes just the bar (title, "N of M online", a
+   plus button), same place, same width, nothing jumps. The What's new line (and the gold update line, if any) are gone.
+   Click the plus (or the title) and it is all back. `/tc mini` and the key (Esc > Options > Keybindings > AddOns >
+   TwizCrew > "Minimize or restore the crew panel") do the same. Right-click the bar: the menu has "Restore the
+   panel". `/reload` while minimized: it comes back minimized.
+3. **Minimize with the panel growing up.** Settings > Advanced > Panel > **Grow direction: Up**, drag the panel near
+   the bottom of the screen, minimize and restore: the title bar must stay exactly where it was.
+4. **Bar notice.** Minimize, then **Try it out > Fake friends**, then **Ding**: for about 6 seconds the bar shows
+   "Testbuddy (test) reached level 13" (name in class colour) with a soft gold glow, and a red **1** appears left of
+   the plus. Press **Death pop-up**, **Friend comes online** and **Congrats from a friend** quickly one after the
+   other: they show one after another, none is skipped. The red number counts up; clicking it opens the **Recent
+   activity** window and clears the number. Restoring the panel clears it too.
+5. **Peek.** While minimized, the notice above also drops the panel open under the bar with only that friend's row
+   (after a Ding it has a **Congrats** button), for 5 seconds, then it closes. Keep the mouse on it: it stays open
+   until you move away. Turn **Peek at the friend** off (Basics): no drop-open, the bar notice still shows. Change
+   **How long to peek** (Advanced > Panel). **Never in a fight:** press a pretend event while you are fighting
+   something: the bar shows the text, but the panel does not open.
+6. **Click the notice.** Ding while minimized and click the bar text: same as clicking the level-up pop-up (a
+   congrats goes out). A pretend friend is never congratulated or whispered; use a real friend for this check.
+7. **No doubling up.** Minimized, press **Ding**, **Death pop-up** and **Friend comes online**: no pop-ups, only the
+   bar. Restore the panel and press them again: pop-ups as always. Minimize, turn **Show news on the bar, not as
+   pop-ups** off (Advanced > Panel): both show. Layer pop-ups and roasts always still pop up.
+8. **Open while my mouse is on the bar.** Turn it on (Advanced > Panel), minimize, hold the mouse on the bar: the whole
+   panel opens; move away: it shrinks back. Off by default.
+9. **Chat lines.** Press **Ding**, **Death pop-up**, **Congrats from a friend**: each prints one line in your chat
+   (`TwizCrew: ...` in gold, the name in class colour; the congrats shows the words in quotes). **Friend comes
+   online** prints nothing (off by default). Turn **Write events in my chat** off (Basics): no lines. Turn the
+   per-kind switches (Advanced > Panel > Activity feed) on and off. Chat lines should print whether the panel is
+   minimized or not. Nobody else ever sees them, and nothing is typed into any channel.
+10. **Recent activity.** `/tc recent`, the wrench menu entry and the Activity feed's **Show recent activity** button
+    open the list: newest first, class icon, "just now" / "5m ago", the line. Mouse wheel scrolls (more than ten
+    lines). **Press Escape** closes it. `/reload`: the list is still there (the pretend ones are not). **Clear test
+    stuff** removes the pretend lines. Open it for the first time in a fight: chat says it opens after the fight.
+11. **With a real friend** (both on this version): their level-up, death, login and logout show in the list; a
+    congrats and a mock they send you show with the words; after you press **Congrats** on their row, the list says
+    "You congratulated ...". A friend logging in within two minutes of leaving (a /reload) is not listed. The first
+    30 seconds after your login nothing is listed for logins, deaths and level-ups.
+12. **Reset to defaults** brings the panel back from minimized and puts all the new switches back (peek on, 5 s,
+    mouse-on-bar off, bar-instead-of-pop-ups on, chat on with died / level-up / congrats / mock). The list stays.
+13. **Fade, lock, hide in fights** (all in Settings) still work with the panel minimized, and the notices stay fully
+    visible when the panel is faded.
 
 ## What to send back
 

@@ -20,6 +20,7 @@ function DB.init(saved, defs)
     myStatus = "",
     myMocks = {}, -- your own roasts for the Mock button (kept by Reset everything)
     stats = { chars = {}, crew = {}, session = {} },
+    feed = {}, -- the activity feed: the newest FeedLogic.MAX events (kept by Reset everything)
     update = {}, -- the newest version a friend told us about (Update reminders); not a setting
     updateNotice = {}, -- { shown = newest version an update pop-up was shown for }: once per version; not a setting
   })

@@ -313,3 +313,58 @@ function PanelLogic.selfMember(name, fields)
     zone = fields.zn, subzone = fields.sz, status = fields.st, tags = ns.Tags.decode(fields.tg), online = true,
   }
 end
+
+---------------------------------------------------------------------------------------------------------- minimize
+-- What the panel shows: "full" (everything), "mini" (just the header bar) or "peek" (the bar and one friend's row).
+-- ctx: { minimized, hover (the mouse is on the bar and "open while my mouse is on the bar" is on), peek (a peek is
+-- due), inCombat }. Never a peek in a fight.
+function PanelLogic.view(ctx)
+  ctx = ctx or {}
+  if not ctx.minimized then return "full" end
+  if ctx.hover then return "full" end
+  if ctx.peek and not ctx.inCombat then return "peek" end
+  return "mini"
+end
+
+-- While minimized the saved position means "where the bar is". For a panel that grows up (anchored at its bottom
+-- corner) the bar is the top of the panel, so a taller view (a peek, the full panel opened by the mouse) must sit
+-- lower by its extra height for the bar not to jump. Returns the y of the bottom corner for a panel of `height`.
+function PanelLogic.barFixedY(savedY, height, barHeight)
+  savedY, height, barHeight = tonumber(savedY) or 0, tonumber(height) or 0, tonumber(barHeight) or 0
+  return savedY - math.max(0, height - barHeight)
+end
+
+-- The saved bottom-corner y of a grow-up panel that is now `height` tall: when it is minimized the saved y is the
+-- bar's, the bottom of the bar-sized panel.
+function PanelLogic.barSavedY(bottomY, height, barHeight)
+  bottomY, height, barHeight = tonumber(bottomY) or 0, tonumber(height) or 0, tonumber(barHeight) or 0
+  return bottomY + math.max(0, height - barHeight)
+end
+
+-- A switch between the full panel and the bar of a grow-up panel keeps the bar still: the saved bottom y after the
+-- switch. `savedY` and `fullHeight` are the ones of the full panel; barHeight the bar's.
+function PanelLogic.yAfterMinimize(savedY, fullHeight, barHeight)
+  return (tonumber(savedY) or 0) + (tonumber(fullHeight) or 0) - (tonumber(barHeight) or 0)
+end
+function PanelLogic.yAfterRestore(barSavedY, fullHeight, barHeight)
+  return (tonumber(barSavedY) or 0) + (tonumber(barHeight) or 0) - (tonumber(fullHeight) or 0)
+end
+
+-- The count text on the bar: the notice line while one shows, else "2 of 3 online" (or the short "2/3").
+function PanelLogic.barText(noticeLine, count)
+  if type(noticeLine) == "string" and noticeLine ~= "" then return noticeLine end
+  return count
+end
+
+-- The missed-counter badge text ("" when nothing was missed; "9+" past nine).
+function PanelLogic.missedText(n)
+  n = tonumber(n) or 0
+  if n <= 0 then return "" end
+  if n > 9 then return "9+" end
+  return tostring(math.floor(n))
+end
+
+-- The toggle's words in the menu and chat.
+function PanelLogic.miniLabel(minimized)
+  return minimized and "Restore the panel" or "Minimize the panel"
+end

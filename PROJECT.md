@@ -20,6 +20,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
   game, riskiest first: `docs/TESTING.md`.
 - **Stats board built too (2026-11-05):** Hall of Shame tab, live roasts, `/tc awards`. Not tested in game, not
   published. Details in the "Stats board" section below.
+- **Minimize, activity feed, peek and chat lines built (2026-11-11, owner left the design to Claude):** not tested in
+  game, not published; the release needs `RESTART_SINCE`. Details in the section "Minimize, activity feed, peek and
+  chat lines" below.
 - **"Tell crew to update" button built (2026-11-05):** not tested in game, not published. Details in its section
   below.
 - **Minimap button built (2026-11-05, owner asked):** left-click settings, right-click panel, drag around the edge,
@@ -150,6 +153,81 @@ Other players never see any of it. The messages are hidden addon messages, not c
   builds `TwizCrew-<version>-forever.zip` (WowUp picks a zip ending in `-forever`) plus `release.json` (flavor
   `forever`), tags `v<version>`, pushes `master` and creates the GitHub release. Then the owner can press **Tell
   crew to update**.
+
+## Minimize, activity feed, peek and chat lines (2026-11-11)
+
+- **Why:** a friend said the panel clutters the screen (wants to minimize it, still get useful information, and open
+  it again easily). The owner also wants a record in chat of what happened (e.g. what someone said in a congrats).
+  The owner approved building it and left the design to Claude ("use your best judgement"). **All the decisions below
+  are Claude's calls.**
+- **Built (2026-11-11), not tested in game, not published.** Tests outside the game pass (`tests/run.sh`; new files
+  `tests/test_feed.lua`, `tests/test_minimize.lua`). In-game checks, riskiest first: `docs/TESTING.md`, section
+  "Minimize, activity feed, peek and chat lines". **The release needs `RESTART_SINCE`** set to the new version: three
+  files were added (`UI/FeedLogic.lua`, `UI/Feed.lua`, `UI/Recent.lua`) and `TwizCrew.toc` and `Bindings.xml` changed.
+  No version bump, changelog entry or release yet (the owner says "release it").
+- **Minimize (Panel, PanelLogic.view):** a minus / plus button at the far right of the title bar, `/tc mini` (also
+  `/tc minimize`), the key binding "Minimize or restore the crew panel" (`TWIZCREW_MINI`), and a "Minimize the panel" /
+  "Restore the panel" entry in the title bar's right-click menu. Minimized = just the header (24 px, same width,
+  same corner): title, the online count, the missed number and the button; the AFK, calendar, tools and settings
+  buttons and the update and What's new lines are hidden. Clicking the title restores it (when minimized the title no
+  longer opens What's new, since that line is hidden then). Saved as the panel setting `minimized` (so **Reset to
+  defaults brings the panel back**). For a panel that grows up, the saved y while minimized means "where the bar is",
+  so the bar does not jump when it opens or closes (`PanelLogic.yAfterMinimize` etc.). The header got 20 px
+  narrower for the title in the full view (one more button): in Compact and Tiny rows the version and the long count
+  go sooner. **Not looked at in game.**
+- **Activity feed (`UI/FeedLogic.lua` pure rules, `UI/Feed.lua` game side, module "activity"):** newest 50 events in
+  `ns.db.feed` (kept by Reset to defaults), each `{ kind, who, at (wall clock), line, dir, zone, subzone, level, words,
+  other, class }`. Kinds: online, offline, died, levelup, congrats, mock, roast. It listens to the roster's
+  `MEMBER_ONLINE / OFFLINE / DIED / LEVELUP` (the sources the pop-ups listen to) and to two new bus events fired by
+  the roasts module only when something is shown on this screen: `MOCK_SEEN (sender, target, words, cheer)` and
+  `ROAST_SHOWN (sender, text)`. The gates copy the pop-ups': 30 s login quiet time for online / offline / died /
+  level-up, and "back online within 120 s of going offline is a /reload, not news" (same numbers; Popups keeps its own
+  copy). **What a copy knows about a congrats or mock (the MOCK message, `k = "g"` = congrats):** the sender, who it is
+  about (`t`), and the finished text (`x`, at most 120 letters, the built-in or the sender's own line with the
+  placeholders filled in). There is no emote and no level in the message, so the feed shows the words only. A death
+  carries only the zone and subzone (the cause guesses -- fall, drown, weak mob -- travel as separate ROAST messages,
+  which the feed logs as "roast" lines), so a death line has the place, not the cause. Mocks and congrats about
+  *other* friends that show on my screen are logged too (dir "seen"). Text goes through `ns.Util.safeText` and a
+  `issecretvalue` guard; the test tools' fakes are kept in memory only (never saved, gone with Clear test stuff).
+- **Bar notices (Panel):** while minimized, online / died / level-up (when the matching pop-up switch is on) and
+  congrats / mocks sent to me replace the count on the bar for 6 s (3 s when two or more wait behind it), the friend's
+  name in class colour, with a gold glow that fades in 1.6 s. Further events queue (8 waiting at most, the oldest
+  waiting one is dropped past that). A red number on the bar counts the events since the panel was last open;
+  restoring clears it, and so does opening the list from it. Clicking the notice does what the pop-up would
+  (level-up: congratulate; online: whisper; others: open the list) and moves to the next.
+- **Peek:** setting `peek` (default on, `peekSeconds` default 5): with each notice that starts, the panel drops open
+  under the bar with only that friend's row (so the Congrats button is on it after a level-up), then closes. The mouse
+  on the panel (or on one of its menus) keeps it open until it leaves. Never in a fight: a peek due in a fight is
+  dropped (the plain-text bar notice still shows, since the panel's own frames already change in combat), and a fight
+  closes a peek. `barHover` ("Open while my mouse is on the bar", default off): hovering the bar shows the full panel
+  until the mouse leaves.
+- **No doubling up:** `barInstead` (default on): while minimized, and only while the bar is on screen and the activity
+  feed is on, the online / died / level-up pop-ups are not made (so there is no pop-up sound either). Everything else
+  (layer pop-ups, roasts, meet-ups, quest shares) still pops up. Not minimized: exactly as before.
+- **Chat lines:** `activity` module settings: master `chat` (default on) plus one per kind. Defaults: died, level-up,
+  congrats, mock on; online, offline, roast off (the game already prints logins). Local only (`DEFAULT_CHAT_FRAME`
+  `:AddMessage`, else `print`; never `SendChatMessage`), prefix "TwizCrew:" in gold, names in class colour. Printed
+  whether or not the panel is minimized.
+- **Recent window (`UI/Recent.lua`):** 10 rows, newest first, class icon (or a picture of the kind), "5m ago", the
+  line; mouse wheel scrolls; hover shows the clock time. Opened by the missed number, `/tc recent`, the wrench menu
+  ("Recent activity") and a button on the Activity feed settings. Built the first time it is opened and not in combat
+  (in a fight the first open says so and waits).
+- **Settings:** Basics got Minimize the panel, Peek at the friend and Write events in my chat. The rest are on
+  Advanced, Panel (the panel's and the new "Activity feed" module's switches), each with an (i) text.
+- **Test tools:** Ding, Death pop-up and Roast already ran through the real events, so they now show the bar notice,
+  peek and chat line too. New buttons / commands: **Friend comes online** (`/tc test online`) and **Congrats from a
+  friend** (`/tc test congrats in`, a MOCK message from Testbuddy through the real path).
+- **Not done / open:** auto-minimize rules, a group-only mini view and a minimap badge (out of scope); no new messages
+  between copies. Unsure until tried in game: how the bar looks at the three row widths, whether `IsMouseOver` on the
+  panel behaves for hover and peek, the glow, the missed number's placement.
+
+## Website and Discord (on hold, owner 2026-11-11)
+
+- The owner wants TwizCrew tied to a website (a subfolder of twizgame.com first, movable to its own domain) and
+  later Discord. **Put on hold the same day** ("put it on hold i want to work on something else"). Nothing
+  designed or built.
+- What the owner asked for, Claude's ideas, the suggested order and the open questions:
+  `docs/website-and-discord-ideas.md`.
 
 ## Decisions (owner)
 
@@ -337,6 +415,17 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **No combat log** for addons in Forever (reported); Blizzard ships its own damage meter and cooldown tracker.
 - **No internet, no files, no other programs.** The only thing it writes is its SavedVariables file. A program
   outside the game could read that file after a `/reload` (e.g. for a stream overlay).
+- **Talking to a program on the same PC (Claude Code, a local model), owner asked 2026-11-12, nothing tried in
+  game:** there is no direct connection, only side doors. Out of the game: SavedVariables (at `/reload` or logout),
+  `Screenshot()` (an image file at once; data can be drawn on screen as coloured squares), the chat log file
+  (`/chatlog`, written with a delay). Into the game: the helper writes a Lua data file in the addon folder or the
+  SavedVariables file, and the game reads it at the next `/reload` or login (how the WeakAuras, TSM and Raider.IO
+  companion apps work); or the player pastes text into a box. Nothing gets in while playing without a `/reload`,
+  except a helper that presses keys for you, which Blizzard's rules forbid (do not build).
+  Idea (owner asked 2026-11-12): the addon takes a screenshot at a moment (death, wipe, level-up) with a caption
+  drawn on screen, a helper watching `_forever_/Screenshots` gives it to a model that can see images, and the
+  reaction comes out **outside the game** (spoken voice, a window over the game, a Discord post), since it cannot
+  get back in live.
 - **The game's calendar works on the server, its window is switched off** (research 2026-11-08, from the code
   and notes of Ultimate Calendar v1.9.2, CurseForge 1339939, which supports Forever; not tried by us):
   Forever ships Blizzard's calendar code (`C_Calendar`) with no window. Ultimate Calendar draws its own window
@@ -381,7 +470,9 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   DialogueUI 1.0.7 b (Peterodox, CurseForge project 989270, by hand 2026-11-05),
   DialogKey - Numy Edition v1.2.62 (https://github.com/NumyAddon/DialogKey_Numy, by hand 2026-11-05),
   Basic Action Update 0.0.2 (TxRx, CurseForge project 1779962, `/bau`, puts the highest rank of each spell on your
-  bars, waits until a fight ends; by hand 2026-11-06), and **TwizTracker** (a small starter addon Claude wrote:
+  bars, waits until a fight ends; by hand 2026-11-06), EllesmereUI 9.8.4 (full UI replacement, 24 folders
+  `EllesmereUI*`, https://github.com/EllesmereGaming/EllesmereUI, CurseForge project 1477613; installed 2026-11-10,
+  checked latest 2026-11-11), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
   `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote

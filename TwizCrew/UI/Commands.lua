@@ -11,6 +11,8 @@ local HELP = {
   "/tc - open or close the settings",
   "/tc show - show the crew panel",
   "/tc hide - hide the crew panel",
+  "/tc mini - minimize the panel to its title bar (again to restore it)",
+  "/tc recent - the list of recent happenings: friends online, deaths, level-ups, congrats and mocks",
   "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
   "/tc mock - the My mocks window: write, try and delete your own mocks",
@@ -21,7 +23,7 @@ local HELP = {
   "/tc rankup - put the highest rank of every spell on your action bars",
   "/tc cal - the crew calendar: who played when, and the best time to play together",
   "/tc recap - today's recap: time played, levels, quests, deaths, gold and who was on",
-  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, calendar, notes, AFK, ranks, mock, recap)",
+  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, minimize, calendar, notes, AFK, ranks, mock, recap)",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
@@ -115,6 +117,7 @@ Commands.setPanel = setPanel
 -- Bindings.xml names these (Esc > Options > Keybindings > AddOns > TwizCrew).
 BINDING_HEADER_TWIZCREW = "TwizCrew"
 BINDING_NAME_TWIZCREW_PANEL = "Show or hide the crew panel"
+BINDING_NAME_TWIZCREW_MINI = "Minimize or restore the crew panel"
 BINDING_NAME_TWIZCREW_CALENDAR = "Open the crew calendar"
 BINDING_NAME_TWIZCREW_NOTE = "Create a calendar note"
 BINDING_NAME_TWIZCREW_AFK = "Go AFK / I'm back"
@@ -125,6 +128,7 @@ BINDING_NAME_TWIZCREW_SETTINGS = "TwizCrew settings"
 
 function Commands.binding(what)
   if what == "panel" then setPanel(not ns.Modules.isEnabled("panel"), true)
+  elseif what == "mini" then Commands.toggleMini(true)
   elseif what == "calendar" then ns.Calendar.toggle()
   elseif what == "note" then ns.Calendar.openMaker({})
   elseif what == "afk" then ns.Panel.toggleAway()
@@ -141,6 +145,16 @@ function Commands.binding(what)
     elseif not ns.Roasts.mock(name) then
       say("give it a few seconds before mocking " .. name .. " again.")
     end
+  end
+end
+
+-- /tc mini and its key binding: minimize or restore the panel. A hidden panel is only shown (as it was left).
+-- quiet: no chat line.
+function Commands.toggleMini(quiet)
+  if not ns.Modules.isEnabled("panel") then setPanel(true, quiet) return end
+  local now = ns.Panel.toggleMinimized()
+  if not quiet then
+    say(now and "panel minimized to its title bar. Type /tc mini to bring it back." or "panel restored.")
   end
 end
 
@@ -248,6 +262,9 @@ local ACTIONS = {
   show = function() setPanel(true) end,
   hide = function() setPanel(false) end,
   minimap = toggleMinimap,
+  mini = function() Commands.toggleMini(false) end,
+  minimize = function() Commands.toggleMini(false) end,
+  recent = function() ns.Recent.toggle() end,
   status = setStatus,
   mock = mock,
   afk = function() ns.Panel.toggleAway() end,

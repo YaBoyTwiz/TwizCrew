@@ -1,5 +1,6 @@
 <Bindings>
   <Binding name="TWIZCREW_PANEL" header="TWIZCREW" category="ADDONS">TwizCrew_Binding("panel")</Binding>
+  <Binding name="TWIZCREW_MINI" category="ADDONS">TwizCrew_Binding("mini")</Binding>
   <Binding name="TWIZCREW_CALENDAR" category="ADDONS">TwizCrew_Binding("calendar")</Binding>
   <Binding name="TWIZCREW_NOTE" category="ADDONS">TwizCrew_Binding("note")</Binding>
   <Binding name="TWIZCREW_AFK" category="ADDONS">TwizCrew_Binding("afk")</Binding>

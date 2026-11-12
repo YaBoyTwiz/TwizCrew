@@ -22,6 +22,7 @@ local DIGEST_EVERY = 600   -- seconds between digests to everyone
 local FIRST_DIGEST = 20    -- after login
 local SEND_GAP = 120       -- seconds before the same person's diary goes to the same friend again
 local ASK_GAP = 120
+local ALTS_BYTES = 150     -- a diary's alts list, as it travels (so the codec never cuts it)
 
 local enabled = false
 local ticker, digestTicker
@@ -170,7 +171,14 @@ local function personFields(id)
   local alts = {}
   for name, class in pairs(p.alts or {}) do alts[#alts + 1] = tostring(name) .. ":" .. tostring(class) end
   table.sort(alts)
-  if #alts > 0 then f.a = table.concat(alts, ",") end
+  -- whole alts only, as many as fit ALTS_BYTES as they travel (the codec would cut one in half)
+  local size, keep = 0, {}
+  for _, a in ipairs(alts) do
+    size = size + ns.Codec.size(a) + (#keep > 0 and 1 or 0)
+    if size > ALTS_BYTES then break end
+    keep[#keep + 1] = a
+  end
+  if #keep > 0 then f.a = table.concat(keep, ",") end
   local from = oldest()
   for day, d in pairs(p.days) do
     if day >= from and L.clean(d.on) then

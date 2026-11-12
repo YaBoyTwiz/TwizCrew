@@ -36,6 +36,29 @@ local function maskOf(L, from, to)
   return m
 end
 
+-- The raw texts of msgType sent since W.sent[from], each once (a message to everyone goes to several places).
+local function textsOf(W, msgType, from)
+  local out, seen = {}, {}
+  for i = (from or 0) + 1, #W.sent do
+    local text = W.sent[i].text
+    if text:find("^%d+%^" .. msgType .. "%^") and not seen[text] then seen[text] = true; out[#out + 1] = text end
+  end
+  return out
+end
+
+-- Every text arrives at this copy as a whisper from `sender`.
+local function hear(W, sender, list)
+  for _, text in ipairs(list) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", sender) end
+end
+
+-- Words far longer than a note may be: "é" (2 bytes), "~" (3 bytes once escaped) and an emoji (4 bytes), with the
+-- bytes one letter takes as it travels.
+local LONG_WORDS = {
+  { text = string.rep("\195\169", 150), size = 2 },
+  { text = string.rep("~", 150), size = 3 },
+  { text = string.rep("\240\159\152\128", 80), size = 4 },
+}
+
 return {
   files = "toc",
   tests = {
@@ -421,6 +444,115 @@ return {
       receive(ns, W, "Frostie", "CALQ", { n = "1" })
       W:advance(3)
       A.eq(#sent(ns, W, "CALN", before), 1, "they asked: all my notes go to them")
+    end,
+    every_calendar_message_fits_one_piece = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L, D = ns.Notes, ns.CalendarLogic, ns.Diary
+      local MAX = ns.Config.MAX_MESSAGE
+      local today = math.floor(D.now() / 86400)
+      local date = N.dateKey(L.civil(today + 3))
+      local function fits(list, what)
+        for _, text in ipairs(list) do A.ok(#text <= MAX, what .. " is " .. #text .. " bytes") end
+      end
+      for wi, w in ipairs(LONG_WORDS) do
+        W:advance(61) -- (a friend gets all my notes at most once a minute)
+        local name = ns.Util.truncateUTF8(w.text, 24)
+        -- the largest note and replies the code keeps, as an older version may have saved them
+        local nk = "abcdefghijklm-" .. (1790000000 + wi)                      -- 24 letters
+        local who = "abcdefghijkl"                                            -- a 12-letter id
+        local ck = nk .. "|c|" .. who .. "-1790000001"                         -- 50 letters
+        local big = { b = name, c = "ABCDEFGHIJKL", u = 1790000000 }
+        local function rec(t) for k, v in pairs(big) do t[k] = t[k] or v end; return t end
+        ns.db.calendar.notes = { [nk] = rec({ d = date, t = w.text, i = 16, at = 1790000000, g = "excavation" }) }
+        ns.db.calendar.replies = {
+          [nk .. "|s|" .. who] = rec({ n = nk, v = "1" }),
+          [nk .. "|r|" .. who] = rec({ n = nk, v = "maybe" }),
+          [ck] = rec({ n = nk, v = w.text }),
+        }
+        local before = #W.sent
+        receive(ns, W, "Frostie", "CALQ", { n = "1" })
+        W:advance(5)
+        local notes, replies = textsOf(W, "CALN", before), textsOf(W, "CALR", before)
+        A.eq(#notes, 1, "one note, one piece")
+        A.eq(#replies, 3, "three replies (seen, going, a comment), one piece each")
+        fits(notes, "the note"); fits(replies, "a reply")
+        -- what arrives is taken (words cut to whole letters, at most MAX_BYTES as they travel)
+        ns.db.calendar.notes, ns.db.calendar.replies = {}, {}
+        hear(W, "Frostie", notes); hear(W, "Frostie", replies)
+        local n = ns.db.calendar.notes[nk]
+        A.ok(n, "the note is taken")
+        A.eq(n.t, w.text:sub(1, #n.t), "the start of the words")
+        A.eq(#n.t % (w.size == 3 and 1 or w.size), 0, "whole letters")
+        local travel = #n.t / (w.size == 3 and 1 or w.size) * w.size
+        A.ok(travel <= N.MAX_BYTES and travel > N.MAX_BYTES - w.size, "as many letters as fit: " .. travel)
+        A.eq(n.g, "excavation"); A.eq(n.at, 1790000000); A.eq(n.c, "ABCDEFGHIJKL")
+        local s = ns.db.calendar.replies
+        A.ok(s[nk .. "|s|" .. who] and s[nk .. "|r|" .. who], "seen and going are taken")
+        A.ok(s[ck] and s[ck].v == n.t, "the comment is taken, cut like the note")
+      end
+      -- the diaries: a person with a 16-letter id, a long name, many alts and 30 full days (on and AFK)
+      local id = "abcdefghijklmnop"
+      local w = LONG_WORDS[3].text
+      local p = { name = ns.Util.truncateUTF8(w, 24), class = "ABCDEFGHIJKL", alts = {}, days = {} }
+      for k = 1, 12 do p.alts[k .. ns.Util.truncateUTF8(w, 22)] = "ABCDEFGHIJKL" end
+      for d = today - 29, today do p.days[d] = { on = maskOf(L, 0, 96), afk = maskOf(L, 0, 96) } end
+      D.people()[id] = p
+      local before = #W.sent
+      D.sendDigest()
+      W:advance(5)
+      local digests = textsOf(W, "CALD", before)
+      A.eq(#digests, 1, "the digest: one piece")
+      fits(digests, "the digest")
+      -- it arrives at a copy that never heard of that person: it asks
+      D.people()[id] = nil
+      before = #W.sent
+      hear(W, "Frostie", digests)
+      W:advance(2)
+      local asks = textsOf(W, "CALQ", before)
+      A.eq(#asks, 1); fits(asks, "the question")
+      A.eq(ns.Codec.decode(asks[1]).fields.i, id)
+      D.people()[id] = p
+      before = #W.sent
+      hear(W, "Frostie", asks)
+      W:advance(30)
+      local pieces = textsOf(W, "CALP", before)
+      A.ok(#pieces > 1, "30 days take several pieces")
+      fits(pieces, "a diary piece")
+      for _, text in ipairs(pieces) do A.eq(ns.Codec.decode(text).fields.i, id, "every piece says whose") end
+      D.people()[id] = nil
+      hear(W, "Frostie", pieces)
+      local got = D.people()[id]
+      A.ok(got, "the diary is taken")
+      A.eq(got.name, p.name)
+      A.eq(L.total(got.days), 30 * 96, "every day arrived")
+      local alts = 0
+      for altName, class in pairs(got.alts) do
+        alts = alts + 1
+        A.eq(p.alts[altName], class, "a whole alt, never half of one")
+      end
+      A.ok(alts >= 1, "alts arrive")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    edit_boxes_stop_at_the_limit = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N = ns.Notes
+      ns.Calendar.open()
+      local _, _, _, day = ns.Calendar.viewForTest()
+      ns.Calendar.openMaker({ day = day })
+      local box = ns.Calendar.makerBoxForTest()
+      box:SetText(string.rep("~", 60))
+      box._scripts.OnTextChanged(box, true)
+      A.eq(box:GetText(), string.rep("~", 33), "33 of them take 99 bytes as they travel")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-1000", d = N.dateKey(ns.CalendarLogic.civil(day)), t = "Run",
+        i = "2", b = "Frostie", c = "MAGE", u = "1000" })
+      A.ok(ns.NoteView.open("frost123-1000"))
+      box = ns.NoteView.boxForTest()
+      box:SetText(string.rep("\195\169", 70))
+      box._scripts.OnTextChanged(box, true)
+      A.eq(box:GetText(), string.rep("\195\169", 50))
+      A.eq(ns.Log.errors(10), {})
     end,
     ------------------------------------------------------------------------------------------------ the window
     calendar_window = function(ns, A, W)

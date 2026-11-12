@@ -72,6 +72,10 @@ Calendar\CalendarLogic.lua
 Calendar\Notes.lua
 Calendar\Diary.lua
 Calendar\CalendarUI.lua
+Calendar\CalendarMonth.lua
+Calendar\CalendarDay.lua
+Calendar\CalendarUsual.lua
+Calendar\CalendarMaker.lua
 Calendar\NoteView.lua
 UI\Extras.lua
 UI\Recap.lua

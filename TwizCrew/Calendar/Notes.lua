@@ -204,17 +204,41 @@ function Notes.timeText(n, off)
   return ns.CalendarLogic.clock(((n.at + (tonumber(off) or 0)) % 86400) / 60)
 end
 
--- A checksum of every note (and deletion), so two copies can tell whether they have the same notes.
+------------------------------------------------------------------------------------------- what counts
+local function utcToday() return math.floor(ns.Diary.now() / ns.CalendarLogic.DAY) end
+
+-- The one rule for what counts (is checksummed, sent, taken and kept): a note whose date is inside the keep window,
+-- at most KEEP_DAYS UTC days before today's UTC day (the same day on every copy, wherever it is); a reply whose note
+-- counts. today: a UTC day number (default: today).
+local function inWindow(dateKey, today)
+  local day = dayOfKey(dateKey)
+  return day ~= nil and day >= (today or utcToday()) - KEEP_DAYS
+end
+
+-- The notes and replies that count: two sets { [key] = true }.
+local function counted()
+  local today = utcToday()
+  local notes, replies = {}, {}
+  for key, n in pairs(store() or {}) do
+    if type(n) == "table" and inWindow(n.d, today) then notes[key] = true end
+  end
+  for key, r in pairs(Notes.replyStore() or {}) do
+    if type(r) == "table" and notes[r.n] then replies[key] = true end
+  end
+  return notes, replies
+end
+
+-- A checksum of every note (and deletion) and reply that counts, so two copies can tell whether they have the same.
+-- (The same sum v0.1.23 makes over what it keeps.)
 function Notes.hash()
+  local notes, replies = counted()
+  local s, rs = store() or {}, Notes.replyStore() or {}
   local keys = {}
-  for key, n in pairs(store() or {}) do keys[#keys + 1] = key .. ":" .. tostring(n.u or 0) end
-  for key, r in pairs(Notes.replyStore() or {}) do keys[#keys + 1] = key .. ":" .. tostring(r.u or 0) end
+  for key in pairs(notes) do keys[#keys + 1] = key .. ":" .. tostring(s[key].u or 0) end
+  for key in pairs(replies) do keys[#keys + 1] = key .. ":" .. tostring(rs[key].u or 0) end
   if #keys == 0 then return nil end
   table.sort(keys)
-  local h = 0
-  local s = table.concat(keys, ";")
-  for i = 1, #s do h = (h * 31 + s:byte(i)) % 2147483647 end
-  return tostring(h)
+  return tostring(ns.Util.hashNumber(table.concat(keys, ";")))
 end
 
 ---------------------------------------------------------------------------------------------------- sending
@@ -241,8 +265,9 @@ function Notes.sendAll(to)
   local t = ns.now()
   if sentAllAt[to] and t - sentAllAt[to] < SEND_ALL_GAP then return end
   sentAllAt[to] = t
-  for key in pairs(store() or {}) do send(key, to) end
-  for key in pairs(Notes.replyStore() or {}) do Notes.sendReply(key, to) end
+  local notes, replies = counted()
+  for key in pairs(notes) do send(key, to) end -- (notes first: a reply is only taken once its note is there)
+  for key in pairs(replies) do Notes.sendReply(key, to) end
 end
 
 ------------------------------------------------------------------------------------------- replies to notes
@@ -374,6 +399,8 @@ function Notes.receiveReply(sender, f)
   if not u then return end
   local s = Notes.replyStore()
   if not s then return end
+  local note = (store() or {})[noteKey]
+  if type(note) ~= "table" or not inWindow(note.d) then return end -- its note is missing or no longer counts
   local old = s[f.r]
   if old and (old.u or 0) >= u then return end
   local deleted = f.x == "1"
@@ -425,7 +452,7 @@ function Notes.receive(sender, f)
   if type(f) ~= "table" then return end
   local key = f.k
   if type(key) ~= "string" or not key:match("^%w+%-%d+$") or #key > MAX_KEY then return end
-  if not dayOfKey(f.d) then return end
+  if not inWindow(f.d) then return end -- (also: a real date)
   local u = tonumber(f.u)
   if not u then return end
   local s = store()
@@ -444,21 +471,12 @@ function Notes.receive(sender, f)
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
--- Old notes and old deletion markers go away (with their replies); never more than MAX_NOTES.
-function Notes.prune(today)
-  local s = store()
-  if not s then return end
-  local rs = Notes.replyStore() or {}
-  local count = 0
-  for key, n in pairs(s) do
-    local day = type(n) == "table" and dayOfKey(n.d)
-    if not day or day < today - KEEP_DAYS then s[key] = nil else count = count + 1 end
-  end
-  if count > MAX_NOTES then
-    local list = {}
-    for key, n in pairs(s) do list[#list + 1] = { key = key, day = dayOfKey(n.d) } end
-    table.sort(list, function(a, b) return a.day < b.day end)
-    for i = 1, count - MAX_NOTES do s[list[i].key] = nil end
-  end
-  for key, r in pairs(rs) do if type(r) ~= "table" or not s[r.n] then rs[key] = nil end end
+-- What no longer counts goes away: old notes and old deletion markers, replies whose note is gone or old.
+-- At login and once a day while logged in.
+function Notes.prune()
+  local s, rs = store(), Notes.replyStore()
+  if not s or not rs then return end
+  local notes, replies = counted()
+  for key in pairs(s) do if not notes[key] then s[key] = nil end end
+  for key in pairs(rs) do if not replies[key] then rs[key] = nil end end
 end

@@ -26,6 +26,7 @@ local ALTS_BYTES = 150     -- a diary's alts list, as it travels (so the codec n
 
 local enabled = false
 local ticker, digestTicker
+local notesPrunedDay -- the UTC day the notes were last pruned (once a day while logged in)
 local sentAt, askedAt = {}, {}
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
@@ -285,6 +286,12 @@ ns.Comm.on("CALR", function(s, f)
 end)
 
 ------------------------------------------------------------------------------------------------- module
+local function pruneNotes()
+  if not ns.Notes or notesPrunedDay == today() then return end
+  notesPrunedDay = today()
+  ns.Notes.prune()
+end
+
 local function tick()
   Diary.mark()
   ns.Bus.fire("CALENDAR_CHANGED")
@@ -294,12 +301,14 @@ local function onEnable()
   enabled = true
   store()
   Diary.prune()
-  if ns.Notes then ns.Notes.prune(Diary.localToday()) end
+  notesPrunedDay = nil
+  pruneNotes()
   Diary.mark()
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
     digestTicker = C_Timer.NewTicker(DIGEST_EVERY, function() ns.Log.safe(FEATURE, function()
       Diary.prune()
+      pruneNotes()
       Diary.sendDigest()
     end) end)
     C_Timer.After(FIRST_DIGEST, function() ns.Log.safe(FEATURE, Diary.sendDigest) end)

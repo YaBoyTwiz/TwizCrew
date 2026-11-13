@@ -114,18 +114,30 @@ function Util.isSecret(v)
   return yes == true
 end
 
-local function scrub(...)
-  local n = select("#", ...)
+-- v, or nil when it is secret (always exactly one result).
+local function keep(v)
+  if Util.isSecret(v) then return nil end
+  return v
+end
+
+-- The n results with every secret one replaced by nil. Up to six without building a table (game calls return
+-- few results and some run every frame); more go through one.
+local function scrub(n, ...)
+  if n == 0 then return end
+  local a, b, c, d, e, f = ...
+  if n == 1 then return keep(a) end
+  if n == 2 then return keep(a), keep(b) end
+  if n == 3 then return keep(a), keep(b), keep(c) end
+  if n == 4 then return keep(a), keep(b), keep(c), keep(d) end
+  if n == 5 then return keep(a), keep(b), keep(c), keep(d), keep(e) end
+  if n == 6 then return keep(a), keep(b), keep(c), keep(d), keep(e), keep(f) end
   local out = {}
-  for i = 1, n do
-    local v = select(i, ...)
-    if not Util.isSecret(v) then out[i] = v end
-  end
+  for i = 1, n do out[i] = keep((select(i, ...))) end
   return unpack(out, 1, n)
 end
 
 local function scrubIfOk(ok, ...)
-  if ok then return scrub(...) end
+  if ok then return scrub(select("#", ...), ...) end
 end
 
 -- Calls fn(...) safely and returns its results with every secret one replaced by nil. Returns nothing when fn is not

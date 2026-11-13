@@ -270,6 +270,9 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Tests are stricter:** the stub knows the real method names of each kind of frame (a typo fails), refuses sends
   over 255 bytes, and its secret values raise on use. Still open: most older tests run as if the custom channel
   delivered messages (78 of them count that extra send); new tests run in the game's real state.
+- **Known gap with v0.1.23 friends:** when a friend still on v0.1.23 resets their stats, updated copies keep showing
+  their old numbers (all-time until each number counts up again, session until the next session). It ends when they
+  update. Also: older tests still run as if the custom channel delivered messages.
 - **Left alone on purpose (Claude's calls):** the channel join / retry code in `Comm/Transport.lua` (the one path
   proven in game), the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
   (still a full snapshot, so v0.1.23 copies keep showing all-time numbers).

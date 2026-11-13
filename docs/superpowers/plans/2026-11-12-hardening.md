@@ -245,3 +245,74 @@
 - [ ] **Step 4:** Split `CalendarUI.lua` the same way.
 - [ ] **Step 5:** No file in the three families is over about 800 lines; the test count equals Step 1's; `git diff --stat` shows no test assertions weakened or removed. While moving, replace the repeated tooltip `OnEnter` / `OnLeave` block and the repeated icon-button block with `ns.Widgets.tip(frame, titleFn, linesFn)` and `ns.Widgets.iconButton(parent, icon, size, onClick, tip)` in `UI/Widgets.lua` **only where the replaced code is identical in behaviour**; leave any variant that differs as it is.
 - [ ] **Step 6:** `tests/run.sh` → `ALL PASSED`. Commit: `refactor: split Panel, CalendarUI and the test tools by responsibility (no behaviour change)`.
+
+---
+
+## Execution record (2026-11-12)
+
+Copied from the run's ledger when the work finished: rulings Claude took, and small review findings left for later.
+
+```
+## Rulings
+- Ruling: start executing without waiting for the owner to read the plan — the owner said "do everything else ... just do it" — costs rework if a task is unwanted.
+- Ruling: branch `hardening` in place instead of a separate worktree — uncommitted minimize work had to come along and the game links to this folder — costs: master checkout is on the branch until merged.
+- Ruling: send rate stays 2/s (review suggested 1/s, unverified on Forever; the saved log shows no throttling) — retry cap + "send failed" counter added instead — costs stalls if Forever does throttle.
+- Ruling: Transport's channel state machine is not rewritten (only dead channel copies dropped) — it is the one path proven in game — costs: fragile code stays.
+- Ruling: periodic STATS stays a full snapshot (session-only sends would blank all-time numbers on v0.1.23 copies) — bulk lane instead — costs queue time.
+- Ruling: dungeon artwork fallback and UnitInParty-in-raid left as they are (need the game to judge).
+
+## Tasks
+Task 1: complete (commits 49d2759..4584361, review clean)
+Task 1: minor (deferred): stub whitelists doubtful animation names (SetOrderBy, SetLoopState, SetChange; SetTarget twice)
+Task 1: minor (deferred): global-write lint treats a file luac cannot compile as clean; A.ok runs per output line
+Task 1: minor (deferred): a real method of another widget type reads as nil instead of raising "<Type> has no method" (deliberate: addon probes f.SetBackdrop)
+Task 2: complete (commits 4584361..2c34699, review clean)
+Task 2: minor (deferred): detectors' game reads now swallow raises silently (a removed API reads as unknown with no log line)
+Task 2: minor (deferred): thin wrappers over isSecret remain in Layer.lua / FeedLogic.lua; plain(InCombatLockdown) is unneeded
+Task 2: note: commit trailers name the implementing model (harness reminder), not Fable; accepted
+Task 3: complete (commits 2c34699..62c3273, review clean)
+Task 3: minor (deferred -> carried into Task 5 dispatch): Log.safe's game branch (xpcall with arguments) is not exercised by any test
+Task 3: minor (deferred): Problems section's 5 lines include traceback lines; repeats "Recent errors"
+Task 4: fix round 1/5 (1 addressed, 0 open — reset moved the panel when scale had changed; commits 3f2bcd9..127319c)
+Task 4: complete (commits 62c3273..127319c, review clean)
+Task 4: minor (deferred): scale rescale relies on resetAll's alphabetical hook order (position before scale); needs a comment or an order-free guard
+Task 4: minor (deferred): Popups FADE_STEP 0.05 is a new value and allocates a closure per step
+Task 5: complete (commits 127319c..94c232a, review clean)
+Task 5: minor (deferred): Layer flush timer pending at onDisable still recomputes after the module is off
+Task 5: minor (deferred): Detectors.guard's game-xpcall branch has no test (Log's has)
+Task 5: minor (deferred): run-off speed rule uses tick time while the position may be up to 3 s old
+Task 6: complete (commits 94c232a..76af4da, review clean)
+Task 6: Ruling: SEND_RETRY_MAX 10 equals the 10 s join grace (plan defect) — raise to 20 in Task 7's dispatch — costs a refused item blocking its lane up to 20 s.
+Task 6: Ruling: tests/run.lua forces echoCount >= 1 so the suite runs in a state the game is never in — Task 7's dispatch flips the default to the real function with opt-in for tests needing channel copies — costs test churn.
+Task 6: minor (deferred): a dropped item returns true from the sender, so the queue counts it as sent and onSent fires
+Task 6: minor (deferred): lk test uses a combat tag, not zn
+Task 7: item (a) done in 73d34fb (SEND_RETRY_MAX 20).
+Task 7: Ruling: flipping the suite to the real echoCount breaks 78 send-counting tests — deferred, not done in this plan; new comm tests from Task 7 on run in the real state — costs: most older tests still count a channel copy the game never sends.
+Task 7: Ruling: plan Step 4 (PING only to online names in fallback) could deadlock two friends who marked each other offline — PING goes to everyone like HELLO — costs one whisper per offline name per minute in fallback mode.
+Task 7: fix round 1/5 (1 addressed, 0 open — fallback PING deadlock; commits fbcc661..b574f8a)
+Task 7: complete (commits 76af4da..b574f8a, review clean)
+Task 7: minor (deferred): Util.checksum duplicates the hash loop in Calendar/Notes.lua
+Task 7: minor (deferred): digest could mismatch steadily if the codec ever cuts a value (needs ~240 escaped bytes; bounded at one SREQ per 2 min)
+Task 7: minor (deferred): Crew.forget leaves the name in Version, Session, calendar and trophy data
+Task 8: Ruling: receivers never prune stats keys; a reset travels as explicit zeros from the sender until its session id changes (memory only) — the implementer's receive-side pruning reopened the zero window — costs: a reset followed at once by /reload may not reach friends until the next session.
+Task 8: Ruling: "older snapshot loses" applies only for 600 s after the stored one arrived (STATS_OLDER_WINDOW) — a wrong PC clock must not lock a friend out — costs: a snapshot delayed more than 10 min can overwrite newer numbers until the next one.
+Task 8: fix round 1/5 (3 addressed, 0 open — pruning, clock lockout, steal test coverage; commits 2b32b6f..b21d1bc)
+Task 8: complete (commits b574f8a..b21d1bc, review clean)
+Task 8: minor (deferred): trophy records for ~18+ people may be re-asked once per digest; a checksum clash (1 in 10^6) never converges
+Task 8: minor (deferred): TrophyLogic checksum can throw on broken saved winners (caught by Log.safe)
+Task 8: note for the game: sendAtLogout sends every piece at once outside the queue; whether Forever drops part of that burst is unknown
+Task 9: Ruling: caps rank by creation time then key (plan said key order = oldest-first, which was wrong: keys start with the author id) — oldest kept, newest refused — costs: at 300 notes / 30 comments new ones are refused until old ones expire.
+Task 9: Ruling: a v0.1.23 friend whose notes checksum keeps differing is fully swapped with at most once an hour per unchanged checksum (plan did not foresee mixed crews) — costs: a real difference with an old copy may take up to an hour to repair when its checksum did not change.
+Task 9: Ruling: accepted the implementer's addition that prune keeps my own in-window notes/comments past a cap (stored, not counted) — costs: I may see a note of mine friends do not.
+Task 9: fix round 1/5 (3 addressed, 0 open — cap order, mixed-crew swaps, numbers on receive; commits c5ffda4..e6551cc)
+Task 9: complete (commits b21d1bc..e6551cc, review clean)
+Task 9: minor (deferred): no test that the hourly ask/answer repeats after 3600 s; Notes.prune has no nil guard on myId
+Task 9: minor (deferred): edit-box cut handler duplicated (CalendarUI, NoteView); counted() built 2-3 times per digest; repliesFor shows uncounted comments
+Task 9: minor (deferred): diary ask about once per pair per day when a digest crosses UTC midnight
+Task 10: complete (commits e6551cc..fcd5f38, review clean)
+Task 10: minor (deferred): load-time copies of P.* functions need a one-line warning comment on the shared block; Panel.lua is 773 lines
+Task 10: note: optional Widgets.tip / iconButton helpers skipped (the repeated blocks differ)
+Final review: ready after fixes; fix wave 40af0cc..d346a19 (8 items), re-review clean.
+Final: Ruling: a v0.1.23 friend's stats reset does not reach updated copies — accepted and documented (ends when friends update) — costs stale numbers for that friend until then.
+Final: left as is: future-dated note deletion markers never expire; STATS snapshots can stack in the bulk lane; onSreq's per-sender table is never pruned.
+```

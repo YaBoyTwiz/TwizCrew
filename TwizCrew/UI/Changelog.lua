@@ -14,6 +14,20 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.1.24", date = "2026-11-12", lines = {
+    "Minimize the panel: the minus button on the title bar, or /tc mini. Only the title bar stays.",
+    "  While minimized, the bar shows who came online, died or levelled up, and the panel peeks open for a moment.",
+    "Recent activity: a list of what happened (/tc recent, or the red number on the bar).",
+    "Deaths, level-ups, congrats and mocks are also written in your chat (only you see them). Switch: Settings.",
+    "Forget a friend: right-click an offline row, or /tc forget Name. Names not seen for 60 days drop off.",
+    "A friend's wrong tag (a missed \"dead\", for example) now fixes itself within about two minutes.",
+    "Hall of Shame: numbers no longer flash to zero, so no more false \"stole the crown\" pop-ups.",
+    "Calendar: notes and comments are about 100 letters at most, and syncing them takes far fewer messages.",
+    "A part of the addon that breaks comes back by itself after 5 minutes. /tc report lists problems.",
+    "Fixed: dragging the awards show, the scale setting moving the panel, \"running off\" for a dead friend.",
+    "Many safety fixes for dungeons and fights.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.1.23", date = "2026-11-09", lines = {
     "Spell helpers removed (window, /tc spells, new-spell pop-up). Macros it made stay in /macro; delete them there",
     "  if you don't want them. The rank updater now updates every spell on your bars.",

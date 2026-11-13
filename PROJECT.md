@@ -20,8 +20,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
   game, riskiest first: `docs/TESTING.md`.
 - **Stats board built too (2026-11-05):** Hall of Shame tab, live roasts, `/tc awards`. Not tested in game, not
   published. Details in the "Stats board" section below.
-- **Minimize, activity feed, peek and chat lines built (2026-11-11, owner left the design to Claude):** not tested in
-  game, not published; the release needs `RESTART_SINCE`. Details in the section "Minimize, activity feed, peek and
+- **v0.1.24 released (2026-11-12, owner: "release it"):** the minimize / activity feed work and the hardening pass
+  (sections below). Released without an in-game try; `RESTART_SINCE` is 0.1.24. The "not tested in game, not
+  published" notes in those two sections are from before the release: the in-game checks in `docs/TESTING.md` are
+  still open.
+- **Minimize, activity feed, peek and chat lines built (2026-11-11, owner left the design to Claude):** released in
+  v0.1.24, not tested in game. Details in the section "Minimize, activity feed, peek and
   chat lines" below.
 - **"Tell crew to update" button built (2026-11-05):** not tested in game, not published. Details in its section
   below.

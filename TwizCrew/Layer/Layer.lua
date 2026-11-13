@@ -10,6 +10,7 @@ local relations = {} -- name -> last computed relation
 local memory = {}    -- name -> { verdict, hiddenSince, scope } kept by LayerKey.judge
 local ticker
 local dirty, waiting = false, false -- events ask for a recompute; one runs at most every LAYER_RECOMPUTE_GAP s
+local running = false -- the module is on (a flush timer still pending after onDisable then does nothing)
 
 -- A value the game hides from addons (a "secret") counts as not known.
 local function readable(v)
@@ -136,7 +137,7 @@ end
 
 local function flush()
   waiting = false
-  if dirty then recompute() end
+  if running and dirty then recompute() end
 end
 
 -- Events (nameplates come in dozens, friends' updates in bursts) only mark the look as out of date; a short timer
@@ -174,6 +175,7 @@ ns.Modules.register({
   id = "layer", name = "Layer tracker", tier = "module",
   info = "Tells you when a friend is on a different layer (they are close by on the map but the game hides them).",
   onEnable = function()
+    running = true
     for _, event in ipairs({ "MEMBER_UPDATED", "SELF_UPDATED" }) do ns.Bus.on(FEATURE, event, request) end
     for _, event in ipairs({ "MEMBER_ONLINE", "MEMBER_OFFLINE" }) do ns.Bus.on(FEATURE, event, recompute) end
     local grouped = call(IsInGroup) and true or false
@@ -194,6 +196,7 @@ ns.Modules.register({
     recompute()
   end,
   onDisable = function()
+    running, dirty = false, false
     if ticker then ticker:Cancel(); ticker = nil end
     relations, memory = {}, {}
   end,

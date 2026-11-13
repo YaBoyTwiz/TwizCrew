@@ -390,23 +390,28 @@ return {
     fallback_broadcast_whispers_online_roster_names_but_hello_and_ping_go_to_everyone = function(ns, A, W)
       ns.Comm.echoCount = W.realEchoCount
       local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Frostie" }
+      db.crew.extra = { "Frostie", "pewpew" } -- Frostie is also an offline roster row; Pewpew is not on the roster
       local online = { Ginkan = true }
+      local rows = { Ginkan = true, Lurabe = true, Frostie = true }
       ns.roster = { names = function() return { "Ginkan", "Lurabe", "Frostie" } end,
-        get = function(_, n) return { online = online[n] == true } end }
+        get = function(_, n) return rows[n] and { online = online[n] == true } or nil end }
       W:advance(16)
       local function targets(msgType)
         local out = {}
         for _, d in ipairs(ns.Transport.destinations(msgType)) do out[#out + 1] = d.target end
         return out
       end
-      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" }, "online roster names and the extra names")
-      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" }, "a HELLO tries everyone")
-      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie" }, "so does a PING: it is how offline friends are found")
+      A.eq(targets("UPDATE"), { "Ginkan", "pewpew" }, "online roster names and the extra names that are not offline rows")
+      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie", "pewpew" }, "a HELLO tries everyone")
+      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie", "pewpew" }, "so does a PING: it is how offline friends are found")
       ns.Modules.set("comm", "transport", "whisper")
-      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" })
-      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie" })
-      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie" })
+      A.eq(targets("UPDATE"), { "Ginkan", "pewpew" })
+      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie", "pewpew" })
+      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie", "pewpew" })
+      db.crew.extra = { "frostie" }
+      A.eq(targets("UPDATE"), { "Ginkan" }, "the roster row is found whatever the case of the extra name")
+      online.Frostie = true
+      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" }, "online again: whispered")
     end,
     modes_pick_their_destinations = function(ns, A, W)
       local db = boot(ns, W)

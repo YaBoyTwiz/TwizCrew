@@ -492,6 +492,7 @@ return {
       A.eq(m.layerKey, nil); A.eq(m.inInstance, false); A.eq(m.tags, nil)
       A.eq(m.class, "MAGE"); A.eq(m.zone, "Elwynn Forest")
       A.ok(upd[1] and upd[1][2].layerKey, "the cleared layer key is reported as a change")
+      A.eq(m.raw, { ver = "0.1.0", rs = "" }, "what they sent before the HELLO no longer counts for the digest")
     end,
     bye_forgets_layer_key = function(ns, A, W)
       start(ns, W)
@@ -593,6 +594,60 @@ return {
       A.eq(W.sent[from + 1].chatType, "WHISPER")
       noErrors(ns, A)
     end,
+    stranger_ping_in_group_chat_mode_gets_hello_and_state_for_everyone = function(ns, A, W)
+      start(ns, W)
+      W.state.inGroup = true
+      ns.Modules.set("comm", "transport", "group")
+      local n = #W.sent
+      receive(ns, W, "Stranger", "PING", {})
+      W:advance(3)
+      local msgs = sentSince(ns, W, n)
+      A.ok(#msgs >= 2, "something was sent")
+      A.eq(msgs[1].type, "HELLO"); A.eq(msgs[2].type, "STATE")
+      for i = n + 1, #W.sent do A.eq(W.sent[i].chatType, "PARTY", "to the group: this mode cannot whisper") end
+      noErrors(ns, A)
+    end,
+    sreq_is_counted_only_when_it_could_be_sent = function(ns, A, W)
+      ns.Comm.echoCount = W.realEchoCount
+      start(ns, W)
+      W.state.inGroup = true
+      ns.Modules.set("comm", "transport", "group")
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
+      local from = #W.sent
+      receive(ns, W, "Frostie", "PING", { h = "1" })
+      receive(ns, W, "Frostie", "PING", { h = "2" })
+      W:advance(5)
+      A.eq(ns.Log.counts()["sent SREQ"], nil, "group chat cannot whisper: nothing sent, nothing counted")
+      for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ") end
+      ns.Modules.set("comm", "transport", "whisper")
+      receive(ns, W, "Frostie", "PING", { h = "3" })
+      receive(ns, W, "Frostie", "PING", { h = "4" })
+      W:advance(5)
+      A.eq(ns.Log.counts()["sent SREQ"], 1, "no waiting left over from the try that sent nothing")
+    end,
+    sreq_is_answered_at_most_once_per_ping_interval = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
+      local function statesSince(from)
+        local k = 0
+        for _, m in ipairs(sentSince(ns, W, from)) do if m.type == "STATE" then k = k + 1 end end
+        return k
+      end
+      local from = #W.sent
+      receive(ns, W, "Frostie", "SREQ", {})
+      W:advance(5)
+      local one = statesSince(from)
+      A.ok(one >= 1, "the first SREQ is answered")
+      receive(ns, W, "Frostie", "SREQ", { x = "1" })
+      receive(ns, W, "Ginkan", "SREQ", {})
+      W:advance(5)
+      A.eq(statesSince(from), one * 2, "Frostie's second ask is ignored, Ginkan's is answered")
+      W:advance(ns.Config.PING_INTERVAL)
+      receive(ns, W, "Frostie", "SREQ", { x = "2" })
+      W:advance(5)
+      A.eq(statesSince(from), one * 3, "answered again after a ping interval")
+      noErrors(ns, A)
+    end,
     forget_removes_an_offline_friend_everywhere = function(ns, A, W)
       local db = start(ns, W)
       db.crew.extra = { "Frostie", "Other" }
@@ -627,9 +682,11 @@ return {
         Undated = { name = "Undated", level = 5 } }
       db.stats.crew.Old = { sid = "s", s = {}, a = {} }
       db.stats.crew.Recent = { sid = "s", s = {}, a = {} }
+      db.crew.extra = { "old", "Recent", "Other" }
       ns.Comm.start()
       ns.Crew.start()
       A.eq(ns.roster:names(), { "Recent", "Undated" })
+      A.eq(db.crew.extra, { "Recent", "Other" }, "a pruned friend leaves the extra names too (any case)")
       A.eq(db.roster.Old, nil)
       A.eq(db.stats.crew.Old, nil)
       A.ok(db.stats.crew.Recent)

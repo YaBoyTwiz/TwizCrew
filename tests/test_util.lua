@@ -64,6 +64,15 @@ return {
       A.eq(select("#", ns.Util.plain(f, 1, nil, 3)), 3, "a nil in the middle survives")
       A.eq(select(3, ns.Util.plain(f, 1, nil, 3)), 3)
     end,
+    plain_handles_more_than_six_results = function(ns, A, W)
+      local hidden = W.secret()
+      local function f() return 1, nil, hidden, 4, 5, 6, hidden, 8, nil end
+      A.eq(select("#", ns.Util.plain(f)), 9)
+      A.eq({ ns.Util.plain(f) }, { 1, nil, nil, 4, 5, 6, nil, 8 })
+      A.eq(select("#", ns.Util.plain(function() return 1, 2, 3, 4, 5, hidden end)), 6)
+      A.eq(select(6, ns.Util.plain(function() return 1, 2, 3, 4, 5, hidden end)), nil)
+      A.eq(select("#", ns.Util.plain(function() end)), 0, "no results: nothing")
+    end,
     plain_replaces_secret_results_with_nil = function(ns, A, W)
       local hidden = W.secret()
       local x, y, z = ns.Util.plain(function() return 1, hidden, 3 end)

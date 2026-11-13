@@ -315,6 +315,24 @@ return {
       A.eq(rel, { { "Frostie", "unknown", "same" } })
       A.eq(ns.Layer.relationOf("Frostie"), "same")
     end,
+    no_recompute_after_the_tracker_is_switched_off = function(ns, A, W)
+      start(ns, W)
+      grouped(W, "party1", "Frostie", true)
+      receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
+      W:advance(1)
+      A.eq(ns.Layer.relationOf("Frostie"), "same")
+      local looks = 0
+      local judge = ns.LayerKey.judge -- only the layer tracker's recompute calls it
+      ns.LayerKey.judge = function(...) looks = looks + 1; return judge(...) end
+      W:fire("NAME_PLATE_UNIT_ADDED", "nameplate1") -- asks for a recompute in a moment...
+      ns.Modules.setEnabled("layer", false)       -- ...but the tracker is switched off first
+      local rel = record(ns, "LAYER_RELATION")
+      W:advance(1)
+      A.eq(looks, 0, "no recompute once off")
+      A.eq(rel, {})
+      A.eq(ns.Layer.relationOf("Frostie"), "unknown")
+      A.eq(ns.Log.errors(10), {})
+    end,
     layer_module_is_registered = function(ns, A)
       local d = ns.Modules.get("layer")
       A.ok(d); A.eq(d.name, "Layer tracker"); A.eq(d.tier, "module")

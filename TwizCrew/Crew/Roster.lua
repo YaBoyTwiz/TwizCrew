@@ -200,6 +200,8 @@ function Roster:clearSession(name)
   if m.layerKey ~= nil then m.layerKey = nil; changes.layerKey = true end
   if m.inInstance then m.inInstance = false; changes.inInstance = true end
   if m.tags ~= nil then m.tags = nil; changes.tags = true end
+  -- The sender always sends tg and ins: without them here the digest differs and a SREQ fetches them again.
+  if m.raw then m.raw.tg, m.raw.ins = nil, nil end
   m.levelSeen, m.xpTrack = nil, nil -- no level-up from a level heard before, a new XP pace
   return changes
 end

@@ -32,6 +32,8 @@ local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_U
 P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD, P.LINE = ROW_WIDTH, HEADER_HEIGHT, PAD, LINE
 
 -- Shared state (set and read by more than one of the panel's files)
+-- Functions and constants on P are set once, at load, in this file; later files may copy them into locals; state
+-- that changes is always read as P.x.
 P.root = nil           -- the panel frame (made in build)
 P.countText = nil      -- the count in the header ("2 of 3 online"), or the notice while minimized
 P.header, P.headerShort = "", nil -- the count's text; the short count ("1/3") when room is tight
@@ -236,6 +238,8 @@ end
 local appliedScale -- the scale the panel has now, to keep its corner still when the scale changes
 
 -- Only the player changing the scale setting moves the saved corner (a reset brings its own position).
+-- Reset relies on Modules.resetAll running the setting hooks in alphabetical key order: "position" is put back
+-- before "scale" comes here.
 local function rescaleSavedPosition()
   local newScale = clamp(setting("scale"), 0.5, 2, 1)
   local oldScale = appliedScale

@@ -13,6 +13,7 @@ local lastStrangerHello  -- time of the last HELLO sent because of any stranger'
 local started = false
 local mismatches = {}  -- name -> PINGs in a row whose digest differed from what we hold
 local sreqAt = {}      -- name -> time we last asked for their state
+local answeredAt = {}  -- name -> time we last answered their SREQ
 
 local function noteVersion(name, ver, rs)
   if ns.Version and ns.Version.seen and type(ver) == "string" then ns.Version.seen(name, ver, rs) end
@@ -47,7 +48,11 @@ local helloFrom = {} -- who said hello since the last reply
 local function onHello(sender, fields)
   -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
   -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
-  onState(sender, { ver = fields.ver, rs = fields.rs or "" }, ns.roster:clearSession(sender))
+  local cleared = ns.roster:clearSession(sender)
+  -- A STATE always follows a HELLO: what they sent before no longer counts for the digest.
+  local m = ns.roster:get(sender)
+  if m then m.raw = {} end
+  onState(sender, { ver = fields.ver, rs = fields.rs or "" }, cleared)
   local listed = false
   for _, n in ipairs(helloFrom) do if n == sender then listed = true end end
   if not listed then helloFrom[#helloFrom + 1] = sender end
@@ -61,7 +66,7 @@ local function onHello(sender, fields)
       -- Only to whoever said hello: everyone else already has our state. Several hellos at once get one reply each.
       local to = helloFrom
       helloFrom = {}
-      local state = ns.Self.fullState()
+      local state = ns.Self.stateFor()
       local all = #to == 0
       for _, name in ipairs(to) do
         if not ns.Comm.sendTo(name, "STATE", state) then all = true end
@@ -79,7 +84,12 @@ local function onPing(sender, fields)
     if nameOk and globalOk then
       helloAt[sender] = now
       lastStrangerHello = now
-      if ns.Comm.sendTo(sender, "HELLO", hello()) then ns.Comm.sendTo(sender, "STATE", ns.Self.fullState()) end
+      if ns.Comm.sendTo(sender, "HELLO", hello()) then
+        ns.Comm.sendTo(sender, "STATE", ns.Self.stateFor())
+      else -- this mode cannot whisper (hidden channel, group or guild chat): answer everyone
+        ns.Comm.send("HELLO", hello())
+        ns.Comm.send("STATE", ns.Self.fullState())
+      end
     end
     return
   end
@@ -96,13 +106,18 @@ local function onPing(sender, fields)
   local now = ns.now()
   if sreqAt[sender] and now - sreqAt[sender] < ns.Config.PING_INTERVAL then return end
   mismatches[sender] = nil
-  sreqAt[sender] = now
-  ns.Log.count("sent SREQ")
-  ns.Comm.sendTo(sender, "SREQ", {})
+  if ns.Comm.sendTo(sender, "SREQ", {}) then
+    sreqAt[sender] = now
+    ns.Log.count("sent SREQ")
+  end
 end
 
+-- Answered at most once per ping interval for each asker.
 local function onSreq(sender)
-  ns.Comm.sendTo(sender, "STATE", ns.Self.fullState())
+  local now = ns.now()
+  if answeredAt[sender] and now - answeredAt[sender] < ns.Config.PING_INTERVAL then return end
+  answeredAt[sender] = now
+  ns.Comm.sendTo(sender, "STATE", ns.Self.stateFor())
 end
 
 local function onBye(sender)
@@ -144,6 +159,18 @@ local function tidyNames(list)
   end
 end
 
+-- Takes `name` out of the extra names from the settings (any case). Returns true when it was there.
+local function dropExtra(name)
+  local crew = ns.db and ns.db.crew
+  if not crew or type(crew.extra) ~= "table" then return false end
+  local low, removed = name:lower(), false
+  for i = #crew.extra, 1, -1 do
+    local n = crew.extra[i]
+    if type(n) == "string" and n:lower() == low then table.remove(crew.extra, i); removed = true end
+  end
+  return removed
+end
+
 -- Takes a friend who is offline out of the roster, the extra names, the saved numbers and the whisper memory.
 -- Returns true when something was removed; otherwise false and a short reason (never you, never an online friend).
 function Crew.forget(name)
@@ -158,20 +185,13 @@ function Crew.forget(name)
     local m = ns.roster:get(row)
     if m and m.online then return false, "online right now" end
   end
-  local crew = ns.db and ns.db.crew
-  local removed = false
-  if crew and type(crew.extra) == "table" then
-    for i = #crew.extra, 1, -1 do
-      local n = crew.extra[i]
-      if type(n) == "string" and n:lower() == low then table.remove(crew.extra, i); removed = true end
-    end
-  end
+  local removed = dropExtra(name)
   if row and ns.roster:forget(row) then removed = true end
   if not removed then return false, "not on your list" end
   local who = row or name
   if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
   ns.Transport.forget(who)
-  mismatches[who], sreqAt[who], helloAt[who] = nil, nil, nil
+  mismatches[who], sreqAt[who], helloAt[who], answeredAt[who] = nil, nil, nil, nil
   ns.Bus.fire("MEMBER_REMOVED", who)
   return true
 end
@@ -184,6 +204,7 @@ function Crew.start()
   ns.roster = ns.Roster.new(ns.db.roster)
   for _, name in ipairs(ns.roster.pruned) do
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
+    dropExtra(name)
   end
   ns.Comm.on("HELLO", onHello)
   ns.Comm.on("STATE", onState)
@@ -205,7 +226,7 @@ function Crew.start()
       ns.Log.safe(FEATURE, function()
         local m = ns.roster:get(name)
         if m and m.lastHeard and m.lastHeard >= foundAt then return end
-        if ns.Comm.sendTo(name, "HELLO", hello()) then ns.Comm.sendTo(name, "STATE", ns.Self.fullState()) end
+        if ns.Comm.sendTo(name, "HELLO", hello()) then ns.Comm.sendTo(name, "STATE", ns.Self.stateFor()) end
       end)
     end)
   end)

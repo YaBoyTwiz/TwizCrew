@@ -558,18 +558,23 @@ end
 
 -- Names we may whisper: channel members, then (rosterToo) roster names, and the extra names from the settings.
 -- everyone: all roster names, not only the online ones (a HELLO or PING is how offline friends are found again).
+-- With rosterToo, an extra name that is also an offline roster row is skipped too, unless everyone.
 local function whisperNames(skipGroup, rosterToo, out, everyone)
   out = out or {}
   local seen = {}
+  local offline = {} -- lower-case name -> true for offline roster rows
   for _, key in ipairs(memberKeys()) do addWhisper(out, seen, members[key].name, skipGroup) end
   if rosterToo ~= false and ns.roster and ns.roster.names then
     local ok, names = ns.Log.safe(FEATURE, function() return ns.roster:names() end)
     if ok and type(names) == "table" then for _, n in ipairs(names) do
       local m = ns.roster:get(n)
-      if everyone or (m and m.online) then addWhisper(out, seen, n, skipGroup) end
+      if everyone or (m and m.online) then addWhisper(out, seen, n, skipGroup)
+      elseif m and type(n) == "string" then offline[n:lower()] = true end
     end end
   end
-  for _, n in ipairs(crew().extra or {}) do addWhisper(out, seen, n, skipGroup) end
+  for _, n in ipairs(crew().extra or {}) do
+    if not (type(n) == "string" and offline[n:lower()]) then addWhisper(out, seen, n, skipGroup) end
+  end
   return out
 end
 

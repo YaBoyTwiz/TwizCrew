@@ -34,6 +34,8 @@ P.WIDTH, P.HEIGHT, P.PAD, P.TOP = WIDTH, HEIGHT, PAD, TOP
 local tabs
 local zoneText
 -- Shared state (set and read by more than one of the window's files)
+-- Functions and constants on P are set once, at load, in this file; later files may copy them into locals; state
+-- that changes is always read as P.x.
 P.frame = nil
 P.view = "month" -- "month" | "day" | "usual"
 P.shownYear, P.shownMonth, P.shownDay = nil, nil, nil

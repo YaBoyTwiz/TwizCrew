@@ -142,7 +142,22 @@ function Self.refresh(reason)
   C_Timer.After(ns.Config.SELF_FLUSH_DELAY, function() ns.Log.safe(FEATURE, flush) end)
 end
 
--- Everything we share; also becomes the new "last sent" (and tells the rest of the addon what changed).
+-- Everything we share, for a STATE that goes to one friend only. What changed since the last send goes to
+-- everyone first as an UPDATE (ride-along keys too: they would otherwise count as sent), so the flush that may be
+-- waiting does not find "nothing changed" while the others never heard it.
+function Self.stateFor()
+  local now = Self.gather()
+  local changes = Self.diff(last, now)
+  if next(changes) ~= nil then
+    last = now
+    ns.Comm.send("UPDATE", changes)
+    ns.Bus.fire("SELF_UPDATED", changes)
+  end
+  return copy(last)
+end
+
+-- Everything we share, for a STATE that goes to everyone; also becomes the new "last sent" (and tells the rest of
+-- the addon what changed).
 function Self.fullState()
   local now = Self.gather()
   local changes = Self.diff(last, now)

@@ -672,6 +672,64 @@ return {
       A.eq(c.twNs.Log.counts()["sent SREQ"], 1, "repaired: no more questions")
       noErrors(A, c.twNs, c.frNs)
     end,
+    -- A STATE sent to one friend (here the answer to Ginkan's SREQ) must not swallow the UPDATE the others wait for.
+    a_state_sent_to_one_friend_still_tells_everyone_else = function(_, A, _, H)
+      local c = twoFriends(H)
+      local gi, giNs = H.client("Ginkan", { class = "PRIEST", level = 8 })
+      H.link(gi)
+      login(gi)
+      for _, pair in ipairs({ { c.tw, c.twNs }, { c.fr, c.frNs }, { gi, giNs } }) do
+        pair[2].Comm.echoCount = pair[1].realEchoCount
+      end
+      H.advance(40)
+      A.ok(c.twNs.roster:get("Frostie") and c.twNs.roster:get("Frostie").online, "Twiz sees Frostie")
+      A.no(c.twNs.roster:get("Frostie").tags and c.twNs.roster:get("Frostie").tags.DEAD)
+      c.fr.state.dead = true
+      c.fr:fire("PLAYER_DEAD")                 -- her UPDATE waits for the 1 s flush...
+      giNs.Comm.sendTo("Frostie", "SREQ", {})  -- ...and Ginkan's question arrives before it
+      H.advance(0.5)
+      A.eq(c.frNs.Log.counts()["recv SREQ"], 1, "the SREQ arrived within the flush delay")
+      H.advance(3)
+      A.ok(giNs.roster:get("Frostie").tags.DEAD, "Ginkan sees DEAD")
+      A.ok(c.twNs.roster:get("Frostie").tags.DEAD, "Twiz sees DEAD too, without waiting for a PING")
+      A.eq(c.twNs.Log.counts()["sent SREQ"], nil)
+      noErrors(A, c.twNs, c.frNs, giNs)
+    end,
+    -- Twiz timed Frostie out while she was dead: her tags were cleared, so her digest must no longer match.
+    a_friend_timed_out_while_dead_shows_dead_again_after_two_pings = function(_, A, _, H)
+      local c = twoFriends(H, { wait = 35 })
+      c.twNs.Comm.echoCount = c.tw.realEchoCount
+      c.frNs.Comm.echoCount = c.fr.realEchoCount
+      c.fr.state.dead = true
+      c.fr:fire("PLAYER_DEAD")
+      H.advance(3)
+      A.ok(c.twNs.roster:get("Frostie").tags.DEAD, "Twiz sees DEAD")
+      -- every whisper Frostie sends to Twiz is lost for a while: Twiz times her out
+      local api = c.fr.env.C_ChatInfo
+      local real = api.SendAddonMessage
+      api.SendAddonMessage = function(prefix, text, chatType, target, ...)
+        local result = real(prefix, text, chatType, target, ...)
+        if chatType == "WHISPER" and tostring(target):find("^Twiz") then c.fr.sent[#c.fr.sent].result = 99 end
+        return result
+      end
+      -- she keeps touching the mouse, so no AFK tag comes along (that UPDATE would be lost too)
+      local function busy() c.frNs.Away.active(true) end
+      H.advance(200, busy) -- OFFLINE_AFTER (180 s) and the next offline tick
+      A.no(c.twNs.roster:get("Frostie").online, "timed out")
+      A.eq(c.twNs.roster:get("Frostie").tags, nil, "her tags were cleared")
+      api.SendAddonMessage = real
+      local back = false
+      H.advance(61, function() busy(); back = back or c.twNs.roster:get("Frostie").online end)
+      A.ok(back, "her PING brought her back")
+      A.eq(c.twNs.roster:get("Frostie").tags, nil, "no DEAD tag yet")
+      A.eq(c.twNs.Log.counts()["sent SREQ"], nil, "one PING is not enough")
+      H.advance(66, busy)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], 1, "the second PING makes Twiz ask, once")
+      A.ok(c.twNs.roster:get("Frostie").tags and c.twNs.roster:get("Frostie").tags.DEAD, "DEAD again")
+      H.advance(300)
+      A.eq(c.twNs.Log.counts()["sent SREQ"], 1, "repaired: no more questions")
+      noErrors(A, c.twNs, c.frNs)
+    end,
     with_no_loss_ten_pings_cause_no_state_request = function(_, A, _, H)
       local c = twoFriends(H)
       c.twNs.Comm.echoCount = c.tw.realEchoCount

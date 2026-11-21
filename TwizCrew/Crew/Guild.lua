@@ -26,6 +26,7 @@ local pendingRead = false
 local started = false
 local ticker
 local signature = ""
+local heldBy = {}            -- lower(key) -> lower(full name) of whoever was ever given that key (saved keys)
 local fallbackKeys = {}      -- used while saved data is not attached (tests, very early)
 
 local function savedKeys()
@@ -114,6 +115,16 @@ local function assignKeys(entries)
       groups[lw][#groups[lw] + 1] = e
     end
   end
+  -- a key no other full name holds (case-insensitive): the wanted one, else "Name (2)", "Name (3)"...
+  local function free(wanted, lf)
+    local key, n = wanted, 1
+    while holder[key:lower()] and holder[key:lower()] ~= lf do
+      n = n + 1
+      key = wanted .. " (" .. n .. ")"
+    end
+    holder[key:lower()] = lf
+    return key
+  end
   for _, lw in ipairs(order) do
     local group = groups[lw]
     local winner
@@ -133,11 +144,11 @@ local function assignKeys(entries)
       end
     end
     for _, e in ipairs(group) do
-      e.key = (e == winner) and e.first or e.full
+      e.key = free((e == winner) and e.first or e.full, e.full:lower())
       saved[e.full:lower()] = e.key
     end
-    if winner then holder[lw] = winner.full:lower() end
   end
+  heldBy = holder
 end
 
 local function sigOf(entries)
@@ -255,6 +266,7 @@ local function tick()
   if seenIn and (not lastRefresh or ns.now() - lastRefresh >= interval()) then Guild.refresh() end
 end
 
+-- The entries are shared tables: callers must not change them.
 function Guild.members()
   local out = {}
   for i, e in ipairs(members) do out[i] = e end
@@ -281,21 +293,22 @@ local function lookup(raw)
   local name = clean(raw)
   if not name then return nil end
   local l = name:lower()
-  local e = byFull[l]
-  if e then return e end
   local suffix = realmSuffix()
-  if suffix and #l > #suffix and l:sub(-#suffix) == suffix then
+  if suffix and #l > #suffix and l:sub(-#suffix) == suffix and not byFull[l] then
     l = l:sub(1, #l - #suffix)
-    e = byFull[l]
-    if e then return e end
   end
   if not l:find(" ", 1, true) then
-    e = byKey[l]
+    -- one word: the member who holds it as a key; else the only member with that first word, unless the word was
+    -- once given to someone else (then it is theirs, even while they are away)
+    local e = byKey[l]
+    if e then return e end
+    e = byFull[l]
     if e then return e end
     local same = byFirst[l]
-    if same and #same == 1 then return same[1] end
+    if same and #same == 1 and (not heldBy[l] or heldBy[l] == same[1].full:lower()) then return same[1] end
+    return nil
   end
-  return nil
+  return byFull[l]
 end
 
 function Guild.keyOf(raw)
@@ -336,12 +349,12 @@ function Guild.isMe(raw)
   local name = clean(raw)
   if not name then return false end
   local e = myEntry()
-  local mine = e and e.full or clean(plain(UnitName, "player"))
+  local mine = clean(plain(UnitName, "player")) or (e and e.full)
   if not mine then return false end
   local l, m = name:lower(), mine:lower()
   local suffix = realmSuffix()
   if suffix and #l > #suffix and l:sub(-#suffix) == suffix then l = l:sub(1, #l - #suffix) end
-  if e and l:find(" ", 1, true) then return l == m end
+  if l:find(" ", 1, true) and m:find(" ", 1, true) then return l == m end
   return firstWord(l) == firstWord(m)
 end
 

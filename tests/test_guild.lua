@@ -262,6 +262,56 @@ return {
       W.state.guild.members = members
     end,
 
+    a_first_word_given_to_someone_who_left_is_not_taken_by_a_namesake = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Abel") })
+      A.eq(ns.Guild.keyOf("Chaos"), "Chaos", "Abel is first A-Z and holds the word")
+      -- make Deathbringr the holder, then he leaves
+      local db = ns.db
+      db.guild.keys = { twiz = "Twiz", ["chaos deathbringr"] = "Chaos", ["chaos abel"] = "Chaos Abel" }
+      W.state.guild.members = { member("Twiz"), member("Chaos Abel") }
+      W:advance(11)
+      W.env.C_GuildInfo.GuildRoster()
+      A.eq(ns.Guild.get("Chaos Abel").full, "Chaos Abel")
+      A.eq(ns.Guild.keyOf("Chaos"), nil)
+      A.no(ns.Guild.isMember("Chaos"))
+      A.eq(ns.Guild.keyOf("Chaos Abel"), "Chaos Abel")
+    end,
+
+    a_one_word_member_never_shares_a_key = function(ns, A, W)
+      local db = boot(ns, W, "Twiz Other", { member("Twiz Other"), member("Ginkan Pebble") })
+      A.eq(ns.Guild.myKey(), "Twiz")
+      table.insert(W.state.guild.members, member("Twiz"))
+      W:advance(11)
+      W.env.C_GuildInfo.GuildRoster()
+      local a, b = ns.Guild.get("Twiz"), ns.Guild.get("Twiz (2)")
+      A.eq(a.full, "Twiz Other"); A.eq(b.full, "Twiz")
+      A.eq(db.guild.keys["twiz"], "Twiz (2)", "saved, so stable")
+      A.eq(#ns.Guild.members(), 3)
+      A.eq(ns.Guild.keyOf("Twiz"), "Twiz", "the word belongs to the holder")
+      A.ok(not ns.Guild.get("Twiz (2)").key:find(" (test)", 1, true))
+    end,
+
+    keys_that_differ_only_in_case_do_not_collide = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "G", members = { member("Twiz"), member("Zed Zed") } }
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.guild.keys["zed zed"] = "twiz"
+      ns.db = db; ns.Modules.attach(db)
+      ns.Guild.start()
+      A.eq(ns.Guild.get("twiz").full, "Zed Zed")
+      A.eq(ns.Guild.get("Twiz (2)").full, "Twiz")
+    end,
+
+    isMe_uses_my_own_full_name_before_the_list_loads = function(ns, A, W)
+      W.state.player = "Chaos Deathbringr"
+      local db = ns.DB.init(nil, ns.Modules.list())
+      ns.db = db; ns.Modules.attach(db)
+      A.no(ns.Guild.loaded())
+      A.no(ns.Guild.isMe("Chaos Other"))
+      A.ok(ns.Guild.isMe("Chaos Deathbringr"))
+      A.ok(ns.Guild.isMe("Chaos"))
+    end,
+
     the_module_is_registered = function(ns, A)
       local d = ns.Modules.get("guild")
       A.ok(d); A.eq(d.tier, "essential"); A.eq(d.name, "Guild list")

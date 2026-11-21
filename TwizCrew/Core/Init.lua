@@ -76,6 +76,7 @@ ns.Config = {
   -- copies within ASK_COLLECT s (SREQ: SREQ_COLLECT s) get one guild answer. A digest mismatch waits a random 0 to
   -- SREQ_JITTER s before asking. An answer to a HELLO waits at most HELLO_LIST_WAIT s for the guild list to know them.
   RESPONDERS = 3, RESPONDER_JITTER = 10, ASK_COLLECT = 3, SREQ_COLLECT = 10, SREQ_JITTER = 10, HELLO_LIST_WAIT = 10,
+  ASK_ANSWER_GAP = 60, -- s: at most one guild answer per asked thing (a diary, a record, my state) in this time
 }
 
 function ns.now() return GetTime() end

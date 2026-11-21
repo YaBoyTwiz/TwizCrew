@@ -58,9 +58,13 @@ local function onGuildState(nowInGuild)
 end
 
 -- v0.1.24 kept a channel name, a crew code and whisper names (db.crew) and a connection choice: none of it means
--- anything now. Only the channel name stays (as db.crew.channel) until the game says we are out of that channel:
--- it is left a few seconds after every login and loading screen until then.
-local OLD_CHANNEL_CHECK = 2 -- s after leaving: is it gone?
+-- anything now. Only the channel name stays (db.crew.channel) as a marker until we know we are out of that channel:
+-- it is tried a few seconds after every login and loading screen. The marker goes when we saw the channel joined, left
+-- it and then read it gone, or when it read gone on OLD_CHANNEL_ZERO_LOGINS separate logins (the game may rejoin saved
+-- channels later than our first look, so one "not there" proves nothing).
+local OLD_CHANNEL_CHECK = 2        -- s after leaving: is it gone?
+local OLD_CHANNEL_ZERO_LOGINS = 3
+local zeroCounted = false          -- this login's "not there" was counted
 
 local function oldChannel()
   local crew = ns.db and ns.db.crew
@@ -72,28 +76,43 @@ local function forgetOldChannel()
   local db = ns.db
   if type(db) ~= "table" then return end
   local old = oldChannel()
-  db.crew = old and { channel = old } or nil
+  local zeros = old and tonumber(db.crew.zeroLogins) or nil
+  db.crew = old and { channel = old, zeroLogins = zeros } or nil
   local comm = type(db.modules) == "table" and db.modules.comm
   if type(comm) == "table" and type(comm.settings) == "table" then comm.settings.transport = nil end
 end
 
-local function oldChannelGone()
-  local old = oldChannel()
-  if not old then return end
-  if type(GetChannelName) == "function" and tonumber(plain(GetChannelName, old)) ~= 0 then return end
+local function channelIndex(old)
+  if type(GetChannelName) ~= "function" then return nil end
+  return tonumber(plain(GetChannelName, old))
+end
+
+local function dropMarker(old, why)
   ns.db.crew = nil
-  ns.Log.add("info", "the old crew channel %s is gone", ns.Util.safeText(old))
+  ns.Log.add("info", "the old crew channel %s is gone (%s)", ns.Util.safeText(old), why)
 end
 
 local function leaveOldChannel()
   local old = oldChannel()
   if not old then return end
-  local index = type(GetChannelName) == "function" and tonumber(plain(GetChannelName, old)) or nil
-  if index == 0 then oldChannelGone(); return end
+  local index = channelIndex(old)
+  if index == 0 then
+    if zeroCounted then return end
+    zeroCounted = true
+    local crew = ns.db.crew
+    crew.zeroLogins = (tonumber(crew.zeroLogins) or 0) + 1
+    if crew.zeroLogins >= OLD_CHANNEL_ZERO_LOGINS then dropMarker(old, "not there on three logins") end
+    return
+  end
   if type(LeaveChannelByName) ~= "function" then return end
   LeaveChannelByName(old)
   ns.Log.add("info", "left the old crew channel %s", ns.Util.safeText(old))
-  C_Timer.After(OLD_CHANNEL_CHECK, function() ns.Log.safe(FEATURE, oldChannelGone) end)
+  if index == nil then dropMarker(old, "this game cannot tell more"); return end
+  C_Timer.After(OLD_CHANNEL_CHECK, function()
+    ns.Log.safe(FEATURE, function()
+      if oldChannel() == old and channelIndex(old) == 0 then dropMarker(old, "left") end
+    end)
+  end)
 end
 
 local leaveDue = false
@@ -207,6 +226,6 @@ end
 -- mode: "guild" (sending to the guild) or "none" (not in a guild, or not known yet: pending = true).
 function Transport.status()
   local guild = plain(GetGuildInfo, "player")
-  return { mode = sending() and "guild" or "none", pending = not settled,
+  return { mode = sending() and "guild" or "none", pending = not settled, waitingList = waitingList,
     guild = type(guild) == "string" and guild or nil, lockdown = Transport.lockdown(), lastResult = lastResult }
 end

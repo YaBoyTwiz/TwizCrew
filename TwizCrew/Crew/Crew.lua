@@ -100,13 +100,15 @@ local function onHello(sender, fields)
       helloWaiting[sender] = true
       if ns.Guild then ns.Guild.refresh() end
       C_Timer.After(ns.Config.HELLO_LIST_WAIT, function()
-        if helloWaiting[sender] then helloWaiting[sender], replyPending[sender] = nil, nil end -- given up
+        ns.Log.safe(FEATURE, function()
+          if helloWaiting[sender] then helloWaiting[sender], replyPending[sender] = nil, nil end -- given up
+        end)
       end)
     end)
   end)
 end
 
--- A new guild list: answer the HELLOs that were waiting for it.
+-- A new guild list (or the transport ready at last): answer the HELLOs that were waiting for it.
 local function onGuildList()
   local names = {}
   for name in pairs(helloWaiting) do names[#names + 1] = name end
@@ -194,10 +196,26 @@ end
 -- guild list gave out (a value in ns.db.guild.keys) is never touched, and no other key loses a later word.
 local function tidyNames(list)
   if type(list) ~= "table" then return end
-  local given = {}
+  local given = {}        -- keys the guild list gave out
+  local givenOther = {}   -- lower(key) -> true when a saved full name other than mine holds it
+  local uname = ns.Util.plain(UnitName, "player")
+  uname = type(uname) == "string" and uname:lower() or nil
+  local first = ns.playerName():lower()
   local saved = ns.db and type(ns.db.guild) == "table" and ns.db.guild.keys
   if type(saved) == "table" then
-    for _, key in pairs(saved) do if type(key) == "string" then given[key] = true end end
+    for full, key in pairs(saved) do
+      if type(key) == "string" then
+        given[key] = true
+        if type(full) == "string" and full ~= uname then givenOther[key:lower()] = true end
+      end
+    end
+  end
+  -- "that is me" here, before the guild list can tell: exactly my game name, or a single word that is my first word
+  -- and nobody else's saved key. A key of several words is never mine on a first-word match.
+  local function mine(key)
+    local l = key:lower()
+    if l == uname then return true end
+    return not l:find(" ", 1, true) and l == first and not givenOther[l]
   end
   local keys = {}
   for key in pairs(list) do keys[#keys + 1] = key end
@@ -205,7 +223,7 @@ local function tidyNames(list)
   for _, key in ipairs(keys) do
     if type(key) == "string" and not given[key] then
       local base = key:match("^([^%-]+)%-.+$") or key -- "Twiz-Realm" -> "Twiz"
-      if ns.isMe(base) then
+      if mine(base) then
         list[key] = nil
         ns.Log.add("info", "removed %s from the crew list (that is you)", ns.Util.safeText(key))
       elseif base ~= key then
@@ -238,6 +256,7 @@ function Crew.forget(name)
   local who = row
   if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
   mismatches[who], sreqAt[who], helloAt[who], answeredAt[who], stateAt[who] = nil, nil, nil, nil, nil
+  sreqDue[who], helloWaiting[who], replyPending[who] = nil, nil, nil
   ns.Bus.fire("MEMBER_REMOVED", who)
   return true
 end
@@ -265,6 +284,7 @@ function Crew.start()
   -- The game said whether we are in a guild, or we joined or left one. The login HELLO was kept for that moment (it
   -- goes out, or is dropped outside a guild); joining a guild later needs a new one.
   ns.Bus.on(FEATURE, "TRANSPORT_READY", function()
+    onGuildList()
     local inGuild = ns.Transport.status().mode == "guild"
     if inGuild then saidHelloAt = ns.now() end
     if helloKept then helloKept = false; return end

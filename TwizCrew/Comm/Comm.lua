@@ -93,8 +93,10 @@ end
 
 -- Asks for the same data of mine from several copies at once (every copy asks a newcomer for the newcomer's diary,
 -- say): asks with the same key within `window` seconds (ASK_COLLECT by default) are answered once, when the window
--- ends: answer(name) for a whisper when one copy asked, answer(nil) for one guild message when more did.
+-- ends: answer(name) for a whisper when one copy asked, answer(nil) for one guild message when more did. A key gets
+-- at most one guild answer per ASK_ANSWER_GAP seconds: more asks inside the gap are ignored (they had it).
 local asks = {} -- key -> { first = name, n = askers, by = { name = true } }
+local guildAnsweredAt = {} -- key -> ns.now() of its last guild answer
 function Comm.answerAsk(key, asker, answer, window)
   local a = asks[key]
   if a then
@@ -105,7 +107,13 @@ function Comm.answerAsk(key, asker, answer, window)
   asks[key] = a
   C_Timer.After(window or ns.Config.ASK_COLLECT, function()
     asks[key] = nil
-    ns.Log.safe(FEATURE, answer, a.n == 1 and a.first or nil)
+    local to = a.n == 1 and a.first or nil
+    if not to then
+      local at = guildAnsweredAt[key]
+      if at and ns.now() - at < ns.Config.ASK_ANSWER_GAP then return end
+      guildAnsweredAt[key] = ns.now()
+    end
+    ns.Log.safe(FEATURE, answer, to)
   end)
 end
 

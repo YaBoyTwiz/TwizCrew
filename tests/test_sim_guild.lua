@@ -144,6 +144,64 @@ return {
       noErrors(A, tw2Ns)
     end,
 
+    old_channel_marker_goes_after_three_logins_without_it = function(_, A, _, H)
+      local db = { crew = { channel = "TwizCrewHQ", password = "goldshire" } }
+      local last
+      for n = 1, 3 do
+        if last then unlink(H, last) end
+        local tw = H.client("Twiz")
+        tw.env.TwizCrewDB = db
+        H.link(tw)
+        login(tw)
+        H.advance(10)
+        tw:fire("PLAYER_ENTERING_WORLD") -- a loading screen in the same login counts once
+        H.advance(10)
+        db = tw.env.TwizCrewDB
+        A.eq(tw.leaves, {}, "never there: never left")
+        if n < 3 then A.eq(db.crew, { channel = "TwizCrewHQ", zeroLogins = n }, "login " .. n) end
+        last = tw
+      end
+      A.eq(db.crew, nil, "not there on three logins: forgotten")
+    end,
+
+    -- An ask goes to one friend or nowhere: while we cannot whisper yet (the guild list is late) a digest's asks wait,
+    -- they never become a guild CALQ that every copy would answer.
+    asks_wait_for_the_list_and_never_go_to_the_guild = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      local fr, frNs = H.client("Frostie", { class = "MAGE" })
+      H.link(tw, fr)
+      login(tw)
+      login(fr)
+      H.advance(60)
+      tw:fire("PLAYER_LOGOUT")
+      H.advance(1)
+      unlink(H, tw)
+      -- meanwhile Frostie learns about someone's evening that Twiz has never seen
+      local today = math.floor(frNs.Diary.now() / 86400)
+      local L = frNs.CalendarLogic
+      frNs.Diary.people().zzzz9999 = { name = "Ghost", class = "PRIEST", alts = {},
+        days = { [today] = { on = L.set(L.set(L.EMPTY, 3), 4) } } }
+      local tw2, tw2Ns = H.client("Twiz", { guildListDelay = 8 })
+      tw2.env.TwizCrewDB = twNs.db
+      H.link(tw2)
+      login(tw2)
+      H.advance(1)
+      A.ok(tw2Ns.Transport.isPending(), "still waiting for the list")
+      frNs.Diary.sendDigest() -- Frostie's digest to everyone arrives now
+      H.advance(1)
+      for _, m in ipairs(tw2.sent) do A.no(m.text:find("^%d+%^CALQ%^") and m.chatType == "GUILD", "a guild CALQ") end
+      H.advance(30)
+      local asked = false
+      for _, m in ipairs(tw2.sent) do
+        if m.text:find("^%d+%^CALQ%^") then
+          A.eq(m.chatType, "WHISPER"); A.eq(m.target, "Frostie"); asked = true
+        end
+      end
+      A.ok(asked, "asked Frostie once the list was in")
+      A.ok(tw2Ns.Diary.people().zzzz9999, "the diary arrived")
+      noErrors(A, tw2Ns, frNs)
+    end,
+
     -- I am "Chaos Deathbringr"; another member is "Chaos Other". Their data never mixes with mine.
     namesake_of_me_is_heard = function(_, A, _, H)
       local me, meNs = H.client("Chaos Deathbringr")

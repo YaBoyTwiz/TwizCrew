@@ -100,7 +100,7 @@ return {
       A.contains(W.sent[1].text, "HELLO")
       A.contains(W.sent[2].text, "PING")
       A.eq(W.sent[1].chatType, "GUILD")
-      A.eq(ns.Transport.status(), { mode = "guild", pending = false, guild = "Late Guild", lockdown = false,
+      A.eq(ns.Transport.status(), { mode = "guild", pending = false, waitingList = false, guild = "Late Guild", lockdown = false,
         lastResult = 0 })
     end,
     not_in_a_guild_settles_after_the_grace_and_sends_nothing = function(ns, A, W)
@@ -151,6 +151,18 @@ return {
       A.eq(#answers, 2)
       W:advance(2)
       A.eq(answers[3], "Frostie", "a window of its own")
+      -- two copies asking for x again and again: one guild answer per ASK_ANSWER_GAP
+      for _ = 1, 5 do
+        ns.Comm.answerAsk("x", "Frostie", answer)
+        ns.Comm.answerAsk("x", "Ginkan", answer)
+        W:advance(ns.Config.ASK_COLLECT + 1)
+      end
+      A.eq(#answers, 3, "inside the gap of the first guild answer: ignored")
+      W:advance(ns.Config.ASK_ANSWER_GAP)
+      ns.Comm.answerAsk("x", "Frostie", answer)
+      ns.Comm.answerAsk("x", "Ginkan", answer)
+      W:advance(ns.Config.ASK_COLLECT + 1)
+      A.eq(answers[4], "guild", "answered again after the gap")
     end,
     whispers_go_to_guild_members_only_by_full_name = function(ns, A, W)
       boot(ns, W)
@@ -603,6 +615,19 @@ return {
       A.eq(W.leaves, { "TwizCrewHQ", "TwizCrewHQ" })
       A.eq(db.crew, nil, "gone now")
       A.ok(logHas(ns, "the old crew channel TwizCrewHQ is gone"))
+    end,
+    -- The game may rejoin saved channels later than our first look: "not there" once is not "gone".
+    old_channel_joined_after_the_first_check_is_still_left = function(ns, A, W)
+      local db = boot(ns, W, nil, { crew = { channel = "TwizCrewHQ", password = "goldshire" } })
+      W:advance(10)
+      A.eq(W.leaves, {}, "not there yet: nothing to leave")
+      A.eq(db.crew, { channel = "TwizCrewHQ", zeroLogins = 1 }, "the marker stays")
+      W.state.channels.TwizCrewHQ = 6 -- the game rejoins it now
+      W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(10)
+      A.eq(W.leaves, { "TwizCrewHQ" })
+      A.eq(db.crew, nil, "seen, left, gone")
+      A.ok(logHas(ns, "the old crew channel TwizCrewHQ is gone (left)"))
     end,
     nothing_left_of_the_channel = function(ns, A, W)
       boot(ns, W)

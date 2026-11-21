@@ -408,6 +408,23 @@ return {
       local ids = {}
       for _, m in ipairs(sent(ns, W, "CALP", from)) do ids[m.fields.i] = true end
       A.ok(ids[ns.Diary.myId()] and ids.aaaa1111 and ids.bbbb2222, "all three diaries")
+      -- one ask carries at most ASK_BATCH (20) ids: the rest is ignored
+      local many = {}
+      for n = 1, 25 do -- (25 ids still fit one message)
+        local id = string.format("m%07d", n)
+        people[id] = { name = id, class = "MAGE", alts = {}, days = { [today] = { on = maskOf(L, 1, 3) } } }
+        many[n] = id
+      end
+      from = #W.sent
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Ginkan", "CALQ", { i = many[1], j = table.concat(many, ",", 2) })
+      W:advance(ns.Config.ASK_COLLECT + 30)
+      local answered = {}
+      for _, m in ipairs(sent(ns, W, "CALP", from)) do answered[m.fields.i] = true end
+      local n = 0
+      for _ in pairs(answered) do n = n + 1 end
+      local list = {} for id in pairs(answered) do list[#list + 1] = id end table.sort(list)
+      A.eq(n, ns.Diary.ASK_BATCH, "20 diaries for an ask of 25: " .. table.concat(list, " "))
     end,
     ------------------------------------------------------------------------------------------------ notes
     notes_add_delete_and_swap = function(ns, A, W)

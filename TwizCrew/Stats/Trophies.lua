@@ -168,6 +168,7 @@ function Trophies.digest()
   return nil
 end
 
+-- Data (a record) to one friend, or to everyone when they cannot be whispered: nobody answers data.
 local function sendTo(name, msgType, fields, opts)
   if name then
     if not ns.Comm.sendTo(name, msgType, fields, opts) then ns.Comm.send(msgType, fields, opts) end
@@ -179,7 +180,9 @@ end
 function Trophies.sendDigest(to)
   if not on() then return end
   local fields = Trophies.digest()
-  if fields then sendTo(to, "TRD", fields, to and { bulk = true } or nil) end -- to one friend: waits behind chat
+  if not fields then return end
+  -- to one friend: waits behind chat; never to the guild instead (every copy would compare and ask)
+  if to then ns.Comm.sendTo(to, "TRD", fields, { bulk = true }) else ns.Comm.send("TRD", fields) end
 end
 
 local function known(sender)
@@ -205,10 +208,11 @@ local function onDigest(sender, f)
       and sum.n == #have.people then
       want = sum.sum < L.checksum(have)
     end
-    if want and (not askedAt[sid] or ns.now() - askedAt[sid] >= ASK_GAP) then
+    -- an ask is only ever whispered (every copy would answer a guild one); not whisperable yet: the next digest asks
+    local due = want and (not askedAt[sid] or ns.now() - askedAt[sid] >= ASK_GAP)
+    if due and ns.Comm.sendTo(sender, "TRQ", { s = sid }) then
       askedAt[sid] = ns.now()
       asks = asks + 1
-      sendTo(sender, "TRQ", { s = sid })
     end
   end
 end

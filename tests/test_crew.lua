@@ -334,6 +334,24 @@ return {
       A.eq(db.roster["Ginkan"], nil)
       noErrors(ns, A)
     end,
+    -- The game may give only my first word (UnitName "Chaos") while the guild list has not loaded: a saved row of a
+    -- namesake ("Chaos Other") is not me, even with no saved guild key for it.
+    a_namesakes_row_is_not_my_ghost_when_the_game_gives_one_word = function(ns, A, W)
+      W.state.player = "Chaos"
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.roster["Chaos Other"] = { name = "Chaos Other", level = 20 }
+      db.roster["Chaos-Realm"] = { name = "Chaos-Realm", level = 6 }
+      db.stats.crew["Chaos Other"] = { sid = "s", s = {}, a = {} }
+      ns.db = db
+      ns.Modules.attach(db)
+      ns.Comm.start()
+      ns.Crew.start()
+      A.eq(db.roster["Chaos Other"].level, 20, "several words: never mine on a first-word match")
+      A.ok(db.stats.crew["Chaos Other"])
+      A.eq(db.roster["Chaos-Realm"], nil, "my own ghost (my name with a realm) goes")
+      A.eq(db.roster["Chaos"], nil)
+      noErrors(ns, A)
+    end,
     hello_gets_jittered_state_reply = function(ns, A, W)
       start(ns, W)
       local n = #W.sent
@@ -416,6 +434,59 @@ return {
       W:fire("GUILD_ROSTER_UPDATE")
       W:advance(2)
       for i = n + 1, #W.sent do A.no(W.sent[i].target == "Oldnew Late", "given up after 10 s") end
+    end,
+    -- A HELLO heard while our sends still wait for the guild list is answered once the list is in.
+    hello_heard_while_waiting_for_the_list_is_answered_when_it_comes = function(ns, A, W)
+      W.state.guildListDelay = 4
+      local db = ns.DB.init(nil, ns.Modules.list())
+      ns.db = db
+      ns.Modules.attach(db)
+      ns.Comm.start()
+      ns.Crew.start()
+      ns.Self.start()
+      ns.Guild.start()
+      W:fire("PLAYER_ENTERING_WORLD")
+      A.ok(ns.Transport.isPending())
+      receive(ns, W, "Frostie", "HELLO", { ver = "0.1.0" })
+      local from = #W.sent
+      W:advance(12)
+      local to
+      for i = from + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "STATE" and W.sent[i].chatType == "WHISPER" then to = W.sent[i].target end
+      end
+      A.eq(to, "Frostie", "answered by whisper once the list was in")
+    end,
+    a_waiting_hello_answer_is_retried_when_the_transport_is_ready = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Newbie", "HELLO", { ver = "0.1.0" })
+      W:advance(6) -- waiting: nobody can whisper Newbie yet
+      local real = ns.Transport.destinationFor
+      ns.Transport.destinationFor = function(name)
+        if name == "Newbie" then return { chatType = "WHISPER", target = "Newbie Joined" } end
+        return real(name)
+      end
+      local from = #W.sent
+      ns.Bus.fire("TRANSPORT_READY")
+      W:advance(1)
+      ns.Transport.destinationFor = real
+      local to
+      for i = from + 1, #W.sent do
+        if ns.Codec.decode(W.sent[i].text).type == "STATE" and W.sent[i].chatType == "WHISPER" then to = W.sent[i].target end
+      end
+      A.eq(to, "Newbie Joined")
+    end,
+    forgetting_someone_drops_an_answer_still_waiting_for_them = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Newbie", "HELLO", { ver = "0.1.0" })
+      W:advance(6) -- the answer now waits for a guild list that has Newbie
+      receive(ns, W, "Newbie", "BYE", {})
+      A.ok(ns.Crew.forget("Newbie"))
+      local from = #W.sent
+      table.insert(W.state.guild.members, { name = "Newbie Joined", online = true })
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      for i = from + 1, #W.sent do A.no(W.sent[i].target == "Newbie Joined", "nothing for a forgotten friend") end
     end,
     pings_from_many_strangers_get_one_hello = function(ns, A, W)
       start(ns, W)

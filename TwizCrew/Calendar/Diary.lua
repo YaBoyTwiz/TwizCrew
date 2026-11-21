@@ -188,6 +188,7 @@ local function digestFields()
   return f
 end
 
+-- Data (a diary) to one friend, or to everyone when they cannot be whispered: nobody answers data.
 local function sendTo(name, msgType, fields, opts)
   if name then
     if not ns.Comm.sendTo(name, msgType, fields, opts) then ns.Comm.send(msgType, fields, opts) end
@@ -200,7 +201,8 @@ function Diary.sendDigest(to)
   if not enabled then return end
   local f = digestFields()
   if next(f) == nil then return end
-  sendTo(to, "CALD", f, to and { bulk = true } or nil) -- to one friend: a swap, it waits behind chat
+  -- to one friend: a swap, it waits behind chat; never to the guild instead (every copy would compare and ask)
+  if to then ns.Comm.sendTo(to, "CALD", f, { bulk = true }) else ns.Comm.send("CALD", f) end
 end
 
 local function personFields(id)
@@ -281,12 +283,35 @@ local function slotsSent(f, days)
 end
 
 -- Asks one friend for these diaries: several ids in one CALQ (i = the first, j = the rest; older copies answer i).
+-- An ask is only ever whispered: a CALQ to the whole guild would be answered by every copy. When the friend cannot be
+-- whispered yet (still waiting for the guild list), the ids wait in waitingAsks and go at the next TRANSPORT_READY or
+-- GUILD_LIST.
 local ASK_BATCH = 20 -- ids per CALQ (8 letters and a comma each: well inside one message)
+Diary.ASK_BATCH = ASK_BATCH
+local waitingAsks = {} -- friend -> { id = true }
 local function askFor(sender, ids)
   for first = 1, #ids, ASK_BATCH do
     local rest = {}
     for n = first + 1, math.min(#ids, first + ASK_BATCH - 1) do rest[#rest + 1] = ids[n] end
-    sendTo(sender, "CALQ", { i = ids[first], j = #rest > 0 and table.concat(rest, ",") or nil }, { bulk = true })
+    local f = { i = ids[first], j = #rest > 0 and table.concat(rest, ",") or nil }
+    if not ns.Comm.sendTo(sender, "CALQ", f, { bulk = true }) then
+      local w = waitingAsks[sender] or {}
+      waitingAsks[sender] = w
+      for n = first, math.min(#ids, first + ASK_BATCH - 1) do w[ids[n]] = true end
+    end
+  end
+end
+
+local function askWaiting()
+  local senders = {}
+  for name in pairs(waitingAsks) do senders[#senders + 1] = name end
+  table.sort(senders)
+  for _, name in ipairs(senders) do
+    local ids = {}
+    for id in pairs(waitingAsks[name]) do ids[#ids + 1] = id end
+    table.sort(ids)
+    waitingAsks[name] = nil
+    askFor(name, ids)
   end
 end
 
@@ -328,9 +353,10 @@ local function onDigest(sender, f)
   local ask = ns.Notes and ns.Notes.askFor(f, sender)
   if ask then
     if not askedAt["notes"] or ns.now() - askedAt["notes"] >= ASK_GAP then
-      askedAt["notes"] = ns.now()
-      sendTo(sender, "CALQ", ask, { bulk = true })
-      ns.Notes.asked(sender, f, ask)
+      if ns.Comm.sendTo(sender, "CALQ", ask, { bulk = true }) then -- (never to the guild: every copy would answer)
+        askedAt["notes"] = ns.now()
+        ns.Notes.asked(sender, f, ask)
+      end
     end
   end
   local wanted = {}
@@ -368,7 +394,12 @@ local function onAsk(sender, f)
   if f.n == "1" and ns.Notes then ns.Notes.sendAll(sender, f.b) end
   -- several copies asking for the same diary at once (a newcomer's own, say): one guild message answers them all
   local ids = { f.i }
-  if type(f.j) == "string" then for id in f.j:gmatch("[^,]+") do ids[#ids + 1] = id end end
+  if type(f.j) == "string" then
+    for id in f.j:gmatch("[^,]+") do
+      if #ids >= ASK_BATCH then break end -- no more than an ask of ours carries; the rest is ignored
+      ids[#ids + 1] = id
+    end
+  end
   for _, id in ipairs(ids) do
     if type(id) == "string" and Diary.people()[id] then
       ns.Comm.answerAsk("CALP:" .. id, sender, function(to) Diary.sendPerson(id, to) end)
@@ -433,6 +464,8 @@ local function onEnable()
     end) end)
     C_Timer.After(FIRST_DIGEST, function() ns.Log.safe(FEATURE, Diary.sendDigest) end)
   end
+  ns.Bus.on(FEATURE, "TRANSPORT_READY", askWaiting)
+  ns.Bus.on(FEATURE, "GUILD_LIST", askWaiting)
   ns.Bus.on(FEATURE, "CALENDAR_CHANGED", function()
     if ns.Calendar and ns.Calendar.isShown() then ns.Calendar.refresh() end
     if ns.NoteView and ns.NoteView.isShown() then ns.NoteView.refresh() end

@@ -31,6 +31,8 @@ local function connection()
   local text
   if s.mode == "guild" then
     text = "through the guild " .. tostring(s.guild or "(name not known yet)")
+  elseif s.waitingList then
+    text = "waiting for the guild list"
   elseif s.pending then
     text = "waiting for the game to say whether you are in a guild"
   else

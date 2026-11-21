@@ -212,6 +212,12 @@ return {
       W:advance(13)
       A.eq(ns.Report.lines()[2], "Connection: not in a guild, so nothing is sent")
       W.state.guild = { name = "Night Owls", members = { { name = "Twiz", online = true } } }
+      W.state.guildListDelay = 30
+      W:advance(2)
+      A.eq(ns.Report.lines()[2], "Connection: waiting for the guild list")
+      W.state.guildListDelay = nil
+      W:fire("GUILD_ROSTER_UPDATE")
+      W.state.guild = { name = "Night Owls", members = { { name = "Twiz", online = true } } }
       W.env.InChatMessagingLockdown = function() return true end
       W:advance(2)
       A.eq(ns.Report.lines()[2],

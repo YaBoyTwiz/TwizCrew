@@ -130,23 +130,31 @@ local function sayGoodbye()
   end
 end
 
--- Saved lists from v0.1.0 can hold "Name Realm" keys, including a ghost of ourselves: fold them into short names.
+-- Saved lists from v0.1.0 can hold "Name-Realm" keys, including a ghost of ourselves: the realm is taken off and the
+-- ghost removed. Keys are guild member keys now: a first word, a full name ("Chaos Other") or "Name (2)". A key the
+-- guild list gave out (a value in ns.db.guild.keys) is never touched, and no other key loses a later word.
 local function tidyNames(list)
   if type(list) ~= "table" then return end
+  local given = {}
+  local saved = ns.db and type(ns.db.guild) == "table" and ns.db.guild.keys
+  if type(saved) == "table" then
+    for _, key in pairs(saved) do if type(key) == "string" then given[key] = true end end
+  end
   local keys = {}
   for key in pairs(list) do keys[#keys + 1] = key end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
   for _, key in ipairs(keys) do
-    if type(key) == "string" then
-      local short = ns.shortName(key)
-      if ns.isMe(short) then
+    if type(key) == "string" and not given[key] then
+      local base = key:match("^([^%-]+)%-.+$") or key -- "Twiz-Realm" -> "Twiz"
+      if ns.isMe(base) then
         list[key] = nil
         ns.Log.add("info", "removed %s from the crew list (that is you)", ns.Util.safeText(key))
-      elseif short ~= key then
+      elseif base ~= key then
         local row = list[key]
         list[key] = nil
-        if list[short] == nil then
-          if type(row) == "table" and row.name ~= nil then row.name = short end
-          list[short] = row
+        if list[base] == nil then
+          if type(row) == "table" and row.name ~= nil then row.name = base end
+          list[base] = row
         end
       end
     end

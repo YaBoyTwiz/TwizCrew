@@ -293,17 +293,45 @@ return {
     end,
     saved_ghost_of_self_is_removed = function(ns, A, W)
       local db = ns.DB.init(nil, ns.Modules.list())
-      db.roster["Twiz Noodledog"] = { name = "Twiz Noodledog", level = 6 }
-      db.roster["Ginkan Noodledog"] = { name = "Ginkan Noodledog", level = 9 }
+      db.roster["Twiz-Noodledog"] = { name = "Twiz-Noodledog", level = 6 }
+      db.roster["Ginkan-Noodledog"] = { name = "Ginkan-Noodledog", level = 9 }
+      db.stats.crew["Ginkan-Noodledog"] = { sid = "s", s = {}, a = {} }
       ns.db = db
       ns.Modules.attach(db)
       ns.Comm.start()
       ns.Crew.start()
-      A.eq(db.roster["Twiz Noodledog"], nil)
-      A.eq(db.roster["Ginkan Noodledog"], nil)
+      A.eq(db.roster["Twiz-Noodledog"], nil)
+      A.eq(db.roster["Ginkan-Noodledog"], nil)
       A.eq(db.roster["Ginkan"].name, "Ginkan")
-      A.eq(ns.roster:get("Twiz Noodledog"), nil)
+      A.ok(db.stats.crew["Ginkan"], "the numbers moved too")
+      A.eq(ns.roster:get("Twiz-Noodledog"), nil)
       A.ok(ns.roster:get("Ginkan") ~= nil)
+      noErrors(ns, A)
+    end,
+    -- Keys are guild member keys now: full names and "Name (2)" are real keys, never shortened at load.
+    saved_full_name_keys_survive_the_load = function(ns, A, W)
+      W.state.player = "Chaos Deathbringr"
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.guild.keys = { ["chaos deathbringr"] = "Chaos", ["chaos other"] = "Chaos Other", ["frostie pebble"] = "Frostie",
+        ["frostie snow"] = "Frostie Snow", ["ginkan a"] = "Ginkan", ["ginkan b"] = "Ginkan (2)" }
+      for _, name in ipairs({ "Chaos Other", "Frostie", "Frostie Snow", "Ginkan (2)" }) do
+        db.roster[name] = { name = name, level = #name }
+        db.stats.crew[name] = { sid = "s", s = { gn = #name }, a = {} }
+      end
+      db.roster["Lurabe Moon"] = { name = "Lurabe Moon", level = 11 } -- not in the saved keys: kept as it is too
+      ns.db = db
+      ns.Modules.attach(db)
+      ns.Comm.start()
+      ns.Crew.start()
+      for _, name in ipairs({ "Chaos Other", "Frostie", "Frostie Snow", "Ginkan (2)", "Lurabe Moon" }) do
+        A.eq(db.roster[name] and db.roster[name].level, #name, name .. " keeps its row")
+        A.ok(ns.roster:get(name), name .. " is on the roster")
+      end
+      for _, name in ipairs({ "Chaos Other", "Frostie", "Frostie Snow", "Ginkan (2)" }) do
+        A.eq(db.stats.crew[name].s.gn, #name, name .. " keeps its numbers")
+      end
+      A.eq(db.roster["Chaos"], nil)
+      A.eq(db.roster["Ginkan"], nil)
       noErrors(ns, A)
     end,
     hello_gets_jittered_state_reply = function(ns, A, W)

@@ -153,6 +153,47 @@ return {
       noErrors(A, meNs, otherNs)
     end,
 
+    -- Saved data keyed by full names ("Chaos Other", "Frostie Snow") survives a reload: nothing is shortened or mixed.
+    namesakes_keep_their_saved_rows_across_a_reload = function(_, A, _, H)
+      local me, meNs = H.client("Chaos Deathbringr")
+      local others = {}
+      for _, x in ipairs({ { "Chaos Other", "MAGE", 20 }, { "Frostie Pebble", "PRIEST", 14 }, { "Frostie Snow", "ROGUE", 9 } }) do
+        local W, ns = H.client(x[1], { class = x[2], level = x[3] })
+        others[#others + 1] = { W = W, ns = ns, class = x[2], level = x[3] }
+      end
+      H.link(me, others[1].W, others[2].W, others[3].W)
+      login(me)
+      for _, o in ipairs(others) do login(o.W) end
+      H.advance(60)
+      for _, o in ipairs(others) do o.ns.Stats.send() end -- everyone's numbers, so the stats rows exist too
+      H.advance(10)
+      local keys = { "Chaos Other", "Frostie", "Frostie Snow" } -- Pebble is first A-Z: the first word is hers
+      local function check(ns, when)
+        for i, key in ipairs(keys) do
+          local row = ns.db.roster[key]
+          A.ok(row, when .. ": roster row " .. key)
+          A.eq(row.class, others[i].class, when .. ": " .. key .. "'s class")
+          A.eq(row.level, others[i].level, when .. ": " .. key .. "'s level")
+          A.ok(ns.db.stats.crew[key], when .. ": stats row " .. key)
+        end
+        A.eq(ns.db.roster["Chaos"], nil, when .. ": nothing under my key")
+      end
+      check(meNs, "first session")
+      me:fire("PLAYER_LOGOUT")
+      H.advance(1)
+      unlink(H, me)
+      local me2, me2Ns = H.client("Chaos Deathbringr")
+      me2.env.TwizCrewDB = meNs.db
+      me2:fire("ADDON_LOADED", "TwizCrew")
+      me2:fire("PLAYER_LOGIN")
+      check(me2Ns, "after the reload")
+      H.link(me2)
+      me2:fire("PLAYER_ENTERING_WORLD")
+      H.advance(30)
+      check(me2Ns, "back online")
+      noErrors(A, me2Ns, others[1].ns, others[3].ns)
+    end,
+
     whisper_from_a_member_before_the_list_loads_is_dropped_then_repaired = function(_, A, _, H)
       local tw, twNs = H.client("Twiz")
       local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12 })

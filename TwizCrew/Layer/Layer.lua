@@ -19,11 +19,9 @@ end
 
 local call = ns.Util.plain
 
--- The member key of a unit's player (see ns.keyOfName), or nil.
+-- The member key of a unit's player (ns.Guild.keyOfUnit: by GUID, then name), or nil.
 local function unitName(unit)
-  local name = call(UnitName, unit)
-  if not readable(name) or type(name) ~= "string" or name == "" then return nil end
-  return ns.keyOfName(name)
+  return ns.Guild.keyOfUnit(unit)
 end
 
 -- The group unit ("party2", "raid7") of a friend, or nil.

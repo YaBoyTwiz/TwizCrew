@@ -109,11 +109,9 @@ function MockShow.myLook()
 end
 
 ------------------------------------------------------------------------------------------------- finding them near
--- The member key of a unit's player (see ns.keyOfName), or nil.
+-- The member key of a unit's player (ns.Guild.keyOfUnit: by GUID, then name), or nil.
 local function unitName(u)
-  local n = call(UnitName, u)
-  if type(n) ~= "string" or not readable(n) or n == "" then return nil end
-  return ns.keyOfName(n)
+  return ns.Guild.keyOfUnit(u)
 end
 
 local function visible(u)

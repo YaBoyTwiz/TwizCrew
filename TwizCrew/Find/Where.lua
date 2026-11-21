@@ -154,11 +154,9 @@ function Where.inGroup()
   return yes(call(IsInGroup)) or yes(call(IsInRaid))
 end
 
--- The member key of a unit's player (see ns.keyOfName), or nil.
+-- The member key of a unit's player (ns.Guild.keyOfUnit: by GUID, then name), or nil.
 local function unitName(unit)
-  local n = call(UnitName, unit)
-  if secret(n) or type(n) ~= "string" or n == "" then return nil end
-  return ns.keyOfName(n)
+  return ns.Guild.keyOfUnit(unit)
 end
 
 -- lower-case member key -> unit token, read from the game at most every UNIT_MAP_AGE seconds (the arrows ask many

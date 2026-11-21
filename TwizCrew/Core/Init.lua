@@ -112,12 +112,11 @@ function ns.playerName()
   return ns.shortName(UnitName("player") or "Unknown")
 end
 
--- The member key for a name the game gives (a unit's name: one word or the full name, maybe with a realm): the guild
--- list's key, else the first word (not a member, or the list not loaded yet). A namesake in my party, named in full by
--- the game, maps to their own row.
+-- The member key for a name the game gives (ns.Guild.keyOfName: never a member's key for someone else); the first word
+-- without the guild list module. Prefer ns.Guild.keyOfUnit when a unit token is at hand.
 function ns.keyOfName(raw)
-  local key = ns.Guild and type(raw) == "string" and ns.Guild.keyOf(raw)
-  return key or ns.shortName(raw)
+  if ns.Guild then return ns.Guild.keyOfName(raw) end
+  return ns.shortName(raw)
 end
 
 -- My own key among member keys (the guild list's key for me, else my first word): use it wherever my name sits in a

@@ -266,6 +266,9 @@ return {
       A.eq(ns.Layer.relationOf("Frostie"), "same", "not grouped, but their nameplate is up")
     end,
     surname_in_unit_name_still_matches = function(ns, A, W)
+      for _, m in ipairs(W.state.guild.members) do -- the guild list has the full name; the key is the first word
+        if m.name == "Frostie" then m.name = "Frostie Coldsnap" end
+      end
       start(ns, W)
       grouped(W, "party1", "Frostie Coldsnap", true)
       receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
@@ -294,6 +297,29 @@ return {
       A.eq(ns.MockShow.liveUnit("Chaos"), nil)
       A.ok(ns.Where.isGroupMember("Chaos Other"))
       A.no(ns.Where.isGroupMember("Chaos"))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    -- A stranger whose name starts with a member's key is never that member.
+    stranger_in_my_party_never_gets_a_members_row = function(ns, A, W)
+      start(ns, W)
+      W.state.inGroup = true
+      grouped(W, "party1", "Chaos Random", true)
+      receive(ns, W, "Chaos", "STATE", { zn = "Elwynn Forest" })
+      W:advance(3)
+      A.eq(ns.Guild.keyOfUnit("party1"), "Chaos Random")
+      A.eq(ns.Where.unitFor("Chaos"), nil)
+      A.eq(ns.MockShow.liveUnit("Chaos"), nil)
+      A.eq(ns.Layer.relationOf("Chaos"), "unknown")
+      -- the game gives only the first word, but a GUID the list does not have: still not member Chaos
+      W.state.units.party1.name = "Chaos"
+      W.state.guids.party1 = "Player-9-9999"
+      ns.Where.forget()
+      A.eq(ns.Guild.keyOfUnit("party1"), nil)
+      A.eq(ns.Where.unitFor("Chaos"), nil)
+      -- a member's GUID wins over the name the game gives
+      W.state.guids.party1 = "Player-1-0007"
+      ns.Where.forget()
+      A.eq(ns.Guild.keyOfUnit("party1"), "Chaos")
       A.eq(ns.Log.errors(10), {})
     end,
     unknown_never_becomes_different = function(ns, A, W)

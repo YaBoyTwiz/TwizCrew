@@ -180,9 +180,13 @@ local function sigOf(entries)
   return table.concat(parts, "\2")
 end
 
+local guidsComplete = false -- every listed member has a GUID (then a unit whose GUID is not listed is no member)
+
 local function install(entries)
   members, byFull, byKey, byFirst, byGuid = entries, {}, {}, {}, {}
+  guidsComplete = #entries > 0
   for _, e in ipairs(entries) do
+    if not e.guid then guidsComplete = false end
     byFull[e.full:lower()] = e
     byKey[e.key:lower()] = e
     local lw = e.first:lower()
@@ -498,6 +502,35 @@ function Guild.resolve(raw, typed)
 end
 
 function Guild.isMember(raw) return lookup(raw) ~= nil end
+
+-- What someone who is not a member is called: their cleaned name, but never a member's key (nil then), so a
+-- stranger "Chaos" never lands on member Chaos's row.
+local function outsider(name)
+  if not name or byKey[name:lower()] then return nil end
+  return name
+end
+
+-- The member key for a name the game gives (a unit's name: one word or the full name, maybe with a realm); for
+-- someone the loaded list does not have, their cleaned name (never a member's key); before the list loads, the first
+-- word, as before the guild.
+function Guild.keyOfName(raw)
+  local key = Guild.keyOf(raw)
+  if key then return key end
+  if loaded then return outsider(clean(raw)) end
+  return type(raw) == "string" and not ns.Util.isSecret(raw) and ns.shortName(raw) or nil
+end
+
+-- The member key of the player behind a unit token ("party2", "target", "nameplate4"): by GUID first, then by name
+-- (keyOfName rules). nil when the game will not say.
+function Guild.keyOfUnit(unit)
+  local guid = plain(UnitGUID, unit)
+  if loaded and type(guid) == "string" then
+    local e = byGuid[guid]
+    if e then return e.key end
+    if guidsComplete then return outsider(clean(plain(UnitName, unit))) end -- not a member, whatever the name
+  end
+  return Guild.keyOfName(plain(UnitName, unit))
+end
 
 function Guild.fullName(key)
   local e = Guild.get(key)

@@ -128,8 +128,7 @@ function Commands.binding(what)
   elseif what == "recap" then ns.Recap.show()
   elseif what == "settings" then ns.Settings.toggle()
   elseif what == "mock" then
-    local raw = ns.Util.plain(UnitName, "target")
-    local name = type(raw) == "string" and raw ~= "" and ns.keyOfName(raw) or nil -- their member key
+    local name = ns.Guild.keyOfUnit("target") -- their member key
     local dead = ns.Util.plain(UnitIsDeadOrGhost, "target")
     if type(name) ~= "string" or not (ns.roster and ns.roster:get(name)) or not dead then
       say("target a dead crew friend to mock them.")

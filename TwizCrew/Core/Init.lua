@@ -26,17 +26,14 @@ end
 -- The one place for tunable values.
 ns.Config = {
   PREFIX = "TwizCrew", PROTOCOL = 1,
-  DEFAULT_CHANNEL = "TwizCrewHQ", DEFAULT_PASSWORD = "goldshire",
-  CHANNEL_JOIN_DELAY = 5, CHANNEL_JOIN_TIMEOUT = 10, CHANNEL_FAILS_BEFORE_FALLBACK = 3,
-  CHANNEL_JOIN_GRACE = 10, CHANNEL_RETRY_FIRST = 60, CHANNEL_RETRY_MAX = 300,
-  CHANNEL_LIST_INTERVAL = 60, CHANNEL_LIST_WAIT = 5, CREW_FOUND_DELAY = 3,
   PING_INTERVAL = 60, OFFLINE_AFTER = 180, OFFLINE_TICK = 15,
   FORGET_AFTER_DAYS = 60, -- a friend not seen for this long leaves the roster (and their saved numbers) at load
   LAYER_STALE_AFTER = 600, LAYER_CONFIRMATIONS = 2, LAYER_TICK = 30,
   -- layer compare: a friend this close (yards) whom the game hides for this long (s) is on another layer
   LAYER_NEAR = 40, LAYER_HIDDEN_FOR = 8, LAYER_LOOK_TICK = 2, LAYER_RECOMPUTE_GAP = 0.5,
   POPUP_COMBINE_WINDOW = 3, LOGIN_QUIET = 30, POPUP_MAX = 5,
-  SELF_FLUSH_DELAY = 1, HELLO_JITTER_MIN = 0.5, HELLO_JITTER_MAX = 5,
+  -- a copy answers a newcomer's HELLO after a random 0 to HELLO_REPLY_JITTER s (50 answers never land at once)
+  SELF_FLUSH_DELAY = 1, HELLO_REPLY_JITTER = 5,
   SEND_PER_SECOND = 2, SEND_BURST = 4, SEND_RETRY_MAX = 20, DEDUPE_WINDOW = 2, MAX_MESSAGE = 255,
   LOG_MAX = 500, PROBLEMS_MAX = 100, BREAK_REARM = 300, STATUS_MAX = 40, BREAK_ERRORS = 3, BREAK_WINDOW = 60, PANEL_MAX_ROWS = 8,
   -- stats board
@@ -77,9 +74,9 @@ ns.Config = {
 function ns.now() return GetTime() end
 function ns.wallclock() return time() end
 
--- A character name without its realm. WoW Forever hands us "Name Realm" (space) for party and whisper senders,
--- other clients "Name-Realm"; character names never contain a space or a hyphen, so we keep what comes before.
--- The crew is same-realm, so the short name is enough to whisper and to tell people apart.
+-- The first word of a character name, without its realm. WoW Forever names are "First Last" and senders may come as
+-- "First Last-Realm"; we keep what comes before the first space or hyphen. A guild member's key is this first word,
+-- except for namesakes (ns.Guild decides); whispers use the full name from the guild list.
 function ns.shortName(name)
   if type(name) ~= "string" then return name end
   local ok, amb = pcall(Ambiguate, name, "none")
@@ -107,6 +104,18 @@ function ns.playerName()
   return ns.shortName(UnitName("player") or "Unknown")
 end
 
+-- Is this name (a raw sender, a full name or a member key) mine? The guild list knows namesakes ("Chaos Other" is not
+-- me, "Chaos Deathbringr" is); a key is looked up as the member it belongs to. Without the guild list module, and for
+-- the test tools' fake names, the first words are compared.
 function ns.isMe(name)
-  return type(name) == "string" and ns.shortName(name):lower() == ns.playerName():lower()
+  if type(name) ~= "string" then return false end
+  local G = ns.Guild
+  if G and not ns.isTestName(name) and ns.Modules and ns.Modules.isEnabled("guild") then
+    local ok, mine = pcall(function()
+      local e = G.get(name)
+      return G.isMe(e and e.full or name)
+    end)
+    if ok then return mine == true end
+  end
+  return ns.shortName(name):lower() == ns.playerName():lower()
 end

@@ -5,7 +5,7 @@ local function tc(W, msg) W.env.SlashCmdList.TWIZCREW(msg) end
 
 local function receive(W, ns, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 

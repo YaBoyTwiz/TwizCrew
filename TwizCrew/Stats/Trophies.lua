@@ -179,7 +179,7 @@ end
 function Trophies.sendDigest(to)
   if not on() then return end
   local fields = Trophies.digest()
-  if fields then sendTo(to, "TRD", fields) end
+  if fields then sendTo(to, "TRD", fields, to and { bulk = true } or nil) end -- to one friend: waits behind chat
 end
 
 local function known(sender)
@@ -245,10 +245,14 @@ function Trophies.start()
   if started then return end
   started = true
   ns.Bus.on(FEATURE, "TROPHIES_CHANGED", function() cache = nil end)
+  local startedAt = ns.now()
   C_Timer.After(FIRST_DIGEST, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)
   C_Timer.NewTicker(DIGEST_EVERY, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)
+  -- a friend who comes online later gets our digest; those we find while logging in get the first one (one guild
+  -- message) instead
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)
     if ns.isTestName(name) then return end
+    if ns.now() - startedAt < FIRST_DIGEST then return end
     C_Timer.After(5, function() ns.Log.safe(FEATURE, Trophies.sendDigest, name) end)
   end)
 end

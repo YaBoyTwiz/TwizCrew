@@ -58,14 +58,6 @@ local function loadFiles(W, ns, files)
     setfenv(chunk, W.env)
     chunk("TwizCrew", ns)
   end
-  -- In the real game automatic mode copies a message to the channel only after the channel delivered something
-  -- (or for a PING). Most tests are about what is sent, not about that rule, so they start as if it had delivered;
-  -- a test of the rule puts its own ns.Comm.echoCount back.
-  if ns.Comm and ns.Comm.echoCount then
-    local real = ns.Comm.echoCount
-    W.realEchoCount = real -- a test of the rule itself restores it: ns.Comm.echoCount = W.realEchoCount
-    ns.Comm.echoCount = function() return math.max(1, real()) end
-  end
 end
 
 -- Each client gets its own math.random: deterministic (seeded from the name) and independent of the others.
@@ -87,21 +79,13 @@ local function clientMath(name)
   return m
 end
 
-local function channelNameOf(W, index)
-  for name, i in pairs(W.state.channels or {}) do if i == index then return name end end
-end
-
 -- Would this addon message (as recorded in from.sent) reach `to` in the real game?
 -- A message the game refused (a result other than success) reaches nobody. Like WoW Forever, an addon message to a
--- custom channel reaches nobody either (the game takes it and never delivers it), unless H.channelDelivers is set.
-local function reaches(from, to, m, channelDelivers)
+-- custom channel reaches nobody either (the game takes it and never delivers it).
+local function reaches(from, to, m)
   if m.result ~= nil and m.result ~= 0 and m.result ~= true then return false end
   local t = m.chatType
-  if t == "CHANNEL" then
-    if not channelDelivers then return false end
-    local name = channelNameOf(from, m.target)
-    return name ~= nil and to.state.channels[name] ~= nil
-  elseif t == "PARTY" or t == "RAID" then
+  if t == "PARTY" or t == "RAID" then
     return true
   elseif t == "GUILD" then
     local a, b = from.state.guild, to.state.guild
@@ -117,8 +101,14 @@ end
 local SIM_STEP = 0.1 -- seconds per simulation step
 
 -- Multi-client helper:
---   H.client(name, state) -> W, ns   a full TOC load in its own fake game (state: W.state overrides, set first)
---   H.link(W, ...)                   these clients hear each other's addon messages from now on
+--   H.client(name, state) -> W, ns   a full TOC load in its own fake game (state: W.state overrides, set first;
+--                                    state.noGuild = true: this client is in no guild, even once linked)
+--   H.link(W, ...)                   these clients hear each other's addon messages from now on. A linked client that
+--                                    is in no guild yet (and not noGuild) joins the harness guild "Crew Guild" (see
+--                                    H.joinCrewGuild), so linked clients share a guild unless a test says otherwise.
+--   H.joinCrewGuild(W)               puts W in the harness guild "Crew Guild": one member list shared by every client
+--                                    in it (W's player name, class, level, zone, online, a GUID); the others get a
+--                                    GUILD_ROSTER_UPDATE at the next delivery, like the game sends when someone joins.
 --   H.advance(seconds, onStep)       all clients' clocks move together; messages are delivered every step
 --   H.guild(name, W1, W2, ..., extras)  puts the clients in one guild called `name`: each client's W.state.guild
 --                                    gets a member entry for every client (its player name, class, level and zone as
@@ -130,51 +120,13 @@ local SIM_STEP = 0.1 -- seconds per simulation step
 --                                    client of the same guild name, the sender too; the sender name follows the sender's
 --                                    W.state.senderForm: "full" (default: "Chaos Deathbringr"), "first" ("Chaos"),
 --                                    "realm" ("Chaos Deathbringr-Realm"). Link the clients with H.link as usual.
--- The channel member list (ListChannelByName -> CHAT_MSG_CHANNEL_LIST) and join / leave notices work between linked
--- clients, as in the game.
 local function newHarness()
-  local H = { clients = {}, linked = {}, elapsed = 0, channelDelivers = false, events = {} }
+  local H = { clients = {}, linked = {}, elapsed = 0, events = {} }
+  local crewGuild = { name = "Crew Guild", members = {} }
 
-  local function isLinked(W)
-    for _, L in ipairs(H.linked) do if L == W then return true end end
-    return false
-  end
-
-  -- Channel events are fired at the next delivery, not inside the call that caused them.
+  -- Game events for a client, fired at the next delivery, not inside the call that caused them.
   local function later(W, ...)
     H.events[#H.events + 1] = { W = W, args = { ... } }
-  end
-
-  local function noticeOthers(W, event, name)
-    if not isLinked(W) then return end
-    for _, other in ipairs(H.linked) do
-      local idx = other.state.channels[name]
-      if other ~= W and idx then later(other, event, "", W.state.player, "", name, "", "", 0, idx, name) end
-    end
-  end
-
-  local function setupChannels(W)
-    W.env.ListChannelByName = function(name)
-      local idx = W.state.channels[name]
-      if not idx then return end
-      local names = {}
-      for _, other in ipairs(H.linked) do
-        if other.state.channels[name] then names[#names + 1] = other.state.player end
-      end
-      if not isLinked(W) then names = { W.state.player } end
-      later(W, "CHAT_MSG_CHANNEL_LIST", table.concat(names, ", "), "", "", name, "", "", 0, idx, name)
-    end
-    local join, leave = W.env.JoinChannelByName, W.env.LeaveChannelByName
-    W.env.JoinChannelByName = function(name, ...)
-      local was = W.state.channels[name]
-      join(name, ...)
-      if not was and W.state.channels[name] then noticeOthers(W, "CHAT_MSG_CHANNEL_JOIN", name) end
-    end
-    W.env.LeaveChannelByName = function(name, ...)
-      local was = W.state.channels[name]
-      leave(name, ...)
-      if was then noticeOthers(W, "CHAT_MSG_CHANNEL_LEAVE", name) end
-    end
   end
 
   function H.client(name, state)
@@ -183,7 +135,6 @@ local function newHarness()
     for k, v in pairs(state or {}) do W.state[k] = v end
     W.clock = W.clock + H.elapsed
     W.env.math = clientMath(name)
-    setupChannels(W)
     W.cursor = 0
     local ns = {}
     loadFiles(W, ns, tocFiles())
@@ -192,6 +143,24 @@ local function newHarness()
     if W.state.restartSince then ns.RESTART_SINCE = W.state.restartSince end
     H.clients[#H.clients + 1] = W
     return W, ns
+  end
+
+  function H.joinCrewGuild(W)
+    local st = W.state
+    st.noGuild = nil
+    local entry
+    for _, m in ipairs(crewGuild.members) do if m.name == st.player then entry = m end end
+    if entry then
+      entry.online, entry.class, entry.level, entry.zone = true, st.class, st.level, st.zone
+    else
+      crewGuild.members[#crewGuild.members + 1] = { name = st.player, class = st.class, level = st.level,
+        zone = st.zone, rank = "Member", rankIndex = 2, online = true,
+        guid = string.format("Player-1-%04d", #crewGuild.members + 1) }
+    end
+    st.guild = crewGuild
+    for _, other in ipairs(H.clients) do
+      if other ~= W and other.state.guild == crewGuild then later(other, "GUILD_ROSTER_UPDATE", false) end
+    end
   end
 
   function H.guild(name, ...)
@@ -231,6 +200,7 @@ local function newHarness()
       local known = false
       for _, L in ipairs(H.linked) do if L == W then known = true end end
       if not known then H.linked[#H.linked + 1] = W end
+      if W.state.guild == nil and not W.state.noGuild and not W.state.inGuild then H.joinCrewGuild(W) end
     end
   end
 
@@ -253,7 +223,7 @@ local function newHarness()
           elseif form == "full" then sender = from.state.player end
         end
         for _, to in ipairs(H.linked) do
-          if (to ~= from or inGuildList) and reaches(from, to, m, H.channelDelivers) then
+          if (to ~= from or inGuildList) and reaches(from, to, m) then
             to:fire("CHAT_MSG_ADDON", m.prefix, m.text, m.chatType, sender)
           end
         end
@@ -287,6 +257,18 @@ local function matches(pattern, id)
   return false
 end
 
+-- Single-client tests (the W a test gets): the player is in "Test Guild" with the friends most tests talk to, all
+-- online, so sends go out as one GUILD message and those friends' whispers are trusted. A test about having no guild
+-- sets W.state.guild = nil before anything starts.
+local DEFAULT_GUILD = { "Twiz", "Frostie", "Ginkan", "Lurabe", "Pewpew", "Holybøi", "Chaos" }
+local function defaultGuild(W)
+  local members = {}
+  for i, name in ipairs(DEFAULT_GUILD) do
+    members[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+  end
+  W.state.guild = { name = "Test Guild", members = members }
+end
+
 local pattern = arg and arg[1]
 local total, failed, failures = 0, 0, {}
 
@@ -314,6 +296,7 @@ for _, path in ipairs(testFiles) do
     if matches(pattern, id) then
       total = total + 1
       local W = Stub.new()
+      defaultGuild(W)
       local ns = {}
       local ok, err = pcall(function()
         loadFiles(W, ns, files)

@@ -11,7 +11,7 @@ end
 
 local function receive(W, sender, msgType, fields, ns)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 

@@ -5,12 +5,15 @@ local Crew = {}
 ns.Crew = Crew
 
 local FEATURE = "crew"
-local STRANGER_HELLO_GAP = 30 -- seconds between HELLOs triggered by pings from the same unknown name
+-- seconds between HELLOs triggered by pings from unknown names (and none this soon after our own HELLO)
+local STRANGER_HELLO_GAP = 30
 
-local replyPending = false -- true while a jittered STATE reply is waiting (one shared reply: a STATE is a broadcast)
+local replyPending = {}  -- name -> true while our answer to their HELLO waits (one per newcomer)
 local helloAt = {}       -- name -> time we last said HELLO because of their PING
 local lastStrangerHello  -- time of the last HELLO sent because of any stranger's PING
 local started = false
+local helloKept = false -- the login HELLO waits in Comm's kept messages for the guild answer (TRANSPORT_READY)
+local saidHelloAt       -- when our HELLO went to the guild (their answers are on the way for a few seconds)
 local mismatches = {}  -- name -> PINGs in a row whose digest differed from what we hold
 local sreqAt = {}      -- name -> time we last asked for their state
 local answeredAt = {}  -- name -> time we last answered their SREQ
@@ -43,8 +46,8 @@ local function onState(sender, fields, cleared)
   announce(sender, m, changes, events)
 end
 
-local helloFrom = {} -- who said hello since the last reply
-
+-- A newcomer gets our STATE as a whisper (only a STATE: a HELLO back would make them answer every copy in the guild),
+-- after a random 0 to HELLO_REPLY_JITTER seconds so that, with many copies online, the answers do not land at once.
 local function onHello(sender, fields)
   -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
   -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
@@ -53,25 +56,13 @@ local function onHello(sender, fields)
   local m = ns.roster:get(sender)
   if m then m.raw = {} end
   onState(sender, { ver = fields.ver, rs = fields.rs or "" }, cleared)
-  local listed = false
-  for _, n in ipairs(helloFrom) do if n == sender then listed = true end end
-  if not listed then helloFrom[#helloFrom + 1] = sender end
-  if replyPending then return end
-  replyPending = true
-  local c = ns.Config
-  local delay = c.HELLO_JITTER_MIN + math.random() * (c.HELLO_JITTER_MAX - c.HELLO_JITTER_MIN)
-  C_Timer.After(delay, function()
+  if replyPending[sender] then return end
+  replyPending[sender] = true
+  C_Timer.After(math.random() * ns.Config.HELLO_REPLY_JITTER, function()
     ns.Log.safe(FEATURE, function()
-      replyPending = false
-      -- Only to whoever said hello: everyone else already has our state. Several hellos at once get one reply each.
-      local to = helloFrom
-      helloFrom = {}
+      replyPending[sender] = nil
       local state = ns.Self.stateFor()
-      local all = #to == 0
-      for _, name in ipairs(to) do
-        if not ns.Comm.sendTo(name, "STATE", state) then all = true end
-      end
-      if all then ns.Comm.send("STATE", state) end
+      if not ns.Comm.sendTo(sender, "STATE", state) then ns.Comm.send("STATE", state) end
     end)
   end)
 end
@@ -79,16 +70,19 @@ end
 local function onPing(sender, fields)
   if not ns.roster:get(sender) then
     local now = ns.now()
+    -- we just said HELLO to the guild: their answer is probably on its way, a PING may simply have overtaken it
+    if saidHelloAt and now - saidHelloAt < STRANGER_HELLO_GAP then return end
     local nameOk = not helloAt[sender] or now - helloAt[sender] >= STRANGER_HELLO_GAP
     local globalOk = not lastStrangerHello or now - lastStrangerHello >= STRANGER_HELLO_GAP
     if nameOk and globalOk then
       helloAt[sender] = now
       lastStrangerHello = now
+      -- only to them: a HELLO to the whole guild would make every copy answer. Not whisperable yet (the guild list
+      -- has not loaded): their next PING tries again.
       if ns.Comm.sendTo(sender, "HELLO", hello()) then
         ns.Comm.sendTo(sender, "STATE", ns.Self.stateFor())
-      else -- this mode cannot whisper (hidden channel, group or guild chat): answer everyone
-        ns.Comm.send("HELLO", hello())
-        ns.Comm.send("STATE", ns.Self.fullState())
+      else
+        helloAt[sender], lastStrangerHello = nil, nil
       end
     end
     return
@@ -105,8 +99,8 @@ local function onPing(sender, fields)
   if mismatches[sender] < 2 then return end
   local now = ns.now()
   if sreqAt[sender] and now - sreqAt[sender] < ns.Config.PING_INTERVAL then return end
-  mismatches[sender] = nil
-  if ns.Comm.sendTo(sender, "SREQ", {}) then
+  if ns.Comm.sendTo(sender, "SREQ", {}) then -- not whisperable yet (guild list not loaded): the next PING asks
+    mismatches[sender] = nil
     sreqAt[sender] = now
     ns.Log.count("sent SREQ")
   end
@@ -159,19 +153,7 @@ local function tidyNames(list)
   end
 end
 
--- Takes `name` out of the extra names from the settings (any case). Returns true when it was there.
-local function dropExtra(name)
-  local crew = ns.db and ns.db.crew
-  if not crew or type(crew.extra) ~= "table" then return false end
-  local low, removed = name:lower(), false
-  for i = #crew.extra, 1, -1 do
-    local n = crew.extra[i]
-    if type(n) == "string" and n:lower() == low then table.remove(crew.extra, i); removed = true end
-  end
-  return removed
-end
-
--- Takes a friend who is offline out of the roster, the extra names, the saved numbers and the whisper memory.
+-- Takes a friend who is offline out of the roster and the saved numbers.
 -- Returns true when something was removed; otherwise false and a short reason (never you, never an online friend).
 function Crew.forget(name)
   if type(name) ~= "string" or name == "" then return false, "no name" end
@@ -185,12 +167,9 @@ function Crew.forget(name)
     local m = ns.roster:get(row)
     if m and m.online then return false, "online right now" end
   end
-  local removed = dropExtra(name)
-  if row and ns.roster:forget(row) then removed = true end
-  if not removed then return false, "not on your list" end
-  local who = row or name
+  if not (row and ns.roster:forget(row)) then return false, "not on your list" end
+  local who = row
   if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
-  ns.Transport.forget(who)
   mismatches[who], sreqAt[who], helloAt[who], answeredAt[who] = nil, nil, nil, nil
   ns.Bus.fire("MEMBER_REMOVED", who)
   return true
@@ -204,7 +183,6 @@ function Crew.start()
   ns.roster = ns.Roster.new(ns.db.roster)
   for _, name in ipairs(ns.roster.pruned) do
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
-    dropExtra(name)
   end
   ns.Comm.on("HELLO", onHello)
   ns.Comm.on("STATE", onState)
@@ -213,22 +191,16 @@ function Crew.start()
   ns.Comm.on("BYE", onBye)
   ns.Comm.on("SREQ", onSreq)
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", sayGoodbye)
-  -- The channel works again after sends were refused: friends there may never have heard our login HELLO.
-  ns.Bus.on(FEATURE, "CHANNEL_BACK", function()
-    ns.Comm.send("HELLO", hello())
-    ns.Comm.send("STATE", ns.Self.fullState())
-  end)
-  -- Someone new turned up in the crew channel after we logged in: hello and our state, to them only. Skipped when
-  -- we heard from them meanwhile (their own hello got our reply already).
-  ns.Bus.on(FEATURE, "CREW_FOUND", function(name)
-    local foundAt = ns.now()
-    C_Timer.After(ns.Config.CREW_FOUND_DELAY, function()
-      ns.Log.safe(FEATURE, function()
-        local m = ns.roster:get(name)
-        if m and m.lastHeard and m.lastHeard >= foundAt then return end
-        if ns.Comm.sendTo(name, "HELLO", hello()) then ns.Comm.sendTo(name, "STATE", ns.Self.stateFor()) end
-      end)
-    end)
+  -- The game said whether we are in a guild, or we joined or left one. The login HELLO was kept for that moment (it
+  -- goes out, or is dropped outside a guild); joining a guild later needs a new one.
+  ns.Bus.on(FEATURE, "TRANSPORT_READY", function()
+    local inGuild = ns.Transport.status().mode == "guild"
+    if inGuild then saidHelloAt = ns.now() end
+    if helloKept then helloKept = false; return end
+    if inGuild then
+      ns.Comm.send("HELLO", hello())
+      ns.Comm.send("STATE", ns.Self.fullState())
+    end
   end)
   C_Timer.NewTicker(ns.Config.PING_INTERVAL, function()
     ns.Log.safe(FEATURE, ns.Comm.send, "PING", { h = ns.Self.digest() })
@@ -238,6 +210,8 @@ function Crew.start()
       for _, name in ipairs(ns.roster:tick(ns.now())) do ns.Bus.fire("MEMBER_OFFLINE", name) end
     end)
   end)
+  helloKept = ns.Transport.isPending()
+  if not helloKept then saidHelloAt = ns.now() end
   ns.Comm.send("HELLO", hello())
   ns.Comm.send("STATE", ns.Self.fullState())
 end

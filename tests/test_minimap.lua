@@ -355,7 +355,7 @@ return {
       local seen = record(W)
       boot(W)
       for _, text in ipairs(ns.Codec.encode("STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", ver = "0.1.0" })) do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie")
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Frostie")
       end
       local f = seen.button
       f._scripts.OnEnter(f)
@@ -379,7 +379,7 @@ return {
       A.no(ns.MinimapButton.badgeShownForTest(), "up to date: no badge")
       for _, text in ipairs(ns.Codec.encode("STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest", ver = "0.2.0",
         rs = "0.1.0" })) do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie")
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Frostie")
       end
       A.ok(ns.MinimapButton.badgeShownForTest(), "a friend is newer: gold !")
       f._scripts.OnEnter(f)
@@ -401,7 +401,7 @@ return {
       boot(W)
       ns.Updates.available = function() error("boom") end
       for _, text in ipairs(ns.Codec.encode("STATE", { cl = "MAGE", ver = "0.2.0" })) do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie")
+        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Frostie")
       end
       A.no(ns.MinimapButton.badgeShownForTest())
       local f = seen.button

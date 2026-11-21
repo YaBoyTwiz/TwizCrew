@@ -32,7 +32,7 @@ end
 
 local function receive(W, sender, msgType, fields, ns)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -74,16 +74,19 @@ return {
       A.ok(ns.Modules.isEnabled("panel"))
     end,
 
-    add_and_remove_names = function(ns, A, W)
+    -- Only guild members are friends now, so there is no list of names to whisper: /tc add is gone (it shows the help)
+    -- and /tc remove is another name for /tc forget.
+    add_is_gone_and_remove_forgets = function(ns, A, W)
       boot(W)
-      tc(W, "add   frostie ")
-      tc(W, "add Holybøi")
-      tc(W, "add frostie")   -- already there
-      tc(W, "add twiz")      -- yourself
-      tc(W, "add    ")       -- empty
-      A.eq(ns.db.crew.extra, { "Frostie", "Holybøi" })
+      W.printed = {}
+      tc(W, "add frostie")
+      A.ok(printedLine(W, "TwizCrew commands:"), "an unknown command shows the help")
+      A.eq(ns.db.crew, nil)
+      for _, line in ipairs(W.printed) do A.no(line:find("/tc add", 1, true), line) end
+      ns.db.roster.Frostie = { name = "Frostie", level = 5, lastSeen = ns.wallclock() }
+      ns.roster = ns.Roster.new(ns.db.roster)
       tc(W, "remove FROSTIE")
-      A.eq(ns.db.crew.extra, { "Holybøi" })
+      A.eq(ns.roster:get("Frostie"), nil)
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -119,9 +122,10 @@ return {
       A.ok(helpLines >= 8, "help should list the commands")
       local text = table.concat(W.printed, "\n")
       for _, cmd in ipairs({ "/tc show", "/tc hide", "/tc status", "/tc reset", "/tc report", "/tc debug",
-        "/tc add", "/tc remove" }) do
+        "/tc forget", "/tc remove" }) do
         A.contains(text, cmd)
       end
+      A.no(text:find("/tc add", 1, true), "no list of names to add any more")
       tc(W, "fly me to the moon")
       A.eq(#W.printed - before, 2 * helpLines, "an unknown command shows the same help")
     end,
@@ -156,7 +160,7 @@ return {
       A.contains(text, "Updates: failed (")
       A.contains(text, "kaboom")
       A.contains(text, "Class icons:")
-      A.contains(text, "Crew in the channel:")
+      A.contains(text, "Guild: ")
       A.contains(text, "Messages this session: ")
       A.contains(text, "recv PING 1")
       A.contains(text, "WARN problem 7")
@@ -174,7 +178,7 @@ return {
       A.contains(text, "Class icons:")
       A.contains(text, "Turned off after errors: none")
       A.contains(text, "Recent errors:")
-      A.eq(lines[2], "Connection: auto (channel TwizCrewHQ joined)")
+      A.eq(lines[2], "Connection: through the guild Test Guild")
       A.eq(lines[3], "Layer: key none, seen never, 0 hidden values skipped")
       A.contains(lines[4], "Class icons: ")
       A.eq(lines[5], "Turned off after errors: none")
@@ -200,52 +204,22 @@ return {
       A.eq(ns.Log.errors(10), { lines[e + 1] }, "show() adds no errors")
     end,
 
-    report_counts_echoes_and_never_shows_the_code = function(ns, A, W)
-      boot(W)
-      ns.Settings.save("comm", "password", "murloc")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz-Realm")
-      local lines = ns.Report.lines()
-      A.eq(lines[#lines], "Channel echoes heard: 1")
-      local text = table.concat(lines, "\n")
-      A.no(text:find("murloc", 1, true), "the crew code is not in the report")
+    report_says_when_there_is_no_guild_and_when_chat_is_held = function(ns, A, W)
+      W.state.guild = nil
+      W:fire("ADDON_LOADED", "TwizCrew")
+      W:fire("PLAYER_LOGIN")
+      A.eq(ns.Report.lines()[2], "Connection: waiting for the game to say whether you are in a guild")
+      W:advance(13)
+      A.eq(ns.Report.lines()[2], "Connection: not in a guild, so nothing is sent")
+      W.state.guild = { name = "Night Owls", members = { { name = "Twiz", online = true } } }
+      W.env.InChatMessagingLockdown = function() return true end
+      W:advance(2)
+      A.eq(ns.Report.lines()[2],
+        "Connection: through the guild Night Owls; the game is holding chat messages back right now")
+      local text = table.concat(ns.Report.lines(), "\n")
+      A.no(text:find("hannel", 1, true), "nothing about a channel any more")
       A.no(text:find("goldshire", 1, true), "the old crew code is not in the report")
-    end,
-
-    crew_code_box_hides_its_letters = function(ns, A, W)
-      local hidden = {}
-      local create = W.env.CreateFrame
-      W.env.CreateFrame = function(...)
-        local f = create(...)
-        rawset(f, "SetPassword", function(self, on) hidden[#hidden + 1] = on end)
-        return f
-      end
-      boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
-      A.eq(hidden, { true }, "only the crew code box hides what is typed")
       A.eq(ns.Log.errors(10), {})
-    end,
-
-    report_channel_failure_reason = function(ns, A, W)
-      boot(W, function() W.state.channelJoinFails = true end)
-      W:advance(20)
-      local lines = ns.Report.lines()
-      A.eq(lines[2], "Connection: auto (channel TwizCrewHQ failed: the channel did not join in time; down for 11 s)")
-    end,
-
-    report_says_when_and_why_the_channel_is_down_and_when_it_is_tried_again = function(ns, A, W)
-      boot(W)
-      W:advance(10)
-      W.state.channelSendResult = 7 -- every channel send refused from now on
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(1)
-      W:advance(30)
-      A.eq(ns.Report.lines()[2], "Connection: auto (channel TwizCrewHQ failed: sends to the channel were refused "
-        .. "(result 7); down for 31 s; using whispers, next try in 30 s)")
-      W.state.inGroup = true
-      W:advance(50) -- the retry joins again; the message waiting then was given up on after 10 tries
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end -- refused again, so the channel counts as down again
-      W:advance(60)
-      A.contains(ns.Report.lines()[2], "down for 2 min; using group chat and whispers, next try in")
     end,
 
     settings_builds_and_resets_without_errors = function(ns, A, W)
@@ -277,14 +251,14 @@ return {
       A.ok(has(d, "setting:find:rowArrows"), "Find the crew: row arrows")
       A.ok(has(d, "setting:find:meetups"))
       A.ok(has(d, "setting:find:sharePosition"))
-      A.no(has(d, "setting:comm:channel"), "no crew channel setup on Basics")
+      A.no(has(d, "setting:comm:debug"), "no technical switch on Basics")
       A.no(has(d, "section:Essentials"))
       A.ok(#d <= 26, "short: " .. #d .. " rows")
       ns.Settings.setTab("advanced", "all")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:comm:channel"), "Advanced has everything")
+      A.ok(has(d, "setting:comm:debug"), "Advanced has everything")
       ns.Settings.setTab("basic")
-      A.no(has(ns.Settings.describeForTest(), "setting:comm:channel"))
+      A.no(has(ns.Settings.describeForTest(), "setting:comm:debug"))
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -295,7 +269,7 @@ return {
       A.eq(ns.Settings.subTab(), "panel")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "module:panel:switch")); A.ok(has(d, "setting:panel:scale")); A.ok(has(d, "setting:tags:autoAway"))
-      A.no(has(d, "setting:comm:channel"), "crew setup is on its own sub-tab")
+      A.no(has(d, "setting:comm:debug"), "the connection is on its own sub-tab")
       A.no(has(d, "section:Essentials"), "no big section headers")
       ns.Settings.setTab("advanced", "roasts")
       d = ns.Settings.describeForTest()
@@ -306,7 +280,7 @@ return {
       A.ok(has(d, "setting:find:rowArrows"))
       ns.Settings.setTab("advanced", "crew")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:comm:channel")); A.ok(has(d, "module:pokes:coming later"))
+      A.ok(has(d, "setting:comm:debug")); A.ok(has(d, "module:pokes:coming later"))
       ns.Settings.setTab("advanced", "test")
       A.ok(has(ns.Settings.describeForTest(), "module:testtools:tools"))
       ns.Settings.setTab("basic")
@@ -335,8 +309,10 @@ return {
       A.ok(ess and mods and ext and ess < mods and mods < ext, "sections in order")
       A.ok(has(d, "module:comm:always on"))
       A.ok(has(d, "module:version:always on"))
-      A.ok(has(d, "setting:comm:transport"))
-      A.ok(has(d, "setting:comm:channel"))
+      A.ok(has(d, "setting:comm:debug"))
+      A.no(has(d, "setting:comm:transport"), "no connection choice: always the guild")
+      A.no(has(d, "setting:comm:channel"), "no crew channel")
+      A.no(has(d, "setting:comm:password"), "no crew code")
       A.ok(has(d, "module:panel:switch"))
       A.ok(has(d, "setting:panel:scale"))
       A.ok(has(d, "child:panel:fadeAlpha"), "a setting with a parent is indented")
@@ -370,23 +346,18 @@ return {
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "one rebuild on the next open")
     end,
 
-    crew_text_settings_save_trimmed_and_rejoin = function(ns, A, W)
+    text_settings_save_trimmed = function(ns, A, W)
+      ns.Modules.register({ id = "texttest", name = "Text test", tier = "module", info = "A test module.",
+        defaults = { title = "Old" },
+        settings = { { key = "title", label = "Title", kind = "text", info = "A test text." } } })
       boot(W)
-      local joins = {}
-      local join = W.env.JoinChannelByName
-      W.env.JoinChannelByName = function(name, pw) joins[#joins + 1] = name; join(name, pw) end
-      A.ok(ns.Settings.save("comm", "channel", "  CrewTwo "))
-      A.eq(ns.db.crew.channel, "CrewTwo")
-      W:advance(3) -- leave, then join again after a short wait
-      A.eq(joins, { "CrewTwo" }, "rejoined once")
-      A.no(ns.Settings.save("comm", "channel", "   "), "a blank channel is refused")
-      A.eq(ns.db.crew.channel, "CrewTwo")
-      A.no(ns.Settings.save("comm", "channel", "CrewTwo"), "same value: nothing to do")
-      A.eq(#joins, 1)
-      A.ok(ns.Settings.save("comm", "password", "murloc"))
-      A.eq(ns.db.crew.password, "murloc")
-      W:advance(3)
-      A.eq(#joins, 2)
+      local changed = {}
+      ns.Bus.on("test", "SETTING_CHANGED", function(id, key, v) if id == "texttest" then changed[#changed + 1] = v end end)
+      A.ok(ns.Settings.save("texttest", "title", "  New one "))
+      A.eq(ns.Modules.setting("texttest", "title"), "New one")
+      A.no(ns.Settings.save("texttest", "title", "   "), "a blank text is refused")
+      A.no(ns.Settings.save("texttest", "title", "New one"), "same value: nothing to do")
+      A.eq(changed, { "New one" })
     end,
 
     options_entry_registered = function(ns, A, W)

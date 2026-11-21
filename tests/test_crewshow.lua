@@ -9,7 +9,7 @@ end
 
 local function receive(W, ns, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -736,7 +736,6 @@ return {
 
     a_fast_presenter_does_not_flood_the_crew = function(ns, A, W)
       start(ns, W)
-      ns.db.crew.extra = { "Ana", "Bo", "Cy", "Di", "Ed" } -- five whispers and the channel: 6 copies a message
       local S = ns.Session.current().id
       hello(W, ns, "Frostie", "PRIEST")
       hello(W, ns, "Lurabe", "ROGUE")
@@ -759,13 +758,13 @@ return {
       local awvAt, awrAt
       for _ = 1, 900 do
         W:advance(0.1)
-        if not awvAt and #sentOf(ns, W, mark, "AWV") == 6 then awvAt = W.clock end
+        if not awvAt and #sentOf(ns, W, mark, "AWV") == 1 then awvAt = W.clock end
         if not awrAt and #sentOf(ns, W, mark, "AWR") > 0 then awrAt = W.clock; break end
       end
       A.ok(awvAt and awrAt, "both went out")
       A.ok(awrAt - awvAt >= 29.5, "the crew got the full 30 s: " .. tostring(awrAt - awvAt))
       local cards = sentOf(ns, W, mark, "AWC")
-      A.ok(clicks >= 4 and #cards <= 6, #cards .. " AWCs for " .. clicks .. " clicks to 6 destinations")
+      A.ok(clicks >= 4 and #cards <= 2, #cards .. " AWCs for " .. clicks .. " clicks (one GUILD message each)")
       A.eq(cards[#cards].i, tostring(lastIndex), "the last card still arrives")
       A.eq(ns.Log.errors(10), {})
     end,

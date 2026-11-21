@@ -27,6 +27,7 @@ local ASK_GAP = 120
 local ALTS_BYTES = 150     -- a diary's alts list, as it travels (so the codec never cuts it)
 
 local enabled = false
+local enabledAt -- ns.now() when the module started (our own login: the first digest goes to everyone at once)
 local ticker, digestTicker
 local notesPrunedDay -- the UTC day the notes were last pruned (once a day while logged in)
 local sentAt, askedAt = {}, {}
@@ -198,7 +199,7 @@ function Diary.sendDigest(to)
   if not enabled then return end
   local f = digestFields()
   if next(f) == nil then return end
-  sendTo(to, "CALD", f)
+  sendTo(to, "CALD", f, to and { bulk = true } or nil) -- to one friend: a swap, it waits behind chat
 end
 
 local function personFields(id)
@@ -297,7 +298,7 @@ local function onDigest(sender, f)
   if ask then
     if not askedAt["notes"] or ns.now() - askedAt["notes"] >= ASK_GAP then
       askedAt["notes"] = ns.now()
-      sendTo(sender, "CALQ", ask)
+      sendTo(sender, "CALQ", ask, { bulk = true })
       ns.Notes.asked(sender, f, ask)
     end
   end
@@ -315,7 +316,7 @@ local function onDigest(sender, f)
       if theirs > mine and id ~= Diary.myId() then
         if not askedAt[id] or ns.now() - askedAt[id] >= ASK_GAP then
           askedAt[id] = ns.now()
-          sendTo(sender, "CALQ", { i = id })
+          sendTo(sender, "CALQ", { i = id }, { bulk = true }) -- a newcomer in a big guild asks many: never ahead of chat
         end
       end
     end
@@ -370,6 +371,7 @@ end
 
 local function onEnable()
   enabled = true
+  enabledAt = ns.now()
   store()
   Diary.prune()
   notesPrunedDay = nil
@@ -389,8 +391,10 @@ local function onEnable()
     if ns.NoteView and ns.NoteView.isShown() then ns.NoteView.refresh() end
   end)
   -- a friend just came online: tell them what we know (a little later, so their copy is ready)
+  -- (not while we are logging in ourselves: everyone we find then gets the first digest, one guild message)
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)
     if ns.isTestName(name) then return end -- pretend friends (test tools) hear nothing
+    if enabledAt and ns.now() - enabledAt < FIRST_DIGEST then return end
     if C_Timer and C_Timer.After then
       C_Timer.After(5 + math.random() * 10, function() ns.Log.safe(FEATURE, Diary.sendDigest, name) end)
     end

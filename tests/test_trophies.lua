@@ -9,7 +9,7 @@ end
 
 local function receive(W, ns, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -724,8 +724,6 @@ return {
       local tw, twNs = H.client("Twiz", { class = "DRUID" })
       local lu, luNs = H.client("Lurabe", { class = "MAGE" })
       H.link(tw, lu)
-      twNs.Comm.echoCount = tw.realEchoCount
-      luNs.Comm.echoCount = lu.realEchoCount
       for _, X in ipairs({ tw, lu }) do
         X:fire("ADDON_LOADED", "TwizCrew"); X:fire("PLAYER_LOGIN"); X:fire("PLAYER_ENTERING_WORLD")
       end

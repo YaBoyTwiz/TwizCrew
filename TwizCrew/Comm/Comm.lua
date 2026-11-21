@@ -1,4 +1,5 @@
--- Send / receive pipeline: encode, wait for the connection, queue, throttle; receive, dedupe, decode, handlers.
+-- Send / receive pipeline: encode, wait for the connection, queue, throttle; receive, trust, dedupe, decode, handlers.
+-- Only guild members are trusted: a message from anyone else is dropped before it is decoded (see onAddon).
 -- Registers the essential module "comm".
 local _, ns = ...
 
@@ -14,7 +15,6 @@ local queue = ns.Queue.new({ perSecond = ns.Config.SEND_PER_SECOND, burst = ns.C
 local handlers = {}  -- msgType -> { fn, ... }
 local pending = {}   -- encoded texts waiting for the transport to resolve
 local seen, seenCount, lastSweep = {}, 0, 0 -- seen: sender .. "\0" .. text -> { at = time, via = chat type }
-local echoes = 0     -- our own CHANNEL messages heard back (shows the channel delivers)
 local started = false
 local pausedUntil = 0
 
@@ -31,7 +31,7 @@ end
 -- key: waiting copies with this key (per destination) are dropped for the new one. sent: { left, fn }, counts the
 -- copies still waiting; fn runs when the last one has gone out.
 local function pushToDestinations(text, key, sent, bulk, msgType)
-  local dests = ns.Transport.destinations(msgType) -- may find the channel gone and start joining it again
+  local dests = ns.Transport.destinations(msgType)
   if ns.Transport.isPending() then keep(text, bulk, msgType); return end
   for _, dest in ipairs(dests) do
     local item = { text = text, dest = dest, sent = sent }
@@ -63,8 +63,8 @@ function Comm.send(msgType, fields, opts)
   if sent and sent.left == 0 then ns.Log.safe(FEATURE, sent.fn) end
 end
 
--- Only to this crew member, as a whisper (automatic and whisper mode). Returns false, sending nothing, when this
--- mode cannot reach one person: the caller sends to everyone instead.
+-- Only to this guild member, as a whisper. Returns false, sending nothing, when they cannot be whispered (not in the
+-- guild, the guild list has not loaded yet, not in a guild at all): the caller sends to everyone instead.
 function Comm.sendTo(name, msgType, fields, opts)
   local dest = ns.Transport.destinationFor(name)
   if not dest then return false end
@@ -74,7 +74,7 @@ function Comm.sendTo(name, msgType, fields, opts)
   return true
 end
 
--- Only to the group (one PARTY or RAID message), never whispered and never to the channel. Returns false, sending
+-- Only to the group (one PARTY or RAID message), never whispered and never to the guild. Returns false, sending
 -- nothing, when not in a group. opts.replace = a key: a waiting message with that key gets the new text instead.
 local groupDest = {} -- chat type -> one destination table, so Queue:replace can tell "the same destination"
 function Comm.sendGroup(msgType, fields, opts)
@@ -104,7 +104,6 @@ function Comm.on(msgType, fn)
 end
 
 function Comm.dedupeSize() return seenCount end
-function Comm.echoCount() return echoes end
 
 local function sweepSeen(now)
   if now - lastSweep < ns.Config.DEDUPE_WINDOW then return end
@@ -122,22 +121,48 @@ local function dispatch(sender, msg)
   end
 end
 
-local function onAddon(prefix, text, chatType, sender)
-  if prefix ~= ns.Config.PREFIX or type(sender) ~= "string" or type(text) ~= "string" then return end
-  for _, fn in ipairs(rawHooks) do ns.Log.safe(FEATURE, fn, text, chatType, sender) end
-  local raw = sender
-  sender = ns.shortName(sender)
+-- "Frostie Snow-Realm" -> "Frostie Snow".
+local function withoutRealm(raw)
+  local ok, amb = pcall(Ambiguate, raw, "none")
+  local name = (ok and type(amb) == "string" and amb ~= "") and amb or raw
+  return ns.Util.trim(name:match("^([^%-]*)") or name)
+end
+
+-- The key a message is filed under, or nil when the sender must not be trusted. A GUILD message is from a member
+-- by definition: their key, or (the list has not loaded yet, or does not have them yet) their first word, unless that
+-- word is mine or another member's key (then the full name, so data never mixes). Any other chat type (whisper,
+-- party, raid) only from someone the guild list has.
+local function senderKey(raw, chatType)
+  local G = ns.Guild
+  local key = G and G.keyOf(raw)
+  if key then return key end
+  if chatType ~= "GUILD" then
+    if G and not G.loaded() then G.refresh() end -- maybe a member: ask for the list (at most every 10 s)
+    return nil
+  end
+  if G and G.loaded() then G.refresh() end -- someone new: the list is behind
+  local short = ns.shortName(raw)
+  if ns.isMe(short) or (G and G.get(short)) then return withoutRealm(raw) end
+  return short
+end
+
+local function onAddon(prefix, text, chatType, raw)
+  if prefix ~= ns.Config.PREFIX or type(raw) ~= "string" or type(text) ~= "string" then return end
+  for _, fn in ipairs(rawHooks) do ns.Log.safe(FEATURE, fn, text, chatType, raw) end
+  if ns.isMe(raw) then return end
+  local sender = senderKey(raw, chatType)
+  if not sender then
+    ns.Log.count("recv not in guild")
+    return
+  end
   if raw ~= sender and not loggedNameForm then
     loggedNameForm = true
     ns.Log.add("info", "sender names look like \"%s\"; using \"%s\"", ns.Util.safeText(raw), ns.Util.safeText(sender))
   end
-  if ns.isMe(sender) then
-    if chatType == "CHANNEL" then echoes = echoes + 1 end
-    return
-  end
   local now = ns.now()
   sweepSeen(now)
-  -- The same message by a second route (channel and party, say) is a duplicate; the same route twice is a resend.
+  -- The same message by a second route (an old copy's whisper and party copy, say) is a duplicate; the same route
+  -- twice is a resend.
   local key = sender .. "\0" .. text
   local entry = seen[key]
   if entry and now - entry.at <= ns.Config.DEDUPE_WINDOW and entry.via ~= chatType then return end
@@ -154,7 +179,6 @@ local function onAddon(prefix, text, chatType, sender)
   end
   ns.Log.count("recv " .. tostring(msg.type))
   if ns.Log.chatDebug then ns.Log.debug("recv %s from %s via %s", msg.type, sender, tostring(chatType)) end
-  ns.Log.safe(FEATURE, ns.Transport.heardFrom, raw, chatType)
   dispatch(sender, msg)
 end
 
@@ -171,7 +195,7 @@ end
 local function sendItem(item)
   local ok, retryLater = ns.Transport.send(item.text, item.dest)
   if retryLater then
-    -- The game is throttling us (or the channel was only just joined): keep the message at the front, wait a
+    -- The game is throttling us (or holds chat back for a moment): keep the message at the front, wait a
     -- moment. Logged once per message, so a message kept for a while does not fill the log.
     pausedUntil = ns.now() + THROTTLE_PAUSE
     item.tries = (item.tries or 0) + 1
@@ -208,6 +232,7 @@ end
 
 local function pump()
   if ns.now() < pausedUntil then return end
+  if ns.Transport.lockdown() then return end -- the game holds chat back (checked every pump)
   queue:pump(sendItem)
 end
 
@@ -233,29 +258,15 @@ end
 
 ns.Modules.register({
   id = "comm", name = "Crew connection", tier = "essential",
-  info = "How your copy of TwizCrew talks to your friends' copies. Leave it on automatic unless something is wrong.",
-  defaults = { transport = "auto", debug = false },
+  info = "How your copy of TwizCrew talks to the copies of your guild mates: through the guild, never in guild chat "
+    .. "you can see. Only guild members are listened to.",
+  defaults = { debug = false },
   settings = {
-    { key = "transport", label = "Connection", kind = "choice", choices = { { "auto", "Automatic" }, { "channel", "Hidden channel" }, { "whisper", "Whispers" },
-        { "group", "Group chat" }, { "guild", "Guild chat" } },
-      info = "How messages travel. Automatic uses a hidden chat channel and falls back to whispers or your group if that fails." },
-    { key = "channel", label = "Crew channel", kind = "text", store = "crew",
-      info = "The hidden channel your crew meets in. The channel name and the crew code must match your crew's. "
-        .. "To lock someone out, pick a new channel name and tell your crew." },
-    { key = "password", label = "Crew code", kind = "text", store = "crew", password = true,
-      info = "The secret code for the crew channel. The channel name and the code must match your crew's. "
-        .. "Changing only the code does not lock anyone out: to do that, pick a new channel name and tell your crew." },
     { key = "debug", label = "Show technical messages", kind = "toggle",
       info = "Prints what TwizCrew sends and receives in your chat window. Only useful when fixing problems." },
   },
   onEnable = function() Comm.start() end,
-  onSettingChanged = function(key, value)
-    if key == "debug" then
-      applyDebug()
-    elseif key == "transport" then
-      flushPending()
-    elseif key == "channel" or key == "password" then
-      ns.Transport.rejoin()
-    end
+  onSettingChanged = function(key)
+    if key == "debug" then applyDebug() end
   end,
 })

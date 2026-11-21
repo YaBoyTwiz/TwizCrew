@@ -126,8 +126,6 @@ return {
 
     a_snapshot_in_slow_pieces_steals_no_crown = function(_, A, _, H)
       local c = twoFriends(H)
-      c.twNs.Comm.echoCount = c.tw.realEchoCount
-      c.frNs.Comm.echoCount = c.fr.realEchoCount
       local frStore = c.frNs.StatsStore
       local function setFrostie(base) -- Frostie leads every award Twiz is in, by a lot
         local rec = frStore.mine()

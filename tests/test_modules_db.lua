@@ -1,8 +1,7 @@
 local function setup(ns)
   local calls = { enable = 0, disable = 0, changed = {} }
   ns.Modules.register({ id = "core1", name = "Core One", tier = "essential", info = "Core.", defaults = { debug = false },
-    settings = { { key = "debug", label = "Debug", info = "Debug.", kind = "toggle" },
-                 { key = "channel", label = "Channel", info = "Channel.", kind = "text", store = "crew" } } })
+    settings = { { key = "debug", label = "Debug", info = "Debug.", kind = "toggle" } } })
   ns.Modules.register({ id = "m1", name = "Module One", tier = "module", info = "Mod.",
     defaults = { scale = 1, position = { point = "LEFT", x = 40, y = 100 } },
     settings = { { key = "scale", label = "Scale", info = "Scale.", kind = "slider", min = 0.5, max = 2, step = 0.1 } },
@@ -42,7 +41,7 @@ return {
       setup(ns)
       local db = ns.DB.init(nil, ns.Modules.list())
       A.eq(db.modules.m1.settings.scale, 1); A.eq(db.modules.m1.enabled, true)
-      A.eq(db.crew.channel, "TwizCrewHQ"); A.eq(db.crew.password, "goldshire"); A.eq(db.crew.extra, {})
+      A.eq(db.crew, nil, "no crew channel, crew code or whisper names any more (the guild replaced them)")
       A.eq(db.schema, 1); A.eq(db.myStatus, "")
     end,
     init_repairs_broken_saved_data = function(ns, A)
@@ -51,7 +50,7 @@ return {
       local db = ns.DB.init({ modules = { m1 = { enabled = "yes", settings = { scale = "big", position = 5 } }, gone = {} } }, ns.Modules.list())
       A.eq(db.modules.m1.settings.scale, 1); A.eq(type(db.modules.m1.enabled), "boolean"); A.ok(db.modules.gone, "an unknown id is left alone")
       A.eq(db.modules.m1.settings.position.x, 40)
-      A.eq(ns.DB.init({ modules = 7, crew = "x", log = 3 }, ns.Modules.list()).crew.channel, "TwizCrewHQ")
+      A.eq(type(ns.DB.init({ modules = 7, crew = "x", log = 3 }, ns.Modules.list()).log), "table")
     end,
     unknown_module_settings_are_kept_but_removed_ones_go = function(ns, A)
       setup(ns)
@@ -91,17 +90,16 @@ return {
       A.no(ns.Modules.set("m1", "nokey", 1))
       A.eq(db.modules.m1.settings.scale, 1.5)
       A.contains(ns.Log.lines()[#ns.Log.lines()], "WARN")
-      A.ok(ns.Modules.set("core1", "channel", "Secret"))
-      A.eq(db.crew.channel, "Secret"); A.eq(ns.Modules.setting("core1", "channel"), "Secret")
-      A.no(ns.Modules.set("core1", "channel", 5))
+      A.ok(ns.Modules.set("core1", "debug", true))
+      A.eq(db.modules.core1.settings.debug, true); A.eq(ns.Modules.setting("core1", "debug"), true)
     end,
     reset_restores_settings_keeps_crew_data = function(ns, A)
       local db = attached(ns)
       db.modules.m1.settings.scale = 2; db.modules.m1.settings.position.x = 999; db.modules.m1.enabled = false
-      db.crew.channel = "Secret"; db.roster.Ginkan = { level = 14 }; db.myStatus = "brb"; db.log[1] = "x"
+      db.roster.Ginkan = { level = 14 }; db.myStatus = "brb"; db.log[1] = "x"
       ns.Modules.resetAll()
       A.eq(db.modules.m1.settings.scale, 1); A.eq(db.modules.m1.settings.position.x, 40); A.ok(db.modules.m1.enabled)
-      A.eq(db.crew.channel, "Secret"); A.eq(db.roster.Ginkan.level, 14); A.eq(db.myStatus, "brb"); A.eq(#db.log, 1)
+      A.eq(db.roster.Ginkan.level, 14); A.eq(db.myStatus, "brb"); A.eq(#db.log, 1)
     end,
     reset_fires_SETTINGS_RESET_and_onSettingChanged = function(ns, A)
       local db, calls = attached(ns)

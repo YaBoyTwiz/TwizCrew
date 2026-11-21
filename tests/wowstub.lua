@@ -262,25 +262,11 @@ local function build(W)
 
   -- >>> later tasks add their fakes below this line <<<
 
-  -- chat transport (Task 6)
-  W.state.channels = {}      -- channel name -> index, once joined
+  -- chat transport (Task 6; guild conversion: no custom channel any more)
   W.state.groupMembers = {}  -- names counted as "in party"
-  W.state.sendResult = 0
-  -- Channel sends only: st.channelSendResult (nil = use sendResult) answers every CHANNEL send; st.channelReadyAfter
-  -- = N makes CHANNEL sends answer 7 (InvalidChannel) for N seconds after the join that put us in the channel, like
-  -- the game did on the owner's first login. Every W.sent entry keeps its result; the harness delivers only
-  -- messages the game accepted.
-  W.state.channelJoinedAt = {}
-  W.removedChannels = {}     -- { frame, channel } for every ChatFrame_RemoveChannel call
+  W.state.sendResult = 0     -- the result every addon send answers (the harness delivers only accepted ones)
   env.Enum = { SendAddonMessageResult = { Success = 0 } }
-  local function sendResultFor(chatType, target)
-    if chatType == "CHANNEL" then
-      local name
-      for n, i in pairs(W.state.channels) do if i == target then name = n end end
-      local at = name and W.state.channelJoinedAt[name]
-      if W.state.channelReadyAfter and at and W.clock - at < W.state.channelReadyAfter then return 7 end
-      if W.state.channelSendResult ~= nil then return W.state.channelSendResult end
-    end
+  local function sendResultFor(chatType)
     -- a GUILD send outside a guild is refused (4 = InvalidChatType), as the game does
     if chatType == "GUILD" and not env.IsInGuild() then return 4 end
     return W.state.sendResult or 0
@@ -293,29 +279,16 @@ local function build(W)
       end
       -- st.sendRaises = true: the call errors; st.sendNil = true: the call returns no result code at all
       if W.state.sendRaises then error("SendAddonMessage: boom", 2) end
-      local result = sendResultFor(chatType, target)
+      local result = sendResultFor(chatType)
       W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target, result = result }
       if W.state.sendNil then return nil end
       return result
     end,
   }
+  -- v0.1.24's hidden channel: only ever left now (W.leaves), never joined (W.joins stays empty)
   W.joins, W.leaves = {}, {}  -- { name, password } per JoinChannelByName call; names per LeaveChannelByName call
-  env.JoinChannelByName = function(name, password)
-    W.joins[#W.joins + 1] = { name = name, password = password }
-    if not W.state.channelJoinFails then
-      if not W.state.channels[name] then W.state.channelJoinedAt[name] = W.clock end
-      W.state.channels[name] = 5
-    end
-  end
-  env.LeaveChannelByName = function(name)
-    W.leaves[#W.leaves + 1] = name
-    W.state.channels[name] = nil
-  end
-  env.GetChannelName = function(name) return W.state.channels[name] or 0 end
-  env.ChatFrame_RemoveChannel = function(frame, name)
-    W.removedChannels[#W.removedChannels + 1] = { frame = frame, channel = name }
-  end
-  env.NUM_CHAT_WINDOWS = 10
+  env.JoinChannelByName = function(name, password) W.joins[#W.joins + 1] = { name = name, password = password } end
+  env.LeaveChannelByName = function(name) W.leaves[#W.leaves + 1] = name end
   env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
   W.messageFilters = {}      -- { event, fn } for every ChatFrame_AddMessageEventFilter call
   env.ChatFrame_AddMessageEventFilter = function(event, fn)

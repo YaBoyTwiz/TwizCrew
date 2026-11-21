@@ -15,7 +15,7 @@ local function tc(W, msg) W.env.SlashCmdList.TWIZCREW(msg) end
 
 local function receive(W, ns, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -361,24 +361,20 @@ return {
     nothing_fake_is_whispered = function(ns, A, W)
       boot(W, nil, 25)
       receive(W, ns, "Frostie-Realm", "STATE", { cl = "MAGE", lv = "12" }) -- one real friend
-      ns.Modules.set("comm", "transport", "whisper")
       W:advance(1)
       local from = #W.sent
       pressEverything(W)
       W.state.zone = "Westfall"; W:fire("ZONE_CHANGED_NEW_AREA") -- a real update goes out to the crew
       W:advance(70) -- and a PING
       W:fire("PLAYER_LOGOUT") -- and a BYE
-      -- Only Frostie may be whispered (the transport would shorten "Testbuddy (test)" to "Testbuddy", a real
-      -- player's name, so the check is on every target).
-      local whispers = 0
+      -- Nobody fake is ever whispered (only guild members can be), and the real messages went to the guild.
+      local guild = 0
       for i = from + 1, #W.sent do
         local m = W.sent[i]
-        if m.chatType == "WHISPER" then
-          whispers = whispers + 1
-          A.eq(m.target, "Frostie", "whispered someone else: " .. m.text)
-        end
+        A.no(m.chatType == "WHISPER" and m.target ~= "Frostie", "whispered someone else: " .. m.text)
+        if m.chatType == "GUILD" then guild = guild + 1 end
       end
-      A.ok(whispers >= 3, "the update, the ping and the goodbye went to Frostie")
+      A.ok(guild >= 3, "the update, the ping and the goodbye went to the guild")
     end,
 
     inject_accepts_only_fake_names = function(ns, A, W)

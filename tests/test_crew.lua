@@ -5,6 +5,7 @@ local function start(ns, W)
   ns.Comm.start()
   ns.Crew.start()
   ns.Self.start()
+  ns.Guild.start()
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
   return db
@@ -12,7 +13,7 @@ end
 
 local function receive(ns, W, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -283,11 +284,11 @@ return {
     end,
     friend_names_lose_their_realm = function(ns, A, W)
       start(ns, W)
-      receive(ns, W, "Ginkan Noodledog", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Ginkan Realm", "HELLO", { ver = "0.1.0" }) -- WoW Forever: "Name Realm"
       receive(ns, W, "Frostie-Noodledog", "HELLO", { ver = "0.1.0" })
       A.ok(ns.roster:get("Ginkan") ~= nil)
       A.ok(ns.roster:get("Frostie") ~= nil)
-      A.eq(ns.roster:get("Ginkan Noodledog"), nil)
+      A.eq(ns.roster:get("Ginkan Realm"), nil)
       noErrors(ns, A)
     end,
     saved_ghost_of_self_is_removed = function(ns, A, W)
@@ -329,12 +330,12 @@ return {
       for _, m in ipairs(sentSince(ns, W, n)) do if m.type == "STATE" then states = states + 1 end end
       A.eq(states, 1)
     end,
-    -- Channel messages never arrive on Forever, so each hello gets our state back as a whisper to that friend only
-    -- (one reply each, all sent together after one short wait), never a copy to everyone per hello.
+    -- Each guild member's hello gets our state back as a whisper to that member only (one answer each, each after its
+    -- own short random wait), never a copy to the whole guild per hello.
     hellos_from_many_friends_get_one_state_each = function(ns, A, W)
       start(ns, W)
       local n = #W.sent
-      for _, name in ipairs({ "A1", "B2", "C3", "D4", "E5" }) do
+      for _, name in ipairs({ "Frostie", "Ginkan", "Lurabe", "Pewpew", "Chaos" }) do
         receive(ns, W, name, "HELLO", { ver = "0.1.0" })
         W:advance(0.2)
       end
@@ -347,63 +348,44 @@ return {
           to[W.sent[i].target] = (to[W.sent[i].target] or 0) + 1
         end
       end
-      A.eq(to, { A1 = 1, B2 = 1, C3 = 1, D4 = 1, E5 = 1 })
-      A.ok(ns.roster:get("E5"))
+      A.eq(to, { Frostie = 1, Ginkan = 1, Lurabe = 1, Pewpew = 1, Chaos = 1 })
+      A.ok(ns.roster:get("Chaos"))
     end,
-    someone_new_in_the_channel_gets_hello_and_state_by_whisper = function(ns, A, W)
+    -- With many copies online the answers to a newcomer must not land at once: each waits 0 to HELLO_REPLY_JITTER s.
+    hello_answers_are_spread_over_the_jitter = function(ns, A, W)
+      start(ns, W)
+      A.eq(ns.Config.HELLO_REPLY_JITTER, 5)
+      local delays = {}
+      local after = W.env.C_Timer.After
+      W.env.C_Timer.After = function(delay, fn) delays[#delays + 1] = delay; return after(delay, fn) end
+      for _, name in ipairs({ "Frostie", "Ginkan", "Lurabe" }) do receive(ns, W, name, "HELLO", { ver = "0.1.0" }) end
+      receive(ns, W, "Frostie", "HELLO", { ver = "0.1.1" }) -- already waiting for an answer: no second one
+      W.env.C_Timer.After = after
+      A.eq(#delays, 3, "one pending answer per newcomer")
+      for _, d in ipairs(delays) do A.ok(d >= 0 and d <= 5, "delay " .. d) end
+      A.no(delays[1] == delays[2] and delays[2] == delays[3], "random, not all the same")
+    end,
+    -- Someone the guild list does not have yet (they just joined): we cannot whisper them, so one STATE to the guild.
+    hello_from_someone_the_list_does_not_have_gets_a_guild_state = function(ns, A, W)
       start(ns, W)
       local n = #W.sent
-      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      W:advance(2)
-      A.eq(#sentSince(ns, W, n), 0, "waits a moment first")
-      W:advance(3)
-      local types = {}
-      for i = n + 1, #W.sent do
-        A.eq(W.sent[i].chatType, "WHISPER"); A.eq(W.sent[i].target, "Frostie Snow")
-        local msg = ns.Codec.decode(W.sent[i].text)
-        if msg then types[msg.type] = true end
-      end
-      A.ok(types.HELLO and types.STATE, "hello and state, to Frostie only")
-    end,
-    someone_new_who_already_said_hello_gets_nothing_extra = function(ns, A, W)
-      start(ns, W)
-      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      W:advance(1)
-      for _, text in ipairs(ns.Codec.encode("HELLO", { ver = "0.1.0" })) do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", "Frostie Snow")
-      end
-      local n = #W.sent
-      W:advance(8)
-      local hellos, states = 0, 0
-      for _, m in ipairs(sentSince(ns, W, n)) do
-        if m.type == "HELLO" then hellos = hellos + 1 elseif m.type == "STATE" then states = states + 1 end
-      end
-      A.eq(hellos, 0, "no extra hello")
-      A.ok(states >= 1, "the reply to their hello")
-    end,
-    hello_reply_goes_to_everyone_in_group_mode = function(ns, A, W)
-      start(ns, W)
-      W.state.inGroup = true
-      ns.Modules.set("comm", "transport", "group")
-      local n = #W.sent
-      receive(ns, W, "A1", "HELLO", { ver = "0.1.0" })
-      receive(ns, W, "B2", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Newbie", "HELLO", { ver = "0.1.0" })
       W:advance(8)
       local states = 0
       for i = n + 1, #W.sent do
         local msg = ns.Codec.decode(W.sent[i].text)
         if msg and msg.type == "STATE" then
           states = states + 1
-          A.eq(W.sent[i].chatType, "PARTY")
+          A.eq(W.sent[i].chatType, "GUILD")
         end
       end
-      A.ok(states >= 1, "a state went out")
-      A.ok(states <= 3, "one state (in pieces at most), not one per hello: " .. states)
+      A.ok(states >= 1 and states <= 2, "one state (in pieces at most): " .. states)
     end,
     pings_from_many_strangers_get_one_hello = function(ns, A, W)
       start(ns, W)
+      W:advance(30) -- past the answers to our own login HELLO
       local n = #W.sent
-      for _, name in ipairs({ "S1", "S2", "S3" }) do
+      for _, name in ipairs({ "Lurabe", "Pewpew", "Chaos" }) do -- guild members we have not heard from
         receive(ns, W, name, "PING", {})
         W:advance(1)
       end
@@ -441,18 +423,52 @@ return {
     end,
     ping_from_stranger_triggers_hello = function(ns, A, W)
       start(ns, W)
+      W:advance(30) -- past the answers to our own login HELLO
       local n = #W.sent
-      receive(ns, W, "Stranger", "PING", {})
+      receive(ns, W, "Pewpew", "PING", {}) -- a guild member we have not heard from
       W:advance(2)
       local msgs = sentSince(ns, W, n)
-      A.eq(#msgs, 2); A.eq(msgs[1].type, "HELLO"); A.eq(msgs[2].type, "STATE") -- to the asker only
+      A.eq(#msgs, 2); A.eq(msgs[1].type, "HELLO"); A.eq(msgs[2].type, "STATE")
+      for i = n + 1, #W.sent do A.eq(W.sent[i].target, "Pewpew", "to the asker only") end
       -- a second ping soon after does not make us send again
       W:advance(5)
       n = #W.sent
       W:advance(1)
-      receive(ns, W, "Stranger", "PING", { x = "1" })
+      receive(ns, W, "Pewpew", "PING", { x = "1" })
       W:advance(2)
       for _, m in ipairs(sentSince(ns, W, n)) do A.no(m.type == "HELLO") end
+    end,
+    -- Right after our HELLO a PING from someone we have not heard yet may just have overtaken their answer: no HELLO
+    -- back for that (else, with many copies online, every copy would get a second answer).
+    no_hello_back_while_the_answers_to_ours_are_coming = function(ns, A, W)
+      start(ns, W)
+      local n = #W.sent
+      receive(ns, W, "Pewpew", "PING", {})
+      W:advance(5)
+      A.eq(#sentSince(ns, W, n), 0)
+      W:advance(25)
+      receive(ns, W, "Pewpew", "PING", { x = "1" })
+      W:advance(2)
+      A.eq(sentSince(ns, W, n)[1].type, "HELLO", "later on, a stranger's PING is answered")
+    end,
+    -- A PING from someone the guild list does not have: a HELLO to the whole guild would make every copy answer, so
+    -- nothing; once the list has them, their next PING is answered.
+    ping_from_someone_not_whisperable_is_answered_once_the_list_has_them = function(ns, A, W)
+      start(ns, W)
+      W:advance(30) -- past the answers to our own login HELLO
+      local n = #W.sent
+      receive(ns, W, "Newbie", "PING", {})
+      W:advance(2)
+      A.eq(#sentSince(ns, W, n), 0)
+      table.insert(W.state.guild.members, { name = "Newbie Joined", online = true })
+      W:advance(10)
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      receive(ns, W, "Newbie", "PING", { x = "1" })
+      W:advance(2)
+      local msgs = sentSince(ns, W, n)
+      A.eq(#msgs, 2); A.eq(msgs[1].type, "HELLO")
+      A.eq(W.sent[#W.sent].target, "Newbie Joined", "whispered by the full name from the guild list")
     end,
     ping_from_known_member_marks_online = function(ns, A, W)
       start(ns, W)
@@ -560,7 +576,6 @@ return {
       A.eq(ns.Self.digestOf({ zn = "A", xc = "1", rx = "2", lk = "x" }), ns.Self.digestOf({ zn = "A", xc = "9" }))
       A.no(ns.Self.digestOf({ zn = "A" }) == ns.Self.digestOf({ zn = "B" }))
       A.ok(#ns.Self.digestOf({ zn = "A" }) <= 6)
-      ns.Comm.echoCount = W.realEchoCount
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
       local from = #W.sent
@@ -568,7 +583,6 @@ return {
       for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ", "no SREQ for an old copy") end
     end,
     two_pings_with_a_wrong_digest_ask_once_and_sreq_is_answered = function(ns, A, W)
-      ns.Comm.echoCount = W.realEchoCount
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
       local from = #W.sent
@@ -594,36 +608,25 @@ return {
       A.eq(W.sent[from + 1].chatType, "WHISPER")
       noErrors(ns, A)
     end,
-    stranger_ping_in_group_chat_mode_gets_hello_and_state_for_everyone = function(ns, A, W)
-      start(ns, W)
-      W.state.inGroup = true
-      ns.Modules.set("comm", "transport", "group")
-      local n = #W.sent
-      receive(ns, W, "Stranger", "PING", {})
-      W:advance(3)
-      local msgs = sentSince(ns, W, n)
-      A.ok(#msgs >= 2, "something was sent")
-      A.eq(msgs[1].type, "HELLO"); A.eq(msgs[2].type, "STATE")
-      for i = n + 1, #W.sent do A.eq(W.sent[i].chatType, "PARTY", "to the group: this mode cannot whisper") end
-      noErrors(ns, A)
-    end,
+    -- Before the guild list loads nobody can be whispered: the SREQ waits for the next PING (the mismatch is kept).
     sreq_is_counted_only_when_it_could_be_sent = function(ns, A, W)
-      ns.Comm.echoCount = W.realEchoCount
+      local rows = 0
+      local real = W.env.GetNumGuildMembers
+      W.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
       start(ns, W)
-      W.state.inGroup = true
-      ns.Modules.set("comm", "transport", "group")
       receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
       local from = #W.sent
       receive(ns, W, "Frostie", "PING", { h = "1" })
       receive(ns, W, "Frostie", "PING", { h = "2" })
       W:advance(5)
-      A.eq(ns.Log.counts()["sent SREQ"], nil, "group chat cannot whisper: nothing sent, nothing counted")
+      A.eq(ns.Log.counts()["sent SREQ"], nil, "nobody can be whispered yet: nothing sent, nothing counted")
       for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ") end
-      ns.Modules.set("comm", "transport", "whisper")
+      rows = 7
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
       receive(ns, W, "Frostie", "PING", { h = "3" })
-      receive(ns, W, "Frostie", "PING", { h = "4" })
       W:advance(5)
-      A.eq(ns.Log.counts()["sent SREQ"], 1, "no waiting left over from the try that sent nothing")
+      A.eq(ns.Log.counts()["sent SREQ"], 1, "the next PING asks at once")
     end,
     sreq_is_answered_at_most_once_per_ping_interval = function(ns, A, W)
       start(ns, W)
@@ -650,7 +653,6 @@ return {
     end,
     forget_removes_an_offline_friend_everywhere = function(ns, A, W)
       local db = start(ns, W)
-      db.crew.extra = { "Frostie", "Other" }
       receive(ns, W, "Frostie", "STATE", { lv = "20" })
       ns.StatsStore.applyWire("Frostie", { sid = "s1", q = "1", a_gn = "5" }, 100)
       A.ok(db.stats.crew.Frostie, "saved numbers")
@@ -662,7 +664,6 @@ return {
       A.ok(ns.Crew.forget("frostie"))
       A.eq(ns.roster:get("Frostie"), nil)
       A.eq(db.roster.Frostie, nil)
-      A.eq(db.crew.extra, { "Other" })
       A.eq(db.stats.crew.Frostie, nil)
       A.eq(#removed, 1); A.eq(removed[1][1], "Frostie")
       A.no(ns.Crew.forget("Frostie"), "already gone")
@@ -682,11 +683,9 @@ return {
         Undated = { name = "Undated", level = 5 } }
       db.stats.crew.Old = { sid = "s", s = {}, a = {} }
       db.stats.crew.Recent = { sid = "s", s = {}, a = {} }
-      db.crew.extra = { "old", "Recent", "Other" }
       ns.Comm.start()
       ns.Crew.start()
       A.eq(ns.roster:names(), { "Recent", "Undated" })
-      A.eq(db.crew.extra, { "Recent", "Other" }, "a pruned friend leaves the extra names too (any case)")
       A.eq(db.roster.Old, nil)
       A.eq(db.stats.crew.Old, nil)
       A.ok(db.stats.crew.Recent)

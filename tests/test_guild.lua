@@ -9,7 +9,7 @@ end
 -- Boots a game whose player is `me` in a guild of `members` (nil members = no guild). Starts the guild module.
 local function boot(ns, W, me, members, mutate)
   W.state.player = me
-  if members then W.state.guild = { name = "Test Guild", members = members } end
+  W.state.guild = members and { name = "Test Guild", members = members } or nil
   if mutate then mutate(W) end
   local db = ns.DB.init(nil, ns.Modules.list())
   ns.db = db

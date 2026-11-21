@@ -16,7 +16,7 @@ end
 
 local function receive(ns, W, sender, msgType, fields)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {}, msgType == "CALP" and { repeatKeys = { "i" } } or nil)) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -51,13 +51,12 @@ local function hear(W, sender, list)
   for _, text in ipairs(list) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", sender) end
 end
 
--- Copies of the addon (one per name), linked and logged in, in the game's real state (the channel delivers nothing:
--- everything travels by whisper). Returns { { W =, ns = }, ... } in the order of names.
+-- Copies of the addon (one per name), linked (so in one guild) and logged in. Returns { { W =, ns = }, ... } in the
+-- order of names.
 local function crewOf(H, names)
   local list, ws = {}, {}
   for i, name in ipairs(names) do
     local W, ns = H.client(name, { class = "MAGE" })
-    ns.Comm.echoCount = W.realEchoCount
     list[i], ws[i] = { W = W, ns = ns }, W
   end
   H.link(unpack(ws))
@@ -766,7 +765,6 @@ return {
     a_pruned_note_stays_pruned_and_checksums_agree = function(_, A, _, H)
       local tw, twNs = H.client("Twiz", { class = "DRUID" })
       local fr, frNs = H.client("Frostie", { class = "MAGE" })
-      twNs.Comm.echoCount, frNs.Comm.echoCount = tw.realEchoCount, fr.realEchoCount
       H.link(tw, fr)
       for _, X in ipairs({ tw, fr }) do
         X:fire("ADDON_LOADED", "TwizCrew"); X:fire("PLAYER_LOGIN"); X:fire("PLAYER_ENTERING_WORLD")

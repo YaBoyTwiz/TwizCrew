@@ -1,10 +1,27 @@
-local function boot(ns, W, mutate)
+-- Comm and Transport: every broadcast is one GUILD message, a whisper goes only to a guild member, and anything from
+-- someone outside the guild is dropped before it is decoded.
+
+-- The guild list for these tests: me (Twiz) and two friends, all online. `more` adds that many online members.
+local function guildOf(W, more)
+  local members = {
+    { name = "Twiz", online = true, guid = "Player-1-0001" },
+    { name = "Ginkan Pebble", class = "PRIEST", online = true },
+    { name = "Frostie Snow", class = "MAGE", online = true },
+  }
+  for i = 1, more or 0 do members[#members + 1] = { name = "Member" .. i .. " Extra", online = true } end
+  W.state.guild = { name = "Test Guild", members = members }
+end
+
+-- mutate(W) runs before anything starts (W.state.guild = nil: not in a guild).
+local function boot(ns, W, mutate, saved)
   W.state.player = "Twiz"
+  guildOf(W)
   if mutate then mutate(W) end
-  local db = ns.DB.init(nil, ns.Modules.list())
+  local db = ns.DB.init(saved, ns.Modules.list())
   ns.db = db
   ns.Modules.attach(db)
   ns.Comm.start()
+  ns.Guild.start()
   W:fire("PLAYER_ENTERING_WORLD")
   return db
 end
@@ -20,186 +37,133 @@ local function noErrors(ns, A)
   A.eq(ns.Log.errors(10), {})
 end
 
-local function filterFor(W, event)
-  for _, f in ipairs(W.messageFilters) do if f.event == event then return f.fn end end
-end
-
-local function joinsOf(W, name)
-  local n = 0
-  for _, j in ipairs(W.joins) do if j.name == name then n = n + 1 end end
-  return n
-end
-
 local function countLog(ns, text)
   local n = 0
   for _, line in ipairs(ns.Log.lines()) do if line:find(text, 1, true) then n = n + 1 end end
   return n
 end
 
--- Times (W.clock) of every JoinChannelByName call, recorded from now on.
-local function recordJoinTimes(W)
-  local times = {}
-  local join = W.env.JoinChannelByName
-  W.env.JoinChannelByName = function(...)
-    times[#times + 1] = W.clock
-    return join(...)
-  end
-  return times
+local function addon(W, text, chatType, sender)
+  W:fire("CHAT_MSG_ADDON", "TwizCrew", text, chatType, sender)
 end
 
--- WoW Forever: the game can list a channel's members. Returns the list of ListChannelByName calls.
-local function withList(W)
-  local calls = {}
-  W.env.ListChannelByName = function(name) calls[#calls + 1] = name end
-  return calls
-end
-
-local function list(W, text)
-  W:fire("CHAT_MSG_CHANNEL_LIST", text, "", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-end
-
-local function whisperTargets(dests)
-  local out = {}
-  for _, d in ipairs(dests) do if d.chatType == "WHISPER" then out[#out + 1] = d.target end end
-  return out
+-- Senders heard by PING handlers.
+local function pingSenders(ns)
+  local got = {}
+  ns.Comm.on("PING", function(sender) got[#got + 1] = sender end)
+  return got
 end
 
 return {
   files = { "Core/Init.lua", "Core/Util.lua", "Core/Log.lua", "Core/Events.lua", "Core/Modules.lua", "Core/DB.lua",
-    "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
+    "Crew/Guild.lua", "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
   tests = {
-    member_list_is_read_with_marks_colours_and_links = function(ns, A)
-      A.eq(ns.Transport.parseList("*Frostie Snow, @Ginkan Pebble, Twiz"), { "Frostie Snow", "Ginkan Pebble", "Twiz" })
-      A.eq(ns.Transport.parseList("[|cffff0000Frostie|r, |Hplayer:Ginkan|h[Ginkan]|h]"), { "Frostie", "Ginkan" })
-      A.eq(ns.Transport.parseList(""), {})
-      A.eq(ns.Transport.parseList(nil), {})
-    end,
-    -- Seen in game and reported by other addon makers: on WoW Forever a channel addon message is taken but never
-    -- delivered. Automatic mode whispers everyone in the channel's member list.
-    auto_mode_whispers_each_channel_member_after_the_first_list = function(ns, A, W)
-      local calls = withList(W)
-      boot(ns, W)
-      W:advance(6)
-      A.eq(calls, { "TwizCrewHQ" }, "asked for the member list right after joining")
-      A.ok(ns.Transport.isPending(), "sends wait for the list")
-      ns.Comm.send("PING", {})
-      W:advance(1)
-      A.eq(#W.sent, 0)
-      list(W, "*Twiz Noodle, Frostie Snow, @Ginkan Pebble")
-      A.no(ns.Transport.isPending())
-      A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Frostie Snow" },
-        { chatType = "WHISPER", target = "Ginkan Pebble" }, { chatType = "CHANNEL", target = 5 } })
-      W:advance(2)
-      A.eq(#W.sent, 3, "the kept PING went to both, and one copy to the channel")
-      A.eq(W.sent[1].target, "Frostie Snow")
-      A.ok(logHas(ns, "crew channel: Frostie Snow is here"))
+    ------------------------------------------------------------------------------------------------ sending
+    broadcast_is_one_guild_send = function(ns, A, W)
+      boot(ns, W, function(w) w.state.guild.members = { w.state.guild.members[1], w.state.guild.members[2] } end)
+      for _, size in ipairs({ 2, 10, 50 }) do
+        local members = { { name = "Twiz", online = true, guid = "Player-1-0001" } }
+        for i = 2, size do members[i] = { name = "Member" .. i .. " Extra", online = true } end
+        W.state.guild.members = members
+        W:fire("GUILD_ROSTER_UPDATE")
+        W:advance(2)
+        local online, total = ns.Guild.count()
+        A.eq({ online, total }, { size, size }, "the list has " .. size)
+        A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+        local before = #W.sent
+        ns.Comm.send("UPDATE", { zn = "Westfall" })
+        W:advance(2)
+        A.eq(#W.sent - before, 1, size .. " members: one send")
+        A.eq(W.sent[#W.sent].chatType, "GUILD")
+        A.eq(W.sent[#W.sent].target, nil)
+      end
       noErrors(ns, A)
     end,
-    sends_go_out_when_no_member_list_comes = function(ns, A, W)
-      withList(W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      W:advance(6)
+    sends_wait_until_the_game_says_whether_we_are_in_a_guild = function(ns, A, W)
+      local inGuild = false
+      boot(ns, W, function(w)
+        w.state.guild.name = "Late Guild"
+        w.env.IsInGuild = function() return inGuild end -- the game has not loaded the guild yet
+      end)
       A.ok(ns.Transport.isPending())
-      W:advance(5)
-      A.no(ns.Transport.isPending(), "stopped waiting after 5 s")
-      A.ok(logHas(ns, "no member list from channel TwizCrewHQ yet"))
-      A.eq(whisperTargets(ns.Transport.destinations()), { "Ginkan" })
-    end,
-    member_list_is_asked_every_minute_and_missing_members_are_forgotten = function(ns, A, W)
-      local calls = withList(W)
-      boot(ns, W)
-      W:advance(6)
-      list(W, "Twiz, Frostie Snow")
-      W:advance(60)
-      A.eq(#calls, 2)
-      for _ = 1, 3 do list(W, "Twiz"); W:advance(60) end
-      A.eq(ns.Transport.members(), {}, "Frostie was missing from three lists")
-      A.ok(logHas(ns, "crew channel: Frostie Snow left (not in the member list any more)"))
-    end,
-    join_and_leave_notices_and_not_playing_update_the_members = function(ns, A, W)
-      withList(W)
-      boot(ns, W)
-      W:advance(6)
-      list(W, "Twiz")
-      local found = {}
-      ns.Bus.on("test", "CREW_FOUND", function(name) found[#found + 1] = name end)
-      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Frostie Snow", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Ginkan Pebble", "", "5. TwizCrewHQ", "", "", 0, 5, "")
-      W:fire("CHAT_MSG_CHANNEL_JOIN", "", "Stranger Danger", "", "General", "", "", 0, 1, "General")
-      A.eq(ns.Transport.members(), { "Frostie Snow", "Ginkan Pebble" })
-      A.eq(found, { "Frostie", "Ginkan" }, "CREW_FOUND for people who came after the first list")
-      W:fire("CHAT_MSG_CHANNEL_LEAVE", "", "Ginkan Pebble", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      A.eq(ns.Transport.members(), { "Frostie Snow" })
-      W:fire("CHAT_MSG_SYSTEM", "No player named 'Frostie Snow' is currently playing.")
-      A.eq(ns.Transport.members(), {})
-      noErrors(ns, A)
-    end,
-    a_whisper_from_a_crew_copy_makes_them_someone_we_whisper = function(ns, A, W)
-      withList(W)
-      boot(ns, W)
-      W:advance(6)
-      list(W, "Twiz")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Frostie Snow")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan Pebble")
-      A.eq(ns.Transport.members(), { "Frostie Snow" }, "a party message alone does not")
-      A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })
-      A.eq(ns.Transport.destinationFor("Twiz"), nil, "never ourselves")
-      ns.Modules.set("comm", "transport", "group")
-      A.eq(ns.Transport.destinationFor("Frostie"), nil, "group mode does not whisper")
-    end,
-    grouped_members_get_the_group_copy_instead_of_a_whisper = function(ns, A, W)
-      withList(W)
-      boot(ns, W)
-      W:advance(6)
-      list(W, "Twiz, Frostie, Ginkan Pebble")
-      W.state.inGroup = true
-      W.state.groupMembers = { "Frostie" }
-      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" }, { chatType = "WHISPER", target = "Ginkan Pebble" },
-        { chatType = "CHANNEL", target = 5 } })
-    end,
-    member_list_lines_are_hidden_from_chat = function(ns, A, W)
-      withList(W)
-      boot(ns, W)
-      W:advance(6)
-      local filter = filterFor(W, "CHAT_MSG_CHANNEL_LIST")
-      A.ok(filter, "a filter for member lists")
-      A.ok(filter(nil, "CHAT_MSG_CHANNEL_LIST", "Twiz, Frostie", "", "", "TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ"))
-      A.no(filter(nil, "CHAT_MSG_CHANNEL_LIST", "Bob", "", "", "General", "", "", 0, 1, "General"))
-    end,
-    changing_the_channel_forgets_the_members = function(ns, A, W)
-      withList(W)
-      boot(ns, W)
-      W:advance(6)
-      list(W, "Twiz, Frostie")
-      ns.Modules.set("comm", "channel", "OtherCrew")
-      A.eq(ns.Transport.members(), {})
-    end,
-    joins_channel_after_delay_and_hides_it = function(ns, A, W)
-      boot(ns, W)
-      W:advance(4)
-      A.eq(W.state.channels.TwizCrewHQ, nil)
-      W:advance(2)
-      A.eq(W.state.channels.TwizCrewHQ, 5)
-      A.eq(#W.removedChannels, 10)
-      A.eq(W.removedChannels[1].channel, "TwizCrewHQ")
-      A.ok(ns.Transport.status().joined)
-      noErrors(ns, A)
-    end,
-    send_goes_to_channel_when_joined = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
+      local ready = 0
+      ns.Bus.on("test", "TRANSPORT_READY", function() ready = ready + 1 end)
+      ns.Comm.send("HELLO", { ver = "1" })
       ns.Comm.send("PING", {})
+      W:advance(3)
+      A.eq(#W.sent, 0)
+      inGuild = true
+      W:advance(2)
+      A.no(ns.Transport.isPending())
+      A.eq(ready, 1)
+      A.eq(#W.sent, 2, "the kept messages went out, in order")
+      A.contains(W.sent[1].text, "HELLO")
+      A.contains(W.sent[2].text, "PING")
+      A.eq(W.sent[1].chatType, "GUILD")
+      A.eq(ns.Transport.status(), { mode = "guild", pending = false, guild = "Late Guild", lockdown = false,
+        lastResult = 0 })
+    end,
+    not_in_a_guild_settles_after_the_grace_and_sends_nothing = function(ns, A, W)
+      boot(ns, W, function(w) w.state.guild = nil end)
+      A.ok(ns.Transport.isPending())
+      ns.Comm.send("HELLO", { ver = "1" })
+      W:advance(ns.Config.GUILD_ABSENT_GRACE + 2)
+      A.no(ns.Transport.isPending(), "settled: not in a guild")
+      A.eq(ns.Transport.destinations(), {})
+      A.eq(ns.Transport.destinationFor("Frostie"), nil)
+      local done = 0
+      ns.Comm.send("PING", {}, { onSent = function() done = done + 1 end })
+      A.eq(done, 1, "nothing to send: done at once")
+      A.no(ns.Comm.sendTo("Frostie", "SREQ", {}))
+      W:advance(60)
+      A.eq(#W.sent, 0)
+      A.eq(ns.Transport.status().mode, "none")
+      noErrors(ns, A)
+    end,
+    messages_still_queued_when_we_leave_the_guild_are_dropped = function(ns, A, W)
+      boot(ns, W)
+      W:advance(6)
+      for _ = 1, 10 do ns.Comm.send("PING", {}) end
+      ns.Comm.sendTo("Frostie", "SREQ", {})
+      W:advance(0.2)
+      A.eq(#W.sent, 4, "the first ones went out")
+      W.state.guild = nil -- kicked
+      W:advance(30)
+      A.eq(#W.sent, 4, "the rest never reach the game")
+      A.eq(ns.Transport.destinations(), {}, "at once, before the guild module says so")
+      noErrors(ns, A)
+    end,
+    whispers_go_to_guild_members_only_by_full_name = function(ns, A, W)
+      boot(ns, W)
+      A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })
+      A.eq(ns.Transport.destinationFor("ginkan pebble"), { chatType = "WHISPER", target = "Ginkan Pebble" })
+      A.eq(ns.Transport.destinationFor("Twiz"), nil, "never ourselves")
+      A.eq(ns.Transport.destinationFor("Stranger"), nil, "not in the guild")
+      A.eq(ns.Transport.fullName("Frostie"), "Frostie Snow")
+      A.eq(ns.Transport.fullName("Stranger-Realm"), "Stranger", "unknown: the short name")
+      A.ok(ns.Comm.sendTo("Frostie", "SREQ", {}))
+      A.no(ns.Comm.sendTo("Stranger", "SREQ", {}))
       W:advance(1)
       A.eq(#W.sent, 1)
-      A.eq(W.sent[1].chatType, "CHANNEL")
-      A.eq(W.sent[1].target, 5)
-      A.eq(W.sent[1].prefix, "TwizCrew")
-      noErrors(ns, A)
+      A.eq(W.sent[1].chatType, "WHISPER")
+      A.eq(W.sent[1].target, "Frostie Snow")
+    end,
+    no_whisper_before_the_list_loads = function(ns, A, W)
+      local rows = 0
+      boot(ns, W, function(w)
+        local real = w.env.GetNumGuildMembers
+        w.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
+      end)
+      A.no(ns.Transport.isPending(), "in a guild: ready even without the list")
+      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+      A.eq(ns.Transport.destinationFor("Frostie"), nil, "who is Frostie? the list has not loaded")
+      rows = 3
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })
     end,
     group_send_goes_to_the_group_only = function(ns, A, W)
       boot(ns, W)
-      W:advance(6)
       A.no(ns.Comm.sendGroup("POS", { c = "0", x = "1", y = "2" }), "not grouped: nothing")
       W:advance(1)
       A.eq(#W.sent, 0)
@@ -215,16 +179,23 @@ return {
       ns.Comm.sendGroup("MEET", { id = "a" })
       W:advance(1)
       A.eq(W.sent[2].chatType, "RAID")
-      local msg = ns.Codec.decode(W.sent[1].text)
-      A.eq(msg.type, "POS")
+      A.eq(ns.Codec.decode(W.sent[1].text).type, "POS")
       A.eq(ns.Codec.decode(W.sent[2].text).type, "MEET")
       noErrors(ns, A)
     end,
-    send_replace_keeps_one_waiting_copy_per_destination = function(ns, A, W)
-      local db = boot(ns, W)
-      W:advance(6)
-      db.crew.extra = { "Ginkan", "Frostie" } -- the channel and two whispers
-      for i = 1, 6 do ns.Comm.send("PING", {}) end -- fill the bucket so the rest has to wait
+    a_broadcast_never_gets_a_party_copy = function(ns, A, W)
+      boot(ns, W, function(w)
+        w.state.inGroup = true
+        w.state.groupMembers = { "Frostie" }
+      end)
+      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+      W.state.inRaid = true
+      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+      A.eq(ns.Transport.groupDestination(), { chatType = "RAID" })
+    end,
+    send_replace_keeps_one_waiting_copy = function(ns, A, W)
+      boot(ns, W)
+      for _ = 1, 6 do ns.Comm.send("PING", {}) end -- fill the bucket so the rest has to wait
       W:advance(0.2)
       local mark = #W.sent
       ns.Comm.send("AWC", { id = "s", i = "1" }, { replace = "s" })
@@ -240,231 +211,74 @@ return {
         if m.type == "AWS" then aws = aws + 1 end
       end
       table.sort(awc)
-      A.eq(awc, { "other1", "other1", "other1", "s2", "s2", "s2" }, "only the latest card of a show, per destination")
-      A.eq(aws, 6, "other types are never replaced")
+      A.eq(awc, { "other1", "s2" }, "only the latest card of a show")
+      A.eq(aws, 2, "other types are never replaced")
       noErrors(ns, A)
     end,
-    send_on_sent_runs_when_the_last_copy_left = function(ns, A, W)
-      local db = boot(ns, W)
-      W:advance(6)
-      db.crew.extra = { "Ginkan", "Frostie" }
-      for i = 1, 6 do ns.Comm.send("PING", {}) end
+    send_on_sent_runs_when_the_copy_left = function(ns, A, W)
+      boot(ns, W)
+      for _ = 1, 6 do ns.Comm.send("PING", {}) end
       local doneAt, calls = nil, 0
       ns.Comm.send("AWV", { id = "s" }, { onSent = function() calls = calls + 1; doneAt = #W.sent end })
       A.eq(calls, 0, "still waiting")
       W:advance(30)
       A.eq(calls, 1)
-      A.eq(ns.Codec.decode(W.sent[doneAt].text).type, "AWV", "right after the last copy")
-      local n = 0
-      for i = 1, doneAt do if ns.Codec.decode(W.sent[i].text).type == "AWV" then n = n + 1 end end
-      A.eq(n, 3, "all three copies were out")
+      A.eq(ns.Codec.decode(W.sent[doneAt].text).type, "AWV", "right after it went out")
       noErrors(ns, A)
     end,
-    send_before_join_is_delivered_after_join = function(ns, A, W)
+    throttled_send_is_retried = function(ns, A, W)
       boot(ns, W)
-      A.ok(ns.Transport.isPending())
-      ns.Comm.send("PING", {})
-      W:advance(3)
-      A.eq(#W.sent, 0)
-      W:advance(3)
-      A.eq(#W.sent, 1)
-      A.eq(W.sent[1].chatType, "CHANNEL")
-      A.eq(W.sent[1].target, 5)
-      A.no(ns.Transport.isPending())
-    end,
-    pending_sends_keep_their_order = function(ns, A, W)
-      boot(ns, W)
-      ns.Comm.send("HELLO", { ver = "1" })
-      ns.Comm.send("PING", {})
-      W:advance(7)
-      A.eq(#W.sent, 2)
-      A.contains(W.sent[1].text, "HELLO")
-      A.contains(W.sent[2].text, "PING")
-    end,
-    pending_sends_go_out_as_whispers_when_join_fails = function(ns, A, W)
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Ginkan", "Frostie" }
-      ns.Comm.send("PING", {})
-      W:advance(14)
-      A.eq(#W.sent, 0)
-      W:advance(3)
-      A.eq(#W.sent, 2)
-      A.eq(W.sent[1].chatType, "WHISPER")
-      A.eq(W.sent[1].target, "Ginkan")
-      A.eq(W.sent[2].target, "Frostie")
-      A.ok(ns.Transport.status().failed)
-    end,
-    falls_back_to_whispers_when_channel_fails = function(ns, A, W)
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Ginkan", "Frostie" }
-      W:advance(16)
-      ns.Comm.send("PING", {})
-      W:advance(2)
-      A.eq(#W.sent, 2)
-      A.eq(W.sent[1].chatType, "WHISPER"); A.eq(W.sent[1].target, "Ginkan")
-      A.eq(W.sent[2].chatType, "WHISPER"); A.eq(W.sent[2].target, "Frostie")
-      local st = ns.Transport.status()
-      A.ok(st.failed)
-      A.ok(st.failReason and st.failReason ~= "")
-      A.ok(logHas(ns, st.failReason))
-    end,
-    never_whispers_yourself = function(ns, A, W)
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Twiz", "Ginkan" }
-      W:advance(16)
-      A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Ginkan" } })
-    end,
-    fallback_after_bad_send_results = function(ns, A, W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      W:advance(6 + 10) -- joined, and past the moment right after joining when refusals are only waited out
-      W.state.sendResult = 7 -- InvalidChannel: a real refusal
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(3)
-      A.ok(ns.Transport.status().failed)
-      A.eq(ns.Transport.status().lastResult, 7)
-      W.state.sendResult = 0
-      ns.Comm.send("PING", {})
-      W:advance(1)
-      local last = W.sent[#W.sent]
-      A.eq(last.chatType, "WHISPER"); A.eq(last.target, "Ginkan")
-    end,
-    throttled_send_is_retried_and_does_not_fail_channel = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
       W.state.sendResult = 3 -- AddonMessageThrottle: "try again later"
       for i = 1, 3 do ns.Comm.send("PING", { n = tostring(i) }) end
       W:advance(4)
-      A.no(ns.Transport.status().failed, "throttle is not a channel failure")
       A.ok(#W.sent >= 2, "the throttled send was tried again")
       for _, s in ipairs(W.sent) do A.contains(s.text, "n=1", "nothing skipped past the throttled message") end
       W.state.sendResult = 8 -- ChannelThrottle
       W:advance(4)
-      A.no(ns.Transport.status().failed)
       W.state.sendResult = 0
       local before = #W.sent
       W:advance(3)
       local got = {}
       for i = before + 1, #W.sent do got[#got + 1] = W.sent[i].text:match("n=(%d)") end
       A.eq(got, { "1", "2", "3" })
-      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
     end,
-    wrong_password_notice_fails_and_prints_once = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
-      A.ok(ns.Transport.status().failed)
-      local n = 0
-      for _, line in ipairs(W.printed) do
-        if line == "TwizCrew: the crew code didn't work. Check it in /tc settings." then n = n + 1 end
-      end
-      A.eq(n, 1)
-    end,
-    other_channel_notice_is_ignored = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "Trade")
-      A.no(ns.Transport.status().failed)
-    end,
-    grouped_fallback_uses_party_and_skips_whisper_to_party_members = function(ns, A, W)
-      local db = boot(ns, W, function(w)
-        w.state.channelJoinFails = true
-        w.state.inGroup = true
-        w.state.groupMembers = { "Ginkan" }
-      end)
-      db.crew.extra = { "Ginkan", "Frostie" }
-      W:advance(16)
-      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" }, { chatType = "WHISPER", target = "Frostie" } })
-      W.state.inRaid = true
-      A.eq(ns.Transport.destinations()[1], { chatType = "RAID" })
-    end,
-    roster_names_are_used_when_present = function(ns, A, W)
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Frostie" }
-      ns.roster = { names = function() return { "Ginkan", "Frostie", "Twiz" } end, get = function() return { online = true } end }
-      W:advance(16)
-      A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Ginkan" },
-        { chatType = "WHISPER", target = "Frostie" } })
-    end,
-    fallback_broadcast_whispers_online_roster_names_but_hello_and_ping_go_to_everyone = function(ns, A, W)
-      ns.Comm.echoCount = W.realEchoCount
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Frostie", "pewpew" } -- Frostie is also an offline roster row; Pewpew is not on the roster
-      local online = { Ginkan = true }
-      local rows = { Ginkan = true, Lurabe = true, Frostie = true }
-      ns.roster = { names = function() return { "Ginkan", "Lurabe", "Frostie" } end,
-        get = function(_, n) return rows[n] and { online = online[n] == true } or nil end }
-      W:advance(16)
-      local function targets(msgType)
-        local out = {}
-        for _, d in ipairs(ns.Transport.destinations(msgType)) do out[#out + 1] = d.target end
-        return out
-      end
-      A.eq(targets("UPDATE"), { "Ginkan", "pewpew" }, "online roster names and the extra names that are not offline rows")
-      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie", "pewpew" }, "a HELLO tries everyone")
-      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie", "pewpew" }, "so does a PING: it is how offline friends are found")
-      ns.Modules.set("comm", "transport", "whisper")
-      A.eq(targets("UPDATE"), { "Ginkan", "pewpew" })
-      A.eq(targets("HELLO"), { "Ginkan", "Lurabe", "Frostie", "pewpew" })
-      A.eq(targets("PING"), { "Ginkan", "Lurabe", "Frostie", "pewpew" })
-      db.crew.extra = { "frostie" }
-      A.eq(targets("UPDATE"), { "Ginkan" }, "the roster row is found whatever the case of the extra name")
-      online.Frostie = true
-      A.eq(targets("UPDATE"), { "Ginkan", "Frostie" }, "online again: whispered")
-    end,
-    modes_pick_their_destinations = function(ns, A, W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      W:advance(6)
-      W.state.inGroup = true
-      ns.Modules.set("comm", "transport", "whisper")
-      A.eq(ns.Transport.destinations(), { { chatType = "WHISPER", target = "Ginkan" } })
-      A.no(ns.Transport.isPending())
-      ns.Modules.set("comm", "transport", "group")
-      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" } })
-      ns.Modules.set("comm", "transport", "channel")
-      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 } })
-      W.state.inGuild = true
-      ns.Modules.set("comm", "transport", "guild")
-      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
-      W.state.inGuild = false
-      ns.Modules.set("comm", "transport", "guild")
-      local dests = ns.Transport.destinations() -- not in a guild: automatic (group first, the channel copy last)
-      A.eq(dests[#dests], { chatType = "CHANNEL", target = 5 })
-    end,
-    -- Found in game: grouped with a friend, both copies on the channel, yet neither heard the other. In auto mode a
-    -- group always gets the message too (the receiver drops the second copy), so grouped friends always connect.
-    auto_mode_in_group_sends_to_channel_and_group = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 5 } })
-      W.state.inGroup = true
-      A.eq(ns.Transport.destinations(), { { chatType = "PARTY" }, { chatType = "CHANNEL", target = 5 } })
-      W.state.inRaid = true
-      A.eq(ns.Transport.destinations(), { { chatType = "RAID" }, { chatType = "CHANNEL", target = 5 } })
-    end,
-    group_copy_of_a_channel_message_is_dropped = function(ns, A, W)
-      boot(ns, W)
-      local got = 0
-      ns.Comm.on("PING", function() got = got + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan")
-      A.eq(got, 1)
-    end,
-    whisper_mode_is_not_pending = function(ns, A, W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      ns.Modules.set("comm", "transport", "whisper")
-      A.no(ns.Transport.isPending())
-      ns.Comm.send("PING", {})
+    queue_holds_during_chat_lockdown_and_resumes = function(ns, A, W)
+      local locked = true
+      boot(ns, W, function(w) w.env.InChatMessagingLockdown = function() return locked end end)
+      ns.Comm.send("PING", { n = "1" })
+      ns.Comm.send("PING", { n = "2" })
+      W:advance(5)
+      A.eq(#W.sent, 0, "nothing goes out during a chat lockdown")
+      A.ok(ns.Transport.status().lockdown)
+      locked = false
       W:advance(1)
-      A.eq(#W.sent, 1)
-      A.eq(W.sent[1].chatType, "WHISPER")
+      A.eq(#W.sent, 2, "both went out once it ended")
+      A.no(ns.Transport.status().lockdown)
+      -- the function may live in C_ChatInfo instead, and may answer a secret value (treated as "no lockdown")
+      W.env.InChatMessagingLockdown = nil
+      W.env.C_ChatInfo.InChatMessagingLockdown = function() return true end
+      ns.Comm.send("PING", { n = "3" })
+      W:advance(3)
+      A.eq(#W.sent, 2)
+      W.env.C_ChatInfo.InChatMessagingLockdown = function() return W.secret() end
+      W:advance(1)
+      A.eq(#W.sent, 3)
+      noErrors(ns, A)
+    end,
+    a_lockdown_send_result_waits_and_tries_again = function(ns, A, W)
+      boot(ns, W)
+      W.state.sendResult = 11 -- AddOnMessageLockdown
+      ns.Comm.send("PING", { n = "1" })
+      W:advance(3)
+      A.ok(#W.sent >= 2, "tried again")
+      A.eq(ns.Log.counts()["send failed"], nil, "not counted as failed while it waits")
+      W.state.sendResult = 0
+      W:advance(2)
+      A.eq(W.sent[#W.sent].result, 0)
+      A.contains(W.sent[#W.sent].text, "n=1")
     end,
     holds_during_boss_fight = function(ns, A, W)
       boot(ns, W)
-      W:advance(6)
       W:fire("ENCOUNTER_START")
       ns.Comm.send("PING", {})
       W:advance(2)
@@ -475,7 +289,6 @@ return {
     end,
     entering_world_releases_hold = function(ns, A, W)
       boot(ns, W)
-      W:advance(6)
       W:fire("ENCOUNTER_START")
       ns.Comm.send("PING", {})
       W:fire("PLAYER_ENTERING_WORLD")
@@ -491,499 +304,23 @@ return {
       W:advance(1)
       A.eq(#W.sent, 6)
     end,
-    receive_normalizes_realm_and_ignores_self = function(ns, A, W)
-      boot(ns, W)
-      local got = {}
-      ns.Comm.on("PING", function(sender) got[#got + 1] = sender end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan-Realm")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Holybøi-OtherRealm")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz-Realm")
-      W:fire("CHAT_MSG_ADDON", "Other", "1^PING^", "CHANNEL", "Ginkan-Realm")
-      -- Since the first in-game test: names always lose their realm (the crew is same-realm; WoW Forever sends
-      -- "Name Realm" for party and whisper senders, which made our own messages look like a friend's).
-      A.eq(got, { "Ginkan", "Holybøi" })
-    end,
-    receive_passes_fields_to_handlers = function(ns, A, W)
-      boot(ns, W)
-      local seen
-      ns.Comm.on("HELLO", function(sender, fields) seen = { sender, fields.zn } end)
-      local texts = ns.Codec.encode("HELLO", { zn = "Elwynn Forest" })
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", texts[1], "WHISPER", "Ginkan")
-      A.eq(seen, { "Ginkan", "Elwynn Forest" })
-    end,
-    receive_ignores_a_newer_protocol = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "2^PING^", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "99^PING^", "WHISPER", "Holybøi")
-      A.eq(n, 0, "a newer protocol is not handled")
-      A.eq(ns.Log.counts()["recv newer protocol"], 2)
-      A.no(ns.Log.counts()["recv PING"], "not counted as a PING")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
-      A.eq(n, 1, "the current protocol still works")
-    end,
-    receive_dedupes_same_text_within_window = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan")
-      A.eq(n, 1)
-      W:advance(3)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan")
-      A.eq(n, 2)
-    end,
-    dedupe_table_does_not_grow_forever = function(ns, A, W)
-      boot(ns, W)
-      for i = 1, 300 do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^x" .. i, "CHANNEL", "Ginkan")
-        W:advance(1)
-      end
-      A.ok(ns.Comm.dedupeSize() < 20, "dedupe size " .. ns.Comm.dedupeSize())
-    end,
-    garbage_message_is_ignored_quietly = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "nonsense", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "", "CHANNEL", "Ginkan")
-      A.eq(n, 0)
-      noErrors(ns, A)
-    end,
-    a_failing_handler_does_not_stop_others = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() error("boom") end)
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Ginkan")
-      A.eq(n, 1)
-    end,
-    debug_setting_controls_chat_debug = function(ns, A, W)
-      boot(ns, W)
-      A.eq(ns.Log.chatDebug, false)
-      ns.Modules.set("comm", "debug", true)
-      A.eq(ns.Log.chatDebug, true)
-      ns.Modules.set("comm", "debug", false)
-      A.eq(ns.Log.chatDebug, false)
-    end,
-    comm_is_an_essential_module = function(ns, A, W)
-      local d = ns.Modules.get("comm")
-      A.eq(d.tier, "essential")
-      A.eq(d.name, "Crew connection")
-      A.eq(d.defaults.transport, "auto")
-    end,
-    late_join_after_timeout_is_still_hidden = function(ns, A, W)
-      boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      W:advance(16)
-      A.ok(ns.Transport.status().failed)
-      A.eq(#W.removedChannels, 0)
-      W.state.channels.TwizCrewHQ = 5
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "YOU_JOINED", "", "", "TwizCrewHQ")
-      A.eq(#W.removedChannels, 10)
-      local frames = {}
-      for _, r in ipairs(W.removedChannels) do frames[r.frame] = true end
-      for i = 1, 10 do A.ok(frames[W.env["ChatFrame" .. i]], "frame " .. i) end
-    end,
-    hides_not_found_line_for_whispered_names = function(ns, A, W)
-      local db = boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      db.crew.extra = { "Ginkan" }
-      W:advance(16)
-      ns.Comm.send("PING", {})
-      W:advance(1)
-      local f = filterFor(W, "CHAT_MSG_SYSTEM")
-      A.ok(f, "a CHAT_MSG_SYSTEM filter")
-      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan' is currently playing."), true)
-      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Stranger' is currently playing."), false)
-      A.eq(f(nil, "CHAT_MSG_SYSTEM", nil), false)
-      W:advance(11)
-      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan' is currently playing."), false)
-    end,
-    changing_only_the_code_leaves_and_joins_again = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      A.ok(ns.Transport.status().joined)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 1)
-      ns.Modules.set("comm", "password", "newcode")
-      A.eq(W.leaves, { "TwizCrewHQ" })
-      A.no(ns.Transport.status().joined)
-      A.ok(ns.Transport.isPending())
-      ns.Comm.send("PING", {})
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "YOU_LEFT", "", "", "5. TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      W:advance(3)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 2, "joined once more, and our own leave notice did not start another join")
-      A.eq(W.joins[#W.joins].password, "newcode")
-      A.ok(ns.Transport.status().joined)
-      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
-      W:advance(15)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 2)
-      noErrors(ns, A)
-    end,
-    destinations_follow_a_new_channel_number = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W.state.channels.TwizCrewHQ = 7
-      A.eq(ns.Transport.destinations(), { { chatType = "CHANNEL", target = 7 } })
-      A.eq(ns.Transport.status().channelIndex, 7)
-    end,
-    lost_channel_number_rejoins_and_sends_wait = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W.state.channels.TwizCrewHQ = nil
-      local before = #W.sent
-      ns.Comm.send("PING", {})
-      A.no(ns.Transport.status().joined, "a missing channel number means not joined")
-      A.ok(ns.Transport.isPending())
-      W:advance(0.5)
-      A.eq(#W.sent, before, "the message waits for the channel")
-      W:advance(4)
-      A.ok(ns.Transport.status().joined)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 2)
-      A.eq(#W.sent, before + 1)
-      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
-      -- lost again right away: the next join waits until 10 s after the last one
-      W.state.channels.TwizCrewHQ = nil
-      ns.Comm.send("PING", {})
-      W:advance(4)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 2, "no second join within 10 s")
-      W:advance(8)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 3)
-      A.ok(ns.Transport.status().joined)
-      noErrors(ns, A)
-    end,
-    you_left_notice_rejoins = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W.state.channels.TwizCrewHQ = nil
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "YOU_LEFT", "", "", "5. TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ")
-      A.no(ns.Transport.status().joined)
-      local before = #W.sent
-      ns.Comm.send("PING", {})
-      W:advance(0.5)
-      A.eq(#W.sent, before)
-      W:advance(4)
-      A.ok(ns.Transport.status().joined)
-      A.eq(#W.sent, before + 1)
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "YOU_LEFT", "", "", "6. Other", "", "", 0, 6, "Other")
-      A.ok(ns.Transport.status().joined, "another channel's notice changes nothing")
-    end,
-    our_channel_lines_are_hidden_from_chat = function(ns, A, W)
-      boot(ns, W)
-      for _, event in ipairs({ "CHAT_MSG_CHANNEL_NOTICE", "CHAT_MSG_CHANNEL_NOTICE_USER", "CHAT_MSG_CHANNEL",
-        "CHAT_MSG_CHANNEL_JOIN", "CHAT_MSG_CHANNEL_LEAVE" }) do
-        local f = filterFor(W, event)
-        A.ok(f, "filter for " .. event)
-        A.eq(f(nil, event, "YOU_JOINED", "", "", "5. TwizCrewHQ", "", "", 0, 5, "TwizCrewHQ"), true)
-        A.eq(f(nil, event, "hi", "Ginkan", "", "5. twizcrewhq", "", "", 0, 5, ""), true, "arg4 without arg9")
-        A.eq(f(nil, event, "hi", "Ginkan", "", "TwizCrewHQ"), true)
-        A.eq(f(nil, event, "hi", "Ginkan", "", "6. TwizCrewHQ2", "", "", 0, 6, "TwizCrewHQ2"), false)
-        A.eq(f(nil, event, "hi", "Ginkan", "", "2. Trade - City", "", "", 0, 2, "Trade - City"), false)
-        A.eq(f(nil, event), false)
-        A.eq(f(nil, event, 1, 2, 3, {}, 5, 6, 7, 8, {}), false)
-      end
-      local general = filterFor(W, "CHAT_MSG_CHANNEL")
-      ns.Modules.set("comm", "channel", "OtherHQ")
-      A.eq(general(nil, "CHAT_MSG_CHANNEL", "hi", "Ginkan", "", "5. OtherHQ", "", "", 0, 5, "OtherHQ"), true)
-      noErrors(ns, A)
-    end,
-    channel_removed_with_newer_api = function(ns, A, W)
-      W.env.ChatFrame_RemoveChannel = nil
-      local calls = {}
-      W.env.ChatFrameUtil = { RemoveChannel = function(frame, name) calls[#calls + 1] = name end }
-      boot(ns, W)
-      W:advance(6)
-      A.eq(#calls, 10)
-      A.eq(calls[1], "TwizCrewHQ")
-      A.eq(#W.removedChannels, 0)
-    end,
-    channel_removed_with_frame_method = function(ns, A, W)
-      W.env.ChatFrame_RemoveChannel = nil
-      local calls = {}
-      for i = 1, 10 do
-        W.env["ChatFrame" .. i] = { RemoveChannel = function(self, name) calls[#calls + 1] = { self, name } end }
-      end
-      boot(ns, W)
-      W:advance(6)
-      A.eq(#calls, 10)
-      A.eq(calls[3][1], W.env.ChatFrame3)
-      A.eq(calls[3][2], "TwizCrewHQ")
-    end,
-    no_way_to_remove_channel_is_logged = function(ns, A, W)
-      W.env.ChatFrame_RemoveChannel = nil
-      for i = 1, 10 do W.env["ChatFrame" .. i] = {} end
-      boot(ns, W)
-      W:advance(6)
-      A.ok(ns.Transport.status().joined)
-      A.ok(ns.Transport.status().hideFailed)
-      A.ok(logHas(ns, "WARN could not take the channel TwizCrewHQ out of the chat windows"))
-      noErrors(ns, A)
-    end,
-    receive_same_route_resend_is_not_dropped = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan")
-      A.eq(n, 2)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Ginkan")
-      A.eq(n, 2, "the same message by another route is a duplicate")
-    end,
-    own_channel_echoes_are_counted = function(ns, A, W)
-      boot(ns, W)
-      local n = 0
-      ns.Comm.on("PING", function() n = n + 1 end)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz-Realm")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^a", "CHANNEL", "Twiz")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "PARTY", "Twiz")
-      A.eq(n, 0)
-      A.eq(ns.Comm.echoCount(), 2)
-    end,
-    -- The owner's first login: the channel joined, and the sends in that same second were refused (result 7).
-    refusals_right_after_join_are_waited_out = function(ns, A, W)
-      boot(ns, W)
-      W.state.channelReadyAfter = 2 -- the game refuses channel sends for 2 s after the join
-      ns.Comm.send("HELLO", { ver = "1" })
-      ns.Comm.send("STATE", { lv = "10" })
-      ns.Comm.send("UPDATE", { zn = "Elwynn Forest" })
-      W:advance(5.3)
-      A.ok(ns.Transport.status().joined)
-      A.eq(W.sent[1].result, 7, "refused like in the game")
-      W:advance(10)
-      local st = ns.Transport.status()
-      A.no(st.failed, "refusals right after joining do not count")
-      A.ok(st.joined)
-      local good = {}
-      for _, m in ipairs(W.sent) do
-        if m.result == 0 then good[#good + 1] = m.chatType .. " " .. m.text:match("^%d+%^(%u+)%^") end
-      end
-      A.eq(good, { "CHANNEL HELLO", "CHANNEL STATE", "CHANNEL UPDATE" }, "all three went out on the channel, in order")
-      A.ok(#W.sent <= 3 + 3, "the refused message was tried about once a second, not more")
-      A.eq(countLog(ns, "refused a send right after joining (result 7)"), 1)
-      A.eq(countLog(ns, "has to wait"), 1, "one line for the message that waited")
-      A.eq(countLog(ns, "channel failed"), 0)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 1)
-      noErrors(ns, A)
-    end,
-    refusals_after_a_rejoin_are_waited_out_too = function(ns, A, W)
-      boot(ns, W)
-      W:advance(20)
-      ns.Modules.set("comm", "password", "newcode") -- leaves and joins again: a new channel for the game
-      W.state.channelReadyAfter = 2
-      W:advance(2.1)
-      ns.Comm.send("PING", {})
-      W:advance(5)
-      A.no(ns.Transport.status().failed)
-      A.eq(W.sent[#W.sent].result, 0)
-      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
-    end,
-    channel_that_keeps_refusing_is_tried_again_at_a_slow_pace = function(ns, A, W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      W.state.channelSendResult = 7 -- every channel send refused, whispers fine
-      local joinTimes = recordJoinTimes(W)
-      local ticker = W.env.C_Timer.NewTicker(20, function() ns.Comm.send("PING", {}) end) -- some traffic
-      W:advance(5 + 10 + 3 * 20 + 10) -- three refused PINGs after the grace, then one more PING
-      local st = ns.Transport.status()
-      A.ok(st.failed, "gave up on the channel for now")
-      A.eq(st.failReason, "sends to the channel were refused (result 7)")
-      A.ok(st.nextRetryIn and st.nextRetryIn > 0 and st.nextRetryIn <= 60, "a try is planned")
-      A.eq(W.sent[#W.sent].chatType, "WHISPER", "the fallback carries the messages")
-      local logStart = #ns.Log.lines()
-      local sentStart = #W.sent
-      W:advance(3600)
-      ticker:Cancel()
-      -- tries: 60 s, then 120, 240 and 300 s apart (plus the time the channel needs to fail again each time)
-      A.ok(#joinTimes >= 8 and #joinTimes <= 16, "tries in an hour: " .. #joinTimes)
-      local gaps = {}
-      for i = 2, #joinTimes do gaps[#gaps + 1] = joinTimes[i] - joinTimes[i - 1] end
-      A.ok(gaps[1] >= 60 and gaps[1] < 120, "first gap " .. tostring(gaps[1]))
-      for i, g in ipairs(gaps) do A.ok(g >= 60 and g <= 300 + 10 + 3 * 20 + 1, "gap " .. i .. ": " .. g) end
-      A.ok(gaps[#gaps] >= 300, "the pace settles at about 5 minutes")
-      -- nothing spams: per try, the waiting message is tried about once a second while the channel is new, then
-      -- the refusals count; everything else goes out as whispers at the normal pace.
-      local channelSends = 0
-      for i = sentStart + 1, #W.sent do if W.sent[i].chatType == "CHANNEL" then channelSends = channelSends + 1 end end
-      A.ok(channelSends <= #joinTimes * 15, "channel sends in an hour: " .. channelSends)
-      -- no endless log flood: the first tries are logged, then only every sixth
-      local channelLines = 0
-      local lines = ns.Log.lines()
-      for i = logStart + 1, #lines do
-        if lines[i]:find("channel", 1, true) and not lines[i]:find("DEBUG", 1, true) then
-          channelLines = channelLines + 1
-        end
-      end
-      A.ok(channelLines <= 20, "channel lines in an hour: " .. channelLines)
-      A.ok(countLog(ns, "trying channel TwizCrewHQ again (try 1)") == 1)
-      A.ok(ns.Transport.status().failed)
-      noErrors(ns, A)
-    end,
-    channel_comes_back_after_refusals = function(ns, A, W)
-      local db = boot(ns, W)
-      db.crew.extra = { "Ginkan" }
-      local back = 0
-      ns.Bus.on("test", "CHANNEL_BACK", function() back = back + 1 end)
-      W:advance(16)
-      W.state.channelSendResult = 7
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(3) -- the whisper copies to Ginkan go in between, so the third refusal comes about a second later
-      A.ok(ns.Transport.status().failed)
-      A.ok(logHas(ns, "using the fallback, trying the channel again in 60 s"))
-      W.state.channelSendResult = nil -- the game takes channel messages again
-      W:advance(57)
-      A.ok(ns.Transport.status().failed, "not before the minute is up")
-      A.eq(back, 0)
-      W:advance(2)
-      A.ok(ns.Transport.status().joined)
-      A.no(ns.Transport.status().failed)
-      A.eq(back, 1, "CHANNEL_BACK fired once")
-      A.ok(logHas(ns, "trying channel TwizCrewHQ again (try 1)"))
-      A.ok(logHas(ns, "channel TwizCrewHQ joined again as 5 (try 1)"))
-      ns.Comm.send("PING", {})
-      W:advance(1)
-      A.eq(W.sent[#W.sent].chatType, "CHANNEL")
-      A.eq(W.sent[#W.sent].result, 0)
-      A.ok(logHas(ns, "channel TwizCrewHQ works again"))
-      noErrors(ns, A)
-    end,
-    refusals_right_after_coming_back_are_waited_out = function(ns, A, W)
-      boot(ns, W)
-      W:advance(16)
-      W.state.channelSendResult = 7
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(2)
-      A.ok(ns.Transport.status().failed)
-      ns.Bus.on("test", "CHANNEL_BACK", function()
-        ns.Comm.send("HELLO", {}); ns.Comm.send("STATE", {}); ns.Comm.send("PING", {})
-        W.env.C_Timer.After(2, function() W.state.channelSendResult = nil end) -- the game is ready 2 s later
-      end)
-      W:advance(70)
-      local st = ns.Transport.status()
-      A.ok(st.joined); A.no(st.failed, "refusals right after joining again do not count either")
-      local good = {}
-      for _, m in ipairs(W.sent) do
-        if m.result == 0 and m.chatType == "CHANNEL" then good[#good + 1] = m.text:match("^%d+%^(%u+)%^") end
-      end
-      A.eq(good, { "HELLO", "STATE", "PING" })
-      noErrors(ns, A)
-    end,
-    wrong_code_during_a_try_stops_the_tries = function(ns, A, W)
-      boot(ns, W)
-      W:advance(16)
-      W.state.channelSendResult = 7
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(2)
-      W.state.channels.TwizCrewHQ = nil       -- we are out of the channel, and joining it again fails
-      W.state.channelJoinFails = true
-      W:advance(59)                           -- the try starts and waits for the channel number
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
-      A.eq(ns.Transport.status().failReason, "wrong crew code")
-      local joins = joinsOf(W, "TwizCrewHQ")
-      W:advance(1200)
-      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "no more tries")
-      A.eq(ns.Transport.status().nextRetryIn, nil)
-    end,
-    tries_start_slow_again_after_the_channel_worked = function(ns, A, W)
-      boot(ns, W)
-      W:advance(16)
-      local function failNow()
-        W.state.channelSendResult = 7
-        for _ = 1, 3 do ns.Comm.send("PING", {}) end
-        W:advance(2)
-        A.ok(ns.Transport.status().failed)
-      end
-      failNow()
-      W.state.channelSendResult = nil
-      W:advance(61)
-      ns.Comm.send("PING", {})
-      W:advance(1)
-      A.eq(ns.Transport.status().retries, 0, "a good send ends the tries")
-      W:advance(15)
-      failNow()
-      A.ok(ns.Transport.status().nextRetryIn <= 60, "the next failure waits a minute again, not longer")
-    end,
-    wrong_code_while_trying_again_stops_the_tries = function(ns, A, W)
-      boot(ns, W)
-      W:advance(16)
-      W.state.channelSendResult = 7
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(2)
-      A.ok(ns.Transport.status().nextRetryIn)
-      W:fire("CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", "", "", "TwizCrewHQ")
-      A.eq(ns.Transport.status().failReason, "wrong crew code")
-      A.eq(ns.Transport.status().nextRetryIn, nil)
-      local joins = joinsOf(W, "TwizCrewHQ")
-      W:advance(1200)
-      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "no more tries")
-    end,
-    join_timeout_is_not_tried_again = function(ns, A, W)
-      boot(ns, W, function(w) w.state.channelJoinFails = true end)
-      W:advance(16)
-      A.ok(ns.Transport.status().failed)
-      A.eq(ns.Transport.status().nextRetryIn, nil)
-      W:advance(1200)
-      A.eq(joinsOf(W, "TwizCrewHQ"), 1)
-    end,
-    changing_the_code_while_trying_again_starts_over = function(ns, A, W)
-      boot(ns, W)
-      W:advance(16)
-      W.state.channelSendResult = 7
-      for _ = 1, 3 do ns.Comm.send("PING", {}) end
-      W:advance(2)
-      W.state.channelSendResult = nil
-      ns.Modules.set("comm", "password", "newcode")
-      W:advance(3)
-      local st = ns.Transport.status()
-      A.ok(st.joined); A.no(st.failed); A.eq(st.retries, 0)
-      local joins = joinsOf(W, "TwizCrewHQ")
-      W:advance(120)
-      A.eq(joinsOf(W, "TwizCrewHQ"), joins, "the old planned try does nothing")
-      noErrors(ns, A)
-    end,
     sends_are_logged_for_debugging = function(ns, A, W)
       boot(ns, W)
       ns.Log.chatDebug = true
-      W:advance(6)
       ns.Comm.send("PING", {})
       W:advance(1)
-      A.ok(logHas(ns, "DEBUG send PING via CHANNEL to 5"))
-    end,
-    chatter_is_counted_not_logged_while_debug_is_off = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan") -- first sight of a name logs once
-      local before = #ns.Log.lines()
-      for i = 2, 50 do
-        W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "WHISPER", "Ginkan")
-      end
-      A.eq(ns.Log.counts()["recv PING"], 50)
-      A.eq(#ns.Log.lines(), before, "no log line for received messages")
-      ns.Comm.send("PING", {})
-      W:advance(2)
-      A.ok(ns.Log.counts()["send PING"] >= 1)
-      for _, line in ipairs(ns.Log.lines()) do A.no(line:find("send PING", 1, true)) end
+      A.ok(logHas(ns, "DEBUG send PING via GUILD to -"))
     end,
     refused_send_is_counted = function(ns, A, W)
       boot(ns, W)
-      W:advance(60)
       W.state.sendResult = 7
       ns.Comm.send("PING", {})
       W:advance(5)
       A.ok(ns.Log.counts()["send failed"] >= 1)
-    end,
-    changing_crew_code_rejoins = function(ns, A, W)
-      boot(ns, W)
-      W:advance(6)
-      A.ok(ns.Transport.status().joined)
-      ns.Modules.set("comm", "channel", "OtherHQ")
-      A.eq(W.leaves, { "TwizCrewHQ" })
-      W:advance(3)
-      A.eq(W.state.channels.OtherHQ, 5)
-      A.eq(ns.Transport.status().channel, "OtherHQ")
-      A.ok(ns.Transport.status().joined)
+      A.eq(ns.Transport.status().lastResult, 7)
     end,
     a_refused_send_is_given_up_after_the_retry_cap = function(ns, A, W)
       boot(ns, W)
-      W:advance(6)
       W.state.sendResult = 3 -- "try again later", for good
       local done = 0
       ns.Comm.send("PING", { n = "1" }, { onSent = function() done = done + 1 end })
@@ -991,7 +328,8 @@ return {
       W:advance(8)
       A.eq(countLog(ns, "given up"), 0, "still trying")
       W:advance(45)
-      A.eq(countLog(ns, "send to 5 given up after " .. ns.Config.SEND_RETRY_MAX .. " tries"), 2, "one line per dropped message")
+      A.eq(countLog(ns, "send to GUILD given up after " .. ns.Config.SEND_RETRY_MAX .. " tries"), 2,
+        "one line per dropped message")
       A.eq(done, 1, "the sent callback ran for the dropped message")
       W.state.sendResult = 0
       local n = #W.sent
@@ -1000,25 +338,215 @@ return {
       A.eq(#W.sent, n + 1, "the queue moved on")
       A.contains(W.sent[#W.sent].text, "n=3")
     end,
-    channel_copy_only_for_ping_or_after_an_echo = function(ns, A, W)
-      withList(W)
+    hides_not_found_line_for_whispered_names = function(ns, A, W)
       boot(ns, W)
-      ns.Comm.echoCount = W.realEchoCount -- the real rule, not the tests' default
-      W:advance(6)
-      list(W, "Twiz, Frostie Snow, Ginkan Pebble, Chaos Deathbringr, Lurabe Moon")
-      A.eq(#ns.Transport.members(), 4)
-      local function sendsFor(msgType)
-        local n = #W.sent
-        ns.Comm.send(msgType, {})
-        W:advance(5)
-        return #W.sent - n
-      end
-      A.eq(sendsFor("UPDATE"), 4, "no echo yet: the four whispers only")
-      A.eq(sendsFor("PING"), 5, "a PING also tries the channel")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^PING^", "CHANNEL", "Twiz")
-      A.eq(ns.Comm.echoCount(), 1)
-      A.eq(sendsFor("UPDATE"), 5, "the channel has delivered: the copy goes out for every type")
+      ns.Comm.sendTo("Ginkan", "SREQ", {})
+      W:advance(1)
+      local f
+      for _, x in ipairs(W.messageFilters) do if x.event == "CHAT_MSG_SYSTEM" then f = x.fn end end
+      A.ok(f, "a CHAT_MSG_SYSTEM filter")
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan Pebble' is currently playing."), true)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Stranger' is currently playing."), false)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", nil), false)
+      W:advance(11)
+      A.eq(f(nil, "CHAT_MSG_SYSTEM", "No player named 'Ginkan Pebble' is currently playing."), false)
+    end,
+
+    ------------------------------------------------------------------------------------------------ receiving
+    whisper_from_a_stranger_is_dropped_and_counted = function(ns, A, W)
+      boot(ns, W)
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "WHISPER", "Stranger Danger-Realm")
+      addon(W, "1^PING^", "WHISPER", "Stranger")
+      A.eq(got, {})
+      A.eq(ns.Log.counts()["recv not in guild"], 2)
+      A.eq(ns.Log.counts()["recv PING"], nil, "not even decoded")
+      addon(W, "1^PING^", "WHISPER", "Frostie Snow-Realm")
+      addon(W, "1^PING^a", "WHISPER", "Ginkan")
+      A.eq(got, { "Frostie", "Ginkan" }, "members are heard under their key")
       noErrors(ns, A)
+    end,
+    party_message_from_a_stranger_is_dropped = function(ns, A, W)
+      boot(ns, W)
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "PARTY", "Stranger Danger")
+      addon(W, "1^PING^", "RAID", "Stranger Danger")
+      addon(W, "1^PING^", "CHANNEL", "Stranger Danger")
+      A.eq(got, {})
+      A.eq(ns.Log.counts()["recv not in guild"], 3)
+      addon(W, "1^PING^", "PARTY", "Frostie Snow")
+      A.eq(got, { "Frostie" })
+    end,
+    guild_message_before_the_list_loads_is_accepted = function(ns, A, W)
+      local rows = 0
+      boot(ns, W, function(w)
+        local real = w.env.GetNumGuildMembers
+        w.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
+      end)
+      A.no(ns.Guild.loaded())
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "GUILD", "Frostie Snow")
+      A.eq(got, { "Frostie" }, "a guild message is from a member: provisional key")
+      addon(W, "1^PING^a", "WHISPER", "Frostie Snow")
+      addon(W, "1^PING^b", "PARTY", "Ginkan Pebble")
+      A.eq(got, { "Frostie" }, "whispers and party messages wait for the list")
+      A.eq(ns.Log.counts()["recv not in guild"], 2)
+      rows = 3
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      addon(W, "1^PING^c", "WHISPER", "Frostie Snow")
+      A.eq(got, { "Frostie", "Frostie" })
+    end,
+    guild_message_from_someone_the_list_does_not_have_yet = function(ns, A, W)
+      boot(ns, W)
+      local got = pingSenders(ns)
+      local asked = W.guildRosterCalls
+      W:advance(11)
+      addon(W, "1^PING^", "GUILD", "Newbie Joined")
+      A.eq(got, { "Newbie" }, "a guild message: their first word, until the list knows them")
+      A.ok(W.guildRosterCalls > asked, "and the list is asked again")
+      -- a newcomer whose first word is already a member's key never takes that key
+      addon(W, "1^PING^a", "GUILD", "Frostie Other")
+      A.eq(got[2], "Frostie Other")
+      addon(W, "1^PING^b", "GUILD", "Twiz Somebody")
+      A.eq(got[3], "Twiz Somebody", "nor mine")
+    end,
+    receive_ignores_self_in_every_form = function(ns, A, W)
+      boot(ns, W)
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "GUILD", "Twiz")
+      addon(W, "1^PING^a", "GUILD", "Twiz-Realm")
+      addon(W, "1^PING^b", "PARTY", "Twiz")
+      addon(W, "1^PING^c", "WHISPER", "Twiz-Realm")
+      addon(W, "1^PING^", "GUILD", "Ginkan-Realm")
+      addon(W, "1^PING^", "WHISPER", "Holybøi-OtherRealm")
+      W:fire("CHAT_MSG_ADDON", "Other", "1^PING^", "GUILD", "Ginkan-Realm")
+      A.eq(got, { "Ginkan" })
+      A.eq(ns.Log.counts()["recv not in guild"], 1, "Holybøi is not in the guild")
+    end,
+    raw_hook_sees_everything_first = function(ns, A, W)
+      boot(ns, W)
+      local raw = {}
+      ns.Comm.onRaw(function(text, chatType, sender) raw[#raw + 1] = chatType .. " " .. sender end)
+      addon(W, "1^PING^", "GUILD", "Twiz")
+      addon(W, "1^PING^", "WHISPER", "Stranger")
+      A.eq(raw, { "GUILD Twiz", "WHISPER Stranger" })
+    end,
+    receive_passes_fields_to_handlers = function(ns, A, W)
+      boot(ns, W)
+      local seen
+      ns.Comm.on("HELLO", function(sender, fields) seen = { sender, fields.zn } end)
+      local texts = ns.Codec.encode("HELLO", { zn = "Elwynn Forest" })
+      addon(W, texts[1], "WHISPER", "Ginkan Pebble")
+      A.eq(seen, { "Ginkan", "Elwynn Forest" })
+    end,
+    receive_ignores_a_newer_protocol = function(ns, A, W)
+      boot(ns, W)
+      local n = 0
+      ns.Comm.on("PING", function() n = n + 1 end)
+      addon(W, "2^PING^", "GUILD", "Ginkan")
+      addon(W, "99^PING^", "WHISPER", "Frostie")
+      A.eq(n, 0, "a newer protocol is not handled")
+      A.eq(ns.Log.counts()["recv newer protocol"], 2)
+      A.no(ns.Log.counts()["recv PING"], "not counted as a PING")
+      addon(W, "1^PING^", "GUILD", "Ginkan")
+      A.eq(n, 1, "the current protocol still works")
+    end,
+    -- An old copy (v0.1.24) in my party and guild whispers and sends to the party: the second route is a duplicate.
+    receive_dedupes_the_same_text_by_another_route = function(ns, A, W)
+      boot(ns, W)
+      local n = 0
+      ns.Comm.on("PING", function() n = n + 1 end)
+      addon(W, "1^PING^", "WHISPER", "Ginkan")
+      addon(W, "1^PING^", "PARTY", "Ginkan")
+      A.eq(n, 1)
+      addon(W, "1^PING^", "WHISPER", "Ginkan")
+      A.eq(n, 2, "the same route twice is a resend")
+      W:advance(3)
+      addon(W, "1^PING^", "PARTY", "Ginkan")
+      A.eq(n, 3)
+    end,
+    dedupe_table_does_not_grow_forever = function(ns, A, W)
+      boot(ns, W)
+      for i = 1, 300 do
+        addon(W, "1^PING^x" .. i, "GUILD", "Ginkan")
+        W:advance(1)
+      end
+      A.ok(ns.Comm.dedupeSize() < 20, "dedupe size " .. ns.Comm.dedupeSize())
+    end,
+    garbage_message_is_ignored_quietly = function(ns, A, W)
+      boot(ns, W)
+      local n = 0
+      ns.Comm.on("PING", function() n = n + 1 end)
+      addon(W, "nonsense", "GUILD", "Ginkan")
+      addon(W, "", "GUILD", "Ginkan")
+      A.eq(n, 0)
+      noErrors(ns, A)
+    end,
+    a_failing_handler_does_not_stop_others = function(ns, A, W)
+      boot(ns, W)
+      local n = 0
+      ns.Comm.on("PING", function() error("boom") end)
+      ns.Comm.on("PING", function() n = n + 1 end)
+      addon(W, "1^PING^", "GUILD", "Ginkan")
+      A.eq(n, 1)
+    end,
+    chatter_is_counted_not_logged_while_debug_is_off = function(ns, A, W)
+      boot(ns, W)
+      addon(W, "1^PING^", "WHISPER", "Ginkan Pebble") -- first sight of a name form logs once
+      local before = #ns.Log.lines()
+      for _ = 2, 50 do addon(W, "1^PING^", "WHISPER", "Ginkan Pebble") end
+      A.eq(ns.Log.counts()["recv PING"], 50)
+      A.eq(#ns.Log.lines(), before, "no log line for received messages")
+      ns.Comm.send("PING", {})
+      W:advance(2)
+      A.ok(ns.Log.counts()["send PING"] >= 1)
+      for _, line in ipairs(ns.Log.lines()) do A.no(line:find("send PING", 1, true)) end
+    end,
+
+    ------------------------------------------------------------------------------------------------ module
+    debug_setting_controls_chat_debug = function(ns, A, W)
+      boot(ns, W)
+      A.eq(ns.Log.chatDebug, false)
+      ns.Modules.set("comm", "debug", true)
+      A.eq(ns.Log.chatDebug, true)
+      ns.Modules.set("comm", "debug", false)
+      A.eq(ns.Log.chatDebug, false)
+    end,
+    comm_is_an_essential_module_with_only_the_debug_setting = function(ns, A)
+      local d = ns.Modules.get("comm")
+      A.eq(d.tier, "essential")
+      A.eq(d.name, "Crew connection")
+      A.eq(d.defaults, { debug = false })
+      A.eq(#d.settings, 1)
+      A.eq(d.settings[1].key, "debug")
+    end,
+    old_channel_settings_are_cleared_on_upgrade = function(ns, A, W)
+      local db = boot(ns, W, nil, {
+        crew = { channel = "TwizCrewHQ", password = "goldshire", extra = { "Frostie" } },
+        modules = { comm = { enabled = true, settings = { transport = "whisper", debug = false } } },
+      })
+      A.eq(db.crew, nil, "channel name, crew code and whisper names are gone")
+      A.eq(db.modules.comm.settings, { debug = false })
+      A.eq(W.leaves, {}, "the game may not have rejoined it yet")
+      W:advance(6)
+      A.eq(W.leaves, { "TwizCrewHQ" }, "left once")
+      A.ok(logHas(ns, "left the old crew channel TwizCrewHQ"))
+      W:advance(60)
+      A.eq(W.leaves, { "TwizCrewHQ" })
+      noErrors(ns, A)
+    end,
+    nothing_left_of_the_channel = function(ns, A, W)
+      boot(ns, W)
+      for _, name in ipairs({ "members", "rejoin", "heardFrom", "forget", "parseList" }) do
+        A.eq(ns.Transport[name], nil, "Transport." .. name)
+      end
+      A.eq(ns.Comm.echoCount, nil)
+      A.eq(ns.Config.DEFAULT_CHANNEL, nil)
+      A.eq(ns.Config.DEFAULT_PASSWORD, nil)
+      W:advance(30)
+      A.eq(W.joins, {}, "no channel is joined")
+      for _, f in ipairs(W.messageFilters) do A.eq(f.event, "CHAT_MSG_SYSTEM", "no channel line filters") end
     end,
   },
 }

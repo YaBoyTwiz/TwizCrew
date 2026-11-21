@@ -40,7 +40,7 @@ function Modules.register(def)
     elseif s.kind == "list" then
       assert(type(s.lines) == "function", "module " .. id .. " list " .. s.key .. " needs lines")
     end
-    if s.store ~= "crew" and not NO_VALUE[s.kind] then
+    if not NO_VALUE[s.kind] then
       assert(def.defaults[s.key] ~= nil, "module " .. id .. " setting " .. s.key .. " has no default")
     end
   end
@@ -118,19 +118,9 @@ end
 function Modules.setting(id, key)
   local d = byId[id]
   if not d then return nil end
-  for _, s in ipairs(d.settings) do
-    if s.key == key and s.store == "crew" then return db and db.crew and db.crew[key] end
-  end
   local e = entry(id)
   if e and e.settings and e.settings[key] ~= nil then return e.settings[key] end
   return d.defaults[key]
-end
-
-local function crewSetting(d, key)
-  for _, s in ipairs(d.settings) do
-    if s.key == key and s.store == "crew" then return true end
-  end
-  return false
 end
 
 -- Stores a setting. Refuses (logs a warning, returns false) unknown keys and values of the wrong type.
@@ -140,22 +130,15 @@ function Modules.set(id, key, value)
     ns.Log.add("warn", "set: unknown module %s", tostring(id))
     return false
   end
-  local isCrew = crewSetting(d, key)
   local current = Modules.setting(id, key)
   if current == nil or type(value) ~= type(current) then
     ns.Log.add("warn", "set: refused %s.%s = %s (expected %s)", id, tostring(key), tostring(value), type(current))
     return false
   end
-  if db then
-    if isCrew then
-      db.crew[key] = value
-    else
-      local e = entry(id)
-      if e then
-        e.settings = e.settings or {}
-        e.settings[key] = value
-      end
-    end
+  local e = entry(id)
+  if e then
+    e.settings = e.settings or {}
+    e.settings[key] = value
   end
   runHook(d, "onSettingChanged", key, value)
   ns.Bus.fire("SETTING_CHANGED", id, key, value)

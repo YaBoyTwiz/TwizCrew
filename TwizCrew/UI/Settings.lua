@@ -140,8 +140,6 @@ local function settingDef(id, key)
 end
 
 -- Saves one setting the way the window does. Text is trimmed and a blank text is refused.
--- Crew settings (store = "crew") land in ns.db.crew; the comm module's onSettingChanged then calls
--- Transport.rejoin(), so a new channel name or crew code takes effect at once.
 function Win.save(id, key, value)
   local s = settingDef(id, key)
   if not s then return false end

@@ -30,9 +30,7 @@ local HELP = {
   "/tc report - a health check you can copy and paste to Discord",
   "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
   "/tc debug - turn technical chat messages on or off",
-  "/tc add <name> - add a friend by name, used when the hidden channel does not work",
-  "/tc remove <name> - take a name off that list (works for friends who are offline)",
-  "/tc forget <name> - drop an offline friend from the crew list for good (same as /tc remove)",
+  "/tc forget <name> - drop an offline friend from the crew list for good (/tc remove does the same)",
   "/tc awards - the awards show for this session, great on stream",
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
@@ -55,35 +53,6 @@ function Commands.normalizeName(text)
   local name = ns.Util.trim(tostring(text or ""))
   if name == "" then return nil end
   return name:sub(1, 1):upper() .. name:sub(2)
-end
-
-local function extraList()
-  local crew = ns.db and ns.db.crew
-  if not crew then return nil end
-  if type(crew.extra) ~= "table" then crew.extra = {} end
-  return crew.extra
-end
-
-local function findName(list, name)
-  local low = name:lower()
-  for i, n in ipairs(list) do
-    if type(n) == "string" and n:lower() == low then return i end
-  end
-end
-
-local function addName(rest)
-  local name = Commands.normalizeName(rest)
-  local list = extraList()
-  if not name then say("type a name after it, like /tc add Frostie"); return end
-  if not list then return end
-  if ns.isMe(name) then
-    say("that's you, no need to add yourself.")
-    return
-  end
-  local safe = ns.Util.safeText(name)
-  if findName(list, name) then say(safe .. " is already on your list."); return end
-  list[#list + 1] = name
-  say("added " .. safe .. ". If the hidden channel does not work, TwizCrew will whisper them directly.")
 end
 
 local function forgetName(rest)
@@ -286,7 +255,6 @@ local ACTIONS = {
   report = function() ns.Report.show() end,
   guildtest = function() ns.GuildTest.run() end,
   debug = toggleDebug,
-  add = addName,
   remove = forgetName,
   forget = forgetName,
   awards = awards,

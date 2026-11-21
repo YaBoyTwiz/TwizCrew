@@ -18,7 +18,6 @@ function DB.init(saved, defs)
   ns.Util.mergeDefaults(db, {
     schema = 1,
     modules = {},
-    crew = { channel = ns.Config.DEFAULT_CHANNEL, password = ns.Config.DEFAULT_PASSWORD, extra = {} },
     roster = {},
     guild = { keys = {} }, -- keys[lower(full name)] = the key a guild member was given the first time (never changed)
     log = {},

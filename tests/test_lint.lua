@@ -150,7 +150,7 @@ return {
         "UnitOnTaxi", "UnitExists", "UnitIsPlayer", "UnitCanAttack", "UnitIsVisible", "UnitInParty", "UnitInRaid",
         "UnitPosition", "UnitIsConnected", "IsInInstance", "IsInGroup", "IsInRaid", "IsMounted", "IsSwimming",
         "IsFalling", "IsResting", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo",
-        "GetGuildRosterLastOnline", "GetGuildInfo", "GuildRoster" }
+        "GetGuildRosterLastOnline", "GetGuildInfo", "GuildRoster", "InChatMessagingLockdown" }
       for _, f in ipairs(tocFiles()) do
         if f ~= "Core\\Util.lua" then
           local n = 0

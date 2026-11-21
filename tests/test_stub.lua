@@ -86,6 +86,7 @@ return {
     end,
 
     guild_list_calls_return_what_the_state_holds = function(ns, A, W)
+      W.state.guild = nil -- (the runner puts every test's player in a guild)
       A.eq(W.env.IsInGuild(), false)
       A.eq(W.env.GetNumGuildMembers(), 0)
       A.eq(W.env.GetGuildInfo("player"), nil)
@@ -118,6 +119,7 @@ return {
     end,
 
     a_guild_send_outside_a_guild_is_refused = function(ns, A, W)
+      W.state.guild = nil
       local send = W.env.C_ChatInfo.SendAddonMessage
       A.ok(send("TwizCrew", "x", "GUILD") ~= 0)
       W.state.guild = { name = "G", members = {} }

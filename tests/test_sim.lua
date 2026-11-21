@@ -1,4 +1,5 @@
 -- Two (or three) copies of TwizCrew talking to each other through the fake game (H.client / H.link / H.advance).
+-- Linked clients share the harness guild, so everything travels as it does in the game: GUILD messages and whispers.
 
 local LOGIN_LINE = "TwizCrew v0.1.0 loaded. Type /tc for settings."
 
@@ -43,8 +44,7 @@ end
 local function twoFriends(H, opts)
   opts = opts or {}
   local tw, twNs = H.client("Twiz", opts.state)
-  local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire",
-    channelJoinFails = opts.state and opts.state.channelJoinFails })
+  local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
   H.link(tw, fr)
   login(tw)
   login(fr)
@@ -360,108 +360,6 @@ return {
       noErrors(A, c.twNs, c.frNs)
     end,
 
-    channel_failure_falls_back_to_whispers = function(_, A, _, H)
-      local c = twoFriends(H, { state = { channelJoinFails = true }, wait = 1 })
-      -- each has the other in the whisper list (typed after logging in, like a player would)
-      tc(c.tw, "add Frostie")
-      tc(c.fr, "add twiz")
-      A.eq(c.twNs.db.crew.extra, { "Frostie" })
-      A.eq(c.frNs.db.crew.extra, { "Twiz" })
-      H.advance(19)
-      A.ok(c.twNs.roster:get("Frostie") and c.twNs.roster:get("Frostie").online, "Twiz sees Frostie")
-      A.ok(c.frNs.roster:get("Twiz") and c.frNs.roster:get("Twiz").online, "Frostie sees Twiz")
-      A.eq(c.twNs.roster:get("Frostie").class, "MAGE")
-      local whispered = false
-      for _, m in ipairs(c.tw.sent) do if m.chatType == "WHISPER" and m.target == "Frostie" then whispered = true end end
-      A.ok(whispered, "the messages went by whisper")
-      local lines = c.twNs.Report.lines()
-      A.contains(lines[2], "failed: the channel did not join in time")
-      noErrors(A, c.twNs, c.frNs)
-    end,
-
-    -- The owner's first-ever login (from the saved log): the channel joined as 6 and the HELLO, STATE and UPDATE
-    -- sent in that same second came back with result 7. Then the copy gave up on the channel for the session.
-    first_login_refusals_right_after_join_still_reach_a_friend = function(_, A, _, H)
-      local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
-      H.link(fr)
-      login(fr)
-      H.advance(10)
-      local hellos = {}
-      frNs.Comm.on("HELLO", function(sender) hellos[#hellos + 1] = sender end)
-      local tw, twNs = H.client("Twiz", { channelReadyAfter = 2 }) -- refuses channel sends for 2 s after joining
-      H.link(tw)
-      login(tw)
-      H.advance(20)
-      -- (the whisper copies to Frostie go out first and are not refused; only the channel copies are)
-      local refused, firstChannel, firstGood = 0, nil, nil
-      for i, m in ipairs(tw.sent) do
-        if m.chatType == "CHANNEL" then
-          if m.result == 7 then refused = refused + 1 end
-          firstChannel = firstChannel or i
-          if not firstGood and m.result == 0 then firstGood = i end
-        end
-      end
-      A.ok(refused >= 1, "the first channel sends were refused, like in the game")
-      A.eq(tw.sent[firstChannel].result, 7)
-      A.ok(firstGood, "the channel took a message later")
-      A.contains(tw.sent[firstGood].text, "HELLO", "the refused HELLO was kept and sent again")
-      A.eq(tw.sent[1].chatType, "WHISPER")
-      A.eq(tw.sent[1].target, "Frostie")
-      A.contains(tw.sent[1].text, "HELLO", "the first thing Frostie gets is the HELLO, by whisper")
-      local st = twNs.Transport.status()
-      A.ok(st.joined, "on the channel"); A.no(st.failed, "never gave up on it")
-      A.eq(hellos, { "Twiz" }, "Frostie heard Twiz's HELLO")
-      A.ok(frNs.roster:get("Twiz") and frNs.roster:get("Twiz").online, "Frostie sees Twiz")
-      A.ok(twNs.roster:get("Frostie") and twNs.roster:get("Frostie").online, "Twiz sees Frostie")
-      A.contains(twNs.Report.lines()[2], "TwizCrewHQ joined)")
-      noErrors(A, twNs, frNs)
-    end,
-
-    -- A channel that refuses for longer: the copy falls back, tries the channel again a minute later, and when it
-    -- works says HELLO there, so a friend who never heard it learns about it.
-    channel_back_after_refusals_says_hello_to_the_crew = function(_, A, _, H)
-      local fr, frNs = H.client("Frostie", { class = "MAGE", level = 12, subzone = "Northshire" })
-      H.link(fr)
-      login(fr)
-      H.advance(10)
-      local hellos = {}
-      frNs.Comm.on("HELLO", function(sender) hellos[#hellos + 1] = sender end)
-      local tw, twNs = H.client("Twiz", { channelSendResult = 7 })
-      H.link(tw)
-      login(tw)
-      H.advance(70) -- joined at 5 s, refusals waited out until 15 s, then counted: down at about 20 s
-      local st = twNs.Transport.status()
-      A.ok(st.failed, "Twiz gave up on the channel for now")
-      A.contains(twNs.Report.lines()[2], "failed: sends to the channel were refused (result 7)")
-      A.contains(twNs.Report.lines()[2], "next try in")
-      -- meanwhile the fallback covers: Twiz heard Frostie on the channel, so Twiz whispers her
-      local whispered = false
-      for _, m in ipairs(tw.sent) do
-        if m.chatType == "WHISPER" and m.target == "Frostie" and m.result == 0 then whispered = true end
-      end
-      A.ok(whispered, "the fallback whispers Frostie")
-      local heardBefore, sentBefore = #hellos, #tw.sent
-      tw.state.channelSendResult = nil -- the game takes channel messages again
-      H.advance(st.nextRetryIn + 15)
-      st = twNs.Transport.status()
-      A.ok(st.joined, "back on the channel"); A.no(st.failed)
-      local helloOnChannel = false
-      for i = sentBefore + 1, #tw.sent do
-        local m = tw.sent[i]
-        if m.chatType == "CHANNEL" and m.result == 0 and m.text:find("^%d+%^HELLO%^") then helloOnChannel = true end
-      end
-      A.ok(helloOnChannel, "Twiz said HELLO on the channel when it came back")
-      A.ok(#hellos > heardBefore and hellos[#hellos] == "Twiz", "Frostie heard it")
-      A.ok(frNs.roster:get("Twiz") and frNs.roster:get("Twiz").online, "Frostie sees Twiz")
-      A.eq(frNs.roster:get("Twiz").class, "WARRIOR", "and Twiz's STATE")
-      A.ok(twNs.roster:get("Frostie") and twNs.roster:get("Frostie").online, "Twiz sees Frostie (her reply)")
-      local log = table.concat(twNs.Log.lines(), "\n")
-      A.contains(log, "trying channel TwizCrewHQ again (try 1)")
-      A.contains(log, "channel TwizCrewHQ works again")
-      A.contains(twNs.Report.lines()[2], "TwizCrewHQ joined)")
-      noErrors(A, twNs, frNs)
-    end,
-
     friend_logging_back_in_shows_no_old_layer = function(_, A, _, H)
       local c = twoFriends(H, { wait = 31 })
       frostieNear(c, true)
@@ -489,8 +387,7 @@ return {
       noErrors(A, c.twNs, c.frNs, pwNs)
     end,
 
-    -- WoW Forever: channel addon messages never arrive (the harness drops them, like the game). A third friend who
-    -- logs in later finds the others in the channel's member list, and they find them by the join notice.
+    -- A third friend who logs in later says HELLO to the guild once; everyone answers with a whisper.
     a_friend_who_logs_in_later_sees_everyone_and_everyone_sees_them = function(_, A, _, H)
       local c = twoFriends(H)
       local gi, giNs = H.client("Ginkan", { class = "PRIEST", level = 8 })
@@ -503,9 +400,18 @@ return {
         A.ok(m and m.online, pair[1].playerName() .. " sees " .. pair[2])
       end
       A.eq(giNs.Panel.headerText(), "2 of 2 online")
-      local channelOnly = true
-      for _, m in ipairs(gi.sent) do if m.chatType ~= "CHANNEL" then channelOnly = false end end
-      A.no(channelOnly, "Ginkan whispered")
+      local hellos = 0
+      for _, m in ipairs(gi.sent) do
+        if m.text:find("^%d+%^HELLO%^") then hellos = hellos + 1; A.eq(m.chatType, "GUILD") end
+      end
+      A.eq(hellos, 1, "one HELLO, to the guild")
+      for _, W in ipairs({ c.tw, c.fr }) do
+        local states = 0
+        for _, m in ipairs(W.sent) do
+          if m.chatType == "WHISPER" and m.target == "Ginkan" and m.text:find("^%d+%^STATE%^") then states = states + 1 end
+        end
+        A.eq(states, 1, W.state.player .. " answered Ginkan's HELLO with one whispered STATE")
+      end
       noErrors(A, c.twNs, c.frNs, giNs)
     end,
     level_progress_reaches_a_friend = function(_, A, _, H)
@@ -522,9 +428,9 @@ return {
       local updates = 0
       for i = sentBefore + 1, #c.fr.sent do
         local msg = c.frNs.Codec.decode(c.fr.sent[i].text)
-        if msg and msg.type == "UPDATE" and c.fr.sent[i].chatType == "WHISPER" then updates = updates + 1 end
+        if msg and msg.type == "UPDATE" then updates = updates + 1; A.eq(c.fr.sent[i].chatType, "GUILD") end
       end
-      A.eq(updates, 6 * 2, "counted once: the whisper to Twiz (the channel copy goes out too)")
+      A.eq(updates, 6 * 2, "one GUILD message each")
       row = rowOf(c.twNs, "Frostie")
       A.eq(row.xpText, "Lv 12 " .. DOT .. " 49%")
       A.eq(row.tip[2], "951 XP to level 13")
@@ -614,21 +520,10 @@ return {
       noErrors(A, tw2Ns, fr3Ns)
     end,
 
-    -- The game's real state: the channel delivers nothing, so everything below travels by whisper.
-    in_fallback_mode_friends_who_marked_each_other_offline_find_each_other_after_a_ping = function(_, A, _, H)
-      local c = twoFriends(H, { state = { channelJoinFails = true }, wait = 20 })
-      c.twNs.Comm.echoCount = c.tw.realEchoCount
-      c.frNs.Comm.echoCount = c.fr.realEchoCount
-      c.twNs.db.crew.extra = { "Frostie" }
-      c.frNs.db.crew.extra = { "Twiz" }
-      c.twNs.Comm.send("HELLO", {})
-      c.frNs.Comm.send("HELLO", {})
-      H.advance(10)
-      A.ok(c.twNs.roster:get("Frostie") and c.frNs.roster:get("Twiz"), "they met by whisper")
-      c.twNs.db.crew.extra, c.frNs.db.crew.extra = {}, {} -- from now on only the roster says who to whisper
+    friends_who_marked_each_other_offline_find_each_other_after_a_ping = function(_, A, _, H)
+      local c = twoFriends(H, { wait = 20 })
+      A.ok(c.twNs.roster:get("Frostie") and c.frNs.roster:get("Twiz"), "they met")
       H.advance(25) -- let what is still queued go out and arrive first
-      c.twNs.Transport.forget("Frostie") -- (a whisper made them channel members too)
-      c.frNs.Transport.forget("Twiz")
       c.twNs.roster:gone("Frostie")
       c.frNs.roster:gone("Twiz")
       A.no(c.twNs.roster:get("Frostie").online)
@@ -640,8 +535,6 @@ return {
     end,
     a_lost_update_is_repaired_after_two_pings = function(_, A, _, H)
       local c = twoFriends(H)
-      c.twNs.Comm.echoCount = c.tw.realEchoCount
-      c.frNs.Comm.echoCount = c.fr.realEchoCount
       H.advance(130)
       A.eq(c.twNs.Log.counts()["sent SREQ"], nil, "nothing lost, nothing asked")
       -- every UPDATE of Frostie's that says she is dead is lost on the way to Twiz (the answer to a request is a STATE)
@@ -678,9 +571,6 @@ return {
       local gi, giNs = H.client("Ginkan", { class = "PRIEST", level = 8 })
       H.link(gi)
       login(gi)
-      for _, pair in ipairs({ { c.tw, c.twNs }, { c.fr, c.frNs }, { gi, giNs } }) do
-        pair[2].Comm.echoCount = pair[1].realEchoCount
-      end
       H.advance(40)
       A.ok(c.twNs.roster:get("Frostie") and c.twNs.roster:get("Frostie").online, "Twiz sees Frostie")
       A.no(c.twNs.roster:get("Frostie").tags and c.twNs.roster:get("Frostie").tags.DEAD)
@@ -698,18 +588,16 @@ return {
     -- Twiz timed Frostie out while she was dead: her tags were cleared, so her digest must no longer match.
     a_friend_timed_out_while_dead_shows_dead_again_after_two_pings = function(_, A, _, H)
       local c = twoFriends(H, { wait = 35 })
-      c.twNs.Comm.echoCount = c.tw.realEchoCount
-      c.frNs.Comm.echoCount = c.fr.realEchoCount
       c.fr.state.dead = true
       c.fr:fire("PLAYER_DEAD")
       H.advance(3)
       A.ok(c.twNs.roster:get("Frostie").tags.DEAD, "Twiz sees DEAD")
-      -- every whisper Frostie sends to Twiz is lost for a while: Twiz times her out
+      -- everything Frostie sends is lost for a while: Twiz times her out
       local api = c.fr.env.C_ChatInfo
       local real = api.SendAddonMessage
       api.SendAddonMessage = function(prefix, text, chatType, target, ...)
         local result = real(prefix, text, chatType, target, ...)
-        if chatType == "WHISPER" and tostring(target):find("^Twiz") then c.fr.sent[#c.fr.sent].result = 99 end
+        c.fr.sent[#c.fr.sent].result = 99
         return result
       end
       -- she keeps touching the mouse, so no AFK tag comes along (that UPDATE would be lost too)
@@ -732,8 +620,6 @@ return {
     end,
     with_no_loss_ten_pings_cause_no_state_request = function(_, A, _, H)
       local c = twoFriends(H)
-      c.twNs.Comm.echoCount = c.tw.realEchoCount
-      c.frNs.Comm.echoCount = c.fr.realEchoCount
       c.fr.state.zone = "Westfall"
       c.fr:fire("ZONE_CHANGED_NEW_AREA")
       H.advance(660)

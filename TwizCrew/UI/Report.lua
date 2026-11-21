@@ -26,30 +26,18 @@ local function interface()
   return ok and n and tostring(n) or "unknown"
 end
 
-local function duration(seconds)
-  seconds = math.ceil(seconds)
-  if seconds < 60 then return seconds .. " s" end
-  if seconds < 3600 then return math.floor(seconds / 60) .. " min" end
-  return math.floor(seconds / 3600) .. " h " .. math.floor(seconds % 3600 / 60) .. " min"
-end
-
-local function fallbackName()
-  return ns.Util.plain(IsInGroup) and "group chat and whispers" or "whispers"
-end
-
 local function connection()
   local s = ns.Transport.status()
-  local state
-  if s.failed then
-    state = "failed: " .. tostring(s.failReason)
-    if type(s.downFor) == "number" then state = state .. "; down for " .. duration(s.downFor) end
-    if type(s.nextRetryIn) == "number" then
-      local using = s.mode == "auto" and ("using " .. fallbackName() .. ", ") or ""
-      state = state .. "; " .. using .. "next try in " .. duration(s.nextRetryIn)
-    end
-  elseif s.joined then state = "joined"
-  else state = "not joined" end
-  return "Connection: " .. tostring(s.mode) .. " (channel " .. tostring(s.channel) .. " " .. state .. ")"
+  local text
+  if s.mode == "guild" then
+    text = "through the guild " .. tostring(s.guild or "(name not known yet)")
+  elseif s.pending then
+    text = "waiting for the game to say whether you are in a guild"
+  else
+    text = "not in a guild, so nothing is sent"
+  end
+  if s.lockdown then text = text .. "; the game is holding chat messages back right now" end
+  return "Connection: " .. text
 end
 
 local function layer()
@@ -90,8 +78,7 @@ local function checkLines(add)
     .. ", atlas check " .. yes(C_Texture and C_Texture.GetAtlasInfo)
     .. ", chat filter " .. yes(type(ChatFrame_AddMessageEventFilter) == "function"))
   local s = ns.Transport.status()
-  add("Channel: number " .. tostring(s.channelIndex or 0) .. ", last send result "
-    .. tostring(s.lastResult == nil and "none" or s.lastResult))
+  add("Sending: last send result " .. tostring(s.lastResult == nil and "none" or s.lastResult))
   local i = ns.LayerSensor.info()
   add("Layer looks: " .. tostring(i.observations or 0) .. " NPCs read, waiting to confirm "
     .. tostring(i.pending or "nothing"))
@@ -185,16 +172,6 @@ function Report.lines()
   section("In-game checks", function()
     add("In-game checks:")
     checkLines(add)
-  end)
-  section("Channel", function()
-    if ns.Transport.status().hideFailed then
-      add("Warning: the crew channel could not be taken out of the chat windows")
-    end
-    local st = ns.Transport.status()
-    local names = st.members or {}
-    add("Crew in the channel: " .. (#names == 0 and "nobody seen" or table.concat(names, ", "))
-      .. " (member lists heard: " .. tostring(st.listsHeard or 0) .. ")")
-    add("Channel echoes heard: " .. tostring(ns.Comm.echoCount and ns.Comm.echoCount() or 0))
   end)
   return out
 end

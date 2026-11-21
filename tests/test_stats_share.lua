@@ -11,7 +11,7 @@ end
 
 local function receive(W, sender, msgType, fields, ns)
   for _, text in ipairs(ns.Codec.encode(msgType, fields or {})) do
-    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender)
+    W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender)
   end
 end
 
@@ -64,7 +64,7 @@ local function pieces(ns, snap)
   return ns.Codec.encode("STATS", ns.StatsLogic.toWire(snap), { repeatKeys = { "sid", "q", "off" } })
 end
 
-local function fireText(W, sender, text) W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", sender) end
+local function fireText(W, sender, text) W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender) end
 
 -- Every award's leaders on the board, both views: "session:<id>" / "all:<id>" -> names.
 local function leadersOf(ns, sid)
@@ -386,9 +386,9 @@ return {
       local rec = ns.db.stats.crew.Frostie
       A.eq(rec.s, {})
       A.eq(rec.a, {})
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATS^", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATS^sid", "CHANNEL", "Ginkan")
-      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATSREQ^junk=%7", "CHANNEL", "Ginkan")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATS^", "GUILD", "Ginkan")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATS^sid", "GUILD", "Ginkan")
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", "1^STATSREQ^junk=%7", "GUILD", "Ginkan")
       -- broken saved data never reaches the board
       ns.db.stats.crew.Bad = { sid = "x", s = "nope", a = { dt = "7", jp = 2 } }
       ns.db.stats.crew[5] = "junk"
@@ -581,7 +581,7 @@ return {
       for i = mark + 1, #W.sent do texts[#texts + 1] = W.sent[i].text end
       A.ok(#texts > 1, "more than one piece")
       -- fired back in as if Frostie sent them: every piece is merged into one record
-      for _, text in ipairs(texts) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "CHANNEL", "Frostie") end
+      for _, text in ipairs(texts) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Frostie") end
       local rec = ns.db.stats.crew.Frostie
       for _, key in ipairs(ns.StatsDefs.KEYS) do
         if key ~= "ld" then A.eq(rec.a[key], want[key], key) end

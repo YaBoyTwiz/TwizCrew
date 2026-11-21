@@ -1,8 +1,10 @@
 -- Delivery through the guild: one GUILD addon message reaches every copy in the guild, a whisper reaches one guild
 -- member (by the full name the guild list gives), and PARTY / RAID reach the group. Outside a guild nothing is sent.
 -- Pending: until the game has said whether we are in a guild (ns.Guild's GUILD_STATE, at most GUILD_ABSENT_GRACE
--- seconds after login). TRANSPORT_READY fires when that settles and again whenever the character joins or leaves a
--- guild, so Comm can send (or drop) what it kept back and Crew can say HELLO.
+-- seconds after login) and, in a guild, until the guild list has loaded (at most GUILD_LIST_WAIT seconds more): the
+-- answers to our HELLO are whispers, and a whisper is only trusted once the list knows its sender. TRANSPORT_READY
+-- fires when that settles and again whenever the character joins or leaves a guild, so Comm can send (or drop) what
+-- it kept back and Crew can say HELLO.
 -- v0.1.24 and before used a hidden chat channel; on the first start after the update it is left once.
 local _, ns = ...
 
@@ -16,6 +18,7 @@ local WHISPER_MEMORY = 10         -- s: the game's "No player named X" line afte
 
 local plain = ns.Util.plain
 local started, settled, inGuild = false, false, false
+local waitingList, waitGen = false, 0 -- in a guild, waiting for the list (waitGen: so an old timer does nothing)
 local lastResult
 local whispered = {} -- full name -> time of the last whisper
 
@@ -38,8 +41,20 @@ end
 function Transport.isPending() return not settled end
 
 local function settle(nowInGuild)
-  settled, inGuild = true, nowInGuild and true or false
+  settled, inGuild, waitingList = true, nowInGuild and true or false, false
   ns.Bus.fire("TRANSPORT_READY")
+end
+
+local function onGuildState(nowInGuild)
+  if not nowInGuild or not ns.Guild or ns.Guild.loaded() then settle(nowInGuild); return end
+  settled, waitingList = false, true -- sends wait for the list (or GUILD_LIST_WAIT s)
+  waitGen = waitGen + 1
+  local gen = waitGen
+  C_Timer.After(ns.Config.GUILD_LIST_WAIT, function()
+    ns.Log.safe(FEATURE, function()
+      if gen == waitGen and waitingList then settle(true) end
+    end)
+  end)
 end
 
 -- v0.1.24 kept a channel name, a crew code and whisper names (db.crew) and a connection choice: none of it means
@@ -86,11 +101,14 @@ function Transport.start()
   if type(ChatFrame_AddMessageEventFilter) == "function" then
     ns.Log.safe(FEATURE, ChatFrame_AddMessageEventFilter, "CHAT_MSG_SYSTEM", hideNotFoundLine)
   end
-  ns.Bus.on(FEATURE, "GUILD_STATE", settle)
+  ns.Bus.on(FEATURE, "GUILD_STATE", onGuildState)
+  ns.Bus.on(FEATURE, "GUILD_LIST", function()
+    if waitingList and ns.Guild.loaded() then settle(true) end
+  end)
   -- the guild list module always answers within GUILD_ABSENT_GRACE; if it never does, ask the game ourselves
   C_Timer.After(ns.Config.GUILD_ABSENT_GRACE + SETTLE_SPARE, function()
     ns.Log.safe(FEATURE, function()
-      if not settled then settle(gameInGuild()) end
+      if not settled and not waitingList then settle(gameInGuild()) end
     end)
   end)
 end

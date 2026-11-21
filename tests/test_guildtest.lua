@@ -108,6 +108,14 @@ return {
       A.ok(printed(a, "Replies could not be tested: the game gave only a first name."))
     end,
 
+    a_strangers_pong_whisper_is_not_remembered = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      tc(a, "guildtest")
+      local text = nsA.Codec.encode("GPONG", { n = "1", z = "Nowhere" })[1]
+      a:fire("CHAT_MSG_ADDON", "TwizCrew", text, "WHISPER", "Ghost Stranger-Realm")
+      A.eq(nsA.GuildTest.forTest.pongRaw()["Ghost"], nil, "not a guild member: not an answer")
+    end,
+
     answers_are_rate_limited_per_sender = function(_, A, _, H)
       local _, nsA, b, nsB = pair(H, "full")
       local text = nsA.Codec.encode("GPROBE", { n = "55" })[1]

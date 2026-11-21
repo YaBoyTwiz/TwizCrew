@@ -308,6 +308,38 @@ local function lookup(raw)
   return nil
 end
 
+-- "Chaos Deathbringr-Realm" -> "Chaos Deathbringr" (nil when there is no usable name). The one place names are cleaned.
+Guild.cleanName = clean
+
+-- lower(full name) of a raw name, with our realm taken off in the " Realm" form too.
+local function lowerFull(raw)
+  local name = clean(raw)
+  if not name then return nil end
+  local l = name:lower()
+  local suffix = realmSuffix()
+  if suffix and #l > #suffix and l:sub(-#suffix) == suffix and not byFull[l] then l = l:sub(1, #l - #suffix) end
+  return l
+end
+
+-- The key saved for this member the first time the guild list showed them (any name form, any case), also while the
+-- list is not loaded; nil when they were never listed.
+function Guild.savedKeyOf(raw)
+  local l = lowerFull(raw)
+  local key = l and savedKeys()[l]
+  return type(key) == "string" and key ~= "" and key or nil
+end
+
+-- True when the saved keys or the current list give `key` (any case) to someone other than `raw`.
+function Guild.keyTakenByOther(key, raw)
+  if type(key) ~= "string" then return false end
+  local lk, l = key:lower(), lowerFull(raw)
+  for lf, k in pairs(savedKeys()) do
+    if type(k) == "string" and k:lower() == lk and lf ~= l then return true end
+  end
+  local e = byKey[lk]
+  return e ~= nil and e.full:lower() ~= l
+end
+
 function Guild.keyOf(raw)
   local e = lookup(raw)
   return e and e.key or nil

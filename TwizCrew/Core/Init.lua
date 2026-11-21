@@ -69,6 +69,8 @@ ns.Config = {
   -- guild list: ask the game for a fresh list at most every GUILD_REFRESH_MIN s; every GUILD_REFRESH_SHOWN s while the
   -- panel is open, every GUILD_REFRESH_HIDDEN s otherwise; "not in a guild" counts only after GUILD_ABSENT_GRACE s
   GUILD_REFRESH_MIN = 10, GUILD_REFRESH_SHOWN = 30, GUILD_REFRESH_HIDDEN = 120, GUILD_ABSENT_GRACE = 10,
+  -- in a guild, sends (the login HELLO first) wait for the guild list at most GUILD_LIST_WAIT s
+  GUILD_LIST_WAIT = 10,
 }
 
 function ns.now() return GetTime() end

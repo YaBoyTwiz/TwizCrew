@@ -333,8 +333,13 @@ local function build(W)
   -- for offline members. C_GuildInfo.GuildRoster() counts in W.guildRosterCalls and fires GUILD_ROSTER_UPDATE at
   -- once (only when in a guild). UnitGUID("player") is the guild entry whose name is the player's, unless
   -- st.guids.player is set.
+  -- st.guildListDelay = s: a slow server. The list reads as empty until that long after the first
+  -- C_GuildInfo.GuildRoster() call, then GUILD_ROSTER_UPDATE fires.
   W.guildRosterCalls = 0
-  local function guildMembers() return st.guild and st.guild.members or {} end
+  local function guildMembers()
+    if st.guildListDelay and not (W.guildListAt and W.clock >= W.guildListAt) then return {} end
+    return st.guild and st.guild.members or {}
+  end
   env.GetNumGuildMembers = function()
     local online = 0
     for _, m in ipairs(guildMembers()) do if m.online then online = online + 1 end end
@@ -355,7 +360,13 @@ local function build(W)
   end
   env.C_GuildInfo = { GuildRoster = function()
     W.guildRosterCalls = W.guildRosterCalls + 1
-    if st.guild then W:fire("GUILD_ROSTER_UPDATE", false) end
+    if not st.guild then return end
+    if st.guildListDelay and not W.guildListAt then
+      W.guildListAt = W.clock + st.guildListDelay
+      addTimer(st.guildListDelay, function() W:fire("GUILD_ROSTER_UPDATE", false) end)
+      return
+    end
+    W:fire("GUILD_ROSTER_UPDATE", false)
   end }
   env.GetGuildInfo = function(unit)
     if unit ~= "player" or not st.guild then return nil end

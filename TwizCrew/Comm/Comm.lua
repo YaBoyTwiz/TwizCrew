@@ -121,17 +121,10 @@ local function dispatch(sender, msg)
   end
 end
 
--- "Frostie Snow-Realm" -> "Frostie Snow".
-local function withoutRealm(raw)
-  local ok, amb = pcall(Ambiguate, raw, "none")
-  local name = (ok and type(amb) == "string" and amb ~= "") and amb or raw
-  return ns.Util.trim(name:match("^([^%-]*)") or name)
-end
-
 -- The key a message is filed under, or nil when the sender must not be trusted. A GUILD message is from a member
--- by definition: their key, or (the list has not loaded yet, or does not have them yet) their first word, unless that
--- word is mine or another member's key (then the full name, so data never mixes). Any other chat type (whisper,
--- party, raid) only from someone the guild list has.
+-- by definition: their key; when the list has not loaded yet (or does not have them yet) the key saved for them
+-- earlier, else their first word, unless that word is mine or given to someone else (then their full name, so data
+-- never mixes). Any other chat type (whisper, party, raid) only from someone the guild list has.
 local function senderKey(raw, chatType)
   local G = ns.Guild
   local key = G and G.keyOf(raw)
@@ -140,9 +133,12 @@ local function senderKey(raw, chatType)
     if G and not G.loaded() then G.refresh() end -- maybe a member: ask for the list (at most every 10 s)
     return nil
   end
-  if G and G.loaded() then G.refresh() end -- someone new: the list is behind
+  if not G then return ns.shortName(raw) end
+  if G.loaded() then G.refresh() end -- someone new: the list is behind
+  local saved = G.savedKeyOf(raw)
+  if saved then return saved end
   local short = ns.shortName(raw)
-  if ns.isMe(short) or (G and G.get(short)) then return withoutRealm(raw) end
+  if ns.isMe(short) or G.keyTakenByOther(short, raw) then return G.cleanName(raw) or short end
   return short
 end
 

@@ -91,6 +91,8 @@ local function onRawMessage(text, chatType, raw)
       rawBySender[ns.shortName(raw)] = { raw = raw, at = ns.now() }
     end
   elseif msg.type == "GPONG" then
+    -- a whisper from outside the guild is not an answer (Comm drops it too); before the list loads we cannot tell
+    if chatType == "WHISPER" and ns.Guild.loaded() and not ns.Guild.isMember(raw) then return end
     local short = usable and ns.shortName(raw) or ("?" .. tostring(msg.fields.n))
     pongRaw[short] = { form = rawText(raw), at = ns.now(), usable = usable }
   end
@@ -171,6 +173,8 @@ function GuildTest.run()
     say(lockdownText())
   end)
 end
+
+GuildTest.forTest = { pongRaw = function() return pongRaw end }
 
 function GuildTest.facts()
   local copy = {}

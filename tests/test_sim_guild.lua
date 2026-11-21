@@ -30,6 +30,19 @@ local function whisper(W, ns, sender, msgType, fields)
   end
 end
 
+-- 50 copies in one guild, logged in together and settled (everyone has met everyone).
+local function fiftyOnline(H, settle)
+  local crew = {}
+  for i = 1, 50 do
+    local W, ns = H.client("Member" .. i, { class = (i % 2 == 0) and "MAGE" or "WARRIOR", level = 10 + i % 7 })
+    crew[i] = { W = W, ns = ns }
+    H.link(W)
+    login(W)
+  end
+  H.advance(settle or 60)
+  return crew
+end
+
 return {
   files = {},
   tests = {
@@ -218,11 +231,11 @@ return {
       H.link(tw2)
       login(tw2)
       local loginAt = H.elapsed
-      H.advance(10)
+      H.advance(20) -- the HELLO waited GUILD_LIST_WAIT (10 s) for the list, then went out anyway
       A.ok((tw2Ns.Log.counts()["recv not in guild"] or 0) >= 1, "Frostie's whispered answer was dropped")
       A.eq(tw2Ns.roster:get("Frostie").zone, "Elwynn Forest", "still the old saved row")
       local fixedAt, listed = nil, false
-      H.advance(130 - 10, function()
+      H.advance(130 - 20, function()
         if not listed and H.elapsed >= listAt then -- the game tells the addon when the list has come in
           listed = true
           tw2:fire("GUILD_ROSTER_UPDATE", false)
@@ -267,15 +280,31 @@ return {
       noErrors(A, twNs)
     end,
 
+    -- The newcomer's guild list comes 4 s late: its HELLO waits for it, so no whispered answer is dropped.
+    a_late_guild_list_loses_no_answer_with_50_online = function(_, A, _, H)
+      local crew = fiftyOnline(H)
+      local nb, nbNs = H.client("Newbie", { class = "PRIEST", guildListDelay = 4 })
+      H.link(nb)
+      login(nb)
+      local loginAt = H.elapsed
+      A.ok(nbNs.Transport.isPending(), "waiting for the list")
+      local knownAt
+      H.advance(15, function()
+        if knownAt then return end
+        for i = 1, 50 do
+          local m = nbNs.roster:get("Member" .. i)
+          if not (m and m.online and m.level == 10 + i % 7) then return end
+        end
+        knownAt = H.elapsed
+      end)
+      A.eq(nbNs.Log.counts()["recv not in guild"], nil, "no answer was dropped")
+      A.ok(knownAt, "the newcomer knows everyone's state within 15 s")
+      A.ok(knownAt - loginAt >= 4, "not before the list came")
+      noErrors(A, nbNs, crew[1].ns)
+    end,
+
     login_with_50_members_online_costs_bounded_sends = function(_, A, _, H)
-      local crew = {}
-      for i = 1, 50 do
-        local W, ns = H.client("Member" .. i, { class = (i % 2 == 0) and "MAGE" or "WARRIOR" })
-        crew[i] = { W = W, ns = ns }
-        H.link(W)
-        login(W)
-      end
-      H.advance(60) -- everyone has met everyone
+      local crew = fiftyOnline(H)
       local nb, nbNs = H.client("Newbie", { class = "PRIEST" })
       H.link(nb)
       local times = {} -- when the newcomer sent each message

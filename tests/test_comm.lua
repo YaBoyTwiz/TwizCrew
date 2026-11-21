@@ -154,13 +154,28 @@ return {
         local real = w.env.GetNumGuildMembers
         w.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
       end)
-      A.no(ns.Transport.isPending(), "in a guild: ready even without the list")
-      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+      A.ok(ns.Transport.isPending(), "in a guild: sends wait for the list (answers to a HELLO need it)")
+      ns.Comm.send("HELLO", { ver = "1" })
+      W:advance(3)
+      A.eq(#W.sent, 0)
       A.eq(ns.Transport.destinationFor("Frostie"), nil, "who is Frostie? the list has not loaded")
       rows = 3
       W:fire("GUILD_ROSTER_UPDATE")
-      W:advance(2)
+      W:advance(1)
+      A.no(ns.Transport.isPending(), "the list is in")
+      A.eq(#W.sent, 1, "the kept HELLO went out")
       A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })
+    end,
+    a_list_that_never_comes_stops_holding_sends_after_the_wait = function(ns, A, W)
+      boot(ns, W, function(w) w.env.GetNumGuildMembers = function() return 0, 0, 0 end end)
+      ns.Comm.send("HELLO", { ver = "1" })
+      W:advance(ns.Config.GUILD_LIST_WAIT - 1)
+      A.ok(ns.Transport.isPending())
+      A.eq(#W.sent, 0)
+      W:advance(2)
+      A.no(ns.Transport.isPending(), "waited GUILD_LIST_WAIT s")
+      A.eq(#W.sent, 1)
+      A.eq(W.sent[1].chatType, "GUILD")
     end,
     group_send_goes_to_the_group_only = function(ns, A, W)
       boot(ns, W)
@@ -396,6 +411,22 @@ return {
       W:advance(2)
       addon(W, "1^PING^c", "WHISPER", "Frostie Snow")
       A.eq(got, { "Frostie", "Frostie" })
+    end,
+    guild_message_before_the_list_loads_uses_the_saved_key = function(ns, A, W)
+      local rows = 0
+      boot(ns, W, function(w)
+        local real = w.env.GetNumGuildMembers
+        w.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
+      end, { guild = { keys = { ["frostie pebble"] = "Frostie", ["frostie snow"] = "Frostie Snow",
+        ["ginkan pebble"] = "Ginkan" } } })
+      A.no(ns.Guild.loaded())
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "GUILD", "Frostie Snow")
+      addon(W, "1^PING^", "GUILD", "Frostie Pebble-Realm")
+      addon(W, "1^PING^", "GUILD", "Ginkan Pebble")
+      addon(W, "1^PING^", "GUILD", "Frostie Newbie") -- never listed, and "Frostie" is Pebble's
+      addon(W, "1^PING^", "GUILD", "Lurabe Moon")    -- never listed, nobody's word
+      A.eq(got, { "Frostie Snow", "Frostie", "Ginkan", "Frostie Newbie", "Lurabe" })
     end,
     guild_message_from_someone_the_list_does_not_have_yet = function(ns, A, W)
       boot(ns, W)

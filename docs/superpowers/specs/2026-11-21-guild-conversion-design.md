@@ -123,16 +123,22 @@ One new module reads the game's guild list and is the single source for "who is 
 
 **Names and identity.** Today a friend is stored under the first word of their name ("Chaos" for "Chaos
 Deathbringr"), and "is this me?" (`ns.isMe`) also compares first words only. In a guild two members can share a first
-name, and one sharing mine would have every message dropped. So **(Claude's calls)**:
+name, and one sharing mine would have every message dropped. **(Claude's calls, revised while planning: the first
+word stays the normal key, because it is the one thing that is the same however the game writes a name on a guild
+message, a whisper, a party message and in the guild list, and because it needs no change to saved data)**:
 
-- A member's identity is their full name as the game gives it, compared without upper / lower case. No identity is
-  put inside messages: the chat sender is the identity (already known from the game: Forever senders arrive as "First
-  Last", and a whisper needs that full name; `Transport.fullName` exists for this).
-- `ns.isMe`, the roster, saved data and every module that uses `ns.shortName` as a key move to that identity. Rows
-  keep showing the first name; when two members on the panel share it, both show their full name.
-- Carrying over v0.1.24 data (stored under first names): when exactly one guild member has that first name, they
-  inherit it. When two or more do, the one whose class matches the saved class inherits it; if that does not settle
-  it, nobody does and the old record is dropped after 30 days like a non-member's.
+- A member's key is the first word of their name, as today, unless another guild member already holds that first
+  word: then the later one's key is their full name. A key, once given, is remembered (saved per full name), so it
+  never changes when someone else joins. Existing v0.1.24 data therefore carries over untouched.
+- When two members share a first word and the saved data has that first word: the one whose class matches the saved
+  class keeps it; otherwise the first in A-Z order of full names.
+- "Is this me?" compares full names when my own full name is known (my entry in the guild list) and the other name
+  has more than one word; otherwise first words, as today.
+- A name inside a message (a mock's target, a vote) is the key. An old copy that sends a first word still matches,
+  unless it is the full-name-keyed one of two namesakes.
+- Rows show the first name; two members on the panel with the same first name both show their full name.
+- No identity is put inside messages: the chat sender is the identity. A whisper needs the full name, which comes
+  from the guild list.
 - Requirement either way: two members with the same first name both show up and their data never mixes.
 
 **Timing at login.** `IsInGuild()` may be false for a moment while the game loads. The first HELLO goes out as soon as

@@ -94,7 +94,7 @@ local ICON = {
 function Version.lines()
   local members = ns.roster and ns.roster:members() or {}
   local out = {}
-  for i, row in ipairs(ns.UpdateLogic.versionRows(ns.playerName(), ns.VERSION, members)) do
+  for i, row in ipairs(ns.UpdateLogic.versionRows(ns.myKey(), ns.VERSION, members)) do
     local name = ns.Util.safeText(row.name) .. (row.me and " (you)" or "")
     local ver = row.version == "?" and "?" or ("v" .. ns.Util.safeText(row.version))
     out[i] = (ICON[row.mark] or ICON.unknown) .. " " .. name .. "  " .. ver

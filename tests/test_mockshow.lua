@@ -82,6 +82,37 @@ return {
       A.no(ns.MockShow.isShown())
     end,
     -- Two guild members start with "Chaos": a mock at the other one is never mine, wherever the key sits.
+    -- I am the later namesake (my key is my full name, "Chaos" is his): both stats rows show and never merge, my
+    -- numbers are under my key, my own mock echoes under my key.
+    my_numbers_and_echo_use_my_key_next_to_a_namesake = function(ns, A, W)
+      local list = {}
+      for i, name in ipairs({ "Chaos Deathbringr", "Chaos Other", "Frostie" }) do
+        list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+      end
+      W.state.player = "Chaos Other"
+      W.state.guild = { name = "Test Guild", members = list }
+      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } },
+        stats = { chars = { Chaos = { sid = "old", s = {}, a = { dt = 50 } } }, crew = {}, session = {} } }
+      start(ns, W)
+      A.eq(ns.myKey(), "Chaos Other")
+      local S = ns.Session.current().id
+      ns.Stats.count("dt", 3)
+      A.eq(ns.db.stats.chars["Chaos Other"].a.dt, 3, "my numbers under my key")
+      A.eq(ns.db.stats.chars.Chaos.a.dt, 50, "the old row stays where it was")
+      receive(ns, W, "Chaos Deathbringr", "STATE", { cl = "WARRIOR", lv = "20" })
+      receive(ns, W, "Chaos Deathbringr", "STATS", { sid = S, q = "1", s_dt = "7", a_dt = "7" })
+      local rows = {}
+      for _, e in ipairs(ns.StatsStore.entries("all")) do rows[e.name] = e end
+      A.ok(rows.Chaos and not rows.Chaos.mine, "the friend Chaos shows")
+      A.eq(rows.Chaos.stats.dt, 7, "with his own numbers")
+      A.ok(rows["Chaos Other"] and rows["Chaos Other"].mine, "my row shows")
+      A.eq(rows["Chaos Other"].stats.dt, 3)
+      local text = ns.Roasts.mock("Chaos")
+      A.ok(text)
+      local s = ns.Roasts.forTest.shown()
+      A.eq(s[#s], "Chaos Other: " .. text, "my echo, under my key")
+      A.eq(ns.Log.errors(10), {})
+    end,
     mock_aimed_at_my_namesake_is_not_shown_as_mine = function(ns, A, W)
       local function guild(...)
         local list = {}

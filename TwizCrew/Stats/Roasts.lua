@@ -152,7 +152,7 @@ local function transmit(kind, v, x)
     n = tostring(math.random(#LINES[kind])),
   }
   ns.Comm.send("ROAST", fields)
-  handle(ns.playerName(), fields, true)
+  handle(ns.myKey(), fields, true)
 end
 
 -- Something roast-worthy happened to me: tell the crew (and show it here). Dropped when it may not be sent.
@@ -383,7 +383,7 @@ function Roasts.mock(target)
   mockLimit:allow(target, ns.now()) -- the 10 s wait starts only now that a line was found
   local fields = { t = target, x = text }
   ns.Comm.send("MOCK", fields)
-  showMock(ns.playerName(), fields)
+  showMock(ns.myKey(), fields)
   return text
 end
 
@@ -466,7 +466,7 @@ function Roasts.cheer(target)
   if not text then text = "Grats on the level, " .. target .. "!" end
   local fields = { t = target, x = text, k = "g" }
   ns.Comm.send("MOCK", fields)
-  showMock(ns.playerName(), fields)
+  showMock(ns.myKey(), fields)
   return text
 end
 

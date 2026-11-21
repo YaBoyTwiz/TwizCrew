@@ -321,6 +321,7 @@ return {
       receive(W, "Ginkan", "STATS", { sid = "Ginkan-5", q = "1", s_jp = "7", a_jp = "70" }, ns)
       ns.db.stats.chars.Twizalt = { sid = "Twiz-1", s = { dt = 1 }, a = { dt = 4 } }
       ns.db.stats.crew.Twizalt = { sid = S, q = "1", s = { dt = 99 }, a = { dt = 99 }, at = 1 }
+      ns.db.guild.mine["Player-1-0099"] = "Twizalt" -- my alt: its key is one of mine (saved when it logged in)
 
       local session = ns.StatsStore.entries("session", S)
       A.eq(names(session), { "Frostie", "Twiz" })

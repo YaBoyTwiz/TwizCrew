@@ -334,7 +334,7 @@ local function redraw()
   P.curView = view
   local members = ns.roster and ns.roster:sorted(s.sort, relationOf) or {}
   if s.showSelf and ns.Self then
-    table.insert(members, 1, Logic.selfMember(ns.playerName(), ns.Self.lastSent()))
+    table.insert(members, 1, Logic.selfMember(ns.myKey(), ns.Self.lastSent()))
   end
   local rowSettings = s
   if view == "peek" then

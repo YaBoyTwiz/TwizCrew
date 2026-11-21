@@ -34,11 +34,12 @@ local function copy(t)
   return out
 end
 
--- My record: { sid = "", s = {}, a = {} } (repaired when broken). nil before saved data is loaded.
+-- My record: { sid = "", s = {}, a = {} } (repaired when broken), under my member key (ns.myKey). nil before saved
+-- data is loaded. (Rows saved before under my first word stay where they are.)
 function Store.mine()
   local stats = root()
   if not stats then return nil end
-  local me = ns.playerName()
+  local me = ns.myKey()
   local rec = stats.chars[me]
   if type(rec) ~= "table" then rec = {}; stats.chars[me] = rec end
   if type(rec.sid) ~= "string" then rec.sid = "" end
@@ -234,6 +235,17 @@ local function statsOn()
   return ns.Modules.isEnabled("stats")
 end
 
+-- My own keys: every character's key saved by the guild list (ns.db.guild.mine) and my key now (my first word
+-- only when that is my key). A friend's record under one of them would be mine: it is not listed.
+function Store.myKeys()
+  local set = { [ns.myKey()] = true }
+  local g = ns.db and ns.db.guild
+  if type(g) == "table" and type(g.mine) == "table" then
+    for _, key in pairs(g.mine) do if type(key) == "string" and key ~= "" then set[key] = true end end
+  end
+  return set
+end
+
 -- view: "session" | "all". Array of { name, class, stats, mine, at, online }, sorted by name: my characters (this
 -- one only while the stats module is on) and every crew record that is not off, not one of mine and not of a member
 -- hidden because they are out of the guild. "session"
@@ -249,9 +261,12 @@ function Store.entries(view, sessionId)
     return type(rec) == "table" and (not session or rec.sid == sessionId)
   end
   local function numbers(rec) return clean(session and rec.s or rec.a) end
-  local me = ns.playerName()
+  local me = ns.myKey()
+  local own = Store.myKeys()
   for name, rec in pairs(stats.chars) do
-    if type(name) == "string" and wanted(rec) and (name ~= me or statsOn()) then
+    -- an old row of mine under a name that is now a friend's key (I am a later namesake) gives way to the friend's
+    if type(name) == "string" and wanted(rec) and (name ~= me or statsOn())
+      and (own[name] or type(stats.crew[name]) ~= "table") then
       local isMe = name == me
       out[#out + 1] = {
         name = name, stats = numbers(rec), mine = true, online = isMe,
@@ -264,7 +279,7 @@ function Store.entries(view, sessionId)
       and rec.prev.sid == sessionId then
       rec = { sid = sessionId, s = rec.prev.s, at = rec.prev.at, off = rec.off }
     end
-    if type(name) == "string" and wanted(rec) and not rec.off and stats.chars[name] == nil
+    if type(name) == "string" and wanted(rec) and not rec.off and not own[name]
       and not (ns.roster and ns.roster:isHidden(name)) then -- out of the guild: kept on disk, not shown
       local m = ns.roster and ns.roster:get(name)
       out[#out + 1] = {

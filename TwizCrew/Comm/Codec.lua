@@ -14,7 +14,8 @@ local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BY
   TRD = true, TRQ = true, TRP = true, -- trophy case: digest, "send me this session", one session's record
   CALN = true, CALR = true, -- a calendar note; a reply to one (seen, going / maybe / no, a comment)
   AWS = true, AWC = true, AWX = true, -- crew awards show: it starts, a card, the presenter closed it
-  AWV = true, AWB = true, AWR = true } -- Clown of the Night: the vote starts, a vote, the result
+  AWV = true, AWB = true, AWR = true, -- Clown of the Night: the vote starts, a vote, the result
+  GPROBE = true, GPONG = true } -- /tc guildtest: a probe to the guild, the whispered answer
 
 local ESCAPE = { ["%"] = "%25", ["^"] = "%5E", ["~"] = "%7E", ["="] = "%3D" }
 local UNESCAPE = { ["25"] = "%", ["5E"] = "^", ["7E"] = "~", ["3D"] = "=" }

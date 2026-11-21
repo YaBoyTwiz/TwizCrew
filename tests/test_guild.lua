@@ -316,6 +316,35 @@ return {
       A.ok(ns.Guild.isMe("Chaos"))
     end,
 
+    isMe_one_word_me_and_a_longer_namesake = function(ns, A, W)
+      W.state.guids.player = "Player-1-ME"
+      boot(ns, W, "Twiz", { member("Twiz", { guid = "Player-1-ME" }), member("Twiz Other") })
+      A.no(ns.Guild.isMe("Twiz Other")); A.ok(ns.Guild.isMe("Twiz")); A.ok(ns.Guild.isMe("twiz-Realm"))
+      A.eq(ns.Guild.myKey(), "Twiz")
+    end,
+
+    isMe_longer_me_and_a_one_word_namesake = function(ns, A, W)
+      W.state.guids.player = "Player-1-ME"
+      boot(ns, W, "Twiz Other", { member("Twiz Other", { guid = "Player-1-ME" }), member("Twiz") })
+      A.no(ns.Guild.isMe("Twiz")); A.ok(ns.Guild.isMe("Twiz Other"))
+    end,
+
+    isMe_unitname_gives_only_the_first_word = function(ns, A, W)
+      W.state.guids.player = "Player-1-ME"
+      boot(ns, W, "Chaos", { member("Chaos Deathbringr", { guid = "Player-1-ME" }), member("Ginkan Pebble") })
+      A.ok(ns.Guild.isMe("Chaos Deathbringr")); A.no(ns.Guild.isMe("Chaos Other")); A.ok(ns.Guild.isMe("Chaos"))
+      A.eq(ns.Guild.myKey(), "Chaos")
+    end,
+
+    isMe_before_the_list_loads = function(ns, A, W)
+      W.state.player = "Chaos"
+      ns.db = ns.DB.init(nil, ns.Modules.list())
+      A.ok(ns.Guild.isMe("Chaos Deathbringr")); A.ok(ns.Guild.isMe("Chaos Other")); A.ok(ns.Guild.isMe("Chaos"))
+      A.no(ns.Guild.isMe("Ginkan"))
+      W.state.player = "Chaos Deathbringr"
+      A.no(ns.Guild.isMe("Chaos Other")); A.ok(ns.Guild.isMe("Chaos Deathbringr")); A.ok(ns.Guild.isMe("Chaos"))
+    end,
+
     the_module_is_registered = function(ns, A)
       local d = ns.Modules.get("guild")
       A.ok(d); A.eq(d.tier, "essential"); A.eq(d.name, "Guild list")

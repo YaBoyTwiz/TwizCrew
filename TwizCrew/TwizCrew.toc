@@ -82,6 +82,7 @@ UI\Extras.lua
 UI\Recap.lua
 UI\Settings.lua
 UI\Report.lua
+UI\GuildTest.lua
 UI\TestTools.lua
 UI\MinimapLogic.lua
 UI\MinimapButton.lua

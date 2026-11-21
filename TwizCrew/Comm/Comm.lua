@@ -91,6 +91,12 @@ function Comm.sendGroup(msgType, fields, opts)
   return true
 end
 
+-- fn(text, chatType, rawSender) runs for every message with our prefix, before the "is it me" check and before any
+-- filtering, so it also sees my own echo and the sender name exactly as the game gave it (possibly a secret value
+-- inside dungeons). The guild test (UI/GuildTest.lua) depends on this hook: keep it when the receive filter changes.
+local rawHooks = {}
+function Comm.onRaw(fn) rawHooks[#rawHooks + 1] = fn end
+
 function Comm.on(msgType, fn)
   local list = handlers[msgType]
   if not list then list = {}; handlers[msgType] = list end
@@ -118,6 +124,7 @@ end
 
 local function onAddon(prefix, text, chatType, sender)
   if prefix ~= ns.Config.PREFIX or type(sender) ~= "string" or type(text) ~= "string" then return end
+  for _, fn in ipairs(rawHooks) do ns.Log.safe(FEATURE, fn, text, chatType, sender) end
   local raw = sender
   sender = ns.shortName(sender)
   if raw ~= sender and not loggedNameForm then

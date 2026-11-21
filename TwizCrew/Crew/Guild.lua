@@ -342,17 +342,38 @@ function Guild.myKey()
   return e and e.key or nil
 end
 
+-- My full name: the listed member whose GUID is mine, else UnitName when it has several words, else unknown (nil).
+-- (On Forever UnitName may give only the first word, so a one-word UnitName alone proves nothing.)
+local function myFull()
+  if loaded then
+    local guid = plain(UnitGUID, "player")
+    local e = type(guid) == "string" and byGuid[guid]
+    if e then return e.full end
+  end
+  local name = clean(plain(UnitName, "player"))
+  if name and name:find(" ", 1, true) then return name end
+  return nil
+end
+
 function Guild.isMe(raw)
   local name = clean(raw)
   if not name then return false end
-  local e = myEntry()
-  local mine = clean(plain(UnitName, "player")) or (e and e.full)
-  if not mine then return false end
-  local l, m = name:lower(), mine:lower()
+  local l = name:lower()
   local suffix = realmSuffix()
   if suffix and #l > #suffix and l:sub(-#suffix) == suffix then l = l:sub(1, #l - #suffix) end
-  if l:find(" ", 1, true) and m:find(" ", 1, true) then return l == m end
-  return firstWord(l) == firstWord(m)
+  local full = myFull()
+  full = full and full:lower()
+  if l == full then return true end
+  local uname = clean(plain(UnitName, "player"))
+  local mine = full or (uname and uname:lower())
+  if not mine then return false end
+  if l:find(" ", 1, true) then
+    if full then return false end
+    return firstWord(l) == firstWord(mine)
+  end
+  local other = byFull[l]
+  if other and other.full:lower() ~= mine then return false end -- a listed member who is not me has this exact name
+  return l == firstWord(mine)
 end
 
 function Guild.start()

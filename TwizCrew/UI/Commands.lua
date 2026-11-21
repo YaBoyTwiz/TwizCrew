@@ -28,6 +28,7 @@ local HELP = {
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
+  "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
   "/tc debug - turn technical chat messages on or off",
   "/tc add <name> - add a friend by name, used when the hidden channel does not work",
   "/tc remove <name> - take a name off that list (works for friends who are offline)",
@@ -283,6 +284,7 @@ local ACTIONS = {
     ns.Settings.confirmReset()
   end,
   report = function() ns.Report.show() end,
+  guildtest = function() ns.GuildTest.run() end,
   debug = toggleDebug,
   add = addName,
   remove = forgetName,

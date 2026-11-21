@@ -553,19 +553,37 @@ return {
       A.eq(d.settings[1].key, "debug")
     end,
     old_channel_settings_are_cleared_on_upgrade = function(ns, A, W)
-      local db = boot(ns, W, nil, {
+      local db = boot(ns, W, function(w) w.state.channels.TwizCrewHQ = 6 end, {
         crew = { channel = "TwizCrewHQ", password = "goldshire", extra = { "Frostie" } },
         modules = { comm = { enabled = true, settings = { transport = "whisper", debug = false } } },
       })
-      A.eq(db.crew, nil, "channel name, crew code and whisper names are gone")
+      A.eq(db.crew, { channel = "TwizCrewHQ" }, "only the channel name stays, until we are out of it")
       A.eq(db.modules.comm.settings, { debug = false })
       A.eq(W.leaves, {}, "the game may not have rejoined it yet")
       W:advance(6)
       A.eq(W.leaves, { "TwizCrewHQ" }, "left once")
       A.ok(logHas(ns, "left the old crew channel TwizCrewHQ"))
+      W:advance(3)
+      A.eq(db.crew, nil, "out of it: the name goes too")
+      W:fire("PLAYER_ENTERING_WORLD")
       W:advance(60)
       A.eq(W.leaves, { "TwizCrewHQ" })
       noErrors(ns, A)
+    end,
+    old_channel_is_left_again_until_it_is_really_gone = function(ns, A, W)
+      local db = boot(ns, W, function(w)
+        w.state.channels.TwizCrewHQ = 6
+        w.state.leaveFails = true -- the game ignores the first leaves
+      end, { crew = { channel = "TwizCrewHQ" } })
+      W:advance(10)
+      A.eq(W.leaves, { "TwizCrewHQ" })
+      A.eq(db.crew, { channel = "TwizCrewHQ" }, "still in it: the marker stays")
+      W:fire("PLAYER_ENTERING_WORLD") -- a loading screen: try again
+      W.state.leaveFails = false
+      W:advance(10)
+      A.eq(W.leaves, { "TwizCrewHQ", "TwizCrewHQ" })
+      A.eq(db.crew, nil, "gone now")
+      A.ok(logHas(ns, "the old crew channel TwizCrewHQ is gone"))
     end,
     nothing_left_of_the_channel = function(ns, A, W)
       boot(ns, W)

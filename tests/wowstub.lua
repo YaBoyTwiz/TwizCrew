@@ -285,10 +285,19 @@ local function build(W)
       return result
     end,
   }
-  -- v0.1.24's hidden channel: only ever left now (W.leaves), never joined (W.joins stays empty)
+  -- v0.1.24's hidden channel: only ever left now (W.leaves), never joined (W.joins stays empty). st.channels[name] =
+  -- its number while the character is in it; st.leaveFails = true: LeaveChannelByName does nothing (still in it).
+  W.state.channels = {}
   W.joins, W.leaves = {}, {}  -- { name, password } per JoinChannelByName call; names per LeaveChannelByName call
-  env.JoinChannelByName = function(name, password) W.joins[#W.joins + 1] = { name = name, password = password } end
-  env.LeaveChannelByName = function(name) W.leaves[#W.leaves + 1] = name end
+  env.JoinChannelByName = function(name, password)
+    W.joins[#W.joins + 1] = { name = name, password = password }
+    W.state.channels[name] = 5
+  end
+  env.LeaveChannelByName = function(name)
+    W.leaves[#W.leaves + 1] = name
+    if not W.state.leaveFails then W.state.channels[name] = nil end
+  end
+  env.GetChannelName = function(name) return W.state.channels[name] or 0 end
   env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
   W.messageFilters = {}      -- { event, fn } for every ChatFrame_AddMessageEventFilter call
   env.ChatFrame_AddMessageEventFilter = function(event, fn)

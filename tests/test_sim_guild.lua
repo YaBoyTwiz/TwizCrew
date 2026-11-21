@@ -123,13 +123,14 @@ return {
     end,
 
     old_channel_is_left_once_on_upgrade = function(_, A, _, H)
-      local tw = H.client("Twiz")
+      local tw = H.client("Twiz", { channels = { TwizCrewHQ = 6 } }) -- the game rejoined the old channel at login
       tw.env.TwizCrewDB = { crew = { channel = "TwizCrewHQ", password = "goldshire", extra = { "Frostie" } },
         modules = { comm = { enabled = true, settings = { transport = "auto", debug = false } } } }
       H.link(tw)
       login(tw)
       H.advance(10)
       A.eq(tw.leaves, { "TwizCrewHQ" })
+      A.eq(tw.state.channels.TwizCrewHQ, nil)
       local db = tw.env.TwizCrewDB
       A.eq(db.crew, nil)
       A.eq(db.modules.comm.settings.transport, nil)

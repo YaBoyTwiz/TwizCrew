@@ -58,20 +58,51 @@ local function onGuildState(nowInGuild)
 end
 
 -- v0.1.24 kept a channel name, a crew code and whisper names (db.crew) and a connection choice: none of it means
--- anything now.
+-- anything now. Only the channel name stays (as db.crew.channel) until the game says we are out of that channel:
+-- it is left a few seconds after every login and loading screen until then.
+local OLD_CHANNEL_CHECK = 2 -- s after leaving: is it gone?
+
+local function oldChannel()
+  local crew = ns.db and ns.db.crew
+  local old = type(crew) == "table" and crew.channel
+  return type(old) == "string" and old ~= "" and old or nil
+end
+
 local function forgetOldChannel()
   local db = ns.db
   if type(db) ~= "table" then return end
-  local old = type(db.crew) == "table" and db.crew.channel or nil
-  db.crew = nil
+  local old = oldChannel()
+  db.crew = old and { channel = old } or nil
   local comm = type(db.modules) == "table" and db.modules.comm
   if type(comm) == "table" and type(comm.settings) == "table" then comm.settings.transport = nil end
-  if type(old) ~= "string" or old == "" or type(LeaveChannelByName) ~= "function" then return end
+end
+
+local function oldChannelGone()
+  local old = oldChannel()
+  if not old then return end
+  if type(GetChannelName) == "function" and tonumber(plain(GetChannelName, old)) ~= 0 then return end
+  ns.db.crew = nil
+  ns.Log.add("info", "the old crew channel %s is gone", ns.Util.safeText(old))
+end
+
+local function leaveOldChannel()
+  local old = oldChannel()
+  if not old then return end
+  local index = type(GetChannelName) == "function" and tonumber(plain(GetChannelName, old)) or nil
+  if index == 0 then oldChannelGone(); return end
+  if type(LeaveChannelByName) ~= "function" then return end
+  LeaveChannelByName(old)
+  ns.Log.add("info", "left the old crew channel %s", ns.Util.safeText(old))
+  C_Timer.After(OLD_CHANNEL_CHECK, function() ns.Log.safe(FEATURE, oldChannelGone) end)
+end
+
+local leaveDue = false
+local function leaveOldChannelSoon()
+  if leaveDue or not oldChannel() then return end
+  leaveDue = true
   C_Timer.After(OLD_CHANNEL_LEAVE_DELAY, function()
-    ns.Log.safe(FEATURE, function()
-      LeaveChannelByName(old)
-      ns.Log.add("info", "left the old crew channel %s", ns.Util.safeText(old))
-    end)
+    leaveDue = false
+    ns.Log.safe(FEATURE, leaveOldChannel)
   end)
 end
 
@@ -98,6 +129,8 @@ function Transport.start()
   if started then return end
   started = true
   ns.Log.safe(FEATURE, forgetOldChannel)
+  leaveOldChannelSoon()
+  ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", leaveOldChannelSoon)
   if type(ChatFrame_AddMessageEventFilter) == "function" then
     ns.Log.safe(FEATURE, ChatFrame_AddMessageEventFilter, "CHAT_MSG_SYSTEM", hideNotFoundLine)
   end

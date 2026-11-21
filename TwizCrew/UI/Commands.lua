@@ -29,6 +29,7 @@ local HELP = {
   "/tc reset - put every setting back to normal (asks first)",
   "/tc report - a health check you can copy and paste to Discord",
   "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
+  "/tc home - your TwizCrew guild (/tc home here makes it this character's guild)",
   "/tc debug - turn technical chat messages on or off",
   "/tc forget <name> - forget an offline friend's saved data; first or full name (/tc remove does the same)",
   "/tc awards - the awards show for this session, great on stream",
@@ -53,6 +54,25 @@ function Commands.normalizeName(text)
   local name = ns.Util.trim(tostring(text or ""))
   if name == "" then return nil end
   return name:sub(1, 1):upper() .. name:sub(2)
+end
+
+-- /tc home: which guild TwizCrew works in (one per account); /tc home here: this character's guild.
+local function home(rest)
+  if rest:lower() == "here" then
+    local name = ns.Guild.setHome()
+    if name then say("your TwizCrew guild is now " .. ns.Util.safeText(name) .. ".")
+    else say("this character is not in a guild (or the game has not named it yet).") end
+    return
+  end
+  local h = ns.Guild.home()
+  if not h then
+    say("no TwizCrew guild yet: it is set the first time you hear a guild friend's TwizCrew.")
+  elseif ns.Guild.inGuild() and not ns.Guild.isHome() then
+    say("your TwizCrew guild is " .. ns.Util.safeText(h) .. "; this character's guild is not it, so TwizCrew stays"
+      .. " quiet here. Type /tc home here to switch.")
+  else
+    say("your TwizCrew guild is " .. ns.Util.safeText(h) .. ".")
+  end
 end
 
 local function forgetName(rest)
@@ -262,6 +282,7 @@ local ACTIONS = {
   end,
   report = function() ns.Report.show() end,
   guildtest = function() ns.GuildTest.run() end,
+  home = home,
   debug = toggleDebug,
   remove = forgetName,
   forget = forgetName,

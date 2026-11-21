@@ -1,11 +1,12 @@
 -- Crew roster (pure, no WoW API): who is in the crew and what we last heard from them.
 -- `now` is the session clock, `wall` is the wallclock; both are passed in by the caller.
 --
--- Guild membership (setGuild, syncGuild): a real member the loaded guild list does not have is hidden (inGuild =
--- false): members(), names(), sorted(), onlineCount() and get() leave them out, while row() and allNames() still find
--- them (Crew's bookkeeping, forgetting). outSince (wallclock, saved) is when a loaded list first lacked them; back in
--- the list clears both. Nothing is marked before the list has loaded. Fakes (test tools) are never marked. A new row
--- from a message starts shown (a guild message comes from a member: the list may be behind) until the next sync.
+-- Guild membership (setGuild, syncGuild): a real member a complete guild list of my TwizCrew guild does not have is
+-- hidden (inGuild = false): members(), names(), sorted(), onlineCount() and get() leave them out, while row() and
+-- allNames() still find them (Crew's bookkeeping, forgetting). Back in the list shows them again. Hiding never deletes
+-- anything (only FORGET_AFTER_DAYS of silence does, at load). Nothing is marked before a complete list of the home
+-- guild has been read (ns.Guild.active, complete). Fakes (test tools) are never marked. A new row from a message
+-- starts shown (a guild message comes from a member: the list may be behind) until the next sync.
 local _, ns = ...
 
 local Roster = {}
@@ -107,12 +108,13 @@ function Roster.new(saved)
   table.sort(old)
   for _, name in ipairs(old) do r.saved[name] = nil; r.pruned[#r.pruned + 1] = name end
   for name, row in pairs(r.saved) do
+    if type(row) == "table" then row.outSince = nil end -- a test build of the guild conversion saved it: unused
     if type(name) == "string" and name ~= "" and type(row) == "table" and not ns.isTestName(name) then
       r.byName[name] = {
         name = name, class = str(row.class), level = num(row.level),
         zone = str(row.zone), subzone = str(row.subzone),
         inInstance = false, online = false, lastSeen = num(row.lastSeen),
-        inGuild = true, outSince = num(row.outSince),
+        inGuild = true,
       }
     end
   end
@@ -139,52 +141,28 @@ end
 
 function Roster:setGuild(guild) self.guild = guild end
 
-local function loadedGuild(self)
+-- The guild list when it may decide who is hidden: my TwizCrew guild, loaded, and read completely.
+local function usableGuild(self)
   local g = self.guild
-  if g and g.loaded() then return g end
+  if g and g.active() and g.loaded() and g.complete() then return g end
   return nil
 end
 
--- Marks one row against the loaded guild list. Returns true when it was shown / hidden differently before.
-local function mark(self, name, m, g, wall)
-  if ns.isTestName(name) then return false end
-  local was = shown(m)
-  local row = self.saved[name]
-  if g.get(name) then
-    m.inGuild, m.outSince = true, nil
-    if type(row) == "table" then row.outSince = nil end
-  else
-    m.inGuild = false
-    m.outSince = m.outSince or wall
-    if type(row) == "table" then row.outSince = m.outSince end
-  end
-  return was ~= shown(m)
-end
-
--- Real members out of the guild for OUT_OF_GUILD_DAYS or longer, A-Z (only while the list is loaded).
-function Roster:outOfGuildDue(wall)
-  local due = {}
-  if not loadedGuild(self) then return due end
-  local limit = ns.Config.OUT_OF_GUILD_DAYS * 86400
-  for name, m in pairs(self.byName) do
-    if m.inGuild == false and m.outSince and wall - m.outSince >= limit then due[#due + 1] = name end
-  end
-  table.sort(due)
-  return due
-end
-
--- Marks every row against the guild list (when it has loaded). Returns { changed = names shown / hidden differently,
--- due = names to forget (see outOfGuildDue) }, both A-Z.
-function Roster:syncGuild(wall)
+-- Marks every row against the guild list (only a complete read of my TwizCrew guild). Returns the names shown /
+-- hidden differently than before, A-Z.
+function Roster:syncGuild()
   local changed = {}
-  local g = loadedGuild(self)
-  if g then
-    for name, m in pairs(self.byName) do
-      if mark(self, name, m, g, wall) then changed[#changed + 1] = name end
+  local g = usableGuild(self)
+  if not g then return changed end
+  for name, m in pairs(self.byName) do
+    if not ns.isTestName(name) then
+      local was = shown(m)
+      m.inGuild = g.get(name) ~= nil
+      if was ~= shown(m) then changed[#changed + 1] = name end
     end
-    table.sort(changed)
   end
-  return { changed = changed, due = self:outOfGuildDue(wall) }
+  table.sort(changed)
+  return changed
 end
 
 function Roster:apply(name, fields, now, wall)
@@ -239,7 +217,7 @@ function Roster:apply(name, fields, now, wall)
   if not ns.isTestName(name) then -- a fake (test tools) is never saved
     self.saved[name] = {
       name = name, class = m.class, level = m.level,
-      zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen, outSince = m.outSince,
+      zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen,
     }
   end
   return m, changes, events

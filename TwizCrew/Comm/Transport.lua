@@ -1,5 +1,6 @@
 -- Delivery through the guild: one GUILD addon message reaches every copy in the guild, a whisper reaches one guild
--- member (by the full name the guild list gives), and PARTY / RAID reach the group. Outside a guild nothing is sent.
+-- member (by the full name the guild list gives), and PARTY / RAID reach the group. Outside a guild nothing is sent,
+-- and a guild that is not my TwizCrew guild (ns.Guild.active false) counts as no guild.
 -- Pending: until the game has said whether we are in a guild (ns.Guild's GUILD_STATE, at most GUILD_ABSENT_GRACE
 -- seconds after login) and, in a guild, until the guild list has loaded (at most GUILD_LIST_WAIT seconds more): the
 -- answers to our HELLO are whispers, and a whisper is only trusted once the list knows its sender. TRANSPORT_READY
@@ -165,7 +166,7 @@ function Transport.start()
   end)
 end
 
-local function sending() return settled and inGuild and gameInGuild() end
+local function sending() return settled and inGuild and gameInGuild() and (not ns.Guild or ns.Guild.active()) end
 
 -- Everyone: one GUILD message (nothing outside a guild). msgType is not needed any more; kept for the callers.
 function Transport.destinations(_msgType)
@@ -229,9 +230,13 @@ function Transport.send(text, dest)
   return good, false
 end
 
--- mode: "guild" (sending to the guild) or "none" (not in a guild, or not known yet: pending = true).
+-- mode: "guild" (sending to the guild) or "none" (not in a guild, or not known yet: pending = true). foreign: this
+-- character's guild is not my TwizCrew guild (home = its name).
 function Transport.status()
   local guild = plain(GetGuildInfo, "player")
+  local G = ns.Guild
+  local foreign = G ~= nil and G.inGuild() and not G.isHome()
   return { mode = sending() and "guild" or "none", pending = not settled, waitingList = waitingList,
-    guild = type(guild) == "string" and guild or nil, lockdown = Transport.lockdown(), lastResult = lastResult }
+    guild = type(guild) == "string" and guild or nil, lockdown = Transport.lockdown(), lastResult = lastResult,
+    foreign = foreign, home = G and G.home() or nil }
 end

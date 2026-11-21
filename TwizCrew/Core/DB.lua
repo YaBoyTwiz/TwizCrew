@@ -19,7 +19,9 @@ function DB.init(saved, defs)
     schema = 1,
     modules = {},
     roster = {},
-    guild = { keys = {} }, -- keys[lower(full name)] = the key a guild member was given the first time (never changed)
+    -- keys[lower(full name)] = the key a guild member was given the first time (never changed), keysFor = the guild
+    -- they belong to, mine[GUID] = my key on that character, home = my TwizCrew guild (see Crew/Guild.lua)
+    guild = { keys = {}, mine = {} },
     log = {},
     problems = {}, -- the ERROR and WARN lines, kept apart from the rolling log
     myStatus = "",

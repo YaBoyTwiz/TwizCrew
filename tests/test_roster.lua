@@ -244,59 +244,56 @@ return {
       A.eq(r:get("Ginkan"), nil); A.eq(saved.Ginkan, nil)
       A.no(r:forget("Ginkan"))
     end,
-    -- Guild membership: a fake ns.Guild with a fixed key list.
+    -- Guild membership: a fake ns.Guild with a fixed key list (active = my TwizCrew guild, complete = a full read).
     roster_hides_members_the_loaded_list_lacks = function(ns, A)
       local saved = { Gone = { name = "Gone", level = 3 }, Ginkan = { name = "Ginkan", level = 5 } }
       local r = ns.Roster.new(saved)
       local isLoaded, keys = false, { Ginkan = true }
-      r:setGuild({ loaded = function() return isLoaded end, get = function(k) return keys[k] and {} or nil end })
-      A.eq(r:syncGuild(1000), { changed = {}, due = {} }, "the list never loaded: nothing happens")
+      r:setGuild({ active = function() return true end, complete = function() return true end,
+        loaded = function() return isLoaded end, get = function(k) return keys[k] and {} or nil end })
+      A.eq(r:syncGuild(), {}, "the list never loaded: nothing happens")
       A.eq(r:names(), { "Ginkan", "Gone" })
       isLoaded = true
-      local res = r:syncGuild(1000)
-      A.eq(res.changed, { "Gone" }); A.eq(res.due, {})
+      A.eq(r:syncGuild(), { "Gone" })
       A.eq(r:names(), { "Ginkan" }); A.eq(#r:members(), 1); A.eq(r:get("Gone"), nil)
-      A.eq(r:row("Gone").inGuild, false); A.eq(r:row("Gone").outSince, 1000)
-      A.eq(saved.Gone.outSince, 1000, "saved")
+      A.eq(r:row("Gone").inGuild, false)
       A.ok(r:isHidden("Gone")); A.no(r:isHidden("Ginkan")); A.no(r:isHidden("Nobody"))
       local _, total = r:onlineCount(); A.eq(total, 1)
       A.eq(#r:sorted("name"), 1)
       A.eq(r:allNames(), { "Ginkan", "Gone" }, "every real row")
-      r:syncGuild(5000)
-      A.eq(r:row("Gone").outSince, 1000, "counted from the first time")
-      -- a message from them (the list is behind) keeps the mark and the saved date
-      r:apply("Gone", { lv = "4" }, 1, 6000)
-      A.eq(saved.Gone.outSince, 1000)
+      A.eq(saved.Gone.level, 3, "hidden, never deleted")
+      A.eq(r:syncGuild(), {}, "no change: nothing to tell")
+      r:apply("Gone", { lv = "4" }, 1, 6000) -- a message from them (the list is behind) keeps the mark
+      A.ok(r:isHidden("Gone"))
       keys.Gone = true
-      res = r:syncGuild(7000)
-      A.eq(res.changed, { "Gone" })
-      A.eq(r:row("Gone").inGuild, true); A.eq(r:row("Gone").outSince, nil); A.eq(saved.Gone.outSince, nil)
+      A.eq(r:syncGuild(), { "Gone" })
+      A.eq(r:row("Gone").inGuild, true)
       A.eq(r:names(), { "Ginkan", "Gone" })
     end,
-    roster_out_of_guild_due_after_the_limit = function(ns, A)
-      local day = 86400
-      local now = ns.wallclock()
-      local saved = { Old = { name = "Old", outSince = now - 30 * day }, Near = { name = "Near", outSince = now - 29 * day } }
+    roster_hides_nobody_on_a_partial_read_or_in_another_guild = function(ns, A)
+      local saved = { Gone = { name = "Gone", level = 3, outSince = 5 } }
       local r = ns.Roster.new(saved)
-      A.eq(r:names(), { "Near", "Old" }, "nothing hidden before the list loads, whatever was saved")
-      r:setGuild({ loaded = function() return true end, get = function() return nil end })
-      local res = r:syncGuild(now)
-      A.eq(res.due, { "Old" }); A.eq(r:row("Near").outSince, now - 29 * day)
-      A.eq(r:outOfGuildDue(now + day), { "Near", "Old" })
-      A.eq(r:outOfGuildDue(now), { "Old" })
+      A.eq(saved.Gone.outSince, nil, "a test build's outSince is removed")
+      local active, whole = true, false
+      r:setGuild({ active = function() return active end, complete = function() return whole end,
+        loaded = function() return true end, get = function() return nil end })
+      A.eq(r:syncGuild(), {}, "a partial read hides nobody")
+      active, whole = false, true
+      A.eq(r:syncGuild(), {}, "not my TwizCrew guild: nobody")
+      A.eq(r:names(), { "Gone" })
     end,
     roster_new_row_from_a_message_waits_for_the_next_sync = function(ns, A)
       local saved = {}
       local r = ns.Roster.new(saved)
-      r:setGuild({ loaded = function() return true end, get = function(k) return k == "Ginkan" and {} or nil end })
+      r:setGuild({ active = function() return true end, complete = function() return true end,
+        loaded = function() return true end, get = function(k) return k == "Ginkan" and {} or nil end })
       r:apply("Ginkan", { lv = "5" }, 1, 100)
       r:apply("Stranger", { lv = "5" }, 1, 100)
       r:apply("Testbuddy (test)", { lv = "5" }, 1, 100)
       A.eq(r:names(true), { "Ginkan", "Stranger", "Testbuddy (test)" }, "the list may be behind: shown until a sync")
-      A.eq(saved.Stranger.outSince, nil)
-      A.eq(r:syncGuild(200).changed, { "Stranger" })
+      A.eq(r:syncGuild(), { "Stranger" })
       A.eq(r:names(true), { "Ginkan", "Testbuddy (test)" }, "fakes are never touched")
-      A.eq(saved.Stranger.outSince, 200)
+      A.ok(saved.Stranger, "kept")
     end,
     load_prunes_rows_older_than_the_forget_limit = function(ns, A)
       local now, day = ns.wallclock(), 86400

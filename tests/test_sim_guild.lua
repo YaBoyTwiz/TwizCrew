@@ -458,5 +458,107 @@ return {
       A.eq(heard, 50, "the newcomer sees everyone")
       noErrors(A, nbNs, crew[1].ns, crew[50].ns)
     end,
+
+    -- One TwizCrew guild per account: the home guild is set by the first guild message heard from another member.
+    home_guild_is_set_by_the_first_guild_message_heard = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      H.link(tw)
+      login(tw)
+      H.advance(30)
+      A.eq(twNs.Guild.home(), nil, "alone: my own messages prove nothing")
+      A.eq(twNs.Transport.status().mode, "guild", "unset home: this guild is used")
+      local fr = H.client("Frostie", { class = "MAGE" })
+      H.link(fr)
+      login(fr)
+      H.advance(10)
+      A.eq(twNs.Guild.home(), "Crew Guild")
+      A.eq(twNs.db.guild.keysFor, "Crew Guild")
+      noErrors(A, twNs)
+    end,
+
+    alt_in_another_guild_stays_quiet_and_the_main_is_unchanged = function(_, A, _, H)
+      -- the main, in the home guild, with a friend and an old friend out of the guild
+      local main, mainNs = H.client("Twiz")
+      local fr, frNs = H.client("Frostie", { class = "MAGE" })
+      H.link(main, fr)
+      login(main)
+      login(fr)
+      H.advance(30)
+      A.eq(mainNs.Guild.home(), "Crew Guild")
+      mainNs.db.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = mainNs.wallclock() }
+      main:fire("PLAYER_LOGOUT")
+      H.advance(1)
+      unlink(H, main)
+      local saved = mainNs.db
+      local keysBefore = {}
+      for k, v in pairs(saved.guild.keys) do keysBefore[k] = v end
+      -- an alt of the same account in another guild that also has a TwizCrew user
+      local alt, altNs = H.client("Altie", { class = "PRIEST" })
+      local other = H.client("Stranger", { class = "ROGUE" })
+      H.guild("Other Guild", alt, other)
+      alt.env.TwizCrewDB = saved
+      H.link(alt, other)
+      login(alt)
+      login(other)
+      H.advance(5 * 60)
+      tc(alt, "report")
+      local sent = 0
+      for _, m in ipairs(alt.sent) do if m.chatType ~= "PARTY" and m.chatType ~= "RAID" then sent = sent + 1 end end
+      A.eq(sent, 0, "zero sends in a foreign guild")
+      A.eq(altNs.Transport.status().mode, "none")
+      A.ok(altNs.Transport.status().foreign)
+      A.eq(altNs.Guild.home(), "Crew Guild", "home unchanged by the other guild's messages")
+      A.no(altNs.Guild.active()); A.no(altNs.Guild.loaded())
+      A.eq(altNs.roster:get("Stranger"), nil, "their messages are not accepted")
+      A.eq(altNs.roster:names(), { "Frostie", "Oldpal" }, "no row hidden")
+      A.eq(saved.guild.keys, keysBefore, "no key written")
+      A.eq(saved.guild.keysFor, "Crew Guild")
+      local reported = false
+      for _, line in ipairs(alt.printed) do
+        if line:find("this character's guild (Other Guild) is not your TwizCrew guild (Crew Guild)", 1, true) then
+          reported = true
+        end
+      end
+      A.ok(reported, "/tc report says why")
+      noErrors(A, altNs)
+      alt:fire("PLAYER_LOGOUT")
+      H.advance(1)
+      unlink(H, alt)
+      -- back on the main: as before
+      local main2, main2Ns = H.client("Twiz")
+      main2.state.guild = main.state.guild
+      main2.env.TwizCrewDB = saved
+      H.link(main2)
+      login(main2)
+      H.advance(30)
+      A.eq(main2Ns.Transport.status().mode, "guild")
+      A.ok(online(main2Ns, "Frostie"))
+      A.ok(online(frNs, "Twiz"))
+      A.eq(main2Ns.roster:names(), { "Frostie" }, "the old friend is hidden again in the home guild")
+      noErrors(A, main2Ns, frNs)
+    end,
+
+    tc_home_here_switches_the_home_guild = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      H.guild("New Guild", tw)
+      tw.env.TwizCrewDB = { guild = { home = "Old Guild", keysFor = "Old Guild", keys = { someone = "Someone" } } }
+      H.link(tw)
+      login(tw)
+      H.advance(30)
+      A.eq(#tw.sent, 0, "a foreign guild: quiet")
+      tc(tw, "home")
+      A.ok(tw.printed[#tw.printed]:find("Old Guild", 1, true), "/tc home names it")
+      tc(tw, "home here")
+      A.eq(tw.printed[#tw.printed], "TwizCrew: your TwizCrew guild is now New Guild.")
+      A.eq(twNs.Guild.home(), "New Guild")
+      H.advance(10)
+      A.ok(twNs.Guild.active())
+      A.eq(twNs.db.guild.keys.someone, nil, "the old guild's keys are gone")
+      A.eq(twNs.db.guild.keys.twiz, "Twiz")
+      local hellos = 0
+      for _, m in ipairs(tw.sent) do if typeOf(m) == "HELLO" then hellos = hellos + 1 end end
+      A.eq(hellos, 1, "now it says hello")
+      noErrors(A, twNs)
+    end,
   },
 }

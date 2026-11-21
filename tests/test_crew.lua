@@ -816,7 +816,7 @@ return {
       A.ok(ns.roster:get("Frostie"), "a friend who shows up again is added again")
       noErrors(ns, A)
     end,
-    -- The roster follows the guild list: a saved friend the loaded list lacks is hidden, dropped after 30 days out.
+    -- The roster follows the guild list: a saved friend a complete list lacks is hidden (never deleted for it).
     saved_friend_not_in_guild_is_hidden_after_first_list_load_only = function(ns, A, W)
       W.state.guildListDelay = 20 -- the list reads as empty for 20 s after the first ask
       local db = ns.DB.init(nil, ns.Modules.list())
@@ -830,21 +830,19 @@ return {
       start(ns, W, db)
       A.no(ns.Guild.loaded())
       A.eq(ns.roster:names(), { "Frostie", "Oldpal" }, "before the list loads nobody is hidden")
-      A.eq(db.roster.Oldpal.outSince, nil)
       W:advance(20)
       A.ok(ns.Guild.loaded())
       A.eq(ns.roster:names(), { "Frostie" }, "hidden once the list has loaded")
       A.eq(ns.roster:get("Oldpal"), nil)
       local _, total = ns.roster:onlineCount(); A.eq(total, 1)
-      local since = db.roster.Oldpal.outSince
-      A.ok(since and since <= ns.wallclock() and since >= ns.wallclock() - 20, "when they were first missing, saved")
+      A.eq(db.roster.Oldpal.level, 30, "their row stays on disk")
       A.eq(db.stats.crew.Oldpal.a.gn, 3, "their numbers stay on disk")
       local shown = {}
       for _, e in ipairs(ns.StatsStore.entries("all")) do shown[#shown + 1] = e.name end
       A.eq(shown, { "Frostie" }, "boards leave them out")
-      local told = false
-      for _, u in ipairs(updated) do if u[1] == "Oldpal" then told = true end end
-      A.ok(told, "the panel is told")
+      local told
+      for _, u in ipairs(updated) do if u[1] == "Oldpal" then told = u[2] end end
+      A.eq(told, { inGuild = false }, "the panel is told, with the real value")
       noErrors(ns, A)
     end,
     saved_friend_in_guild_keeps_stats_trophies_notes = function(ns, A, W)
@@ -859,63 +857,56 @@ return {
       W:advance(5)
       A.ok(ns.Guild.loaded())
       A.eq(ns.roster:names(), { "Frostie" })
-      A.eq(db.roster.Frostie.level, 20); A.eq(db.roster.Frostie.outSince, nil)
+      A.eq(db.roster.Frostie.level, 20)
       A.eq(db.stats.crew.Frostie.a.gn, 4)
       A.eq(db.stats.trophies.s1.winners.gn, "Frostie")
       A.eq(db.calendar.notes.n1.b, "Frostie")
       noErrors(ns, A)
     end,
-    out_of_guild_30_days_is_forgotten_29_is_not = function(ns, A, W)
-      local day, now = 86400, nil
+    -- Ruling: being out of the guild never deletes anything; only FORGET_AFTER_DAYS of silence does (at load).
+    out_of_guild_is_only_hidden_never_forgotten = function(ns, A, W)
+      local day = 86400
       local db = ns.DB.init(nil, ns.Modules.list())
-      now = ns.wallclock()
-      db.roster.Gone30 = { name = "Gone30", level = 5, lastSeen = now - 31 * day, outSince = now - 30 * day }
-      db.roster.Gone29 = { name = "Gone29", level = 5, lastSeen = now - 31 * day, outSince = now - 29 * day }
-      db.stats.crew.Gone30 = { sid = "s", s = {}, a = { gn = 1 } }
-      db.stats.crew.Gone29 = { sid = "s", s = {}, a = { gn = 1 } }
+      local now = ns.wallclock()
+      db.roster.Gone = { name = "Gone", level = 5, lastSeen = now - 31 * day, outSince = now - 40 * day }
+      db.stats.crew.Gone = { sid = "s", s = {}, a = { gn = 1 } }
       ns.db = db
       ns.Modules.attach(db)
       local removed = record(ns, "MEMBER_REMOVED")
       start(ns, W, db)
-      A.eq(db.roster.Gone30, nil, "30 days out: forgotten")
-      A.eq(db.stats.crew.Gone30, nil, "with their numbers")
-      A.eq(removed[1] and removed[1][1], "Gone30")
-      A.ok(db.roster.Gone29, "29 days: kept (hidden)")
-      A.ok(db.stats.crew.Gone29)
-      A.ok(ns.roster:isHidden("Gone29"))
-      -- a day later, in the same session: the next check forgets them
-      W.wall = W.wall + day
-      W:advance(ns.Config.OFFLINE_TICK + 1)
-      A.eq(db.roster.Gone29, nil, "a day later")
-      A.eq(db.stats.crew.Gone29, nil)
+      A.ok(ns.roster:isHidden("Gone"))
+      A.eq(db.roster.Gone.outSince, nil, "a test build's outSince is removed")
+      W.wall = W.wall + 25 * day -- still under the 60 days of silence
+      W:advance(ns.Config.OFFLINE_TICK * 3)
+      A.eq(db.roster.Gone.level, 5, "kept")
+      A.ok(db.stats.crew.Gone)
+      A.eq(#removed, 0)
       noErrors(ns, A)
     end,
-    rejoining_clears_out_since = function(ns, A, W)
+    rejoining_shows_them_again = function(ns, A, W)
       local db = ns.DB.init(nil, ns.Modules.list())
-      local since = ns.wallclock() - 5 * 86400
-      db.roster.Oldpal = { name = "Oldpal", level = 30, outSince = since }
+      db.roster.Oldpal = { name = "Oldpal", level = 30 }
       db.stats.crew.Oldpal = { sid = "s", s = {}, a = { gn = 3 } }
       ns.db = db
       ns.Modules.attach(db)
+      local updated = record(ns, "MEMBER_UPDATED")
       start(ns, W, db)
       A.ok(ns.roster:isHidden("Oldpal"))
-      A.eq(db.roster.Oldpal.outSince, since, "still counted from the first day")
       local list = W.state.guild.members
       list[#list + 1] = { name = "Oldpal", online = false, guid = "Player-1-0099", lastOnline = { 0, 0, 1, 0 } }
       W:fire("GUILD_ROSTER_UPDATE", false)
       W:advance(2)
       A.no(ns.roster:isHidden("Oldpal"))
       A.eq(ns.roster:names(), { "Oldpal" })
-      A.eq(db.roster.Oldpal.outSince, nil)
       A.eq(ns.roster:get("Oldpal").inGuild, true)
+      A.eq(updated[#updated], { "Oldpal", { inGuild = true } })
       A.eq(db.stats.crew.Oldpal.a.gn, 3, "back with their numbers")
       noErrors(ns, A)
     end,
     nothing_is_hidden_when_the_list_never_loads = function(ns, A, W)
       W.state.guildListDelay = 1e9
       local db = ns.DB.init(nil, ns.Modules.list())
-      local old = ns.wallclock() - 90 * 86400
-      db.roster.Oldpal = { name = "Oldpal", level = 30, outSince = old }
+      db.roster.Oldpal = { name = "Oldpal", level = 30 }
       db.roster.Frostie = { name = "Frostie", level = 20 }
       ns.db = db
       ns.Modules.attach(db)
@@ -923,8 +914,34 @@ return {
       W:advance(120)
       A.no(ns.Guild.loaded())
       A.eq(ns.roster:names(), { "Frostie", "Oldpal" })
-      A.eq(db.roster.Oldpal.outSince, old, "kept as it was")
-      A.ok(db.roster.Oldpal, "never dropped while the list is not there")
+      noErrors(ns, A)
+    end,
+    -- One unreadable (secret) row: the read is partial, nobody is hidden and no new key is given out.
+    a_partial_guild_read_hides_nobody = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.roster.Oldpal = { name = "Oldpal", level = 30 }
+      db.roster.Frostie = { name = "Frostie", level = 20 }
+      db.guild.keys = { twiz = "Twiz", frostie = "Frostie" } -- given out before
+      ns.db = db
+      ns.Modules.attach(db)
+      local real = W.env.GetGuildRosterInfo
+      W.env.GetGuildRosterInfo = function(i)
+        if i == 3 then local v = "Secret Name"; W.state.secret[v] = true; return v end
+        return real(i)
+      end
+      start(ns, W, db)
+      A.ok(ns.Guild.loaded()); A.no(ns.Guild.complete())
+      A.eq(ns.Guild.get("Frostie").full, "Frostie", "members with saved keys are listed")
+      A.eq(ns.Guild.get("Lurabe"), nil, "no new key on a partial read")
+      A.eq(db.guild.keys.lurabe, nil)
+      A.eq(ns.roster:names(), { "Frostie", "Oldpal" }, "a partial read hides nobody")
+      W.env.GetGuildRosterInfo = real
+      W:advance(11)
+      W.env.C_GuildInfo.GuildRoster()
+      W:advance(2)
+      A.ok(ns.Guild.complete())
+      A.eq(ns.roster:names(), { "Frostie" })
+      A.eq(db.guild.keys.lurabe, "Lurabe", "new keys once the read is complete")
       noErrors(ns, A)
     end,
     prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)

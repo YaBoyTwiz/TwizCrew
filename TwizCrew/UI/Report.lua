@@ -31,6 +31,9 @@ local function connection()
   local text
   if s.mode == "guild" then
     text = "through the guild " .. tostring(s.guild or "(name not known yet)")
+  elseif s.foreign then
+    text = "this character's guild (" .. ns.Util.safeText(tostring(s.guild or "name not known yet"))
+      .. ") is not your TwizCrew guild (" .. ns.Util.safeText(tostring(s.home)) .. "), so nothing is sent"
   elseif s.waitingList then
     text = "waiting for the guild list"
   elseif s.pending then

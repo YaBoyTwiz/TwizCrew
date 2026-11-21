@@ -3,7 +3,15 @@
 --
 -- Key of a member: the first word of the name, unless another member already holds that word (saved keys count, and
 -- so does the current list); then the full name. Keys are saved in ns.db.guild.keys[lower(full)] the first time a
--- member is seen and never change.
+-- member is seen (only on a complete read) and never change; they belong to one guild (ns.db.guild.keysFor) and are
+-- cleared when keys are about to be given out in another one.
+--
+-- Home guild: one TwizCrew guild per account (ns.db.guild.home), set the first time a GUILD message from another
+-- member is heard while it is unset (Comm calls Guild.setHome), or by /tc home here. On a character in another guild
+-- the addon acts as if it were in no guild: active() is false, no list is read, nothing is keyed, sent or accepted.
+-- GUILD_STATE(active) fires when active() changes; inGuild() stays the game's answer.
+--
+-- My own key is saved per character GUID (ns.db.guild.mine) so myKey() can answer before the list loads.
 local _, ns = ...
 
 local FEATURE = "guild"
@@ -17,7 +25,10 @@ local MAX_MEMBERS = 2000 -- never read more rows than this
 
 local members, byFull, byKey, byFirst, byGuid = {}, {}, {}, {}, {}
 local loaded = false
-local announced              -- nil until known, then true / false: what GUILD_STATE last said
+local complete = false       -- the last read gave as many readable rows as the game said there are
+local announced              -- nil until known, then true / false: is the character in a guild (the game, after grace)
+local activeAnnounced        -- nil until known, then what GUILD_STATE last said (in my TwizCrew guild)
+local nameWaitSince          -- ns.now() since when we are in a guild, home is set and the guild name is not known
 local seenIn                 -- what the game last said about being in a guild (nil: nothing usable yet)
 local absentSince            -- ns.now() when the game first said "no guild" (nil while it says yes)
 local lastRefresh, lastRead
@@ -27,13 +38,19 @@ local started = false
 local ticker
 local signature = ""
 local heldBy = {}            -- lower(key) -> lower(full name) of whoever was ever given that key (saved keys)
-local fallbackKeys = {}      -- used while saved data is not attached (tests, very early)
+local fallback = { keys = {}, mine = {} } -- used while saved data is not attached (tests, very early)
 
-local function savedKeys()
-  local g = ns.db and ns.db.guild
-  if type(g) == "table" and type(g.keys) == "table" then return g.keys end
-  return fallbackKeys
+local function saved()
+  local db = ns.db
+  if type(db) ~= "table" then return fallback end
+  if type(db.guild) ~= "table" then db.guild = {} end
+  local g = db.guild
+  if type(g.keys) ~= "table" then g.keys = {} end
+  if type(g.mine) ~= "table" then g.mine = {} end
+  return g
 end
+
+local function savedKeys() return saved().keys end
 
 -- "Chaos Deathbringr-Realm" / "Chaos Deathbringr" -> "Chaos Deathbringr"; nil when there is no usable name.
 local function clean(raw)
@@ -96,8 +113,9 @@ local function savedClassOf(first)
   return type(row) == "table" and type(row.class) == "string" and row.class or nil
 end
 
--- Gives every entry its key (entries are sorted A-Z by full name).
-local function assignKeys(entries)
+-- Gives every entry its key (entries are sorted A-Z by full name). allowNew false (a partial read): only saved keys,
+-- an entry without one gets none.
+local function assignKeys(entries, allowNew)
   local saved = savedKeys()
   local holder = {} -- lower(key) -> lower(full name) of the member who has it
   for lf, key in pairs(saved) do
@@ -111,8 +129,10 @@ local function assignKeys(entries)
       e.key = key
     else
       local lw = e.first:lower()
-      if not groups[lw] then groups[lw] = {}; order[#order + 1] = lw end
-      groups[lw][#groups[lw] + 1] = e
+      if allowNew then
+        if not groups[lw] then groups[lw] = {}; order[#order + 1] = lw end
+        groups[lw][#groups[lw] + 1] = e
+      end
     end
   end
   -- a key no other full name holds (case-insensitive): the wanted one, else "Name (2)", "Name (3)"...
@@ -172,33 +192,85 @@ local function install(entries)
   end
 end
 
--- Reads the game's list. A list that cannot be read (secret values, nothing yet) changes nothing.
+local function guildName()
+  local name = plain(GetGuildInfo, "player")
+  if type(name) == "string" and name ~= "" then return name end
+  return nil
+end
+
+-- Saved keys (and my saved keys per GUID) belong to the guild they were given out in: in another guild they go.
+-- Returns true when they were cleared.
+local function keysForGuild(name)
+  if not name then return false end
+  local g = saved()
+  if g.keysFor == nil then g.keysFor = name; return false end -- keys from before this was saved: adopted
+  if g.keysFor == name then return false end
+  ns.Log.add("info", "guild keys cleared: they were for another guild")
+  for k in pairs(g.keys) do g.keys[k] = nil end
+  for k in pairs(g.mine) do g.mine[k] = nil end
+  g.keysFor = name
+  return true
+end
+
+local function byFullName(a, b)
+  local x, y = a.full:lower(), b.full:lower()
+  if x ~= y then return x < y end
+  return a.full < b.full
+end
+
+-- Saves my key for this character (ns.db.guild.mine[GUID]) once the list has me.
+local function rememberMyKey()
+  local guid = plain(UnitGUID, "player")
+  if type(guid) ~= "string" then return end
+  local e = byGuid[guid]
+  if not e then
+    local mine = clean(plain(UnitName, "player"))
+    e = mine and byFull[mine:lower()]
+  end
+  if e then saved().mine[guid] = e.key end
+end
+
+-- Reads the game's list (only in my TwizCrew guild). A list that cannot be read (secret values, nothing yet) changes
+-- nothing. A partial read (fewer readable rows than the game counts) updates the members it did read, keeps the
+-- others as they were and gives out no new keys; complete() tells which one the last read was.
 local function read()
   lastRead = ns.now()
-  local total = plain(GetNumGuildMembers)
-  if type(total) ~= "number" or total <= 0 then return end
-  if total > MAX_MEMBERS then total = MAX_MEMBERS end
-  local entries, seen = {}, {}
+  if not Guild.active() then return end
+  local count = plain(GetNumGuildMembers)
+  if type(count) ~= "number" or count <= 0 then return end
+  local total = math.min(count, MAX_MEMBERS)
+  local entries, seen, readable = {}, {}, 0
   for i = 1, total do
     local e = readRow(i)
-    if e and not seen[e.full:lower()] then
-      seen[e.full:lower()] = true
-      entries[#entries + 1] = e
+    if e then
+      readable = readable + 1
+      if not seen[e.full:lower()] then
+        seen[e.full:lower()] = true
+        entries[#entries + 1] = e
+      end
     end
   end
   if #entries == 0 then return end
-  table.sort(entries, function(a, b)
-    local x, y = a.full:lower(), b.full:lower()
-    if x ~= y then return x < y end
-    return a.full < b.full
-  end)
-  assignKeys(entries)
-  local sig = sigOf(entries)
+  local isComplete = readable == count
+  local cleared = keysForGuild(guildName())
+  table.sort(entries, byFullName) -- keys are given out A-Z
+  assignKeys(entries, isComplete)
+  local kept = {}
+  for _, e in ipairs(entries) do if e.key then kept[#kept + 1] = e end end
+  if not isComplete and not cleared then -- members this read could not see stay as they were
+    for _, e in ipairs(members) do
+      if not seen[e.full:lower()] then kept[#kept + 1] = e end
+    end
+  end
+  if #kept == 0 then return end
+  table.sort(kept, byFullName)
+  local sig = sigOf(kept)
   local first = not loaded
-  local changed = sig ~= signature
-  install(entries)
-  loaded = true
+  local changed = sig ~= signature or (isComplete and not complete)
+  install(kept)
+  loaded, complete = true, isComplete
   signature = sig
+  rememberMyKey()
   if first or changed then ns.Bus.fire("GUILD_LIST") end
 end
 
@@ -216,6 +288,38 @@ local function readSoon()
   read()
 end
 
+-- Drops the list (left the guild, or this is not my TwizCrew guild).
+local function dropList()
+  local had = loaded or #members > 0
+  loaded, complete, signature = false, false, ""
+  install({})
+  if had then ns.Bus.fire("GUILD_LIST") end
+end
+
+-- GUILD_STATE follows active(): true once in my TwizCrew guild, false otherwise. While in a guild with a home set and
+-- the guild name not known yet, nothing is said for up to GUILD_ABSENT_GRACE seconds (the game may name it late).
+local function updateActive()
+  if announced == nil then return end
+  local now = Guild.active()
+  if announced and not now and Guild.home() and not guildName() then
+    nameWaitSince = nameWaitSince or ns.now()
+    if activeAnnounced == nil and ns.now() - nameWaitSince < ns.Config.GUILD_ABSENT_GRACE then return end
+  else
+    nameWaitSince = nil
+  end
+  if now == activeAnnounced then return end
+  activeAnnounced = now
+  if now then
+    ns.Bus.fire("GUILD_STATE", true)
+    read()
+    Guild.refresh()
+  else
+    if announced then ns.Log.add("info", "this guild is not your TwizCrew guild: TwizCrew stays quiet here") end
+    dropList()
+    ns.Bus.fire("GUILD_STATE", false)
+  end
+end
+
 -- Membership: true at once, false only after the grace time of the game saying so.
 local function checkState()
   local now = plain(IsInGuild)
@@ -223,29 +327,53 @@ local function checkState()
   seenIn = now == true
   if seenIn then
     absentSince = nil
-    if announced ~= true then
-      announced = true
-      ns.Bus.fire("GUILD_STATE", true)
-    end
-    return
+    announced = true
+  else
+    absentSince = absentSince or ns.now()
+    if announced ~= false and ns.now() - absentSince >= ns.Config.GUILD_ABSENT_GRACE then announced = false end
   end
-  absentSince = absentSince or ns.now()
-  if announced ~= false and ns.now() - absentSince >= ns.Config.GUILD_ABSENT_GRACE then
-    announced = false
-    local had = loaded or #members > 0
-    loaded, signature = false, ""
-    install({})
-    if had then ns.Bus.fire("GUILD_LIST") end
-    ns.Bus.fire("GUILD_STATE", false)
-  end
+  updateActive()
 end
 
+-- The game's answer: is this character in a guild (any guild)?
 function Guild.inGuild() return announced == true end
 function Guild.loaded() return loaded end
+function Guild.complete() return loaded and complete end
+
+-- The current guild's name (nil when not in a guild or not known yet), my TwizCrew guild's name (nil while unset).
+Guild.name = guildName
+function Guild.home()
+  local h = ns.db and type(ns.db.guild) == "table" and ns.db.guild.home
+  return type(h) == "string" and h ~= "" and h or nil
+end
+
+-- True while no home is set, or the current guild is it; false while the guild name is not known and home is set.
+function Guild.isHome()
+  local home = Guild.home()
+  if not home then return true end
+  return guildName() == home
+end
+
+-- In a guild, and it is my TwizCrew guild: the only state in which the addon reads the list, keys, sends or accepts.
+function Guild.active() return Guild.inGuild() and Guild.isHome() end
+
+-- Makes the current guild my TwizCrew guild. Returns its name, or nil when not in a guild or its name is not known.
+function Guild.setHome()
+  local name = plain(IsInGuild) == true and guildName() or nil
+  if not name or not ns.db then return nil end
+  if type(ns.db.guild) ~= "table" then ns.db.guild = {} end
+  if ns.db.guild.home ~= name then
+    ns.db.guild.home = name
+    ns.Log.add("info", "TwizCrew guild set to %s", ns.Util.safeText(name))
+  end
+  if started then updateActive() end
+  return name
+end
 
 -- Asks the game for a fresh list, at most once per GUILD_REFRESH_MIN seconds. Returns true when it asked.
 function Guild.refresh()
   if plain(IsInGuild) ~= true then return false end
+  if Guild.inGuild() and not Guild.isHome() then return false end -- not my TwizCrew guild
   local now = ns.now()
   if lastRefresh and now - lastRefresh < ns.Config.GUILD_REFRESH_MIN then return false end
   local fn = (C_GuildInfo and C_GuildInfo.GuildRoster) or GuildRoster
@@ -393,9 +521,13 @@ local function myEntry()
   return mine and byFull[mine:lower()] or nil
 end
 
+-- My key: from the list, else the one saved for this character (any guild list read before), else nil.
 function Guild.myKey()
   local e = myEntry()
-  return e and e.key or nil
+  if e then return e.key end
+  local guid = plain(UnitGUID, "player")
+  local key = type(guid) == "string" and saved().mine[guid]
+  return type(key) == "string" and key ~= "" and key or nil
 end
 
 -- My full name: the listed member whose GUID is mine, else UnitName when it has several words, else unknown (nil).
@@ -441,7 +573,7 @@ function Guild.start()
     Guild.refresh()
   end)
   checkState()
-  read()
+  if not activeAnnounced then read() end -- (updateActive already read when it became active)
   Guild.refresh()
   ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
 end

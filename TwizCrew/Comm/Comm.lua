@@ -153,6 +153,7 @@ end
 -- never mixes). Any other chat type (whisper, party, raid) only from someone the guild list has.
 local function senderKey(raw, chatType)
   local G = ns.Guild
+  if G and G.inGuild() and not G.isHome() then return nil end -- not my TwizCrew guild: as if in no guild
   local key = G and G.keyOf(raw)
   if key then return key end
   if chatType ~= "GUILD" then
@@ -177,6 +178,8 @@ local function onAddon(prefix, text, chatType, raw)
     ns.Log.count("recv not in guild")
     return
   end
+  -- the first guild message from another member proves TwizCrew is used in this guild: it becomes my TwizCrew guild
+  if chatType == "GUILD" and ns.Guild and not ns.Guild.home() then ns.Guild.setHome() end
   if raw ~= sender and not loggedNameForm then
     loggedNameForm = true
     ns.Log.add("info", "sender names look like \"%s\"; using \"%s\"", ns.Util.safeText(raw), ns.Util.safeText(sender))

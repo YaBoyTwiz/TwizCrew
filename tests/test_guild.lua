@@ -385,6 +385,66 @@ return {
       A.eq(ns.resolveName("Bob (test)"), "Bob (test)", "the text as it is when the list cannot tell")
     end,
 
+    home_guild_rules = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      A.eq(ns.Guild.name(), "Test Guild")
+      A.eq(ns.Guild.home(), nil); A.ok(ns.Guild.isHome(), "no home yet: any guild"); A.ok(ns.Guild.active())
+      A.eq(ns.Guild.setHome(), "Test Guild"); A.eq(ns.db.guild.home, "Test Guild"); A.ok(ns.Guild.isHome())
+      ns.db.guild.home = "Main Guild"
+      A.no(ns.Guild.isHome()); A.no(ns.Guild.active()); A.ok(ns.Guild.inGuild(), "inGuild stays the game's answer")
+      W.state.guild.name = nil
+      local real = W.env.GetGuildInfo
+      W.env.GetGuildInfo = function() return nil end
+      A.no(ns.Guild.isHome(), "the name is not known and a home is set")
+      ns.db.guild.home = nil
+      A.ok(ns.Guild.isHome())
+      W.env.GetGuildInfo = real
+    end,
+
+    another_guild_drops_the_list_and_keys_belong_to_one_guild = function(ns, A, W)
+      local seen = listen(ns)
+      local db = boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      A.ok(ns.Guild.loaded()); A.eq(db.guild.keysFor, "Test Guild")
+      db.guild.home = "Main Guild"
+      W:advance(2)
+      A.no(ns.Guild.loaded(), "not my TwizCrew guild: no list")
+      A.eq(seen.states, { true, false })
+      A.eq(ns.Guild.keyOf("Ginkan Pebble"), nil)
+      W.state.guild.members = { member("Twiz"), member("Zed Zed") }
+      W.env.C_GuildInfo.GuildRoster()
+      W:advance(2)
+      A.eq(db.guild.keys["zed zed"], nil, "nothing keyed in another guild")
+      -- this guild becomes the TwizCrew guild: its own keys only
+      db.guild.keysFor = "Main Guild"
+      A.eq(ns.Guild.setHome(), "Test Guild")
+      A.ok(ns.Guild.loaded())
+      A.eq(db.guild.keys["ginkan pebble"], nil, "the other guild's keys were cleared")
+      A.eq(db.guild.keys["zed zed"], "Zed")
+      A.eq(db.guild.keysFor, "Test Guild")
+    end,
+
+    my_key_is_saved_per_character_and_known_before_the_list = function(ns, A, W)
+      local db = boot(ns, W, "Chaos Other", { member("Chaos Deathbringr", { guid = "Player-1-0001" }),
+        member("Chaos Other", { guid = "Player-1-0002" }) })
+      A.eq(ns.Guild.myKey(), "Chaos Other")
+      A.eq(db.guild.mine["Player-1-0002"], "Chaos Other")
+      A.eq(ns.myKey(), "Chaos Other")
+    end,
+
+    my_saved_key_answers_while_the_list_is_not_loaded = function(ns, A, W)
+      W.state.player = "Chaos Other"
+      W.state.guild = { name = "Test Guild", members = {} }
+      W.state.guids = W.state.guids or {}
+      W.state.guids.player = "Player-1-0002"
+      local db = ns.DB.init({ guild = { keys = {}, mine = { ["Player-1-0002"] = "Chaos Other" } } }, ns.Modules.list())
+      ns.db = db
+      ns.Modules.attach(db)
+      ns.Guild.start()
+      A.no(ns.Guild.loaded())
+      A.eq(ns.Guild.myKey(), "Chaos Other")
+      A.eq(ns.myKey(), "Chaos Other", "not my first word")
+    end,
+
     the_module_is_registered = function(ns, A)
       local d = ns.Modules.get("guild")
       A.ok(d); A.eq(d.tier, "essential"); A.eq(d.name, "Guild list")

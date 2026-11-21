@@ -284,20 +284,12 @@ function Crew.forget(name)
   return true, row
 end
 
--- Members out of the guild for OUT_OF_GUILD_DAYS are forgotten (roster row, saved numbers).
-local function forgetDue(names)
-  for _, name in ipairs(names) do
-    if Crew.forgetRow(name) then
-      ns.Log.add("info", "forgot %s: out of the guild for %d days", ns.Util.safeText(name), ns.Config.OUT_OF_GUILD_DAYS)
-    end
-  end
-end
-
--- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again.
+-- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted.
 local function followGuild()
-  local res = ns.roster:syncGuild(ns.wallclock())
-  for _, name in ipairs(res.changed) do ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = true }) end
-  forgetDue(res.due)
+  for _, name in ipairs(ns.roster:syncGuild()) do
+    local m = ns.roster:row(name)
+    ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = m and m.inGuild or false })
+  end
 end
 
 function Crew.start()
@@ -345,7 +337,6 @@ function Crew.start()
       for _, name in ipairs(ns.roster:tick(ns.now())) do
         if not ns.roster:isHidden(name) then ns.Bus.fire("MEMBER_OFFLINE", name) end
       end
-      forgetDue(ns.roster:outOfGuildDue(ns.wallclock()))
     end)
   end)
   helloKept = ns.Transport.isPending()

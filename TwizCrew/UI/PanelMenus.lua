@@ -213,15 +213,12 @@ end
 -------------------------------------------------------------------------------------------------------- row menu
 local call = ns.Util.plain
 
--- Is this friend in my group? The game's name check, else their name in my party / raid slots (Forever's name
--- check can miss them).
+-- Is this friend (a member key) in my group? The game's name check with their full name, else their key among my
+-- party / raid slots (Forever's name check can miss them; Where maps each slot to a member key).
 local function inMyGroup(name)
-  if (call(UnitInParty, name) or call(UnitInRaid, name)) then return true end
-  if ns.Where and ns.Where.unitFor then
-    if ns.Where.unitFor(name) then return true end
-    local short = ns.shortName and ns.shortName(name)
-    if short and short ~= name and ns.Where.unitFor(short) then return true end
-  end
+  local full = (ns.Guild and ns.Guild.fullName(name)) or name
+  if (call(UnitInParty, full) or call(UnitInRaid, full)) then return true end
+  if ns.Where and ns.Where.unitFor and ns.Where.unitFor(name) then return true end
   return false
 end
 

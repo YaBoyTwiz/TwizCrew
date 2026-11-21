@@ -154,13 +154,14 @@ function Where.inGroup()
   return yes(call(IsInGroup)) or yes(call(IsInRaid))
 end
 
+-- The member key of a unit's player (see ns.keyOfName), or nil.
 local function unitName(unit)
   local n = call(UnitName, unit)
   if secret(n) or type(n) ~= "string" or n == "" then return nil end
-  return ns.shortName(n)
+  return ns.keyOfName(n)
 end
 
--- lower-case short name -> unit token, read from the game at most every UNIT_MAP_AGE seconds (the arrows ask many
+-- lower-case member key -> unit token, read from the game at most every UNIT_MAP_AGE seconds (the arrows ask many
 -- times a second; a raid would mean 40 name reads per question otherwise). Where.forget() drops it (group changes).
 local UNIT_MAP_AGE = 0.5
 local unitMap, unitMapAt
@@ -181,7 +182,7 @@ end
 function Where.forget() unitMap = nil end
 Where.isSecret = secret
 
--- The party / raid unit token of a group member by short name, or nil.
+-- The party / raid unit token of a group member by member key, or nil.
 function Where.unitFor(name)
   if type(name) ~= "string" then return nil end
   local now = ns.now()
@@ -206,9 +207,10 @@ function Where.isGroupMember(name)
   if ns.isTestName(name) then
     return ns.TestTools ~= nil and type(ns.TestTools.inGroup) == "function" and ns.TestTools.inGroup(name) or false
   end
-  local inParty = call(UnitInParty, name)
+  local full = (ns.Guild and ns.Guild.fullName(name)) or name -- the game's check wants the name, not our key
+  local inParty = call(UnitInParty, full)
   if not secret(inParty) and inParty then return true end
-  local inRaid = call(UnitInRaid, name)
+  local inRaid = call(UnitInRaid, full)
   if not secret(inRaid) and inRaid then return true end
   return Where.unitFor(name) ~= nil
 end

@@ -109,10 +109,11 @@ function MockShow.myLook()
 end
 
 ------------------------------------------------------------------------------------------------- finding them near
+-- The member key of a unit's player (see ns.keyOfName), or nil.
 local function unitName(u)
   local n = call(UnitName, u)
   if type(n) ~= "string" or not readable(n) or n == "" then return nil end
-  return ns.shortName(n)
+  return ns.keyOfName(n)
 end
 
 local function visible(u)

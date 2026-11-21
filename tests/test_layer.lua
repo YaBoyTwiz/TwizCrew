@@ -271,6 +271,31 @@ return {
       receive(ns, W, "Frostie", "STATE", { zn = "Elwynn Forest" })
       A.eq(ns.Layer.relationOf("Frostie"), "same")
     end,
+    -- Two members start with "Chaos": the one in my party (the game names the unit in full) is the one whose row
+    -- gets the layer, the position lookup and the live unit; the other one gets nothing.
+    party_namesake_gets_the_right_row = function(ns, A, W)
+      local list = {}
+      for i, name in ipairs({ "Twiz", "Chaos Deathbringr", "Chaos Other" }) do
+        list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+      end
+      W.state.guild = { name = "Test Guild", members = list }
+      start(ns, W)
+      A.eq(ns.Guild.keyOf("Chaos Deathbringr"), "Chaos")
+      W.state.inGroup = true
+      grouped(W, "party1", "Chaos Other", true)
+      receive(ns, W, "Chaos Other", "STATE", { zn = "Elwynn Forest" })
+      receive(ns, W, "Chaos Deathbringr", "STATE", { zn = "Elwynn Forest" })
+      W:advance(3)
+      A.eq(ns.Layer.relationOf("Chaos Other"), "same")
+      A.eq(ns.Layer.relationOf("Chaos"), "unknown", "not in my party: nothing known")
+      A.eq(ns.Where.unitFor("Chaos Other"), "party1")
+      A.eq(ns.Where.unitFor("Chaos"), nil)
+      A.eq(ns.MockShow.liveUnit("Chaos Other"), "party1")
+      A.eq(ns.MockShow.liveUnit("Chaos"), nil)
+      A.ok(ns.Where.isGroupMember("Chaos Other"))
+      A.no(ns.Where.isGroupMember("Chaos"))
+      A.eq(ns.Log.errors(10), {})
+    end,
     unknown_never_becomes_different = function(ns, A, W)
       start(ns, W)
       grouped(W, "party1", "Frostie", false)

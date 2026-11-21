@@ -260,9 +260,9 @@ local function currentGroup()
   local okRaid, raid = pcall(IsInRaid)
   raid = okRaid and not Where.isSecret(raid) and raid and true or false
   for i = 1, raid and 40 or 4 do
-    local ok, n = pcall(UnitName, (raid and "raid" or "party") .. i)
-    if ok and not Where.isSecret(n) and type(n) == "string" and n ~= "" then
-      out[ns.shortName(n):lower()] = true
+    local n = ns.Util.plain(UnitName, (raid and "raid" or "party") .. i)
+    if not Where.isSecret(n) and type(n) == "string" and n ~= "" then
+      out[ns.keyOfName(n):lower()] = true -- member keys, like the rest of Find
     end
   end
   return out

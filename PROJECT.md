@@ -69,6 +69,17 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Pop-ups (owner):** a small pop-up too, for **layer changes and deaths**. Other tags stay quiet on the panel.
 - **The crew (owner):** all on the **same realm and same faction**, **no guild yet**. So the copies talk over a
   hidden custom channel (Claude's call), and over `PARTY` when grouped; switch to `GUILD` later if they make one.
+  **Update (owner, 2026-11-21): the owner is now a guild master.** The guild is the owner's gaming buddies and
+  stream regulars, small, may grow a little. Owner's decisions (2026-11-21): TwizCrew becomes **guild only** ("no fir
+  now make it guild only"), every guild member has the same powers ("its fine for now"; ranks maybe later), a
+  website tie-in may come later (not now). **Research 2026-11-21 (other addon makers, not tried by us):** `GUILD`
+  addon messages are delivered on Forever 1.60.1 (guild-vendetta probe: result 0, received, also by the sender;
+  ForeverGuild+ and LibGuildSync sync over it); `AreOutgoingAddonChatMessagesRestricted()` is true in the open world
+  although guild and whisper addon messages go through (use `InChatMessagingLockdown` and the send result); guild
+  roster names come "with spaces, without a realm" and carry GUID, class, level, rank, note, online, last online;
+  addons cannot write officer notes or the guild info text; `SendChatMessage` to `GUILD` (real chat) needs a key
+  press or click; trial and veteran accounts cannot send addon messages. Ideas for using the guild (not approved, nothing built): Claude's review of 2026-11-21 in the
+  conversation; the settings already have a plain "Guild chat" transport mode (GUILD only, no whispers or group).
 - **Crew size (owner):** about **5**, probably more over time. Build the panel for ~5 but let it grow (scroll or a
   compact view past ~8; Claude's call).
 - **Crew panel can be hidden (owner)** but is **on by default**. Give it **plenty of settings** so people tailor
@@ -532,7 +543,8 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   Basic Action Update 0.0.2 (TxRx, CurseForge project 1779962, `/bau`, puts the highest rank of each spell on your
   bars, waits until a fight ends; by hand 2026-11-06), EllesmereUI 9.8.4 (full UI replacement, 24 folders
   `EllesmereUI*`, https://github.com/EllesmereGaming/EllesmereUI, CurseForge project 1477613; installed 2026-11-10,
-  checked latest 2026-11-11), and **TwizTracker** (a small starter addon Claude wrote:
+  checked latest 2026-11-11), Spy (Forever) 1.3.8-forever26 (CurseForge project 1701654, by hand 2026-11-20; finds
+  enemies by nameplate / target / mouseover since Forever has no combat log), and **TwizTracker** (a small starter addon Claude wrote:
   `/twiz` shows XP per hour, time to level and gold this session; not yet tested in game).
 - **WowUp-CF 2.25.4 installed (2026-11-05, owner asked):** `~/Applications/WowUp-CF-2.25.4.AppImage`, menu entry
   `~/.local/share/applications/wowup-cf.desktop`. Its auto-detect misses our Flatpak-Lutris game, so Claude wrote

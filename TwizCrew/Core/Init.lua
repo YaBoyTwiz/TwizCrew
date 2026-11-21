@@ -28,6 +28,7 @@ ns.Config = {
   PREFIX = "TwizCrew", PROTOCOL = 1,
   PING_INTERVAL = 60, OFFLINE_AFTER = 180, OFFLINE_TICK = 15,
   FORGET_AFTER_DAYS = 60, -- a friend not seen for this long leaves the roster (and their saved numbers) at load
+  OUT_OF_GUILD_DAYS = 30, -- a friend missing from the loaded guild list this long is forgotten (hidden at once)
   LAYER_STALE_AFTER = 600, LAYER_CONFIRMATIONS = 2, LAYER_TICK = 30,
   -- layer compare: a friend this close (yards) whom the game hides for this long (s) is on another layer
   LAYER_NEAR = 40, LAYER_HIDDEN_FOR = 8, LAYER_LOOK_TICK = 2, LAYER_RECOMPUTE_GAP = 0.5,

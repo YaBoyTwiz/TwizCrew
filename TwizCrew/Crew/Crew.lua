@@ -50,7 +50,9 @@ end
 
 local function hello() return { ver = ns.VERSION, rs = ns.RESTART_SINCE } end
 
+-- A hidden member (out of the guild: the guild list is behind) tells the rest of the addon nothing.
 local function announce(name, m, changes, events)
+  if ns.roster:isHidden(name) then return end
   ns.Bus.fire("MEMBER_UPDATED", name, changes)
   for _, e in ipairs(events) do
     if e == "online" then
@@ -89,7 +91,7 @@ local function onHello(sender, fields)
   -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
   local cleared = ns.roster:clearSession(sender)
   -- A STATE always follows a HELLO: what they sent before no longer counts for the digest.
-  local m = ns.roster:get(sender)
+  local m = ns.roster:row(sender)
   if m then m.raw = {} end
   onState(sender, { ver = fields.ver, rs = fields.rs or "" }, cleared)
   if replyPending[sender] then return end
@@ -117,7 +119,7 @@ local function onGuildList()
 end
 
 local function onPing(sender, fields)
-  if not ns.roster:get(sender) then
+  if not ns.roster:row(sender) then
     local now = ns.now()
     -- we just said HELLO to the guild: their answer is probably on its way, a PING may simply have overtaken it
     if saidHelloAt and now - saidHelloAt < STRANGER_HELLO_GAP then return end
@@ -137,7 +139,7 @@ local function onPing(sender, fields)
     return
   end
   for _, e in ipairs(ns.roster:heard(sender, ns.now(), ns.wallclock())) do
-    if e == "online" then ns.Bus.fire("MEMBER_ONLINE", sender) end
+    if e == "online" and not ns.roster:isHidden(sender) then ns.Bus.fire("MEMBER_ONLINE", sender) end
   end
   -- The digest shows a lost message: two PINGs in a row that disagree (one may just have passed an update in
   -- flight) make us ask for their whole state, at most once per ping interval. No "h" = an old copy: never a mismatch.
@@ -176,11 +178,11 @@ local function onSreq(sender)
 end
 
 local function onBye(sender)
-  local m = ns.roster:get(sender)
+  local m = ns.roster:row(sender)
   if not m then return end
   local wasOnline = m.online
   ns.roster:gone(sender)
-  if wasOnline then ns.Bus.fire("MEMBER_OFFLINE", sender) end
+  if wasOnline and not ns.roster:isHidden(sender) then ns.Bus.fire("MEMBER_OFFLINE", sender) end
 end
 
 local function sayGoodbye()
@@ -245,11 +247,11 @@ function Crew.forget(name)
   if ns.isMe(name) then return false, "that is you" end
   local low = name:lower()
   local row
-  for _, n in ipairs(ns.roster and ns.roster:names() or {}) do
+  for _, n in ipairs(ns.roster and ns.roster:allNames() or {}) do
     if n:lower() == low then row = n end
   end
   if row then
-    local m = ns.roster:get(row)
+    local m = ns.roster:row(row)
     if m and m.online then return false, "online right now" end
   end
   if not (row and ns.roster:forget(row)) then return false, "not on your list" end
@@ -261,6 +263,22 @@ function Crew.forget(name)
   return true
 end
 
+-- Members out of the guild for OUT_OF_GUILD_DAYS are forgotten (roster row, saved numbers).
+local function forgetDue(names)
+  for _, name in ipairs(names) do
+    if Crew.forget(name) then
+      ns.Log.add("info", "forgot %s: out of the guild for %d days", ns.Util.safeText(name), ns.Config.OUT_OF_GUILD_DAYS)
+    end
+  end
+end
+
+-- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again.
+local function followGuild()
+  local res = ns.roster:syncGuild(ns.wallclock())
+  for _, name in ipairs(res.changed) do ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = true }) end
+  forgetDue(res.due)
+end
+
 function Crew.start()
   if started then return end
   started = true
@@ -270,6 +288,8 @@ function Crew.start()
   for _, name in ipairs(ns.roster.pruned) do
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
   end
+  ns.roster:setGuild(ns.Guild)
+  ns.Log.safe(FEATURE, followGuild)
   ns.Comm.on("HELLO", onHello)
   ns.Comm.on("STATE", function(sender, fields)
     stateAt[sender] = ns.now()
@@ -280,7 +300,10 @@ function Crew.start()
   ns.Comm.on("BYE", onBye)
   ns.Comm.on("SREQ", onSreq)
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", sayGoodbye)
-  ns.Bus.on(FEATURE, "GUILD_LIST", onGuildList)
+  ns.Bus.on(FEATURE, "GUILD_LIST", function()
+    followGuild()
+    onGuildList()
+  end)
   -- The game said whether we are in a guild, or we joined or left one. The login HELLO was kept for that moment (it
   -- goes out, or is dropped outside a guild); joining a guild later needs a new one.
   ns.Bus.on(FEATURE, "TRANSPORT_READY", function()
@@ -298,7 +321,10 @@ function Crew.start()
   end)
   C_Timer.NewTicker(ns.Config.OFFLINE_TICK, function()
     ns.Log.safe(FEATURE, function()
-      for _, name in ipairs(ns.roster:tick(ns.now())) do ns.Bus.fire("MEMBER_OFFLINE", name) end
+      for _, name in ipairs(ns.roster:tick(ns.now())) do
+        if not ns.roster:isHidden(name) then ns.Bus.fire("MEMBER_OFFLINE", name) end
+      end
+      forgetDue(ns.roster:outOfGuildDue(ns.wallclock()))
     end)
   end)
   helloKept = ns.Transport.isPending()

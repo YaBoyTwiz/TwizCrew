@@ -1,7 +1,10 @@
-local function start(ns, W)
-  local db = ns.DB.init(nil, ns.Modules.list())
-  ns.db = db
-  ns.Modules.attach(db)
+-- db: saved data to start with (already attached), else a fresh one
+local function start(ns, W, db)
+  if not db then
+    db = ns.DB.init(nil, ns.Modules.list())
+    ns.db = db
+    ns.Modules.attach(db)
+  end
   ns.Comm.start()
   ns.Crew.start()
   ns.Self.start()
@@ -811,6 +814,117 @@ return {
       A.no(me); A.eq(why2, "that is you")
       receive(ns, W, "Frostie", "STATE", { lv = "21" })
       A.ok(ns.roster:get("Frostie"), "a friend who shows up again is added again")
+      noErrors(ns, A)
+    end,
+    -- The roster follows the guild list: a saved friend the loaded list lacks is hidden, dropped after 30 days out.
+    saved_friend_not_in_guild_is_hidden_after_first_list_load_only = function(ns, A, W)
+      W.state.guildListDelay = 20 -- the list reads as empty for 20 s after the first ask
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.roster.Oldpal = { name = "Oldpal", class = "ROGUE", level = 30 }
+      db.roster.Frostie = { name = "Frostie", class = "MAGE", level = 20 }
+      db.stats.crew.Oldpal = { sid = "s", s = { gn = 3 }, a = { gn = 3 } }
+      db.stats.crew.Frostie = { sid = "s", s = { gn = 4 }, a = { gn = 4 } }
+      ns.db = db
+      ns.Modules.attach(db)
+      local updated = record(ns, "MEMBER_UPDATED")
+      start(ns, W, db)
+      A.no(ns.Guild.loaded())
+      A.eq(ns.roster:names(), { "Frostie", "Oldpal" }, "before the list loads nobody is hidden")
+      A.eq(db.roster.Oldpal.outSince, nil)
+      W:advance(20)
+      A.ok(ns.Guild.loaded())
+      A.eq(ns.roster:names(), { "Frostie" }, "hidden once the list has loaded")
+      A.eq(ns.roster:get("Oldpal"), nil)
+      local _, total = ns.roster:onlineCount(); A.eq(total, 1)
+      local since = db.roster.Oldpal.outSince
+      A.ok(since and since <= ns.wallclock() and since >= ns.wallclock() - 20, "when they were first missing, saved")
+      A.eq(db.stats.crew.Oldpal.a.gn, 3, "their numbers stay on disk")
+      local shown = {}
+      for _, e in ipairs(ns.StatsStore.entries("all")) do shown[#shown + 1] = e.name end
+      A.eq(shown, { "Frostie" }, "boards leave them out")
+      local told = false
+      for _, u in ipairs(updated) do if u[1] == "Oldpal" then told = true end end
+      A.ok(told, "the panel is told")
+      noErrors(ns, A)
+    end,
+    saved_friend_in_guild_keeps_stats_trophies_notes = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.roster.Frostie = { name = "Frostie", class = "MAGE", level = 20 }
+      db.stats.crew.Frostie = { sid = "s", s = { gn = 4 }, a = { gn = 4 } }
+      db.stats.trophies = { s1 = { sid = "s1", people = { "Frostie", "Twiz" }, winners = { gn = "Frostie" } } }
+      db.calendar = { notes = { n1 = { d = "2026-11-21", t = "raid", b = "Frostie" } } }
+      ns.db = db
+      ns.Modules.attach(db)
+      start(ns, W, db)
+      W:advance(5)
+      A.ok(ns.Guild.loaded())
+      A.eq(ns.roster:names(), { "Frostie" })
+      A.eq(db.roster.Frostie.level, 20); A.eq(db.roster.Frostie.outSince, nil)
+      A.eq(db.stats.crew.Frostie.a.gn, 4)
+      A.eq(db.stats.trophies.s1.winners.gn, "Frostie")
+      A.eq(db.calendar.notes.n1.b, "Frostie")
+      noErrors(ns, A)
+    end,
+    out_of_guild_30_days_is_forgotten_29_is_not = function(ns, A, W)
+      local day, now = 86400, nil
+      local db = ns.DB.init(nil, ns.Modules.list())
+      now = ns.wallclock()
+      db.roster.Gone30 = { name = "Gone30", level = 5, lastSeen = now - 31 * day, outSince = now - 30 * day }
+      db.roster.Gone29 = { name = "Gone29", level = 5, lastSeen = now - 31 * day, outSince = now - 29 * day }
+      db.stats.crew.Gone30 = { sid = "s", s = {}, a = { gn = 1 } }
+      db.stats.crew.Gone29 = { sid = "s", s = {}, a = { gn = 1 } }
+      ns.db = db
+      ns.Modules.attach(db)
+      local removed = record(ns, "MEMBER_REMOVED")
+      start(ns, W, db)
+      A.eq(db.roster.Gone30, nil, "30 days out: forgotten")
+      A.eq(db.stats.crew.Gone30, nil, "with their numbers")
+      A.eq(removed[1] and removed[1][1], "Gone30")
+      A.ok(db.roster.Gone29, "29 days: kept (hidden)")
+      A.ok(db.stats.crew.Gone29)
+      A.ok(ns.roster:isHidden("Gone29"))
+      -- a day later, in the same session: the next check forgets them
+      W.wall = W.wall + day
+      W:advance(ns.Config.OFFLINE_TICK + 1)
+      A.eq(db.roster.Gone29, nil, "a day later")
+      A.eq(db.stats.crew.Gone29, nil)
+      noErrors(ns, A)
+    end,
+    rejoining_clears_out_since = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      local since = ns.wallclock() - 5 * 86400
+      db.roster.Oldpal = { name = "Oldpal", level = 30, outSince = since }
+      db.stats.crew.Oldpal = { sid = "s", s = {}, a = { gn = 3 } }
+      ns.db = db
+      ns.Modules.attach(db)
+      start(ns, W, db)
+      A.ok(ns.roster:isHidden("Oldpal"))
+      A.eq(db.roster.Oldpal.outSince, since, "still counted from the first day")
+      local list = W.state.guild.members
+      list[#list + 1] = { name = "Oldpal", online = false, guid = "Player-1-0099", lastOnline = { 0, 0, 1, 0 } }
+      W:fire("GUILD_ROSTER_UPDATE", false)
+      W:advance(2)
+      A.no(ns.roster:isHidden("Oldpal"))
+      A.eq(ns.roster:names(), { "Oldpal" })
+      A.eq(db.roster.Oldpal.outSince, nil)
+      A.eq(ns.roster:get("Oldpal").inGuild, true)
+      A.eq(db.stats.crew.Oldpal.a.gn, 3, "back with their numbers")
+      noErrors(ns, A)
+    end,
+    nothing_is_hidden_when_the_list_never_loads = function(ns, A, W)
+      W.state.guildListDelay = 1e9
+      local db = ns.DB.init(nil, ns.Modules.list())
+      local old = ns.wallclock() - 90 * 86400
+      db.roster.Oldpal = { name = "Oldpal", level = 30, outSince = old }
+      db.roster.Frostie = { name = "Frostie", level = 20 }
+      ns.db = db
+      ns.Modules.attach(db)
+      start(ns, W, db)
+      W:advance(120)
+      A.no(ns.Guild.loaded())
+      A.eq(ns.roster:names(), { "Frostie", "Oldpal" })
+      A.eq(db.roster.Oldpal.outSince, old, "kept as it was")
+      A.ok(db.roster.Oldpal, "never dropped while the list is not there")
       noErrors(ns, A)
     end,
     prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)

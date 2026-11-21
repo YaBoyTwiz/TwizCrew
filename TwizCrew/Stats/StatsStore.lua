@@ -235,7 +235,8 @@ local function statsOn()
 end
 
 -- view: "session" | "all". Array of { name, class, stats, mine, at, online }, sorted by name: my characters (this
--- one only while the stats module is on) and every crew record that is not off and not one of mine. "session"
+-- one only while the stats module is on) and every crew record that is not off, not one of mine and not of a member
+-- hidden because they are out of the guild. "session"
 -- keeps only records of sessionId (nobody when it is nil) and shows their session numbers; a friend who already
 -- moved on is listed with their numbers from that session (rec.prev).
 function Store.entries(view, sessionId)
@@ -263,7 +264,8 @@ function Store.entries(view, sessionId)
       and rec.prev.sid == sessionId then
       rec = { sid = sessionId, s = rec.prev.s, at = rec.prev.at, off = rec.off }
     end
-    if type(name) == "string" and wanted(rec) and not rec.off and stats.chars[name] == nil then
+    if type(name) == "string" and wanted(rec) and not rec.off and stats.chars[name] == nil
+      and not (ns.roster and ns.roster:isHidden(name)) then -- out of the guild: kept on disk, not shown
       local m = ns.roster and ns.roster:get(name)
       out[#out + 1] = {
         name = name, stats = numbers(rec), mine = false, online = (m and m.online) and true or false,

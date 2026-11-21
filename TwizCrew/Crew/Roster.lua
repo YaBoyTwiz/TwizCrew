@@ -1,5 +1,11 @@
 -- Crew roster (pure, no WoW API): who is in the crew and what we last heard from them.
 -- `now` is the session clock, `wall` is the wallclock; both are passed in by the caller.
+--
+-- Guild membership (setGuild, syncGuild): a real member the loaded guild list does not have is hidden (inGuild =
+-- false): members(), names(), sorted(), onlineCount() and get() leave them out, while row() and allNames() still find
+-- them (Crew's bookkeeping, forgetting). outSince (wallclock, saved) is when a loaded list first lacked them; back in
+-- the list clears both. Nothing is marked before the list has loaded. Fakes (test tools) are never marked. A new row
+-- from a message starts shown (a guild message comes from a member: the list may be behind) until the next sync.
 local _, ns = ...
 
 local Roster = {}
@@ -106,13 +112,80 @@ function Roster.new(saved)
         name = name, class = str(row.class), level = num(row.level),
         zone = str(row.zone), subzone = str(row.subzone),
         inInstance = false, online = false, lastSeen = num(row.lastSeen),
+        inGuild = true, outSince = num(row.outSince),
       }
     end
   end
   return r
 end
 
-function Roster:get(name) return self.byName[name] end
+local function shown(m) return m ~= nil and m.inGuild ~= false end
+
+-- A member who is shown (in the guild, or not known to be out of it yet); nil for a hidden one.
+function Roster:get(name)
+  local m = self.byName[name]
+  if shown(m) then return m end
+  return nil
+end
+
+-- Any row, hidden ones too (only for keeping the roster itself: messages, going offline, forgetting).
+function Roster:row(name) return self.byName[name] end
+
+-- True when we hold a row for `name` that is hidden (out of the guild).
+function Roster:isHidden(name)
+  local m = self.byName[name]
+  return m ~= nil and not shown(m)
+end
+
+function Roster:setGuild(guild) self.guild = guild end
+
+local function loadedGuild(self)
+  local g = self.guild
+  if g and g.loaded() then return g end
+  return nil
+end
+
+-- Marks one row against the loaded guild list. Returns true when it was shown / hidden differently before.
+local function mark(self, name, m, g, wall)
+  if ns.isTestName(name) then return false end
+  local was = shown(m)
+  local row = self.saved[name]
+  if g.get(name) then
+    m.inGuild, m.outSince = true, nil
+    if type(row) == "table" then row.outSince = nil end
+  else
+    m.inGuild = false
+    m.outSince = m.outSince or wall
+    if type(row) == "table" then row.outSince = m.outSince end
+  end
+  return was ~= shown(m)
+end
+
+-- Real members out of the guild for OUT_OF_GUILD_DAYS or longer, A-Z (only while the list is loaded).
+function Roster:outOfGuildDue(wall)
+  local due = {}
+  if not loadedGuild(self) then return due end
+  local limit = ns.Config.OUT_OF_GUILD_DAYS * 86400
+  for name, m in pairs(self.byName) do
+    if m.inGuild == false and m.outSince and wall - m.outSince >= limit then due[#due + 1] = name end
+  end
+  table.sort(due)
+  return due
+end
+
+-- Marks every row against the guild list (when it has loaded). Returns { changed = names shown / hidden differently,
+-- due = names to forget (see outOfGuildDue) }, both A-Z.
+function Roster:syncGuild(wall)
+  local changed = {}
+  local g = loadedGuild(self)
+  if g then
+    for name, m in pairs(self.byName) do
+      if mark(self, name, m, g, wall) then changed[#changed + 1] = name end
+    end
+    table.sort(changed)
+  end
+  return { changed = changed, due = self:outOfGuildDue(wall) }
+end
 
 function Roster:apply(name, fields, now, wall)
   local m = self.byName[name]
@@ -123,7 +196,7 @@ function Roster:apply(name, fields, now, wall)
   -- a level-up counts only when we already got their level while they were online in this play session
   local levelBefore = m ~= nil and wasOnline and m.levelSeen and m.level or nil
   if isNew then
-    m = { name = name, inInstance = false, online = false }
+    m = { name = name, inInstance = false, online = false, inGuild = true }
     self.byName[name] = m
     -- "new" means never seen at all (not even in saved data)
     events[#events + 1] = "new"
@@ -166,7 +239,7 @@ function Roster:apply(name, fields, now, wall)
   if not ns.isTestName(name) then -- a fake (test tools) is never saved
     self.saved[name] = {
       name = name, class = m.class, level = m.level,
-      zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen,
+      zone = m.zone, subzone = m.subzone, lastSeen = m.lastSeen, outSince = m.outSince,
     }
   end
   return m, changes, events
@@ -230,10 +303,11 @@ end
 
 -- names() and members() leave out fakes (test tools) unless withTest: every path that sends, saves, counts stats
 -- or lists versions uses them as they are. Only the panel (sorted, onlineCount) and the layer tracker show fakes.
+-- Hidden members (out of the guild) are always left out.
 function Roster:names(withTest)
   local list = {}
-  for name in pairs(self.byName) do
-    if withTest or not ns.isTestName(name) then list[#list + 1] = name end
+  for name, m in pairs(self.byName) do
+    if shown(m) and (withTest or not ns.isTestName(name)) then list[#list + 1] = name end
   end
   table.sort(list)
   return list
@@ -242,8 +316,18 @@ end
 function Roster:members(withTest)
   local list = {}
   for name, m in pairs(self.byName) do
-    if withTest or not ns.isTestName(name) then list[#list + 1] = m end
+    if shown(m) and (withTest or not ns.isTestName(name)) then list[#list + 1] = m end
   end
+  return list
+end
+
+-- Every real member we hold a row for, hidden ones too, A-Z.
+function Roster:allNames()
+  local list = {}
+  for name in pairs(self.byName) do
+    if not ns.isTestName(name) then list[#list + 1] = name end
+  end
+  table.sort(list)
   return list
 end
 
@@ -277,8 +361,10 @@ end
 function Roster:onlineCount()
   local on, total = 0, 0
   for _, m in pairs(self.byName) do
-    total = total + 1
-    if m.online then on = on + 1 end
+    if shown(m) then
+      total = total + 1
+      if m.online then on = on + 1 end
+    end
   end
   return on, total
 end

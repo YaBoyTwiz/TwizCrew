@@ -71,6 +71,11 @@ ns.Config = {
   GUILD_REFRESH_MIN = 10, GUILD_REFRESH_SHOWN = 30, GUILD_REFRESH_HIDDEN = 120, GUILD_ABSENT_GRACE = 10,
   -- in a guild, sends (the login HELLO first) wait for the guild list at most GUILD_LIST_WAIT s
   GUILD_LIST_WAIT = 10,
+  -- a big guild: about RESPONDERS copies (picked alike by every copy, Crew.isResponder) tell a friend who comes online
+  -- our session and digests, each after a random 0 to RESPONDER_JITTER s. Asks for the same data of mine from several
+  -- copies within ASK_COLLECT s (SREQ: SREQ_COLLECT s) get one guild answer. A digest mismatch waits a random 0 to
+  -- SREQ_JITTER s before asking. An answer to a HELLO waits at most HELLO_LIST_WAIT s for the guild list to know them.
+  RESPONDERS = 3, RESPONDER_JITTER = 10, ASK_COLLECT = 3, SREQ_COLLECT = 10, SREQ_JITTER = 10, HELLO_LIST_WAIT = 10,
 }
 
 function ns.now() return GetTime() end

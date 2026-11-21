@@ -393,21 +393,29 @@ return {
       for _, d in ipairs(delays) do A.ok(d >= 0 and d <= 5, "delay " .. d) end
       A.no(delays[1] == delays[2] and delays[2] == delays[3], "random, not all the same")
     end,
-    -- Someone the guild list does not have yet (they just joined): we cannot whisper them, so one STATE to the guild.
-    hello_from_someone_the_list_does_not_have_gets_a_guild_state = function(ns, A, W)
+    -- Someone the guild list does not have yet (they just joined): no STATE to the whole guild (every copy would send
+    -- one); the answer waits for a guild list that has them, at most HELLO_LIST_WAIT s.
+    hello_from_someone_the_list_does_not_have_waits_for_the_list = function(ns, A, W)
       start(ns, W)
       local n = #W.sent
       receive(ns, W, "Newbie", "HELLO", { ver = "0.1.0" })
+      receive(ns, W, "Oldnew", "HELLO", { ver = "0.1.0" })
       W:advance(8)
-      local states = 0
+      for _, m in ipairs(sentSince(ns, W, n)) do A.no(m.type == "STATE", "nothing yet, and nothing to the guild") end
+      table.insert(W.state.guild.members, { name = "Newbie Joined", online = true })
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      local to = {}
       for i = n + 1, #W.sent do
         local msg = ns.Codec.decode(W.sent[i].text)
-        if msg and msg.type == "STATE" then
-          states = states + 1
-          A.eq(W.sent[i].chatType, "GUILD")
-        end
+        if msg and msg.type == "STATE" then to[#to + 1] = W.sent[i].chatType .. " " .. tostring(W.sent[i].target) end
       end
-      A.ok(states >= 1 and states <= 2, "one state (in pieces at most): " .. states)
+      A.eq(to, { "WHISPER Newbie Joined" }, "the new list has Newbie: whispered")
+      W:advance(20)
+      table.insert(W.state.guild.members, { name = "Oldnew Late", online = true })
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      for i = n + 1, #W.sent do A.no(W.sent[i].target == "Oldnew Late", "given up after 10 s") end
     end,
     pings_from_many_strangers_get_one_hello = function(ns, A, W)
       start(ns, W)
@@ -615,22 +623,22 @@ return {
       receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
       local from = #W.sent
       receive(ns, W, "Frostie", "PING", { h = "1" })
-      W:advance(5)
+      W:advance(11)
       A.eq(#sentSince(ns, W, from), 0, "one mismatch is not enough")
       receive(ns, W, "Frostie", "PING", { h = "2" })
-      W:advance(5)
+      W:advance(11)
       local got = sentSince(ns, W, from)
       A.eq(#got, 1); A.eq(got[1].type, "SREQ")
       A.eq(W.sent[#W.sent].chatType, "WHISPER", "to the sender only")
       for _ = 1, 3 do receive(ns, W, "Frostie", "PING", { h = "3" }) end
-      W:advance(5)
+      W:advance(11)
       A.eq(#sentSince(ns, W, from), 1, "not again within a ping interval")
       -- a matching digest clears the count
       receive(ns, W, "Frostie", "PING", { h = ns.roster:digest("Frostie") })
       -- SREQ is answered with the whole state to the asker only
       from = #W.sent
       receive(ns, W, "Frostie", "SREQ", {})
-      W:advance(5)
+      W:advance(11)
       got = sentSince(ns, W, from)
       A.eq(#got >= 1 and got[1].type, "STATE")
       A.eq(W.sent[from + 1].chatType, "WHISPER")
@@ -646,15 +654,48 @@ return {
       local from = #W.sent
       receive(ns, W, "Frostie", "PING", { h = "1" })
       receive(ns, W, "Frostie", "PING", { h = "2" })
-      W:advance(5)
+      W:advance(11)
       A.eq(ns.Log.counts()["sent SREQ"], nil, "nobody can be whispered yet: nothing sent, nothing counted")
       for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ") end
       rows = 7
       W:fire("GUILD_ROSTER_UPDATE")
       W:advance(2)
       receive(ns, W, "Frostie", "PING", { h = "3" })
-      W:advance(5)
-      A.eq(ns.Log.counts()["sent SREQ"], 1, "the next PING asks at once")
+      W:advance(11)
+      A.eq(ns.Log.counts()["sent SREQ"], 1, "the next PING asks")
+    end,
+    -- Many copies may notice the same loss: each waits a random 0 to SREQ_JITTER s, and a STATE meanwhile settles it.
+    sreq_waits_a_moment_and_a_state_meanwhile_settles_it = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Westfall" })
+      local delays = {}
+      local after = W.env.C_Timer.After
+      W.env.C_Timer.After = function(d, fn) delays[#delays + 1] = d; return after(d, fn) end
+      local from = #W.sent
+      W:advance(1)
+      receive(ns, W, "Frostie", "PING", { h = "1" })
+      receive(ns, W, "Frostie", "PING", { h = "2" })
+      W.env.C_Timer.After = after
+      A.ok(#delays >= 1 and delays[#delays] >= 0 and delays[#delays] <= ns.Config.SREQ_JITTER, "a random wait")
+      A.ok(delays[#delays] > 0.01, "(this run's wait leaves room for the STATE)")
+      W:advance(0.01)
+      receive(ns, W, "Frostie", "STATE", { lv = "21", zn = "Westfall" }) -- her full state arrives meanwhile
+      W:advance(11)
+      for _, m in ipairs(sentSince(ns, W, from)) do A.no(m.type == "SREQ", "no need to ask any more") end
+    end,
+    -- Several copies asking at once (all lost the same UPDATE) get one STATE to the guild, not one whisper each.
+    many_sreqs_at_once_get_one_guild_state = function(ns, A, W)
+      start(ns, W)
+      local from = #W.sent
+      for _, name in ipairs({ "Frostie", "Ginkan", "Lurabe" }) do receive(ns, W, name, "SREQ", {}) end
+      W:advance(ns.Config.SREQ_COLLECT + 2)
+      local states = {}
+      for i = from + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "STATE" then states[#states + 1] = W.sent[i].chatType end
+      end
+      A.ok(#states >= 1 and #states <= 2, "one STATE (in pieces at most): " .. #states)
+      for _, t in ipairs(states) do A.eq(t, "GUILD") end
     end,
     sreq_is_answered_at_most_once_per_ping_interval = function(ns, A, W)
       start(ns, W)
@@ -666,16 +707,16 @@ return {
       end
       local from = #W.sent
       receive(ns, W, "Frostie", "SREQ", {})
-      W:advance(5)
+      W:advance(11)
       local one = statesSince(from)
       A.ok(one >= 1, "the first SREQ is answered")
       receive(ns, W, "Frostie", "SREQ", { x = "1" })
       receive(ns, W, "Ginkan", "SREQ", {})
-      W:advance(5)
+      W:advance(11)
       A.eq(statesSince(from), one * 2, "Frostie's second ask is ignored, Ginkan's is answered")
       W:advance(ns.Config.PING_INTERVAL)
       receive(ns, W, "Frostie", "SREQ", { x = "2" })
-      W:advance(5)
+      W:advance(11)
       A.eq(statesSince(from), one * 3, "answered again after a ping interval")
       noErrors(ns, A)
     end,

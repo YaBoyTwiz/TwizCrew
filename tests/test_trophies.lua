@@ -133,7 +133,7 @@ return {
       -- asked by someone else: we answer with our copy
       mark = #W.sent
       receive(W, ns, "Lurabe", "TRQ", { s = "Lurabe-500" })
-      W:advance(3)
+      W:advance(ns.Config.ASK_COLLECT + 2) -- asks are collected for a moment first
       local sentRecord = false
       for i = mark + 1, #W.sent do
         local msg = ns.Codec.decode(W.sent[i].text)

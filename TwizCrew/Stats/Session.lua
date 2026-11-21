@@ -14,8 +14,8 @@ local current          -- { id, start, manual } or nil
 local isDecided = false
 local started = false
 local heard = {}       -- sender -> { sid = ..., sst = ... } as merged from their STATE / UPDATE pieces (HELLO forgets)
-local RESHARE_GAP = 30 -- seconds between re-sends of our sid/sst to a friend in another session or coming back
-local lastReshare      -- session clock of the last re-send
+local RESHARE_GAP = 30 -- seconds between re-sends of our sid/sst to the same friend
+local lastReshare = {} -- friend -> session clock of the last re-send to them
 local previous         -- { id, lastActive } of the session saved before login (read at the decision)
 
 local function copy(s)
@@ -89,14 +89,22 @@ local function decide()
 end
 
 -- sid/sst only travel in UPDATEs when they change, so one lost message could leave a friend in another session:
--- tell the crew ours again (at most once per RESHARE_GAP seconds).
+-- tell that friend ours again (at most once per RESHARE_GAP seconds each). The crew session is shared (every copy
+-- ends up in the same one), so a few copies telling them is enough: only responders (Crew.isResponder) do, by
+-- whisper, after a random 0 to RESPONDER_JITTER seconds.
 local function reshare(name)
-  if ns.isTestName(name) or not isDecided or not current then return end -- a fake (test tools) never makes us send
+  if type(name) ~= "string" or ns.isTestName(name) or not isDecided or not current then return end -- fakes: never
+  if ns.Crew and not ns.Crew.isResponder(name) then return end
   local now = ns.now()
-  if lastReshare and now - lastReshare < RESHARE_GAP then return end
-  lastReshare = now
-  local sid, sst = Logic.toWire(current)
-  ns.Comm.send("UPDATE", { sid = sid, sst = sst })
+  if lastReshare[name] and now - lastReshare[name] < RESHARE_GAP then return end
+  lastReshare[name] = now
+  C_Timer.After(math.random() * ns.Config.RESPONDER_JITTER, function()
+    ns.Log.safe(FEATURE, function()
+      if not current then return end
+      local sid, sst = Logic.toWire(current)
+      ns.Comm.sendTo(name, "UPDATE", { sid = sid, sst = sst })
+    end)
+  end)
 end
 
 local function onFields(sender, fields)
@@ -113,7 +121,7 @@ local function onFields(sender, fields)
     change(s, current, keep, "heard from " .. tostring(sender)
       .. (s.manual and " (started by hand, counts start over)" or " (older session, counts kept)"))
   elseif theirs and current and theirs.id ~= current.id then
-    reshare() -- ours wins: make sure they hear it
+    reshare(sender) -- ours wins: make sure they hear it
   end
 end
 

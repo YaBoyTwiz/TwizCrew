@@ -366,6 +366,49 @@ return {
       A.eq(p.name, "Twiz")
       A.ok(twNs.Diary.people()[frId], "and Twiz has Frostie's")
     end,
+    -- Every copy asks a newcomer for the newcomer's diary at once: asks within ASK_COLLECT s get one guild answer;
+    -- a single ask is whispered. One CALQ can ask for many diaries (j = more ids).
+    asks_for_my_diary_from_many_get_one_guild_answer = function(ns, A, W)
+      start(ns, W)
+      for _, n in ipairs({ "Frostie", "Ginkan", "Lurabe" }) do receive(ns, W, n, "STATE", { cl = "MAGE" }) end
+      W:advance(70) -- a slot of my own play time is marked
+      local me = ns.Diary.myId()
+      local from = #W.sent
+      for _, n in ipairs({ "Frostie", "Ginkan", "Lurabe" }) do receive(ns, W, n, "CALQ", { i = me }) end
+      W:advance(ns.Config.ASK_COLLECT + 3)
+      local got = {}
+      for i = from + 1, #W.sent do
+        local msg = ns.Codec.decode(W.sent[i].text)
+        if msg and msg.type == "CALP" then got[#got + 1] = W.sent[i].chatType end
+      end
+      A.ok(#got >= 1, "answered")
+      for _, t in ipairs(got) do A.eq(t, "GUILD", "one answer to the guild, not three whispers") end
+      W:advance(130)
+      from = #W.sent
+      receive(ns, W, "Frostie", "CALQ", { i = me })
+      W:advance(ns.Config.ASK_COLLECT + 3)
+      local alone = sent(ns, W, "CALP", from)
+      A.ok(#alone >= 1, "a single ask is answered")
+      A.eq(alone[1].target, "Frostie", "by whisper")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    one_ask_for_many_diaries = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(70)
+      local people = ns.Diary.people()
+      local L = ns.CalendarLogic
+      local today = math.floor(ns.Diary.now() / 86400)
+      for _, id in ipairs({ "aaaa1111", "bbbb2222" }) do
+        people[id] = { name = id, class = "MAGE", alts = {}, days = { [today] = { on = maskOf(L, 1, 3) } } }
+      end
+      local from = #W.sent
+      receive(ns, W, "Frostie", "CALQ", { i = ns.Diary.myId(), j = "aaaa1111,bbbb2222" })
+      W:advance(ns.Config.ASK_COLLECT + 5)
+      local ids = {}
+      for _, m in ipairs(sent(ns, W, "CALP", from)) do ids[m.fields.i] = true end
+      A.ok(ids[ns.Diary.myId()] and ids.aaaa1111 and ids.bbbb2222, "all three diaries")
+    end,
     ------------------------------------------------------------------------------------------------ notes
     notes_add_delete_and_swap = function(ns, A, W)
       start(ns, W)

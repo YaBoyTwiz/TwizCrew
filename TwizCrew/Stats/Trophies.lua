@@ -215,12 +215,17 @@ end
 
 local function onAsk(sender, f)
   if not on() or not known(sender) or type(f) ~= "table" or type(f.s) ~= "string" then return end
-  local r = Trophies.records()[f.s]
-  if not r then return end
-  local key = f.s .. ">" .. sender
-  if sentAt[key] and ns.now() - sentAt[key] < SEND_GAP then return end
-  sentAt[key] = ns.now()
-  sendTo(sender, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l", "e" }, bulk = true })
+  local sid = f.s
+  if not Trophies.records()[sid] then return end
+  -- several copies asking for the same record at once get one guild message
+  ns.Comm.answerAsk("TRP:" .. sid, sender, function(to)
+    local r = Trophies.records()[sid]
+    if not r then return end
+    local key = sid .. ">" .. tostring(to)
+    if to and sentAt[key] and ns.now() - sentAt[key] < SEND_GAP then return end
+    sentAt[key] = ns.now()
+    sendTo(to, "TRP", L.toWire(r), { repeatKeys = { "s", "k", "t", "l", "e" }, bulk = true })
+  end)
 end
 
 local function onRecord(sender, f)
@@ -253,6 +258,9 @@ function Trophies.start()
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)
     if ns.isTestName(name) then return end
     if ns.now() - startedAt < FIRST_DIGEST then return end
-    C_Timer.After(5, function() ns.Log.safe(FEATURE, Trophies.sendDigest, name) end)
+    if ns.Crew and not ns.Crew.isResponder(name) then return end -- a few copies answer (Crew.isResponder)
+    C_Timer.After(10 + math.random() * ns.Config.RESPONDER_JITTER, function()
+      ns.Log.safe(FEATURE, Trophies.sendDigest, name)
+    end)
   end)
 end

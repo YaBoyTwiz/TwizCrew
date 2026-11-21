@@ -8,6 +8,7 @@
 --         minutes, and to a friend who just came online); di = my id and d<utcDay> = on[:afk] = my own slots
 --         today and yesterday (v0.1.23 ignores both), so friends see my evening without asking for my diary
 --   CALQ  "send me person i" (to one friend whose digest shows more than I know; only ever pulled, never pushed);
+--         j = more ids, comma-separated (one ask for many diaries; v0.1.24 answers i only);
 --         n=1 = "send me your notes" (b = only these buckets: see Notes.lua)
 --   CALP  one person's diary: i = id, n = name, c = class, a = alts "Name:CLASS,...", d<utcDay> = on[:afk]
 -- Merging only ever adds slots (masks are OR-ed), so the order things arrive in never matters.
@@ -230,7 +231,7 @@ function Diary.sendPerson(id, to)
   if id == c.me and setting("share") == false then return end
   local key = id .. ">" .. tostring(to)
   local t = ns.now()
-  if sentAt[key] and t - sentAt[key] < SEND_GAP then return end
+  if to and sentAt[key] and t - sentAt[key] < SEND_GAP then return end -- (to everyone: Comm.answerAsk spaces them)
   local f = personFields(id)
   if not f then return end
   sentAt[key] = t
@@ -279,6 +280,36 @@ local function slotsSent(f, days)
   return n
 end
 
+-- Asks one friend for these diaries: several ids in one CALQ (i = the first, j = the rest; older copies answer i).
+local ASK_BATCH = 20 -- ids per CALQ (8 letters and a comma each: well inside one message)
+local function askFor(sender, ids)
+  for first = 1, #ids, ASK_BATCH do
+    local rest = {}
+    for n = first + 1, math.min(#ids, first + ASK_BATCH - 1) do rest[#rest + 1] = ids[n] end
+    sendTo(sender, "CALQ", { i = ids[first], j = #rest > 0 and table.concat(rest, ",") or nil }, { bulk = true })
+  end
+end
+
+-- Asks for one diary after min + a random part of spread seconds, unless it has come meanwhile. A responder asks for a
+-- newcomer's own diary soon (ASK_SPREAD: the copies' asks fall apart but inside the answerer's ASK_COLLECT); the
+-- other copies leave it to the responders and ask only if it never came (LATER_MIN, LATER_SPREAD).
+local LATER_MIN, LATER_SPREAD, ASK_SPREAD = 30, 30, 2 -- s
+local askingLater = {}
+local function askLater(sender, id, theirs, min, spread)
+  if askingLater[id] then return end
+  askingLater[id] = true
+  C_Timer.After(min + math.random() * spread, function()
+    ns.Log.safe(FEATURE, function()
+      askingLater[id] = nil
+      local p = Diary.people()[id]
+      if p and L.total(p.days, oldest()) >= theirs then return end -- it came
+      if askedAt[id] and ns.now() - askedAt[id] < ASK_GAP then return end
+      askedAt[id] = ns.now()
+      askFor(sender, { id })
+    end)
+  end)
+end
+
 local function onDigest(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
   local from = oldest()
@@ -302,6 +333,7 @@ local function onDigest(sender, f)
       ns.Notes.asked(sender, f, ask)
     end
   end
+  local wanted = {}
   for k, v in pairs(f) do
     local id = type(k) == "string" and k:match("^p(%w+)$")
     local theirs = tonumber(v)
@@ -314,19 +346,34 @@ local function onDigest(sender, f)
       -- they know more: ask them (once per person for a while, whoever offers it first). Nobody pushes diaries
       -- unasked, so a friend logging in doesn't get the same diary from everyone at once.
       if theirs > mine and id ~= Diary.myId() then
-        if not askedAt[id] or ns.now() - askedAt[id] >= ASK_GAP then
+        if id == f.di and ns.Crew and not ns.Crew.isResponder(sender) then
+          -- their own diary, which every copy wants from them at once: only a few copies ask (the answer to several
+          -- asks goes to the whole guild); the rest ask later only if it never came
+          askLater(sender, id, theirs, LATER_MIN, LATER_SPREAD)
+        elseif id == f.di and ns.Crew and not (askedAt[id] and ns.now() - askedAt[id] < ASK_GAP) then
+          askLater(sender, id, theirs, 0, ASK_SPREAD) -- a responder: soon, not at the same moment as the others
+        elseif not askedAt[id] or ns.now() - askedAt[id] >= ASK_GAP then
           askedAt[id] = ns.now()
-          sendTo(sender, "CALQ", { i = id }, { bulk = true }) -- a newcomer in a big guild asks many: never ahead of chat
+          wanted[#wanted + 1] = id
         end
       end
     end
   end
+  table.sort(wanted)
+  askFor(sender, wanted)
 end
 
 local function onAsk(sender, f)
   if not enabled or not known(sender) or type(f) ~= "table" then return end
   if f.n == "1" and ns.Notes then ns.Notes.sendAll(sender, f.b) end
-  if type(f.i) == "string" and Diary.people()[f.i] then Diary.sendPerson(f.i, sender) end
+  -- several copies asking for the same diary at once (a newcomer's own, say): one guild message answers them all
+  local ids = { f.i }
+  if type(f.j) == "string" then for id in f.j:gmatch("[^,]+") do ids[#ids + 1] = id end end
+  for _, id in ipairs(ids) do
+    if type(id) == "string" and Diary.people()[id] then
+      ns.Comm.answerAsk("CALP:" .. id, sender, function(to) Diary.sendPerson(id, to) end)
+    end
+  end
 end
 
 local function onPerson(sender, f)
@@ -391,12 +438,15 @@ local function onEnable()
     if ns.NoteView and ns.NoteView.isShown() then ns.NoteView.refresh() end
   end)
   -- a friend just came online: tell them what we know (a little later, so their copy is ready)
-  -- (not while we are logging in ourselves: everyone we find then gets the first digest, one guild message)
+  -- (not while we are logging in ourselves: everyone we find then gets the first digest, one guild message; and only
+  -- a few copies answer, Crew.isResponder: the newcomer's own digest to everyone is the safety net)
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", function(name)
     if ns.isTestName(name) then return end -- pretend friends (test tools) hear nothing
     if enabledAt and ns.now() - enabledAt < FIRST_DIGEST then return end
+    if ns.Crew and not ns.Crew.isResponder(name) then return end
     if C_Timer and C_Timer.After then
-      C_Timer.After(5 + math.random() * 10, function() ns.Log.safe(FEATURE, Diary.sendDigest, name) end)
+      local delay = 10 + math.random() * 5 + math.random() * ns.Config.RESPONDER_JITTER
+      C_Timer.After(delay, function() ns.Log.safe(FEATURE, Diary.sendDigest, name) end)
     end
   end)
 end

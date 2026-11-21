@@ -91,6 +91,24 @@ function Comm.sendGroup(msgType, fields, opts)
   return true
 end
 
+-- Asks for the same data of mine from several copies at once (every copy asks a newcomer for the newcomer's diary,
+-- say): asks with the same key within `window` seconds (ASK_COLLECT by default) are answered once, when the window
+-- ends: answer(name) for a whisper when one copy asked, answer(nil) for one guild message when more did.
+local asks = {} -- key -> { first = name, n = askers, by = { name = true } }
+function Comm.answerAsk(key, asker, answer, window)
+  local a = asks[key]
+  if a then
+    if not a.by[asker] then a.by[asker], a.n = true, a.n + 1 end
+    return
+  end
+  a = { first = asker, n = 1, by = { [asker] = true } }
+  asks[key] = a
+  C_Timer.After(window or ns.Config.ASK_COLLECT, function()
+    asks[key] = nil
+    ns.Log.safe(FEATURE, answer, a.n == 1 and a.first or nil)
+  end)
+end
+
 -- fn(text, chatType, rawSender) runs for every message with our prefix, before the "is it me" check and before any
 -- filtering, so it also sees my own echo and the sender name exactly as the game gave it (possibly a secret value
 -- inside dungeons). The guild test (UI/GuildTest.lua) depends on this hook: keep it when the receive filter changes.

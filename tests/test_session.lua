@@ -358,17 +358,23 @@ return {
       local newer = mine.start + 100
       local n = #W.sent
       receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer) }, ns)
-      W:advance(1)
+      W:advance(11) -- (a random wait of up to RESPONDER_JITTER s)
       A.eq(ns.Session.current().id, mine.id)
       A.eq(sharesOfMine(n), 1, "our session is sent once")
       receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer), st = "x" }, ns)
       W:advance(10)
       A.eq(sharesOfMine(n), 1, "not again within 30 s")
-      W:advance(20)
+      W:advance(10)
       receive(W, "Frostie", "UPDATE", { sid = "Frostie-" .. newer, sst = tostring(newer), st = "y" }, ns)
-      W:advance(1)
+      W:advance(11)
       A.eq(sharesOfMine(n), 2, "again after 30 s")
       for _, line in ipairs(W.printed) do A.no(line:find(mine.id, 1, true), "never in chat") end
+      for i = n + 1, #W.sent do
+        local m = ns.Codec.decode(W.sent[i].text)
+        if m and m.type == "UPDATE" and m.fields.sid == mine.id then
+          A.eq(W.sent[i].chatType, "WHISPER", "to Frostie only"); A.eq(W.sent[i].target, "Frostie")
+        end
+      end
     end,
 
     friend_coming_back_hears_our_session = function(ns, A, W)
@@ -378,7 +384,7 @@ return {
       local n = #W.sent
       receive(W, "Frostie", "PING", {}, ns) -- unknown: no MEMBER_ONLINE
       receive(W, "Frostie", "UPDATE", { st = "back" }, ns) -- known now and online
-      W:advance(1)
+      W:advance(11)
       local count = 0
       for _, m in ipairs(sentSince(ns, W, n)) do
         if m.type == "UPDATE" and m.fields.sid == mine.id then count = count + 1 end

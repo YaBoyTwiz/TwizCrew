@@ -133,6 +133,25 @@ return {
       A.eq(ns.Transport.destinations(), {}, "at once, before the guild module says so")
       noErrors(ns, A)
     end,
+    asks_within_the_window_are_answered_once = function(ns, A, W)
+      boot(ns, W)
+      local answers = {}
+      local function answer(to) answers[#answers + 1] = to or "guild" end
+      ns.Comm.answerAsk("x", "Frostie", answer)
+      ns.Comm.answerAsk("x", "Ginkan", answer)
+      ns.Comm.answerAsk("x", "Ginkan", answer)
+      ns.Comm.answerAsk("y", "Lurabe", answer)
+      W:advance(ns.Config.ASK_COLLECT - 0.5)
+      A.eq(answers, {}, "collecting")
+      W:advance(1)
+      table.sort(answers)
+      A.eq(answers, { "Lurabe", "guild" }, "two askers: one guild answer; one asker: a whisper")
+      ns.Comm.answerAsk("x", "Frostie", answer, 10)
+      W:advance(9)
+      A.eq(#answers, 2)
+      W:advance(2)
+      A.eq(answers[3], "Frostie", "a window of its own")
+    end,
     whispers_go_to_guild_members_only_by_full_name = function(ns, A, W)
       boot(ns, W)
       A.eq(ns.Transport.destinationFor("Frostie"), { chatType = "WHISPER", target = "Frostie Snow" })

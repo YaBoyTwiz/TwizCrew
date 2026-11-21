@@ -16,7 +16,33 @@ local helloKept = false -- the login HELLO waits in Comm's kept messages for the
 local saidHelloAt       -- when our HELLO went to the guild (their answers are on the way for a few seconds)
 local mismatches = {}  -- name -> PINGs in a row whose digest differed from what we hold
 local sreqAt = {}      -- name -> time we last asked for their state
+local sreqDue = {}     -- name -> true while an SREQ to them waits its random delay
+local stateAt = {}     -- name -> time their last STATE (piece) arrived
+local helloWaiting = {} -- name -> true while our answer to their HELLO waits for the guild list to know them
 local answeredAt = {}  -- name -> time we last answered their SREQ
+
+-- Spreads the reading of a hash (hashNumber is nearly linear in the last letters).
+local function mixed(s) return ns.Util.hashNumber(tostring(ns.Util.hashNumber(s)) .. s) end
+
+-- Is this copy one of the about k (RESPONDERS) copies that answer for the crew when `name` comes online (session,
+-- digests)? Every copy decides the same way without talking: it ranks the online copies it knows (itself included,
+-- `name` left out) by a hash of key .. name and answers when it is among the first k, or when fewer than k others are
+-- online. Copies may disagree a little (their rosters differ): then a few more or fewer answer.
+function Crew.isResponder(name, k)
+  k = k or ns.Config.RESPONDERS
+  name = tostring(name)
+  local me = (ns.Guild and ns.Guild.myKey()) or ns.playerName()
+  local mine = mixed(me .. "|" .. name)
+  local rank, others = 1, 0
+  for _, m in ipairs(ns.roster and ns.roster:members() or {}) do
+    if m.online and m.name ~= name and not ns.isMe(m.name) then
+      others = others + 1
+      local h = mixed(m.name .. "|" .. name)
+      if h < mine or (h == mine and m.name < me) then rank = rank + 1 end
+    end
+  end
+  return others < k or rank <= k
+end
 
 local function noteVersion(name, ver, rs)
   if ns.Version and ns.Version.seen and type(ver) == "string" then ns.Version.seen(name, ver, rs) end
@@ -46,8 +72,18 @@ local function onState(sender, fields, cleared)
   announce(sender, m, changes, events)
 end
 
+-- Our STATE to someone who said HELLO, by whisper. False while they cannot be whispered (the guild list does not
+-- have them yet).
+local function answerHello(name)
+  if not ns.Comm.sendTo(name, "STATE", ns.Self.stateFor()) then return false end
+  replyPending[name], helloWaiting[name] = nil, nil
+  return true
+end
+
 -- A newcomer gets our STATE as a whisper (only a STATE: a HELLO back would make them answer every copy in the guild),
 -- after a random 0 to HELLO_REPLY_JITTER seconds so that, with many copies online, the answers do not land at once.
+-- When the guild list does not have them yet, the answer waits for the next list (at most HELLO_LIST_WAIT s); never
+-- a STATE to the whole guild instead (every copy would send one).
 local function onHello(sender, fields)
   -- A HELLO starts a new play session for them: what we knew about their layer, dungeon and tags is old.
   -- No rs = an older copy: forget the rs it may have sent before (when it was a newer copy).
@@ -60,11 +96,22 @@ local function onHello(sender, fields)
   replyPending[sender] = true
   C_Timer.After(math.random() * ns.Config.HELLO_REPLY_JITTER, function()
     ns.Log.safe(FEATURE, function()
-      replyPending[sender] = nil
-      local state = ns.Self.stateFor()
-      if not ns.Comm.sendTo(sender, "STATE", state) then ns.Comm.send("STATE", state) end
+      if answerHello(sender) then return end
+      helloWaiting[sender] = true
+      if ns.Guild then ns.Guild.refresh() end
+      C_Timer.After(ns.Config.HELLO_LIST_WAIT, function()
+        if helloWaiting[sender] then helloWaiting[sender], replyPending[sender] = nil, nil end -- given up
+      end)
     end)
   end)
+end
+
+-- A new guild list: answer the HELLOs that were waiting for it.
+local function onGuildList()
+  local names = {}
+  for name in pairs(helloWaiting) do names[#names + 1] = name end
+  table.sort(names)
+  for _, name in ipairs(names) do answerHello(name) end
 end
 
 local function onPing(sender, fields)
@@ -98,20 +145,32 @@ local function onPing(sender, fields)
   mismatches[sender] = (mismatches[sender] or 0) + 1
   if mismatches[sender] < 2 then return end
   local now = ns.now()
-  if sreqAt[sender] and now - sreqAt[sender] < ns.Config.PING_INTERVAL then return end
-  if ns.Comm.sendTo(sender, "SREQ", {}) then -- not whisperable yet (guild list not loaded): the next PING asks
-    mismatches[sender] = nil
-    sreqAt[sender] = now
-    ns.Log.count("sent SREQ")
-  end
+  if sreqDue[sender] or (sreqAt[sender] and now - sreqAt[sender] < ns.Config.PING_INTERVAL) then return end
+  -- wait a random moment (many copies may notice the same loss at once); their STATE meanwhile settles it
+  sreqDue[sender] = true
+  C_Timer.After(math.random() * ns.Config.SREQ_JITTER, function()
+    ns.Log.safe(FEATURE, function()
+      sreqDue[sender] = nil
+      if stateAt[sender] and stateAt[sender] > now then mismatches[sender] = nil; return end
+      if ns.Comm.sendTo(sender, "SREQ", {}) then -- not whisperable yet (guild list not loaded): the next PING asks
+        mismatches[sender] = nil
+        sreqAt[sender] = ns.now()
+        ns.Log.count("sent SREQ")
+      end
+    end)
+  end)
 end
 
--- Answered at most once per ping interval for each asker.
+-- Answered at most once per ping interval for each asker. Several asks within SREQ_COLLECT seconds (many copies lost
+-- the same message) get one STATE to the guild; a single one a whisper.
 local function onSreq(sender)
   local now = ns.now()
   if answeredAt[sender] and now - answeredAt[sender] < ns.Config.PING_INTERVAL then return end
   answeredAt[sender] = now
-  ns.Comm.sendTo(sender, "STATE", ns.Self.stateFor())
+  ns.Comm.answerAsk("STATE", sender, function(to)
+    local state = ns.Self.stateFor()
+    if not (to and ns.Comm.sendTo(to, "STATE", state)) then ns.Comm.send("STATE", state, { replace = "SREQ" }) end
+  end, ns.Config.SREQ_COLLECT)
 end
 
 local function onBye(sender)
@@ -178,7 +237,7 @@ function Crew.forget(name)
   if not (row and ns.roster:forget(row)) then return false, "not on your list" end
   local who = row
   if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
-  mismatches[who], sreqAt[who], helloAt[who], answeredAt[who] = nil, nil, nil, nil
+  mismatches[who], sreqAt[who], helloAt[who], answeredAt[who], stateAt[who] = nil, nil, nil, nil, nil
   ns.Bus.fire("MEMBER_REMOVED", who)
   return true
 end
@@ -193,12 +252,16 @@ function Crew.start()
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
   end
   ns.Comm.on("HELLO", onHello)
-  ns.Comm.on("STATE", onState)
+  ns.Comm.on("STATE", function(sender, fields)
+    stateAt[sender] = ns.now()
+    onState(sender, fields)
+  end)
   ns.Comm.on("UPDATE", onState)
   ns.Comm.on("PING", onPing)
   ns.Comm.on("BYE", onBye)
   ns.Comm.on("SREQ", onSreq)
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", sayGoodbye)
+  ns.Bus.on(FEATURE, "GUILD_LIST", onGuildList)
   -- The game said whether we are in a guild, or we joined or left one. The login HELLO was kept for that moment (it
   -- goes out, or is dropped outside a guild); joining a guild later needs a new one.
   ns.Bus.on(FEATURE, "TRANSPORT_READY", function()

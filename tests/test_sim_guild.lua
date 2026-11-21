@@ -281,6 +281,29 @@ return {
       noErrors(A, twNs)
     end,
 
+    -- Copies agree on who answers for the crew without talking: with the same rosters exactly k say yes.
+    responders_are_the_same_few_on_every_copy = function(_, A, _, H)
+      local all = {}
+      for i = 1, 8 do
+        local W, ns = H.client("Pal" .. i)
+        all[i] = ns
+        H.link(W)
+        login(W)
+      end
+      H.advance(20)
+      for _, newcomer in ipairs({ "Newbie", "Pal3", "Zed" }) do
+        local yes = 0
+        for _, ns in ipairs(all) do if ns.Crew.isResponder(newcomer, 3) then yes = yes + 1 end end
+        A.eq(yes, 3, "three copies answer for " .. newcomer)
+      end
+      local picked = {}
+      for i, ns in ipairs(all) do if ns.Crew.isResponder("Newbie", 3) then picked[#picked + 1] = i end end
+      local other = {}
+      for i, ns in ipairs(all) do if ns.Crew.isResponder("Zed", 3) then other[#other + 1] = i end end
+      A.no(table.concat(picked, ",") == table.concat(other, ","), "a different few for someone else")
+      A.ok(all[1].Crew.isResponder("Newbie", 8), "fewer than k others online: everyone answers")
+    end,
+
     -- The newcomer's guild list comes 4 s late: its HELLO waits for it, so no whispered answer is dropped.
     a_late_guild_list_loses_no_answer_with_50_online = function(_, A, _, H)
       local crew = fiftyOnline(H)
@@ -304,47 +327,70 @@ return {
       noErrors(A, nbNs, crew[1].ns)
     end,
 
+    -- 50 copies online, a newcomer logs in: every addon send of the next 60 s is counted (the PING every copy sends
+    -- once a minute anyway is left out of the per-copy numbers). What it costs:
+    --   newcomer: HELLO and STATE to the guild in its first 10 s (at most 3 sends there), at most 12 sends in 60 s
+    --     (its digests and numbers to the guild, one guild answer for its own diary, batched asks for the diaries it
+    --     lacks: one CALQ per 20 people);
+    --   an existing copy that is not a responder (Crew.isResponder): its STATE answer only (at most 2 pieces);
+    --   a responder (about 3): also its calendar digest (up to 3 pieces with 50 people), our session (UPDATE) and at
+    --     most one ask, by whisper (at most 7 sends), plus the diaries the newcomer asked it for (CALP: in all at most
+    --     one per person, 51).
     login_with_50_members_online_costs_bounded_sends = function(_, A, _, H)
       local crew = fiftyOnline(H)
       local nb, nbNs = H.client("Newbie", { class = "PRIEST" })
       H.link(nb)
-      local times = {} -- when the newcomer sent each message
-      local send = nb.env.C_ChatInfo.SendAddonMessage
-      nb.env.C_ChatInfo.SendAddonMessage = function(...)
-        times[#times + 1] = nb.clock
-        return send(...)
+      local function timed(W)
+        local at = {}
+        local send = W.env.C_ChatInfo.SendAddonMessage
+        W.env.C_ChatInfo.SendAddonMessage = function(...)
+          at[#W.sent + 1] = W.clock
+          return send(...)
+        end
+        return at
       end
-      local marks = {}
-      for i, c in ipairs(crew) do marks[i] = #c.W.sent end
+      local nbAt = timed(nb)
+      local marks, ats = {}, {}
+      for i, c in ipairs(crew) do marks[i], ats[i] = #c.W.sent, timed(c.W) end
       login(nb)
       local loginAt = nb.clock
-      H.advance(30)
-      local firstTen = {}
-      for i, at in ipairs(times) do
-        if at - loginAt <= 10 then firstTen[#firstTen + 1] = typeOf(nb.sent[i]) .. " " .. nb.sent[i].chatType end
+      H.advance(60)
+      local firstTen, all = {}, {}
+      for i, m in ipairs(nb.sent) do
+        local what = typeOf(m) .. " " .. m.chatType
+        all[#all + 1] = what
+        if nbAt[i] - loginAt <= 10 then firstTen[#firstTen + 1] = what end
       end
       A.ok(#firstTen <= 3, "the newcomer sent " .. #firstTen .. " in its first 10 s: " .. table.concat(firstTen, ", "))
-      -- What each copy whispers to the newcomer: its STATE (the answer to the HELLO), and, in the bulk lane behind
-      -- chat, the calendar swap: its digest (CALD, up to 3 pieces with 50 people in it), the diaries the newcomer
-      -- asked it for (CALP; the newcomer asks for each person's diary once, from whoever offered it first) and its own
-      -- ask for the newcomer's diary (CALQ, once).
-      local diaries = 0
+      A.ok(#all <= 12, "the newcomer sent " .. #all .. " in 60 s: " .. table.concat(all, ", "))
+      local diaries, responders = 0, 0
+      local storm = {} -- 0.1 s step -> the copy that sent something other than its STATE answer then
       for i, c in ipairs(crew) do
-        local answers, digests, asks = 0, 0, 0
+        local responder = c.ns.Crew.isResponder("Newbie")
+        if responder then responders = responders + 1 end
+        local sends, states = {}, 0
         for j = marks[i] + 1, #c.W.sent do
           local m = c.W.sent[j]
-          if m.chatType == "WHISPER" and m.target == "Newbie" then
-            local t = typeOf(m)
-            if t == "CALP" then diaries = diaries + 1
-            elseif t == "CALD" then digests = digests + 1
-            elseif t == "CALQ" then asks = asks + 1
-            else answers = answers + 1; A.eq(t, "STATE", c.ns.playerName() .. " whispered a " .. t) end
+          local t = typeOf(m)
+          if t == "CALP" then
+            diaries = diaries + 1
+          elseif t ~= "PING" then
+            sends[#sends + 1] = t .. " " .. m.chatType
+            if t == "STATE" then
+              states = states + 1
+              A.eq(m.chatType, "WHISPER", "a STATE answer is a whisper")
+            else
+              local step = math.floor(ats[i][j] * 10 + 0.5)
+              A.ok(storm[step] == nil or storm[step] == i, "two copies sent at the same moment: " .. t)
+              storm[step] = i
+            end
           end
         end
-        A.ok(answers >= 1 and answers <= 2, c.ns.playerName() .. " answered with " .. answers .. " STATE pieces")
-        A.ok(digests <= 3, c.ns.playerName() .. " sent " .. digests .. " digest pieces")
-        A.ok(asks <= 1, c.ns.playerName() .. " asked " .. asks .. " times")
+        local who = c.ns.playerName() .. (responder and " (responder)" or "")
+        A.ok(states >= 1 and states <= 2, who .. " answered with " .. states .. " STATE pieces")
+        A.ok(#sends <= (responder and 7 or 2), who .. " sent " .. table.concat(sends, ", "))
       end
+      A.ok(responders >= 1 and responders <= 6, responders .. " responders")
       A.ok(diaries <= 51, diaries .. " diaries for 51 people")
       local seen = 0
       for _, c in ipairs(crew) do if online(c.ns, "Newbie") then seen = seen + 1 end end

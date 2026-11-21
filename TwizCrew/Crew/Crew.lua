@@ -284,8 +284,18 @@ function Crew.forget(name)
   return true, row
 end
 
--- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted.
+local tidied = false -- the saved rows were pruned this session (only once they are known to be this guild's)
+
+-- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted for
+-- that; friends not seen for FORGET_AFTER_DAYS go, once a session, when the data in use is this guild's.
 local function followGuild()
+  if not tidied and ns.Guild and ns.Guild.writable() then
+    tidied = true
+    for _, name in ipairs(ns.roster:pruneOld(ns.wallclock())) do
+      if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
+      ns.Bus.fire("MEMBER_REMOVED", name)
+    end
+  end
   for _, name in ipairs(ns.roster:syncGuild()) do
     local m = ns.roster:row(name)
     ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = m and m.inGuild or false })
@@ -298,9 +308,6 @@ function Crew.start()
   ns.Log.safe(FEATURE, tidyNames, ns.db.roster)
   if type(ns.db.stats) == "table" then ns.Log.safe(FEATURE, tidyNames, ns.db.stats.crew) end
   ns.roster = ns.Roster.new(ns.db.roster)
-  for _, name in ipairs(ns.roster.pruned) do
-    if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
-  end
   ns.roster:setGuild(ns.Guild)
   ns.Log.safe(FEATURE, followGuild)
   ns.Comm.on("HELLO", onHello)

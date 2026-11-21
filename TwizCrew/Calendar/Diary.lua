@@ -125,6 +125,7 @@ end
 
 -- Marks "online now" (and AFK) in my diary. t: a time for tests.
 function Diary.mark(t)
+  if ns.Guild and not ns.Guild.writable() then return end -- no guild, or the calendar in use is another guild's
   t = t or now()
   local p = person(Diary.myId())
   if not p then return end
@@ -436,8 +437,12 @@ ns.Comm.on("CALR", function(s, f)
 end)
 
 ------------------------------------------------------------------------------------------------- module
+-- Old diaries and notes go only from the calendar of this character's guild (not from another guild's set, not
+-- outside a guild).
+local function mayPrune() return not ns.Guild or ns.Guild.writable() end
+
 local function pruneNotes()
-  if not ns.Notes or notesPrunedDay == today() then return end
+  if not ns.Notes or notesPrunedDay == today() or not mayPrune() then return end
   notesPrunedDay = today()
   ns.Notes.prune()
 end
@@ -451,14 +456,14 @@ local function onEnable()
   enabled = true
   enabledAt = ns.now()
   store()
-  Diary.prune()
+  if mayPrune() then Diary.prune() end
   notesPrunedDay = nil
   pruneNotes()
   Diary.mark()
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, tick) end)
     digestTicker = C_Timer.NewTicker(DIGEST_EVERY, function() ns.Log.safe(FEATURE, function()
-      Diary.prune()
+      if mayPrune() then Diary.prune() end
       pruneNotes()
       Diary.sendDigest()
     end) end)

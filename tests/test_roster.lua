@@ -273,6 +273,7 @@ return {
     roster_hides_nobody_on_a_partial_read_or_in_another_guild = function(ns, A)
       local saved = { Gone = { name = "Gone", level = 3, outSince = 5 } }
       local r = ns.Roster.new(saved)
+      r:pruneOld(ns.wallclock())
       A.eq(saved.Gone.outSince, nil, "a test build's outSince is removed")
       local active, whole = true, false
       r:setGuild({ active = function() return active end, complete = function() return whole end,
@@ -301,8 +302,9 @@ return {
       local saved = { Old = { lastSeen = now - (limit + 1) * day }, Edge = { lastSeen = now - (limit - 1) * day },
         Undated = {} }
       local r = ns.Roster.new(saved)
+      A.eq(r:names(), { "Edge", "Old", "Undated" }, "loading changes nothing")
+      A.eq(r:pruneOld(now), { "Old" })
       A.eq(r:names(), { "Edge", "Undated" })
-      A.eq(r.pruned, { "Old" })
       A.eq(saved.Old, nil)
       A.eq(saved.Undated.lastSeen, now)
     end,

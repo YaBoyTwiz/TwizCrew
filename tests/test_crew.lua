@@ -870,6 +870,7 @@ return {
       local now = ns.wallclock()
       db.roster.Gone = { name = "Gone", level = 5, lastSeen = now - 31 * day, outSince = now - 40 * day }
       db.stats.crew.Gone = { sid = "s", s = {}, a = { gn = 1 } }
+      db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
       local removed = record(ns, "MEMBER_REMOVED")
@@ -887,6 +888,7 @@ return {
       local db = ns.DB.init(nil, ns.Modules.list())
       db.roster.Oldpal = { name = "Oldpal", level = 30 }
       db.stats.crew.Oldpal = { sid = "s", s = {}, a = { gn = 3 } }
+      db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
       local updated = record(ns, "MEMBER_UPDATED")
@@ -922,6 +924,7 @@ return {
       db.roster.Oldpal = { name = "Oldpal", level = 30 }
       db.roster.Frostie = { name = "Frostie", level = 20 }
       db.guild.keys = { twiz = "Twiz", frostie = "Frostie" } -- given out before
+      db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
       local real = W.env.GetGuildRosterInfo
@@ -944,8 +947,10 @@ return {
       A.eq(db.guild.keys.lurabe, "Lurabe", "new keys once the read is complete")
       noErrors(ns, A)
     end,
+    -- Friends not seen for 60 days go, once the data in use is known to be this guild's (never on another guild's).
     prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)
       local db = ns.DB.init(nil, ns.Modules.list())
+      db.guild.name = "Test Guild"
       ns.db = db
       ns.Modules.attach(db)
       local day, now = 86400, ns.wallclock()
@@ -956,7 +961,9 @@ return {
       db.stats.crew.Recent = { sid = "s", s = {}, a = {} }
       ns.Comm.start()
       ns.Crew.start()
-      A.eq(ns.roster:names(), { "Recent", "Undated" })
+      A.ok(db.roster.Old, "not before the guild says the data is its own")
+      ns.Guild.start()
+      A.eq(ns.roster:allNames(), { "Recent", "Undated" })
       A.eq(db.roster.Old, nil)
       A.eq(db.stats.crew.Old, nil)
       A.ok(db.stats.crew.Recent)

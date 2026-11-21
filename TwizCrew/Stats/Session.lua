@@ -29,15 +29,20 @@ local function savedTable()
   return ns.db.stats
 end
 
+-- The saved session belongs to the guild data in use: written only while it is this character's guild's; decided
+-- (in memory) also outside a guild, but not while waiting to know whose data it is.
+local function quiet() return ns.Guild ~= nil and ns.Guild.quiet() end
+local function writable() return ns.Guild == nil or ns.Guild.writable() end
+
 local function save()
   local stats = savedTable()
-  if not stats or not current then return end
+  if not stats or not current or not writable() then return end
   stats.session = { id = current.id, start = current.start, manual = current.manual, lastActive = ns.wallclock() }
 end
 
 local function saveActive()
   local stats = savedTable()
-  if not stats or not current or type(stats.session) ~= "table" then return end
+  if not stats or not current or type(stats.session) ~= "table" or not writable() then return end
   stats.session.lastActive = ns.wallclock()
 end
 
@@ -58,6 +63,7 @@ end
 
 local function decide()
   if isDecided then return end
+  if quiet() then return end -- another guild's data: decided once it is this guild's (GUILD_STATE), else never
   isDecided = true
   local list = {}
   for name in pairs(heard) do
@@ -170,7 +176,9 @@ function Session.start()
   started = true
   ns.Bus.on(FEATURE, "MEMBER_ONLINE", reshare) -- a friend coming back hears our session even if nothing changes
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", saveActive)
-  C_Timer.After(ns.Config.SESSION_DECIDE_AFTER, function() ns.Log.safe(FEATURE, decide) end)
+  local due = false
+  C_Timer.After(ns.Config.SESSION_DECIDE_AFTER, function() due = true; ns.Log.safe(FEATURE, decide) end)
+  ns.Bus.on(FEATURE, "GUILD_STATE", function(active) if active and due then decide() end end)
   C_Timer.NewTicker(ns.Config.SESSION_ACTIVE_TICK, function() ns.Log.safe(FEATURE, saveActive) end)
 end
 

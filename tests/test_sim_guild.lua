@@ -43,6 +43,53 @@ local function fiftyOnline(H, settle)
   return crew
 end
 
+
+-- A character logged out: its copy stops running (it would keep writing into the shared saved table otherwise).
+local function retire(H, W)
+  W:fire("PLAYER_LOGOUT")
+  H.advance(1)
+  for i, L in ipairs(H.linked) do if L == W then table.remove(H.linked, i) end end
+  for i, C in ipairs(H.clients) do if C == W then table.remove(H.clients, i) end end
+end
+
+-- The per-guild data on top of a saved table, deep-copied (Core/DB.lua GUILD_PATHS), and the guild name.
+local function snapshot(saved)
+  local function copy(v)
+    if type(v) ~= "table" then return v end
+    local t = {}
+    for k, x in pairs(v) do t[k] = copy(x) end
+    return t
+  end
+  return { name = saved.guild.name, roster = copy(saved.roster), crew = copy(saved.stats.crew),
+    trophies = copy(saved.stats.trophies), calendar = copy(saved.calendar), keys = copy(saved.guild.keys),
+    mine = copy(saved.guild.mine), session = copy(saved.stats.session), feed = copy(saved.feed),
+    clown = copy(saved.stats.clown) }
+end
+
+-- My alt "Altie" (its own GUID) in guild `name` with "Stranger", who has TwizCrew too, logged in on `saved`.
+local function altIn(H, name, saved)
+  local alt, altNs = H.client("Altie", { class = "PRIEST" })
+  alt.state.guids.player = "Player-9-0001"
+  local other = H.client("Stranger", { class = "ROGUE" })
+  H.guild(name, alt, other)
+  alt.env.TwizCrewDB = saved
+  H.link(alt, other)
+  login(alt)
+  login(other)
+  return alt, altNs
+end
+
+local function groupless(sent)
+  local n = 0
+  for _, m in ipairs(sent) do if m.chatType ~= "PARTY" and m.chatType ~= "RAID" then n = n + 1 end end
+  return n
+end
+
+local function printed(W, text)
+  for _, line in ipairs(W.printed) do if line == text then return true end end
+  return false
+end
+
 return {
   files = {},
   tests = {
@@ -459,106 +506,144 @@ return {
       noErrors(A, nbNs, crew[1].ns, crew[50].ns)
     end,
 
-    -- One TwizCrew guild per account: the home guild is set by the first guild message heard from another member.
-    home_guild_is_set_by_the_first_guild_message_heard = function(_, A, _, H)
-      local tw, twNs = H.client("Twiz")
-      H.link(tw)
-      login(tw)
-      H.advance(30)
-      A.eq(twNs.Guild.home(), nil, "alone: my own messages prove nothing")
-      A.eq(twNs.Transport.status().mode, "guild", "unset home: this guild is used")
-      local fr = H.client("Frostie", { class = "MAGE" })
-      H.link(fr)
-      login(fr)
-      H.advance(10)
-      A.eq(twNs.Guild.home(), "Crew Guild")
-      A.eq(twNs.db.guild.keysFor, "Crew Guild")
-      noErrors(A, twNs)
-    end,
 
-    alt_in_another_guild_stays_quiet_and_the_main_is_unchanged = function(_, A, _, H)
-      -- the main, in the home guild, with a friend and an old friend out of the guild
+    -- Saved data is kept per guild: a main in guild A and an alt in guild B share one saved table.
+    main_and_alt_keep_separate_guild_data = function(_, A, _, H)
       local main, mainNs = H.client("Twiz")
       local fr, frNs = H.client("Frostie", { class = "MAGE" })
       H.link(main, fr)
       login(main)
       login(fr)
       H.advance(30)
-      A.eq(mainNs.Guild.home(), "Crew Guild")
-      mainNs.db.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = mainNs.wallclock() }
-      main:fire("PLAYER_LOGOUT")
-      H.advance(1)
-      unlink(H, main)
       local saved = mainNs.db
-      local keysBefore = {}
-      for k, v in pairs(saved.guild.keys) do keysBefore[k] = v end
-      -- an alt of the same account in another guild that also has a TwizCrew user
-      local alt, altNs = H.client("Altie", { class = "PRIEST" })
-      local other = H.client("Stranger", { class = "ROGUE" })
-      H.guild("Other Guild", alt, other)
-      alt.env.TwizCrewDB = saved
-      H.link(alt, other)
-      login(alt)
-      login(other)
+      A.eq(saved.guild.name, "Crew Guild", "an empty roster: adopted by the first guild")
+      A.ok(online(mainNs, "Frostie"))
+      saved.stats.trophies.s1 = { sid = "s1", people = { "Frostie", "Twiz" } }
+      saved.calendar.notes = { n1 = { d = "2026-11-21", t = "raid night", b = "Twiz" } }
+      saved.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = mainNs.wallclock() }
+      mainNs.Modules.set("panel", "scale", 1.2) -- a setting: shared by every character
+      mainNs.Stats.count("dt", 4)               -- my own numbers: shared too
+      retire(H, main)
+      local guildA = snapshot(saved)
+      -- the alt's first login: guild B's name is not the data in use: quiet, and it says /reload
+      local alt, altNs = altIn(H, "Other Guild", saved)
       H.advance(5 * 60)
-      tc(alt, "report")
-      local sent = 0
-      for _, m in ipairs(alt.sent) do if m.chatType ~= "PARTY" and m.chatType ~= "RAID" then sent = sent + 1 end end
-      A.eq(sent, 0, "zero sends in a foreign guild")
-      A.eq(altNs.Transport.status().mode, "none")
-      A.ok(altNs.Transport.status().foreign)
-      A.eq(altNs.Guild.home(), "Crew Guild", "home unchanged by the other guild's messages")
-      A.no(altNs.Guild.active()); A.no(altNs.Guild.loaded())
-      A.eq(altNs.roster:get("Stranger"), nil, "their messages are not accepted")
-      A.eq(altNs.roster:names(), { "Frostie", "Oldpal" }, "no row hidden")
-      A.eq(saved.guild.keys, keysBefore, "no key written")
-      A.eq(saved.guild.keysFor, "Crew Guild")
-      local reported = false
-      for _, line in ipairs(alt.printed) do
-        if line:find("this character's guild (Other Guild) is not your TwizCrew guild (Crew Guild)", 1, true) then
-          reported = true
-        end
-      end
-      A.ok(reported, "/tc report says why")
+      A.eq(groupless(alt.sent), 0, "zero sends")
+      A.ok(printed(alt, "TwizCrew keeps separate data for each guild. Type /reload to switch to Other Guild."))
+      A.ok(altNs.Transport.status().reload)
+      A.eq(altNs.roster:get("Stranger"), nil, "nothing accepted")
+      A.eq(altNs.roster:names(), { "Frostie", "Oldpal" }, "nobody hidden")
+      A.eq(snapshot(saved), guildA, "guild A's data: nothing hidden, deleted or rewritten")
+      A.eq(saved.modules.panel.settings.scale, 1.2, "settings are shared")
       noErrors(A, altNs)
-      alt:fire("PLAYER_LOGOUT")
-      H.advance(1)
-      unlink(H, alt)
-      -- back on the main: as before
+      retire(H, alt)
+      -- the alt's second login: guild B's own data, and it works
+      local alt2, alt2Ns = altIn(H, "Other Guild", saved)
+      H.advance(30)
+      A.eq(saved.guild.name, "Other Guild")
+      A.ok(online(alt2Ns, "Stranger"), "the alt meets its guild")
+      A.eq(alt2Ns.roster:get("Frostie"), nil, "guild A's people are not here")
+      A.eq(saved.guilds["Crew Guild"].roster.Frostie.class, "MAGE", "guild A's data is parked")
+      A.eq(saved.guilds["Crew Guild"].stats.trophies.s1.sid, "s1")
+      A.eq(saved.guilds["Crew Guild"].calendar.notes.n1.t, "raid night")
+      A.ok(saved.guilds["Crew Guild"].guild.keys.frostie, "with its keys")
+      A.eq(saved.guild.keys.frostie, nil)
+      A.ok(saved.guild.keys.stranger, "guild B's own keys")
+      A.eq(saved.stats.chars.Twiz.a.dt, 4, "my own characters' numbers are shared")
+      A.eq(saved.modules.panel.settings.scale, 1.2)
+      noErrors(A, alt2Ns)
+      retire(H, alt2)
+      -- the main again: guild A's data back on top, guild B's parked
+      local main2, main2Ns = H.client("Twiz")
+      main2.state.guild = main.state.guild
+      main2.env.TwizCrewDB = saved
+      main2:fire("ADDON_LOADED", "TwizCrew")
+      main2:fire("PLAYER_LOGIN")
+      A.eq(saved.guild.name, "Crew Guild")
+      A.eq(saved.roster.Frostie.class, "MAGE")
+      A.eq(saved.stats.trophies.s1.sid, "s1")
+      A.eq(saved.guilds["Other Guild"].roster.Stranger.class, "ROGUE")
+      H.link(main2)
+      main2:fire("PLAYER_ENTERING_WORLD")
+      H.advance(30)
+      A.ok(online(main2Ns, "Frostie"))
+      A.eq(main2Ns.roster:names(), { "Frostie" }, "the old friend is hidden again, never deleted")
+      A.ok(saved.roster.Oldpal)
+      noErrors(A, main2Ns, frNs)
+    end,
+
+    old_data_opened_first_on_an_alt_stays_for_its_guild = function(_, A, _, H)
+      local saved = { roster = { Frostie = { name = "Frostie", class = "MAGE", level = 20, lastSeen = 1700000000 } },
+        stats = { chars = { Twiz = { sid = "x", s = {}, a = { dt = 9 } } },
+          crew = { Frostie = { sid = "x", s = {}, a = { dt = 3 } } }, trophies = { old = { sid = "old", people = {} } } },
+        calendar = { notes = { n1 = { d = "2026-11-01", t = "old note", b = "Frostie" } } } }
+      local alt, altNs = altIn(H, "Other Guild", saved)
+      H.advance(60)
+      A.eq(groupless(alt.sent), 0, "an unrelated guild: quiet")
+      A.no(printed(alt, "TwizCrew keeps separate data for each guild. Type /reload to switch to Other Guild."),
+        "no /reload line for unnamed data")
+      A.eq(saved.guild.name, nil)
+      A.eq(saved.roster.Frostie.level, 20, "the old data is intact")
+      A.eq(altNs.roster:names(), { "Frostie" }, "nobody hidden")
+      noErrors(A, altNs)
+      retire(H, alt)
+      local alt2, alt2Ns = altIn(H, "Other Guild", saved)
+      H.advance(30)
+      A.eq(saved.guild.name, "Other Guild", "the second login: a fresh set of its own")
+      A.ok(online(alt2Ns, "Stranger"))
+      A.eq(saved.guilds[""].roster.Frostie.level, 20, "the old data is parked, unnamed")
+      retire(H, alt2)
+      -- the main, in guild A where Frostie is
+      local fr, frNs = H.client("Frostie", { class = "MAGE" })
+      H.link(fr)
+      login(fr)
+      local main, mainNs = H.client("Twiz")
+      main.env.TwizCrewDB = saved
+      H.link(main)
+      login(main)
+      H.advance(30)
+      A.eq(groupless(main.sent), 0, "guild B's data is in use: quiet")
+      A.ok(printed(main, "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew Guild."))
+      retire(H, main)
       local main2, main2Ns = H.client("Twiz")
       main2.state.guild = main.state.guild
       main2.env.TwizCrewDB = saved
       H.link(main2)
       login(main2)
       H.advance(30)
-      A.eq(main2Ns.Transport.status().mode, "guild")
+      A.eq(saved.guild.name, "Crew Guild", "the old data found its guild")
+      A.eq(saved.guilds[""], nil)
+      A.eq(saved.stats.crew.Frostie.a.dt, 3)
+      A.eq(saved.stats.trophies.old.sid, "old")
+      A.eq(saved.calendar.notes.n1.t, "old note")
+      A.eq(saved.stats.chars.Twiz.a.dt, 9)
       A.ok(online(main2Ns, "Frostie"))
-      A.ok(online(frNs, "Twiz"))
-      A.eq(main2Ns.roster:names(), { "Frostie" }, "the old friend is hidden again in the home guild")
+      A.eq(saved.guilds["Other Guild"].roster.Stranger.class, "ROGUE")
       noErrors(A, main2Ns, frNs)
     end,
 
-    tc_home_here_switches_the_home_guild = function(_, A, _, H)
-      local tw, twNs = H.client("Twiz")
-      H.guild("New Guild", tw)
-      tw.env.TwizCrewDB = { guild = { home = "Old Guild", keysFor = "Old Guild", keys = { someone = "Someone" } } }
-      H.link(tw)
-      login(tw)
+    a_guildless_alt_changes_nothing = function(_, A, _, H)
+      local main, mainNs = H.client("Twiz")
+      local fr = H.client("Frostie", { class = "MAGE" })
+      H.link(main, fr)
+      login(main)
+      login(fr)
       H.advance(30)
-      A.eq(#tw.sent, 0, "a foreign guild: quiet")
-      tc(tw, "home")
-      A.ok(tw.printed[#tw.printed]:find("Old Guild", 1, true), "/tc home names it")
-      tc(tw, "home here")
-      A.eq(tw.printed[#tw.printed], "TwizCrew: your TwizCrew guild is now New Guild.")
-      A.eq(twNs.Guild.home(), "New Guild")
-      H.advance(10)
-      A.ok(twNs.Guild.active())
-      A.eq(twNs.db.guild.keys.someone, nil, "the old guild's keys are gone")
-      A.eq(twNs.db.guild.keys.twiz, "Twiz")
-      local hellos = 0
-      for _, m in ipairs(tw.sent) do if typeOf(m) == "HELLO" then hellos = hellos + 1 end end
-      A.eq(hellos, 1, "now it says hello")
-      noErrors(A, twNs)
+      local saved = mainNs.db
+      saved.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = mainNs.wallclock() }
+      retire(H, main)
+      local before = snapshot(saved)
+      local alt, altNs = H.client("Loner", { noGuild = true })
+      alt.state.guids.player = "Player-9-0002"
+      alt.env.TwizCrewDB = saved
+      H.link(alt)
+      login(alt)
+      H.advance(5 * 60)
+      A.eq(#alt.sent, 0)
+      A.eq(saved.guild.name, "Crew Guild", "nothing swapped")
+      A.eq(altNs.roster:names(), { "Frostie", "Oldpal" }, "nothing hidden")
+      A.eq(snapshot(saved), before, "nothing rewritten")
+      noErrors(A, altNs)
     end,
   },
 }

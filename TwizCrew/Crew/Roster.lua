@@ -91,24 +91,10 @@ local function trackXP(m, now)
   t.lv, t.xc, t.xm = lv, xc, xm
 end
 
+-- Loads the saved rows (changes nothing in them: see pruneOld).
 function Roster.new(saved)
-  local r = setmetatable({ byName = {}, saved = saved or {}, pruned = {} }, Roster)
-  local wall = ns.wallclock()
-  local limit = ns.Config.FORGET_AFTER_DAYS * 86400
-  local old = {}
+  local r = setmetatable({ byName = {}, saved = saved or {} }, Roster)
   for name, row in pairs(r.saved) do
-    if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then
-      if num(row.lastSeen) == nil then
-        row.lastSeen = wall -- no saved time yet: today counts, so nobody vanishes on the update
-      elseif wall - row.lastSeen > limit then
-        old[#old + 1] = name
-      end
-    end
-  end
-  table.sort(old)
-  for _, name in ipairs(old) do r.saved[name] = nil; r.pruned[#r.pruned + 1] = name end
-  for name, row in pairs(r.saved) do
-    if type(row) == "table" then row.outSince = nil end -- a test build of the guild conversion saved it: unused
     if type(name) == "string" and name ~= "" and type(row) == "table" and not ns.isTestName(name) then
       r.byName[name] = {
         name = name, class = str(row.class), level = num(row.level),
@@ -124,6 +110,28 @@ end
 local function shown(m) return m ~= nil and m.inGuild ~= false end
 
 -- A member who is shown (in the guild, or not known to be out of it yet); nil for a hidden one.
+-- Tidies the saved rows (once a session, when they are this character's guild's: Crew): a row without a saved
+-- time gets today (nobody vanishes on the update), a row not seen for FORGET_AFTER_DAYS goes (from saved and from
+-- the roster). Returns the names that went, A-Z.
+function Roster:pruneOld(wall)
+  local limit = ns.Config.FORGET_AFTER_DAYS * 86400
+  local old = {}
+  for name, row in pairs(self.saved) do
+    if type(row) == "table" then row.outSince = nil end -- a test build of the guild conversion saved it: unused
+    if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then
+      if num(row.lastSeen) == nil then
+        row.lastSeen = wall
+        if self.byName[name] then self.byName[name].lastSeen = wall end
+      elseif wall - row.lastSeen > limit then
+        old[#old + 1] = name
+      end
+    end
+  end
+  table.sort(old)
+  for _, name in ipairs(old) do self.saved[name] = nil; self.byName[name] = nil end
+  return old
+end
+
 function Roster:get(name)
   local m = self.byName[name]
   if shown(m) then return m end

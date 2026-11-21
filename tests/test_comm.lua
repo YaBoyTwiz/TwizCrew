@@ -179,6 +179,20 @@ return {
       A.eq(W.sent[1].chatType, "WHISPER")
       A.eq(W.sent[1].target, "Frostie Snow")
     end,
+    -- A one-word member "Frost" gets "Frost (2)" when "Frost Bite" already holds "Frost": a whisper to the key "Frost"
+    -- goes to Frost Bite, not to the member whose full name is "Frost".
+    a_whisper_to_a_key_goes_to_its_holder_not_to_a_member_named_like_it = function(ns, A, W)
+      boot(ns, W, function(w)
+        local list = w.state.guild.members
+        list[#list + 1] = { name = "Frost Bite", online = true, guid = "Player-1-0901" }
+        list[#list + 1] = { name = "Frost", online = true, guid = "Player-1-0902" }
+      end, { guild = { keys = { ["frost bite"] = "Frost" } } })
+      A.eq(ns.Guild.get("Frost").full, "Frost Bite")
+      A.eq(ns.Guild.get("Frost (2)").full, "Frost")
+      A.eq(ns.Transport.destinationFor("Frost"), { chatType = "WHISPER", target = "Frost Bite" })
+      A.eq(ns.Transport.destinationFor("Frost (2)"), { chatType = "WHISPER", target = "Frost" })
+      A.eq(ns.Transport.fullName("Frost"), "Frost Bite")
+    end,
     no_whisper_before_the_list_loads = function(ns, A, W)
       local rows = 0
       boot(ns, W, function(w)

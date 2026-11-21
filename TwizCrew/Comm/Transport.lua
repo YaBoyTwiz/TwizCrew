@@ -173,11 +173,17 @@ function Transport.destinations(_msgType)
   return {}
 end
 
+-- The key of a member named by our key (what the rest of the addon passes) or by a game name.
+local function memberKey(name)
+  local e = ns.Guild.get(name)
+  return e and e.key or ns.Guild.keyOf(name)
+end
+
 -- A whisper to one guild member, by the full name in the guild list. nil for a stranger, for me, before the list
 -- has loaded, or outside a guild.
 function Transport.destinationFor(name)
   if type(name) ~= "string" or name == "" or not sending() or not ns.Guild then return nil end
-  local key = ns.Guild.keyOf(name)
+  local key = memberKey(name)
   local full = key and ns.Guild.fullName(key)
   if not full or ns.isMe(key) then return nil end
   return { chatType = "WHISPER", target = full }
@@ -193,7 +199,7 @@ end
 -- invites; the short name when the guild list does not know them.
 function Transport.fullName(name)
   if type(name) ~= "string" or name == "" then return name end
-  local key = ns.Guild and ns.Guild.keyOf(name)
+  local key = ns.Guild and memberKey(name)
   return (key and ns.Guild.fullName(key)) or ns.shortName(name) or name
 end
 

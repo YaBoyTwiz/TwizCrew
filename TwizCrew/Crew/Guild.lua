@@ -297,18 +297,15 @@ local function lookup(raw)
   if suffix and #l > #suffix and l:sub(-#suffix) == suffix and not byFull[l] then
     l = l:sub(1, #l - #suffix)
   end
+  -- order: an exact full name, then an exact key, then (one word only) the first-word fallback; unless the word
+  -- was once given to someone else (then it is theirs, even while they are away)
+  local e = byFull[l] or byKey[l]
+  if e then return e end
   if not l:find(" ", 1, true) then
-    -- one word: the member who holds it as a key; else the only member with that first word, unless the word was
-    -- once given to someone else (then it is theirs, even while they are away)
-    local e = byKey[l]
-    if e then return e end
-    e = byFull[l]
-    if e then return e end
     local same = byFirst[l]
     if same and #same == 1 and (not heldBy[l] or heldBy[l] == same[1].full:lower()) then return same[1] end
-    return nil
   end
-  return byFull[l]
+  return nil
 end
 
 function Guild.keyOf(raw)

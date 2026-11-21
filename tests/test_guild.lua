@@ -287,7 +287,11 @@ return {
       A.eq(a.full, "Twiz Other"); A.eq(b.full, "Twiz")
       A.eq(db.guild.keys["twiz"], "Twiz (2)", "saved, so stable")
       A.eq(#ns.Guild.members(), 3)
-      A.eq(ns.Guild.keyOf("Twiz"), "Twiz", "the word belongs to the holder")
+      A.eq(ns.Guild.keyOf("Twiz"), "Twiz (2)", "an exact full name wins over a key")
+      A.eq(ns.Guild.keyOf("Twiz Other"), "Twiz")
+      A.eq(ns.Guild.keyOf("Twiz-Realm"), "Twiz (2)")
+      A.eq(ns.Guild.keyOf("Twiz (2)"), "Twiz (2)")
+      A.eq(ns.Guild.get("Twiz").full, "Twiz Other", "the key still belongs to the holder")
       A.ok(not ns.Guild.get("Twiz (2)").key:find(" (test)", 1, true))
     end,
 

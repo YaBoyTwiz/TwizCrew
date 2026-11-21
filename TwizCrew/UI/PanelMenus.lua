@@ -288,7 +288,7 @@ function Panel.rowMenu(m)
   items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
   if m.offline then
     items[#items + 1] = { label = "Forget this friend", onClick = function()
-      local ok, why = ns.Crew.forget(name)
+      local ok, why = ns.Crew.forgetRow(name)
       if ok then print("TwizCrew: forgot " .. ns.Util.safeText(name) .. ".")
       else print("TwizCrew: could not forget " .. ns.Util.safeText(name) .. " (" .. tostring(why) .. ").") end
     end }

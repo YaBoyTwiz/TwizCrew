@@ -113,6 +113,21 @@ function ns.playerName()
   return ns.shortName(UnitName("player") or "Unknown")
 end
 
+-- My own key among member keys (the guild list's key for me, else my first word): use it wherever my name sits in a
+-- list next to friends' keys, so a friend whose key is my first word is never taken for me.
+function ns.myKey()
+  local key = ns.Guild and ns.Guild.myKey and ns.Guild.myKey()
+  return key or ns.playerName()
+end
+
+-- A member name from a message field (a key, a full name, an old copy's first word) as this copy's key for them;
+-- the text as it is when the guild list cannot tell (not loaded yet, a fake, someone outside the guild).
+function ns.resolveName(name)
+  local G = ns.Guild
+  if type(name) ~= "string" or not G or ns.isTestName(name) then return name end
+  return G.resolve(name) or name
+end
+
 -- Is this name (a raw sender, a full name or a member key) mine? The guild list knows namesakes ("Chaos Other" is not
 -- me, "Chaos Deathbringr" is); a key is looked up as the member it belongs to. Without the guild list module, and for
 -- the test tools' fake names, the first words are compared.

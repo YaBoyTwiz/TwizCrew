@@ -30,7 +30,7 @@ local HELP = {
   "/tc report - a health check you can copy and paste to Discord",
   "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
   "/tc debug - turn technical chat messages on or off",
-  "/tc forget <name> - drop an offline friend from the crew list for good (/tc remove does the same)",
+  "/tc forget <name> - forget an offline friend's saved data; first or full name (/tc remove does the same)",
   "/tc awards - the awards show for this session, great on stream",
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
@@ -60,8 +60,9 @@ local function forgetName(rest)
   if not name then say("type a name after it, like /tc forget Frostie"); return end
   local ok, why = ns.Crew.forget(name)
   local safe = ns.Util.safeText(name)
-  if ok then say("forgot " .. safe .. ".")
+  if ok then say("forgot " .. ns.Util.safeText(why or name) .. ".")
   elseif why == "that is you" then say("that's you.")
+  elseif why == "which one" then say("more than one member is called " .. ns.Util.safeText(rest) .. "; type the full name.")
   elseif why == "online right now" then say(safe .. " is online right now; try again when they are offline.")
   else say(safe .. " is not on your list.") end
 end
@@ -169,7 +170,13 @@ local function mock(rest)
     if gone then say('removed "' .. ns.Util.safeText(gone) .. '".')
     else say("type the number from /tc mock list, like: /tc mock remove 2") end
   elseif what ~= "" then
-    local name = ns.shortName(Commands.normalizeName(rest))
+    local typed = Commands.normalizeName(rest)
+    local key, why = ns.Guild.resolve(typed, true)
+    if why == "ambiguous" then
+      say("more than one member is called " .. ns.Util.safeText(rest) .. "; type the full name.")
+      return
+    end
+    local name = key or ns.shortName(typed) -- the list does not know them: the first word, as before the guild
     if ns.Roasts.mock(name) then return end
     say("can't mock " .. ns.Util.safeText(name) .. " right now (wait a few seconds between mocks).")
   else

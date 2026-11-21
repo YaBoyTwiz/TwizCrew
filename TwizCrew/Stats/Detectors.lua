@@ -323,7 +323,7 @@ add({ id = "pulls", label = "pulls in dungeons",
 local watch -- wipe watch (created at first start, kept across stop/start)
 local function crewHere()
   local zone = call(GetRealZoneText)
-  local names = { ns.playerName() }
+  local names = { ns.myKey() } -- my key: a friend's key may be my first word
   if not inDungeon() or not ns.roster then return names, zone end
   for _, m in ipairs(ns.roster:members()) do
     if m.online and m.inInstance and m.zone == zone and m.name ~= names[1] then names[#names + 1] = m.name end
@@ -345,9 +345,9 @@ add({ id = "wipes", label = "wipes",
   start = function()
     local d = byId.wipes
     watch = watch or Logic.newWipeWatch(ns.Config.WIPE_WINDOW)
-    local function meAlive() if not plain(UnitIsDeadOrGhost, "player") then watch:alive(ns.playerName()) end end
+    local function meAlive() if not plain(UnitIsDeadOrGhost, "player") then watch:alive(ns.myKey()) end end
     onEvent(d, "PLAYER_DEAD", function()
-      watch:dead(ns.playerName(), ns.now())
+      watch:dead(ns.myKey(), ns.now())
       checkWipe()
     end)
     onEvent(d, "PLAYER_ALIVE", meAlive)
@@ -560,7 +560,7 @@ add({ id = "chatter", label = "chat lines and emotes",
     for event, key in pairs(CHAT_KEYS) do
       onEvent(byId.chatter, event, function(_, sender)
         if secret(sender) or type(sender) ~= "string" then return end
-        if ns.shortName(sender) == ns.playerName() then api.count(key, 1) end
+        if ns.isMe(sender) then api.count(key, 1) end -- a namesake's lines are not mine
       end)
     end
   end })

@@ -332,10 +332,12 @@ local function showMock(sender, f)
     return
   end
   if not mockShowLimit:allow(sender, ns.now()) then return end
+  -- who it is about, as our key for them (a key, a full name or an old copy's first word on the wire)
+  local target = type(f.t) == "string" and ns.resolveName(f.t) or nil
   -- the activity feed records it: who sent it, who it is about, the words (plain), congrats or mock
-  ns.Bus.fire("MOCK_SEEN", sender, type(f.t) == "string" and f.t or "", text, cheer)
+  ns.Bus.fire("MOCK_SEEN", sender, target or "", text, cheer)
   -- about ME from a friend: their character laughs at me (a mock) or cheers for me (congrats), if that's on
-  if ns.MockShow and f.t and ns.isMe(f.t) and not ns.isMe(sender) and setting("mockModel") ~= false then
+  if ns.MockShow and target and ns.isMe(target) and not ns.isMe(sender) and setting("mockModel") ~= false then
     shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
     if #shown > SHOWN_MAX then table.remove(shown, 1) end
     ns.MockShow.show(sender, text, cheer and { cheer = true } or nil)
@@ -354,7 +356,7 @@ end
 -- May the Mock button show for this friend? (the panel also checks they're dead)
 function Roasts.canMock(target)
   return ns.Modules.isEnabled(FEATURE) and setting("mocks") and type(target) == "string" and target ~= ""
-    and target ~= ns.playerName() and true or false
+    and not ns.isMe(target) and true or false
 end
 
 -- The Mock button: returns the text sent, or nil (too soon, nothing in the rotation, or not allowed).

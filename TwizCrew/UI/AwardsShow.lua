@@ -402,6 +402,33 @@ local function classOf(name)
   return m and m.class or nil
 end
 
+-- Names from the wire, cleaned like the candidates a viewer got (ShowLogic names).
+local function wireName(s)
+  if type(s) ~= "string" then return nil end
+  return ns.Util.truncateUTF8(ns.Util.safeText(s), 24)
+end
+
+-- A name from the wire, already cleaned (wireName / ShowLogic), as my key for that member (the presenter may name
+-- them by full name, or by first word if an old copy), cleaned the same way.
+local function myName(clean)
+  if type(clean) ~= "string" then return nil end
+  local raw = (clean:gsub("||", "|"))
+  local key = ns.resolveName(raw)
+  if key == raw then return clean end
+  return wireName(key)
+end
+
+-- Cleaned wire names as my keys, without doubles; sorted when asked.
+local function myNames(list, sorted)
+  local seen, out = {}, {}
+  for _, name in ipairs(list or {}) do
+    local key = myName(name)
+    if key and not seen[key] then seen[key] = true; out[#out + 1] = key end
+  end
+  if sorted then table.sort(out) end
+  return out
+end
+
 ------------------------------------------------------------------------------------------------------------ vote
 local function showIdNow() return showId or (follow and follow.id) end
 
@@ -554,7 +581,7 @@ local function showWireCard(c, reveal)
   end
   cards = { [c.i] = viewerCard(c) }
   index = c.i
-  for _, name in ipairs(c.winners or {}) do classes[name] = classOf(name) end
+  for _, name in ipairs(c.winners or {}) do classes[name] = classOf(myName(name)) end -- shown as the presenter named them
   if c.kind == "end" then
     setPhase("end")
   elseif c.kind == "nobody" then
@@ -647,22 +674,18 @@ local function onVoteStart(sender, f)
   if not fromPresenter(sender, f) or vote then return end -- one vote per show
   local v = ns.ShowLogic.voteFromWire(f)
   if not v then return end
-  vote = newVote(v.candidates, v.seconds, true, true)
+  local candidates = myNames(v.candidates, true)
+  if #candidates < 2 then return end
+  vote = newVote(candidates, v.seconds, true, true)
   if latest({ kind = "vote" }) then enterVote() end
-end
-
--- Names from the wire, cleaned like the candidates a viewer got (ShowLogic names).
-local function wireName(s)
-  if type(s) ~= "string" then return nil end
-  return ns.Util.truncateUTF8(ns.Util.safeText(s), 24)
 end
 
 local function onBallot(sender, f)
   if not vote or type(f) ~= "table" or f.id == nil or f.id ~= showIdNow() or not known(sender) then return end
   if vote.escaped then
-    countVote(wireName(sender), wireName(f.c))
+    countVote(wireName(sender), myName(wireName(f.c)))
   else
-    countVote(sender, f.c)
+    countVote(sender, ns.resolveName(f.c))
   end
 end
 
@@ -676,7 +699,7 @@ local function onResult(sender, f)
     if latest({ kind = "skip" }) then setPhase("end") end
     return
   end
-  reveal(r.names, r.n, false)
+  reveal(myNames(r.names), r.n, false)
   if latest({ kind = "clown" }) then setPhase("clown") end
 end
 

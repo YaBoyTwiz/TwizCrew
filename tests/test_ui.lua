@@ -104,6 +104,40 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    -- A member is forgotten by first word (when only one member has it) or by full name, any case; a first word two
+    -- members share asks which one.
+    tc_forget_accepts_first_word_or_full_name = function(ns, A, W)
+      local list = {}
+      for i, name in ipairs({ "Twiz", "Ginkan Pebble", "Lurabe Moon", "Chaos Deathbringr", "Chaos Other" }) do
+        list[i] = { name = name, online = i == 1, guid = string.format("Player-1-%04d", i), lastOnline = { 0, 0, 1, 0 } }
+      end
+      W.state.guild = { name = "Test Guild", members = list }
+      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos", ["lurabe sun"] = "Lurabe" } },
+        roster = {} }
+      for _, key in ipairs({ "Ginkan", "Lurabe Moon", "Chaos", "Chaos Other" }) do
+        W.env.TwizCrewDB.roster[key] = { name = key, level = 5 }
+      end
+      boot(W)
+      A.eq(ns.roster:names(), { "Chaos", "Chaos Other", "Ginkan", "Lurabe Moon" })
+      tc(W, "forget ginkan pebble")
+      A.eq(ns.db.roster.Ginkan, nil, "full name")
+      A.ok(printedLine(W, "TwizCrew: forgot Ginkan."))
+      tc(W, "forget lurabe")
+      A.eq(ns.db.roster["Lurabe Moon"], nil, "first word only one member has (its old holder left)")
+      W.printed = {}
+      tc(W, "forget chaos")
+      A.ok(ns.db.roster.Chaos and ns.db.roster["Chaos Other"], "two members start with it: nobody")
+      A.ok(printedLine(W, "TwizCrew: more than one member is called chaos; type the full name."))
+      tc(W, "remove Chaos Other")
+      A.eq(ns.db.roster["Chaos Other"], nil)
+      tc(W, "forget chaos deathbringr")
+      A.eq(ns.db.roster.Chaos, nil, "his full name, his key")
+      W.printed = {}
+      tc(W, "forget twiz")
+      A.ok(printedLine(W, "TwizCrew: that's you."))
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     debug_toggles = function(ns, A, W)
       boot(W)
       tc(W, "debug")

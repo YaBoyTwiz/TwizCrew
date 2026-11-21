@@ -31,7 +31,7 @@ local function mixed(s) return ns.Util.hashNumber(tostring(ns.Util.hashNumber(s)
 function Crew.isResponder(name, k)
   k = k or ns.Config.RESPONDERS
   name = tostring(name)
-  local me = (ns.Guild and ns.Guild.myKey()) or ns.playerName()
+  local me = ns.myKey()
   local mine = mixed(me .. "|" .. name)
   local rank, others = 1, 0
   for _, m in ipairs(ns.roster and ns.roster:members() or {}) do
@@ -240,33 +240,54 @@ local function tidyNames(list)
   end
 end
 
--- Takes a friend who is offline out of the roster and the saved numbers.
--- Returns true when something was removed; otherwise false and a short reason (never you, never an online friend).
+-- Takes the roster row `key` (exactly: the row menu, the 30-day rule) out of the roster and the saved numbers when
+-- that friend is offline. Returns true, or false and a short reason.
+function Crew.forgetRow(key)
+  local m = ns.roster and type(key) == "string" and ns.roster:row(key)
+  if not m then return false, "not on your list" end
+  if m.online then return false, "online right now" end
+  if not ns.roster:forget(key) then return false, "not on your list" end
+  if ns.StatsStore then ns.StatsStore.forgetCrew(key) end
+  mismatches[key], sreqAt[key], helloAt[key], answeredAt[key], stateAt[key] = nil, nil, nil, nil, nil
+  sreqDue[key], helloWaiting[key], replyPending[key] = nil, nil, nil
+  ns.Bus.fire("MEMBER_REMOVED", key)
+  return true
+end
+
+-- The row a typed name means: the member the guild list gives it (a full name, a key, a first word only one member
+-- has), else a row of that name in any case (someone out of the guild, or the list not loaded). Returns the row (or
+-- nil), the member's key (or nil), and "which one" when two members start with that word.
+local function rowFor(name)
+  local key, why
+  if ns.Guild then key, why = ns.Guild.resolve(name, true) end
+  if why == "ambiguous" then return nil, nil, "which one" end
+  if key and ns.roster:row(key) then return key, key end
+  local low = name:lower()
+  for _, n in ipairs(ns.roster:allNames()) do
+    if n:lower() == low then return n, key end
+  end
+  return nil, key
+end
+
+-- Takes a friend who is offline out of the roster and the saved numbers, by a typed name (first word or full name,
+-- any case). Returns true and the row's key when something was removed; otherwise false and a short reason (never
+-- you, never an online friend, "which one" for a first word two members share).
 function Crew.forget(name)
   if type(name) ~= "string" or name == "" then return false, "no name" end
-  if ns.isMe(name) then return false, "that is you" end
-  local low = name:lower()
-  local row
-  for _, n in ipairs(ns.roster and ns.roster:allNames() or {}) do
-    if n:lower() == low then row = n end
-  end
-  if row then
-    local m = ns.roster:row(row)
-    if m and m.online then return false, "online right now" end
-  end
-  if not (row and ns.roster:forget(row)) then return false, "not on your list" end
-  local who = row
-  if ns.StatsStore then ns.StatsStore.forgetCrew(who) end
-  mismatches[who], sreqAt[who], helloAt[who], answeredAt[who], stateAt[who] = nil, nil, nil, nil, nil
-  sreqDue[who], helloWaiting[who], replyPending[who] = nil, nil, nil
-  ns.Bus.fire("MEMBER_REMOVED", who)
-  return true
+  if not ns.roster then return false, "not on your list" end
+  local row, key, why = rowFor(name)
+  if why then return false, why end
+  if ns.isMe(key or row or name) then return false, "that is you" end
+  if not row then return false, "not on your list" end
+  local ok, reason = Crew.forgetRow(row)
+  if not ok then return false, reason end
+  return true, row
 end
 
 -- Members out of the guild for OUT_OF_GUILD_DAYS are forgotten (roster row, saved numbers).
 local function forgetDue(names)
   for _, name in ipairs(names) do
-    if Crew.forget(name) then
+    if Crew.forgetRow(name) then
       ns.Log.add("info", "forgot %s: out of the guild for %d days", ns.Util.safeText(name), ns.Config.OUT_OF_GUILD_DAYS)
     end
   end

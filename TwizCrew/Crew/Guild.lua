@@ -345,6 +345,30 @@ function Guild.keyOf(raw)
   return e and e.key or nil
 end
 
+-- The key of the member a name taken from a message field (a mock's target, a vote) or typed by the player stands
+-- for: an exact key (what new copies send), else an exact full name, else (one word) the first word of exactly one
+-- current member. Unlike keyOf (names the game gives: a sender, a unit), a key comes first, and a first word is not
+-- kept for a member who has left: typed, or sent by an old copy, it means the one member who has that word now.
+-- typed: an exact full name first, and a single word that two members start with is "which one?" even when it is
+-- one of their keys (the panel shows both full names). Returns nil (and "ambiguous" when two members share the word) for anyone else, an
+-- unreadable name, or while the list is not loaded.
+function Guild.resolve(raw, typed)
+  if not loaded then return nil end
+  local l = lowerFull(raw)
+  if not l then return nil end
+  local oneWord = not l:find(" ", 1, true)
+  local same = oneWord and byFirst[l] or nil
+  if typed then
+    if byFull[l] then return byFull[l].key end -- exactly a name the panel shows
+    if same and #same > 1 then return nil, "ambiguous" end
+  end
+  local e = byKey[l] or byFull[l]
+  if e then return e.key end
+  if same and #same == 1 then return same[1].key end
+  if same then return nil, "ambiguous" end
+  return nil
+end
+
 function Guild.isMember(raw) return lookup(raw) ~= nil end
 
 function Guild.fullName(key)

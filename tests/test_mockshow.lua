@@ -81,6 +81,41 @@ return {
       receive(ns, W, "Frostie", "MOCK", { t = "Ginkan", x = "Rest in pieces, Ginkan." })
       A.no(ns.MockShow.isShown())
     end,
+    -- Two guild members start with "Chaos": a mock at the other one is never mine, wherever the key sits.
+    mock_aimed_at_my_namesake_is_not_shown_as_mine = function(ns, A, W)
+      local function guild(...)
+        local list = {}
+        for i, name in ipairs({ ... }) do
+          list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+        end
+        W.state.guild = { name = "Test Guild", members = list }
+      end
+      -- I am the later namesake: the other one holds the word "Chaos"
+      W.state.player = "Chaos Other"
+      guild("Chaos Deathbringr", "Chaos Other", "Frostie")
+      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      start(ns, W)
+      A.eq(ns.Guild.myKey(), "Chaos Other")
+      receive(ns, W, "Frostie", "MOCK", { t = "Chaos", x = "Rest in pieces, Chaos." })
+      A.no(ns.MockShow.isShown(), "his key: not me")
+      local s = ns.Roasts.forTest.shown()
+      A.eq(s[#s], "Frostie: Rest in pieces, Chaos.", "a plain line")
+      W:advance(4)
+      receive(ns, W, "Frostie", "MOCK", { t = "Chaos Deathbringr", x = "Again, Chaos." })
+      A.no(ns.MockShow.isShown(), "his full name: not me")
+      s = ns.Roasts.forTest.shown()
+      A.eq(s[#s], "Frostie: Again, Chaos.")
+      A.ok(ns.Roasts.canMock("Chaos"), "I can mock him (my first word is his key)")
+      A.no(ns.Roasts.canMock("Chaos Other"), "never myself")
+      W:advance(11)
+      receive(ns, W, "Frostie", "MOCK", { t = "chaos other", x = "Rest in pieces, me." })
+      A.ok(ns.MockShow.isShown(), "my key in any case: me")
+      local feed = ns.Feed.entries()
+      local seen = {}
+      for _, e in ipairs(feed) do if e.other then seen[#seen + 1] = e.other end end
+      A.eq(seen[#seen] or seen[1], "Chaos", "the feed names the one it was about by key")
+      A.eq(ns.Log.errors(10), {})
+    end,
     the_3d_switch_off_means_the_plain_line = function(ns, A, W)
       start(ns, W)
       ns.Modules.set("roasts", "mockModel", false)

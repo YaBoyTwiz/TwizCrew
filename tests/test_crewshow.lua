@@ -606,6 +606,61 @@ return {
       A.eq(state(ns).text, "Clown of the Night: Lurabe & Twiz (1 vote)")
     end,
 
+    -- Two members start with "Chaos" (keys "Chaos" and "Chaos Other"): a ballot naming one by its full name (a newer
+    -- copy) or by its key counts for that one only; a viewer files the result under the right key.
+    vote_for_a_namesake_counts_for_the_right_one = function(ns, A, W)
+      local list = {}
+      for i, name in ipairs({ "Twiz", "Chaos Deathbringr", "Chaos Other", "Frostie" }) do
+        list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+      end
+      W.state.guild = { name = "Test Guild", members = list }
+      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      start(ns, W)
+      A.eq(ns.Guild.keyOf("Chaos Other"), "Chaos Other")
+      local S = ns.Session.current().id
+      hello(W, ns, "Chaos Deathbringr", "WARRIOR")
+      hello(W, ns, "Chaos Other", "ROGUE")
+      hello(W, ns, "Frostie", "PRIEST")
+      receive(W, ns, "Chaos Deathbringr", "STATS", { sid = S, q = "1", s_dt = "2", a_dt = "2" })
+      receive(W, ns, "Chaos Other", "STATS", { sid = S, q = "1", s_dt = "1", a_dt = "1" })
+      receive(W, ns, "Frostie", "STATS", { sid = S, q = "1", s_rz = "2", a_rz = "2" })
+      ns.Stats.count("dt", 7)
+      local mark = #W.sent
+      toTheVote(ns, W)
+      A.eq(state(ns).phase, "vote")
+      W:advance(3)
+      local id = sentOf(ns, W, mark, "AWS")[1].id
+      A.eq(sentOf(ns, W, mark, "AWV")[1].c, "Chaos,Chaos Other,Frostie,Twiz")
+      receive(W, ns, "Chaos Other", "AWB", { id = id, c = "Chaos Deathbringr" }) -- his full name
+      receive(W, ns, "Frostie", "AWB", { id = id, c = "chaos" })                 -- his key, any case
+      receive(W, ns, "Chaos Deathbringr", "AWB", { id = id, c = "Chaos Other" })
+      A.eq(state(ns).voted, "3 of 4 voted")
+      press(ns, "Frostie")
+      A.eq(state(ns).phase, "clown", "everyone voted")
+      A.eq(state(ns).text, "Clown of the Night: Chaos (2 votes)")
+      A.eq(ns.db.stats.clown.names, { "Chaos" })
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    viewer_files_a_namesake_result_under_the_right_key = function(ns, A, W)
+      local list = {}
+      for i, name in ipairs({ "Twiz", "Chaos Deathbringr", "Chaos Other", "Frostie" }) do
+        list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
+      end
+      W.state.guild = { name = "Test Guild", members = list }
+      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      local id = frostieShow(ns, W)
+      hello(W, ns, "Chaos Other", "ROGUE")
+      card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })
+      receive(W, ns, "Frostie", "AWV", { id = id, c = "Chaos Deathbringr,Chaos Other,Frostie,Twiz", t = "30" })
+      A.eq(state(ns).buttons, { "Chaos", "Chaos Other", "Frostie" }, "candidates as my keys")
+      receive(W, ns, "Chaos Other", "AWB", { id = id, c = "Chaos Deathbringr" })
+      A.eq(state(ns).voted, "1 of 4 voted", "the voter is a candidate under my key")
+      receive(W, ns, "Frostie", "AWR", { id = id, w = "Chaos Deathbringr", n = "1" })
+      A.eq(ns.db.stats.clown.names, { "Chaos" })
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     nobody_votes_no_clown = function(ns, A, W)
       local S = voteNight(ns, W)
       ns.db.stats.clown = { names = { "Frostie" }, sid = S, at = 1 }

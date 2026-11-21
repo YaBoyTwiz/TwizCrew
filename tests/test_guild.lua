@@ -345,6 +345,46 @@ return {
       A.no(ns.Guild.isMe("Chaos Other")); A.ok(ns.Guild.isMe("Chaos Deathbringr")); A.ok(ns.Guild.isMe("Chaos"))
     end,
 
+    -- resolve: names from message fields (keys, full names, an old copy's first words) and typed names
+    resolve_takes_keys_full_names_and_a_first_word_only_one_member_has = function(ns, A, W)
+      A.eq(ns.Guild.resolve("Twiz"), nil, "nothing before the list loads")
+      boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Other"),
+        member("Ginkan Pebble") })
+      A.eq(ns.Guild.get("Chaos").full, "Chaos Deathbringr")
+      A.eq(ns.Guild.resolve("Chaos"), "Chaos", "an exact key")
+      A.eq(ns.Guild.resolve("chaos other"), "Chaos Other", "any case")
+      A.eq(ns.Guild.resolve("Chaos Deathbringr"), "Chaos", "an exact full name")
+      A.eq(ns.Guild.resolve("Chaos Deathbringr-Realm"), "Chaos", "a realm is taken off")
+      A.eq(ns.Guild.resolve("Ginkan"), "Ginkan")
+      A.eq(ns.Guild.resolve("ginkan pebble"), "Ginkan")
+      A.eq(ns.Guild.resolve("Stranger"), nil)
+      A.eq(ns.Guild.resolve("Bob (test)"), nil)
+      A.eq(ns.Guild.resolve(nil), nil)
+      A.eq(ns.Guild.resolve(""), nil)
+    end,
+
+    resolve_maps_a_first_word_whose_old_holder_left = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Abel") })
+      ns.db.guild.keys = { twiz = "Twiz", ["chaos deathbringr"] = "Chaos", ["chaos abel"] = "Chaos Abel" }
+      W.state.guild.members = { member("Twiz"), member("Chaos Abel") }
+      W:advance(11)
+      W.env.C_GuildInfo.GuildRoster()
+      A.eq(ns.Guild.keyOf("Chaos"), nil, "a sender name: the word stays with whoever had it")
+      A.eq(ns.Guild.resolve("Chaos"), "Chaos Abel", "a field or typed name: the one member with that word now")
+    end,
+
+    resolve_typed_first_word_two_members_share_asks_which_one = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Other") })
+      A.eq(ns.Guild.resolve("Chaos"), "Chaos", "from a message: the key")
+      local key, why = ns.Guild.resolve("Chaos", true)
+      A.eq(key, nil, "typed: two members start with it"); A.eq(why, "ambiguous")
+      A.eq(ns.Guild.resolve("Chaos Other", true), "Chaos Other")
+      A.eq(ns.Guild.resolve("Chaos Deathbringr", true), "Chaos")
+      A.eq(ns.Guild.resolve("Twiz", true), "Twiz")
+      A.eq(ns.resolveName("chaos other"), "Chaos Other")
+      A.eq(ns.resolveName("Bob (test)"), "Bob (test)", "the text as it is when the list cannot tell")
+    end,
+
     the_module_is_registered = function(ns, A)
       local d = ns.Modules.get("guild")
       A.ok(d); A.eq(d.tier, "essential"); A.eq(d.name, "Guild list")

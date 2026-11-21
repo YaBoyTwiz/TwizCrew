@@ -20,6 +20,7 @@ function DB.init(saved, defs)
     modules = {},
     crew = { channel = ns.Config.DEFAULT_CHANNEL, password = ns.Config.DEFAULT_PASSWORD, extra = {} },
     roster = {},
+    guild = { keys = {} }, -- keys[lower(full name)] = the key a guild member was given the first time (never changed)
     log = {},
     problems = {}, -- the ERROR and WARN lines, kept apart from the rolling log
     myStatus = "",

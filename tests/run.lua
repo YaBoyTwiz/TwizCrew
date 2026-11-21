@@ -104,7 +104,9 @@ local function reaches(from, to, m, channelDelivers)
   elseif t == "PARTY" or t == "RAID" then
     return true
   elseif t == "GUILD" then
-    return (from.state.inGuild and to.state.inGuild) and true or false
+    local a, b = from.state.guild, to.state.guild
+    if a or b then return (a ~= nil and b ~= nil and a.name == b.name) end -- the same guild, the sender included
+    return (from.state.inGuild and to.state.inGuild) and true or false -- older tests: a bare flag, sender excluded
   elseif t == "WHISPER" then
     local target = tostring(m.target or "")
     return target == to.state.player or target == to.state.player .. "-" .. to.state.realm
@@ -118,6 +120,16 @@ local SIM_STEP = 0.1 -- seconds per simulation step
 --   H.client(name, state) -> W, ns   a full TOC load in its own fake game (state: W.state overrides, set first)
 --   H.link(W, ...)                   these clients hear each other's addon messages from now on
 --   H.advance(seconds, onStep)       all clients' clocks move together; messages are delivered every step
+--   H.guild(name, W1, W2, ..., extras)  puts the clients in one guild called `name`: each client's W.state.guild
+--                                    gets a member entry for every client (its player name, class, level and zone as
+--                                    they are now, online, a GUID "Player-1-000N") plus `extras`, an optional last
+--                                    argument: an array of entries for members without the addon or offline ones, e.g.
+--                                    { { name = "Ginkan Other", class = "MAGE" }, ... } (defaults: WARRIOR, level 10,
+--                                    "Elwynn Forest", rank "Member" / rankIndex 2, offline, lastOnline 1 day, a GUID).
+--                                    Every client gets its own copy of the list. A GUILD send reaches every linked
+--                                    client of the same guild name, the sender too; the sender name follows the sender's
+--                                    W.state.senderForm: "full" (default: "Chaos Deathbringr"), "first" ("Chaos"),
+--                                    "realm" ("Chaos Deathbringr-Realm"). Link the clients with H.link as usual.
 -- The channel member list (ListChannelByName -> CHAT_MSG_CHANNEL_LIST) and join / leave notices work between linked
 -- clients, as in the game.
 local function newHarness()
@@ -182,6 +194,38 @@ local function newHarness()
     return W, ns
   end
 
+  function H.guild(name, ...)
+    local args = { ... }
+    local extras = {}
+    if #args > 0 and type(args[#args]) == "table" and not args[#args].env then extras = table.remove(args) end
+    local entries = {}
+    local function guid() return string.format("Player-1-%04d", #entries + 1) end
+    for _, W in ipairs(args) do
+      local st = W.state
+      entries[#entries + 1] = { name = st.player, class = st.class, level = st.level, zone = st.zone, rank = "Member",
+        rankIndex = 2, online = true, guid = guid() }
+    end
+    for _, e in ipairs(extras) do
+      local m = {}
+      for k, v in pairs(e) do m[k] = v end
+      m.class, m.level, m.zone = m.class or "WARRIOR", m.level or 10, m.zone or "Elwynn Forest"
+      m.rank, m.rankIndex = m.rank or "Member", m.rankIndex or 2
+      if m.online == nil then m.online = false end
+      m.guid = m.guid or guid()
+      if not m.online and not m.lastOnline then m.lastOnline = { 0, 0, 1, 0 } end
+      entries[#entries + 1] = m
+    end
+    for _, W in ipairs(args) do
+      local copy = {}
+      for i, m in ipairs(entries) do
+        local c = {}
+        for k, v in pairs(m) do c[k] = type(v) == "table" and { unpack(v) } or v end
+        copy[i] = c
+      end
+      W.state.guild = { name = name, members = copy }
+    end
+  end
+
   function H.link(...)
     for _, W in ipairs({ ... }) do
       local known = false
@@ -202,8 +246,14 @@ local function newHarness()
         from.cursor = from.cursor + 1
         local m = from.sent[from.cursor]
         local sender = from.state.player .. "-" .. from.state.realm
+        local inGuildList = m.chatType == "GUILD" and from.state.guild ~= nil
+        if inGuildList then
+          local form = from.state.senderForm or "full"
+          if form == "first" then sender = from.state.player:match("^(%S+)") or from.state.player
+          elseif form == "full" then sender = from.state.player end
+        end
         for _, to in ipairs(H.linked) do
-          if to ~= from and reaches(from, to, m, H.channelDelivers) then
+          if (to ~= from or inGuildList) and reaches(from, to, m, H.channelDelivers) then
             to:fire("CHAT_MSG_ADDON", m.prefix, m.text, m.chatType, sender)
           end
         end

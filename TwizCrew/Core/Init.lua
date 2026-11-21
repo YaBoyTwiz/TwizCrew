@@ -69,6 +69,9 @@ ns.Config = {
   -- "running off": a group member who was within FIND_RUN_NEAR yards and is FIND_RUN_FAR yards away within
   -- FIND_RUN_WINDOW seconds (and moved more than you did); their arrow flashes for FIND_RUN_ALARM seconds
   FIND_RUN_NEAR = 40, FIND_RUN_FAR = 100, FIND_RUN_WINDOW = 20, FIND_RUN_ALARM = 10,
+  -- guild list: ask the game for a fresh list at most every GUILD_REFRESH_MIN s; every GUILD_REFRESH_SHOWN s while the
+  -- panel is open, every GUILD_REFRESH_HIDDEN s otherwise; "not in a guild" counts only after GUILD_ABSENT_GRACE s
+  GUILD_REFRESH_MIN = 10, GUILD_REFRESH_SHOWN = 30, GUILD_REFRESH_HIDDEN = 120, GUILD_ABSENT_GRACE = 10,
 }
 
 function ns.now() return GetTime() end

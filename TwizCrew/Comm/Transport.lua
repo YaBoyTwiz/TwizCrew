@@ -623,7 +623,7 @@ function Transport.destinations(msgType)
     local g = groupDestination()
     return g and { g } or {}
   elseif m == "guild" then
-    if IsInGuild() then return { { chatType = "GUILD" } } end
+    if ns.Util.plain(IsInGuild) then return { { chatType = "GUILD" } } end
   end
   if state.joined and not state.failed then
     -- The group (when grouped), a whisper to each channel member outside it, and, for a PING or once the channel

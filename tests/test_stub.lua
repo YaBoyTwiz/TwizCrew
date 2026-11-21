@@ -84,5 +84,86 @@ return {
       A.errors(function() return secret.field end, "secret")
       A.errors(function() return secret == W.secret() end, "secret")
     end,
+
+    guild_list_calls_return_what_the_state_holds = function(ns, A, W)
+      A.eq(W.env.IsInGuild(), false)
+      A.eq(W.env.GetNumGuildMembers(), 0)
+      A.eq(W.env.GetGuildInfo("player"), nil)
+      local lastOnline = { 1, 2, 3, 4 }
+      W.state.guild = { name = "Test Guild", members = {
+        { name = "Twiz", class = "DRUID", level = 31, zone = "Stonetalon", rank = "Officer", rankIndex = 1,
+          online = true, guid = "Player-1-0001" },
+        { name = "Ginkan Pebble", class = "MAGE", level = 12, zone = "Elwynn Forest", rank = "Member", rankIndex = 2,
+          online = false, guid = "Player-1-0002", lastOnline = lastOnline },
+      } }
+      A.eq(W.env.IsInGuild(), true)
+      local total, online = W.env.GetNumGuildMembers()
+      A.eq({ total, online }, { 2, 1 })
+      local r = { W.env.GetGuildRosterInfo(2) }
+      A.eq(r[1], "Ginkan Pebble"); A.eq(r[2], "Member"); A.eq(r[3], 2); A.eq(r[4], 12); A.eq(r[6], "Elwynn Forest")
+      A.eq(r[9], false); A.eq(r[11], "MAGE"); A.eq(r[17], "Player-1-0002")
+      A.eq(W.env.GetGuildRosterInfo(3), nil)
+      A.eq({ W.env.GetGuildRosterLastOnline(2) }, { 1, 2, 3, 4 })
+      A.eq(W.env.GetGuildRosterLastOnline(1), nil, "online members have no last-online time")
+      A.eq({ W.env.GetGuildInfo("player") }, { "Test Guild", "Officer", 1 })
+      A.eq(W.env.UnitGUID("player"), "Player-1-0001")
+      W.state.rosterRealm = true
+      A.eq(W.env.GetGuildRosterInfo(1), "Twiz-Realm")
+      local fired = 0
+      local f = W.env.CreateFrame("Frame")
+      f:RegisterEvent("GUILD_ROSTER_UPDATE")
+      f:SetScript("OnEvent", function() fired = fired + 1 end)
+      W.env.C_GuildInfo.GuildRoster()
+      A.eq({ W.guildRosterCalls, fired }, { 1, 1 })
+    end,
+
+    a_guild_send_outside_a_guild_is_refused = function(ns, A, W)
+      local send = W.env.C_ChatInfo.SendAddonMessage
+      A.ok(send("TwizCrew", "x", "GUILD") ~= 0)
+      W.state.guild = { name = "G", members = {} }
+      A.eq(send("TwizCrew", "x", "GUILD"), 0)
+    end,
+
+    guild_sends_reach_the_guild_and_nobody_else = function(ns, A, W, H)
+      local a, b, c = H.client("Chaos Deathbringr"), H.client("Ginkan Pebble"), H.client("Outsider")
+      local d = H.client("Other Guilder")
+      H.guild("One", a, b, { { name = "Offline Guy" } })
+      H.guild("Two", d)
+      H.link(a, b, c, d)
+      local heard = {}
+      for _, W2 in ipairs({ a, b, c, d }) do
+        local f = W2.env.CreateFrame("Frame")
+        f:RegisterEvent("CHAT_MSG_ADDON")
+        f:SetScript("OnEvent", function(_, _, prefix, text, chatType, sender)
+          heard[W2.state.player] = { text = text, sender = sender, chatType = chatType }
+        end)
+      end
+      A.eq(#a.state.guild.members, 3, "two clients and the extra member")
+      A.eq(a.state.guild.members[3].online, false)
+      a.env.C_ChatInfo.SendAddonMessage("TwizCrew", "hi", "GUILD")
+      H.advance(1)
+      A.eq(heard["Chaos Deathbringr"].text, "hi", "the sender hears its own guild message")
+      A.eq(heard["Ginkan Pebble"].text, "hi")
+      A.eq(heard["Outsider"], nil, "not in a guild")
+      A.eq(heard["Other Guilder"], nil, "another guild")
+    end,
+
+    guild_senders_come_in_three_forms = function(ns, A, W, H)
+      local a, b = H.client("Chaos Deathbringr"), H.client("Ginkan Pebble")
+      H.guild("One", a, b)
+      H.link(a, b)
+      local sender
+      local f = b.env.CreateFrame("Frame")
+      f:RegisterEvent("CHAT_MSG_ADDON")
+      f:SetScript("OnEvent", function(_, _, _, _, _, s) sender = s end)
+      local seen = {}
+      for _, form in ipairs({ "full", "first", "realm" }) do
+        a.state.senderForm = form
+        a.env.C_ChatInfo.SendAddonMessage("TwizCrew", form, "GUILD")
+        H.advance(1)
+        seen[form] = sender
+      end
+      A.eq(seen, { full = "Chaos Deathbringr", first = "Chaos", realm = "Chaos Deathbringr-Realm" })
+    end,
   },
 }

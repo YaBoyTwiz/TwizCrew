@@ -281,6 +281,8 @@ local function build(W)
       if W.state.channelReadyAfter and at and W.clock - at < W.state.channelReadyAfter then return 7 end
       if W.state.channelSendResult ~= nil then return W.state.channelSendResult end
     end
+    -- a GUILD send outside a guild is refused (4 = InvalidChatType), as the game does
+    if chatType == "GUILD" and not env.IsInGuild() then return 4 end
     return W.state.sendResult or 0
   end
   env.C_ChatInfo = {
@@ -319,7 +321,7 @@ local function build(W)
   for i = 1, 10 do env["ChatFrame" .. i] = newObject(W, "ScrollingMessageFrame", "ChatFrame" .. i) end
   env.IsInGroup = function() return W.state.inGroup or false end
   env.IsInRaid = function() return W.state.inRaid or false end
-  env.IsInGuild = function() return W.state.inGuild or false end
+  env.IsInGuild = function() return W.state.guild ~= nil or W.state.inGuild or false end
   env.UnitInParty = function(name)
     for _, n in ipairs(W.state.groupMembers) do if n == name then return true end end
     return false
@@ -346,6 +348,53 @@ local function build(W)
   st.guids, st.secret = {}, {}
   env.UnitGUID = function(unit) return st.guids[unit] end
   env.issecretvalue = function(v) return st.secret[v] == true end
+
+  -- guild list: st.guild = { name = "Test Guild", members = { { name = "Chaos Deathbringr", class = "WARRIOR",
+  -- level = 31, zone = "Stonetalon", rank = "Member", rankIndex = 2, online = true, guid = "Player-1-0001",
+  -- lastOnline = { years, months, days, hours } } , ... } }; nil = no guild. IsInGuild is true while st.guild is
+  -- there (or the older st.inGuild flag is set). Names come back without a realm unless st.rosterRealm is true (then
+  -- "Name-Realm"). GetGuildRosterInfo returns the retail order (GUID 17th); GetGuildRosterLastOnline answers only
+  -- for offline members. C_GuildInfo.GuildRoster() counts in W.guildRosterCalls and fires GUILD_ROSTER_UPDATE at
+  -- once (only when in a guild). UnitGUID("player") is the guild entry whose name is the player's, unless
+  -- st.guids.player is set.
+  W.guildRosterCalls = 0
+  local function guildMembers() return st.guild and st.guild.members or {} end
+  env.GetNumGuildMembers = function()
+    local online = 0
+    for _, m in ipairs(guildMembers()) do if m.online then online = online + 1 end end
+    return #guildMembers(), online, online
+  end
+  env.GetGuildRosterInfo = function(i)
+    local m = guildMembers()[i]
+    if not m then return nil end
+    local class = m.class or "WARRIOR"
+    local name = m.name .. (st.rosterRealm and ("-" .. st.realm) or "")
+    return name, m.rank or "Member", m.rankIndex or 2, m.level or 10, class:sub(1, 1) .. class:sub(2):lower(),
+      m.zone or "", "", "", m.online and true or false, 0, class, 0, 0, false, false, 0, m.guid
+  end
+  env.GetGuildRosterLastOnline = function(i)
+    local m = guildMembers()[i]
+    if not m or m.online or type(m.lastOnline) ~= "table" then return nil end
+    return unpack(m.lastOnline, 1, 4)
+  end
+  env.C_GuildInfo = { GuildRoster = function()
+    W.guildRosterCalls = W.guildRosterCalls + 1
+    if st.guild then W:fire("GUILD_ROSTER_UPDATE", false) end
+  end }
+  env.GetGuildInfo = function(unit)
+    if unit ~= "player" or not st.guild then return nil end
+    local mine
+    for _, m in ipairs(guildMembers()) do if m.name == st.player then mine = m end end
+    return st.guild.name, mine and mine.rank or "Member", mine and mine.rankIndex or 2
+  end
+  local layerGUID = env.UnitGUID
+  env.UnitGUID = function(unit)
+    local g = layerGUID(unit)
+    if g == nil and unit == "player" then
+      for _, m in ipairs(guildMembers()) do if m.name == st.player then return m.guid end end
+    end
+    return g
+  end
 
   -- panel, widgets, class icons (Task 11)
   st.atlases = {}            -- atlas name -> info table, for atlases that "exist"

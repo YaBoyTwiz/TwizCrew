@@ -40,7 +40,7 @@ return {
       A.ok(printed(a, "You are in the guild Test Guild: 2 members, 2 online"), "line 1")
       A.ok(printed(a, "A guild list name looks like \"Ginkan Pebble\", and zones are given"), "line 2")
       H.advance(3.5)
-      A.ok(printed(a, "accepted (result code 0) and my own copy heard it back, sender shown as \"Chaos Deathbringr\""),
+      A.ok(printed(a, "accepted; my own copy heard it back, sender shown as \"Chaos Deathbringr\""),
         "line 3")
       H.advance(5)
       A.ok(printed(a, "These answered: Ginkan in "), "line 4")
@@ -88,23 +88,119 @@ return {
       A.ok(printed(a, "has InChatMessagingLockdown, and addon chat is restricted right now"))
     end,
 
-    a_short_sender_form_cannot_be_whispered_back = function(_, A, _, H)
-      local a, nsA, b = pair(H, "first")
+    a_first_name_sender_gets_a_whisper_to_the_full_name = function(_, A, _, H)
+      local a, nsA = pair(H, "first")
       a.printed = {}
       tc(a, "guildtest")
       H.advance(9)
       A.ok(printed(a, "sender shown as \"Chaos\""), "the form the echo came with")
-      A.ok(printed(a, "Nobody answered"), "a whisper to \"Chaos\" does not arrive")
+      A.ok(printed(a, "These answered: Ginkan"), "the list gives the full name to whisper")
+      A.eq(nsA.GuildTest.facts().answers[1].key, "Ginkan")
+    end,
+
+    a_first_name_not_in_the_list_cannot_be_answered = function(_, A, _, H)
+      local a, _, _, nsB = pair(H, "first")
+      nsB.Guild.keyOf = function() return nil end -- Ginkan's list does not know "Chaos"
+      a.printed = {}
+      tc(a, "guildtest")
+      H.advance(9)
+      A.ok(printed(a, "Nobody answered"))
+      A.ok(printed(a, "Replies could not be tested: the game gave only a first name."))
     end,
 
     answers_are_rate_limited_per_sender = function(_, A, _, H)
-      local a, nsA, b, nsB = pair(H, "full")
-      tc(a, "guildtest"); H.advance(1)
-      tc(a, "guildtest"); H.advance(1)
+      local _, nsA, b, nsB = pair(H, "full")
+      local text = nsA.Codec.encode("GPROBE", { n = "55" })[1]
+      for _ = 1, 2 do
+        b:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Chaos Deathbringr")
+        H.advance(1)
+      end
       A.eq(sentOfType(nsB, b, "GPONG", "WHISPER"), 1, "second probe within 10 s is not answered")
       H.advance(10)
-      tc(a, "guildtest"); H.advance(1)
+      b:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Chaos Deathbringr")
+      H.advance(1)
       A.eq(sentOfType(nsB, b, "GPONG", "WHISPER"), 2)
+    end,
+
+    a_second_run_within_ten_seconds_only_asks_to_wait = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      tc(a, "guildtest"); H.advance(2)
+      a.printed = {}
+      tc(a, "guildtest")
+      A.eq(#a.printed, 1)
+      A.ok(printed(a, "Wait 8 seconds before testing again."))
+      A.eq(sentOfType(nsA, a, "GPROBE", "GUILD"), 1, "nothing more sent")
+      H.advance(9)
+      tc(a, "guildtest")
+      A.eq(sentOfType(nsA, a, "GPROBE", "GUILD"), 2)
+    end,
+
+    send_outcomes_are_told_apart = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      local function run(set)
+        for k, v in pairs(set) do a.state[k] = v end
+        H.advance(11)
+        a.printed = {}
+        tc(a, "guildtest"); H.advance(4)
+      end
+      run({ sendNil = true })
+      A.ok(printed(a, "Guild send: accepted (the game gave no result code);"), "nil is accepted")
+      A.ok(nsA.GuildTest.facts().accepted)
+      A.ok(nsA.Report.lines()[1] and (function()
+        for _, l in ipairs(nsA.Report.lines()) do
+          if l:find("send accepted (the game gave no result code)", 1, true) then return true end
+        end
+      end)(), "the report uses the same wording")
+      run({ sendNil = false, sendRaises = true })
+      A.ok(printed(a, "Guild send: the call failed (SendAddonMessage: boom"), "an error is a failed call")
+      A.no(nsA.GuildTest.facts().accepted)
+      run({ sendRaises = false, sendResult = 4 })
+      A.ok(printed(a, "refused (result code 4)"))
+      run({ sendResult = 0 })
+      A.ok(printed(a, "Guild send: accepted;"))
+    end,
+
+    an_unloaded_guild_list_is_not_zero_members = function(_, A, _, H)
+      local a, nsA = H.client("Chaos Deathbringr")
+      a.state.guild = { name = "Test Guild", members = {} }
+      boot(a)
+      a.state.guild = nil
+      a.state.inGuild = true -- the game says guild, but no list rows have loaded
+      a.printed = {}
+      -- force the module back to "not loaded"
+      local real = nsA.Guild.loaded
+      nsA.Guild.loaded = function() return false end
+      local asked = 0
+      nsA.Guild.refresh = function() asked = asked + 1 end
+      H.link(a)
+      tc(a, "guildtest")
+      A.ok(printed(a, "the guild list has not loaded yet"))
+      A.no(printed(a, "0 members"))
+      A.no(printed(a, "nobody but you"))
+      A.eq(asked, 1, "asked for the list")
+      H.advance(4)
+      A.ok(printed(a, "Guild send: accepted"), "the send test still ran")
+      local found
+      for _, l in ipairs(nsA.Report.lines()) do
+        if l:find("^Guild: in .-the guild list has not loaded yet") then found = true end
+      end
+      A.ok(found, "the report says it too")
+      nsA.Guild.loaded = real
+    end,
+
+    a_pong_that_did_not_come_by_whisper_is_not_an_answer = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      H.clients[2].state.sendRaises = false
+      tc(a, "guildtest")
+      local n = nsA.GuildTest.facts()
+      local nonce
+      for _, m in ipairs(a.sent) do
+        local msg = nsA.Codec.decode(m.text)
+        if msg and msg.type == "GPROBE" then nonce = msg.fields.n end
+      end
+      local pong = nsA.Codec.encode("GPONG", { n = nonce })[1]
+      a:fire("CHAT_MSG_ADDON", "TwizCrew", pong, "GUILD", "Ginkan Pebble")
+      A.eq(#nsA.GuildTest.facts().answers, 0)
     end,
 
     report_has_a_guild_section = function(_, A, _, H)
@@ -114,7 +210,7 @@ return {
       end
       A.eq(line(), "Guild: in Test Guild, 2 members, 2 online; guild test not run (type /tc guildtest)")
       tc(a, "guildtest"); H.advance(9)
-      A.eq(line(), "Guild: in Test Guild, 2 members, 2 online; guild test: send accepted (0), own echo yes as "
+      A.eq(line(), "Guild: in Test Guild, 2 members, 2 online; guild test: send accepted, own echo yes as "
         .. "\"Chaos Deathbringr\", answered by Ginkan")
     end,
 

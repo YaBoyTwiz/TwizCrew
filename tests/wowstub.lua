@@ -291,8 +291,11 @@ local function build(W)
       if type(text) == "string" and #text > 255 then
         error("SendAddonMessage: message is " .. #text .. " bytes, the game allows 255", 2)
       end
+      -- st.sendRaises = true: the call errors; st.sendNil = true: the call returns no result code at all
+      if W.state.sendRaises then error("SendAddonMessage: boom", 2) end
       local result = sendResultFor(chatType, target)
       W.sent[#W.sent + 1] = { prefix = prefix, text = text, chatType = chatType, target = target, result = result }
+      if W.state.sendNil then return nil end
       return result
     end,
   }

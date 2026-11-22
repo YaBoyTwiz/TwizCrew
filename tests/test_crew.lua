@@ -299,10 +299,12 @@ return {
       db.roster["Twiz-Noodledog"] = { name = "Twiz-Noodledog", level = 6 }
       db.roster["Ginkan-Noodledog"] = { name = "Ginkan-Noodledog", level = 9 }
       db.stats.crew["Ginkan-Noodledog"] = { sid = "s", s = {}, a = {} }
+      db.guild.name = "Test Guild"
       ns.db = db
       ns.Modules.attach(db)
       ns.Comm.start()
       ns.Crew.start()
+      ns.Guild.start() -- the guild confirms the data is its own: the saved names are tidied now
       A.eq(db.roster["Twiz-Noodledog"], nil)
       A.eq(db.roster["Ginkan-Noodledog"], nil)
       A.eq(db.roster["Ginkan"].name, "Ginkan")
@@ -322,13 +324,15 @@ return {
         db.stats.crew[name] = { sid = "s", s = { gn = #name }, a = {} }
       end
       db.roster["Lurabe Moon"] = { name = "Lurabe Moon", level = 11 } -- not in the saved keys: kept as it is too
+      db.guild.name = "Test Guild"
       ns.db = db
       ns.Modules.attach(db)
       ns.Comm.start()
       ns.Crew.start()
+      ns.Guild.start() -- the guild confirms the data is its own: the saved names are tidied now
       for _, name in ipairs({ "Chaos Other", "Frostie", "Frostie Snow", "Ginkan (2)", "Lurabe Moon" }) do
         A.eq(db.roster[name] and db.roster[name].level, #name, name .. " keeps its row")
-        A.ok(ns.roster:get(name), name .. " is on the roster")
+        A.ok(ns.roster:row(name), name .. " is on the roster (hidden when not in this guild's list)")
       end
       for _, name in ipairs({ "Chaos Other", "Frostie", "Frostie Snow", "Ginkan (2)" }) do
         A.eq(db.stats.crew[name].s.gn, #name, name .. " keeps its numbers")
@@ -345,10 +349,12 @@ return {
       db.roster["Chaos Other"] = { name = "Chaos Other", level = 20 }
       db.roster["Chaos-Realm"] = { name = "Chaos-Realm", level = 6 }
       db.stats.crew["Chaos Other"] = { sid = "s", s = {}, a = {} }
+      db.guild.name = "Test Guild"
       ns.db = db
       ns.Modules.attach(db)
       ns.Comm.start()
       ns.Crew.start()
+      ns.Guild.start() -- the guild confirms the data is its own: the saved names are tidied now
       A.eq(db.roster["Chaos Other"].level, 20, "several words: never mine on a first-word match")
       A.ok(db.stats.crew["Chaos Other"])
       A.eq(db.roster["Chaos-Realm"], nil, "my own ghost (my name with a realm) goes")
@@ -965,6 +971,35 @@ return {
       A.eq(hellos, 0, "no new HELLO")
       A.eq(#states, 1, "no GUILD_STATE flip")
       W.state.guildNameHidden = nil
+      noErrors(ns, A)
+    end,
+    -- The 60-day prune never drops someone on the guild list; nothing is tidied while the data is not this guild's.
+    the_old_friend_prune_keeps_listed_members = function(ns, A, W)
+      local day = 86400
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.guild.name = "Test Guild"
+      db.roster.Frostie = { name = "Frostie", level = 5, lastSeen = ns.wallclock() - 61 * day }
+      db.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = ns.wallclock() - 61 * day }
+      ns.db = db
+      ns.Modules.attach(db)
+      start(ns, W, db)
+      A.ok(db.roster.Frostie, "on the guild list: kept")
+      A.eq(db.roster.Oldpal, nil)
+      noErrors(ns, A)
+    end,
+    nothing_is_tidied_or_pruned_while_the_data_is_another_guilds = function(ns, A, W)
+      local db = ns.DB.init(nil, ns.Modules.list())
+      db.guild.name = "Main Guild"
+      db.roster["Twiz-Realm"] = { name = "Twiz-Realm", level = 6 }
+      db.roster["Ginkan-Realm"] = { name = "Ginkan-Realm", level = 9 }
+      db.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = ns.wallclock() - 90 * 86400 }
+      ns.db = db
+      ns.Modules.attach(db)
+      start(ns, W, db)
+      W:advance(60)
+      A.ok(ns.Guild.needsReload())
+      A.ok(db.roster["Twiz-Realm"] and db.roster["Ginkan-Realm"], "not tidied")
+      A.ok(db.roster.Oldpal, "not pruned")
       noErrors(ns, A)
     end,
     prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)

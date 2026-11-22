@@ -33,7 +33,7 @@ local function connection()
     text = "through the guild " .. tostring(s.guild or "(name not known yet)")
   elseif s.reload then
     text = "TwizCrew keeps separate data for each guild. Type /reload to switch to "
-      .. ns.Util.safeText(tostring(s.guild)) .. " (in use now: " .. ns.Util.safeText(tostring(s.dataGuild))
+      .. ns.Util.safeText(tostring(s.guildId or s.guild)) .. " (in use now: " .. ns.Util.safeText(tostring(s.dataGuild))
       .. "); nothing is sent until then"
   elseif s.waitingList then
     text = "waiting for the guild list"

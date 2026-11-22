@@ -34,12 +34,13 @@ local function copy(t)
   return out
 end
 
--- My record: { sid = "", s = {}, a = {} } (repaired when broken), under my member key (ns.myKey). nil before saved
--- data is loaded. (Rows saved before under my first word stay where they are.)
+-- My record: { sid = "", s = {}, a = {} } (repaired when broken). nil before saved data is loaded. stats.chars is
+-- account-wide (my own characters) and keyed by each character's first word (ns.playerName), as in v0.1.24, whatever
+-- guild's data is in use; entries() shows my row under my member key (ns.myKey).
 function Store.mine()
   local stats = root()
   if not stats then return nil end
-  local me = ns.myKey()
+  local me = ns.playerName()
   local rec = stats.chars[me]
   if type(rec) ~= "table" then rec = {}; stats.chars[me] = rec end
   if type(rec.sid) ~= "string" then rec.sid = "" end
@@ -261,15 +262,16 @@ function Store.entries(view, sessionId)
     return type(rec) == "table" and (not session or rec.sid == sessionId)
   end
   local function numbers(rec) return clean(session and rec.s or rec.a) end
-  local me = ns.myKey()
+  local first, me = ns.playerName(), ns.myKey()
   local own = Store.myKeys()
   for name, rec in pairs(stats.chars) do
-    -- an old row of mine under a name that is now a friend's key (I am a later namesake) gives way to the friend's
-    if type(name) == "string" and wanted(rec) and (name ~= me or statsOn())
-      and (own[name] or type(stats.crew[name]) ~= "table") then
-      local isMe = name == me
+    local isMe = name == first
+    -- this character's row shows under my member key; another character's row under a name that is a friend's key
+    -- here (not one of my keys) gives way to the friend's
+    if type(name) == "string" and wanted(rec) and (not isMe or statsOn())
+      and (isMe or own[name] or type(stats.crew[name]) ~= "table") then
       out[#out + 1] = {
-        name = name, stats = numbers(rec), mine = true, online = isMe,
+        name = isMe and me or name, stats = numbers(rec), mine = true, online = isMe,
         class = isMe and select(2, UnitClass("player")) or nil, at = isMe and ns.wallclock() or nil,
       }
     end

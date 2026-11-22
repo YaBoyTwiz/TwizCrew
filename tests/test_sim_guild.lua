@@ -749,5 +749,78 @@ return {
       A.eq(back.winners[twNs.StatsDefs.AWARDS[1].id], { long })
       noErrors(A, twNs, lgNs)
     end,
+
+    -- My own numbers are account-wide, by my first word; in each guild's data they show under my key there.
+    a_namesake_characters_numbers_follow_it_across_guilds = function(_, A, _, H)
+      local function entries(ns)
+        local out = {}
+        for _, e in ipairs(ns.StatsStore.entries("all")) do out[e.name] = e end
+        return out
+      end
+      local me, meNs = H.client("Chaos Other", { class = "ROGUE" })
+      H.guild("Guild A", me, { { name = "Chaos Deathbringr", class = "WARRIOR" } })
+      me.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      H.link(me)
+      login(me)
+      H.advance(30)
+      local saved = meNs.db
+      A.eq(saved.guild.name, "Guild A")
+      A.eq(meNs.myKey(), "Chaos Other")
+      meNs.Stats.count("dt", 2)
+      saved.stats.crew.Chaos = { sid = "x", s = {}, a = { dt = 9 }, at = meNs.wallclock() }
+      local rows = entries(meNs)
+      A.ok(rows["Chaos Other"] and rows["Chaos Other"].mine, "my row, under my key here")
+      A.eq(rows["Chaos Other"].stats.dt, 2)
+      A.ok(rows.Chaos and not rows.Chaos.mine, "the friend Chaos, apart")
+      A.eq(rows.Chaos.stats.dt, 9)
+      retire(H, me)
+      -- the same character, now in guild B: the first login says /reload, the second has guild B's data
+      local me2 = H.client("Chaos Other", { class = "ROGUE" })
+      H.guild("Guild B", me2, { { name = "Stranger Person" } })
+      me2.env.TwizCrewDB = saved
+      H.link(me2)
+      login(me2)
+      H.advance(30)
+      retire(H, me2)
+      local me3, me3Ns = H.client("Chaos Other", { class = "ROGUE" })
+      H.guild("Guild B", me3, { { name = "Stranger Person" } })
+      me3.env.TwizCrewDB = saved
+      H.link(me3)
+      login(me3)
+      H.advance(30)
+      A.eq(saved.guild.name, "Guild B")
+      A.eq(me3Ns.myKey(), "Chaos", "alone with my first word here")
+      rows = entries(me3Ns)
+      A.ok(rows.Chaos and rows.Chaos.mine, "my row, under my key here")
+      A.eq(rows.Chaos.stats.dt, 2, "the same numbers")
+      A.eq(rows["Chaos Other"], nil, "no stale row of mine")
+      A.eq(saved.stats.chars.Chaos.a.dt, 2)
+      noErrors(A, me3Ns)
+    end,
+
+    -- A character in no guild keeps its own session across logins (account-wide, per character), never a guild's.
+    a_guildless_character_keeps_its_session_across_logins = function(_, A, _, H)
+      local saved = { guild = { name = "Crew Guild" }, stats = { session = { id = "Frostie-1", start = 1, manual = false,
+        lastActive = 1700000000 } } }
+      local lo, loNs = H.client("Loner", { noGuild = true })
+      lo.state.guids.player = "Player-9-0003"
+      lo.env.TwizCrewDB = saved
+      H.link(lo)
+      login(lo)
+      H.advance(30)
+      local first = loNs.Session.current().id
+      A.ok(first ~= "Frostie-1", "the guild's session is not mine")
+      A.eq(saved.solo["Player-9-0003"].session.id, first)
+      A.eq(saved.stats.session.id, "Frostie-1", "the guild's saved session untouched")
+      retire(H, lo)
+      local lo2, lo2Ns = H.client("Loner", { noGuild = true })
+      lo2.state.guids.player = "Player-9-0003"
+      lo2.env.TwizCrewDB = saved
+      H.link(lo2)
+      login(lo2)
+      H.advance(30)
+      A.eq(lo2Ns.Session.current().id, first, "the same session after a short break")
+      noErrors(A, lo2Ns)
+    end,
   },
 }

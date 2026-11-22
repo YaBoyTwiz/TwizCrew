@@ -711,6 +711,38 @@ function Guild.fromWire(raw)
   return nil
 end
 
+-- The full name to write into a lasting record (a trophy record) for a member key: from the list, else from the
+-- saved keys (written there in lower case: each word gets its capital back), else the key as it is.
+function Guild.recordName(key)
+  if type(key) ~= "string" or ns.isTestName(key) then return key end
+  local e = Guild.get(key)
+  if e then return e.full end
+  for lf, k in pairs(savedKeys()) do
+    if k == key and type(lf) == "string" then
+      return (lf:gsub("(%S)(%S*)", function(a, b) return a:upper() .. b end))
+    end
+  end
+  return key
+end
+
+-- My key for a name read from a lasting record: an exact full name in the list or in the saved keys; a single
+-- first word: whoever was given that word as key (the saved keys), even if they left, never whoever has that word
+-- alone today. nil otherwise (shown as plain text).
+function Guild.fromRecord(raw)
+  local l = lowerFull(raw)
+  if not l then return nil end
+  local e = loaded and byFull[l]
+  if e then return e.key end
+  local keys = savedKeys()
+  if type(keys[l]) == "string" and keys[l] ~= "" then return keys[l] end
+  if not l:find(" ", 1, true) then
+    for _, key in pairs(keys) do
+      if type(key) == "string" and key:lower() == l then return key end
+    end
+  end
+  return nil
+end
+
 -- A name the player typed: an exact full name (what the panel shows), else a single word: "which one?" when two
 -- current members start with it, else an exact key, else the first word of exactly one member. Returns the key, or
 -- nil (and "ambiguous" for a shared first word); nil while the list is not loaded.
@@ -754,7 +786,13 @@ function Guild.keyOfUnit(unit)
     if e then return e.key end
     if guidsComplete then return outsider(clean(plain(UnitName, unit))) end -- not a member, whatever the name
   end
-  return Guild.keyOfName(plain(UnitName, unit))
+  local raw = plain(UnitName, unit)
+  local key = Guild.keyOf(raw)
+  local e = key and Guild.get(key)
+  if e and e.guid and type(guid) == "string" and e.guid ~= guid then -- the name fits a member, the GUID is not theirs
+    return outsider(clean(raw))
+  end
+  return Guild.keyOfName(raw)
 end
 
 function Guild.fullName(key)

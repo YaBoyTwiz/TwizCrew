@@ -23,27 +23,38 @@ local function copy(s)
   return { id = s.id, start = s.start, manual = s.manual and true or false }
 end
 
-local function savedTable()
+-- Where my session is saved (a table with a .session field): the crew session of the guild data in use
+-- (ns.db.stats) while that data is this guild's; a character in no guild keeps its own, account-wide
+-- (ns.db.solo[character]), and never reads a guild's; nil while in a guild whose data is not in use, or before the
+-- game has said whether we are in a guild.
+local function slot()
   if not ns.db then return nil end
-  if type(ns.db.stats) ~= "table" then ns.db.stats = { chars = {}, crew = {}, session = {} } end
-  return ns.db.stats
+  local G = ns.Guild
+  if not G or G.active() then
+    if type(ns.db.stats) ~= "table" then ns.db.stats = { chars = {}, crew = {}, session = {} } end
+    return ns.db.stats
+  end
+  if not G.known() or G.inGuild() then return nil end
+  local id = ns.DB.charId()
+  if not id then return nil end
+  if type(ns.db.solo) ~= "table" then ns.db.solo = {} end
+  if type(ns.db.solo[id]) ~= "table" then ns.db.solo[id] = {} end
+  return ns.db.solo[id]
 end
 
--- The saved session belongs to the guild data in use: written only while it is this character's guild's; decided
--- (in memory) also outside a guild, but not while waiting to know whose data it is.
-local function quiet() return ns.Guild ~= nil and ns.Guild.quiet() end
-local function writable() return ns.Guild == nil or ns.Guild.writable() end
+-- Decided once it is known where my session lives (another guild's data in use: never this session).
+local function quiet() return ns.Guild ~= nil and slot() == nil end
 
 local function save()
-  local stats = savedTable()
-  if not stats or not current or not writable() then return end
-  stats.session = { id = current.id, start = current.start, manual = current.manual, lastActive = ns.wallclock() }
+  local t = slot()
+  if not t or not current then return end
+  t.session = { id = current.id, start = current.start, manual = current.manual, lastActive = ns.wallclock() }
 end
 
 local function saveActive()
-  local stats = savedTable()
-  if not stats or not current or type(stats.session) ~= "table" or not writable() then return end
-  stats.session.lastActive = ns.wallclock()
+  local t = slot()
+  if not t or not current or type(t.session) ~= "table" then return end
+  t.session.lastActive = ns.wallclock()
 end
 
 local function change(new, old, keep, why)
@@ -72,8 +83,8 @@ local function decide()
     if s then list[#list + 1] = s end
   end
   table.sort(list, function(a, b) return a.id < b.id end) -- same answer whatever order pairs() gives
-  local stats = savedTable()
-  local own = stats and stats.session
+  local t = slot()
+  local own = t and t.session
   if type(own) == "table" and type(own.id) == "string" and type(own.lastActive) == "number" then
     previous = { id = own.id, lastActive = own.lastActive } -- change() overwrites it
   end
@@ -178,7 +189,7 @@ function Session.start()
   ns.Events.on(FEATURE, "PLAYER_LOGOUT", saveActive)
   local due = false
   C_Timer.After(ns.Config.SESSION_DECIDE_AFTER, function() due = true; ns.Log.safe(FEATURE, decide) end)
-  ns.Bus.on(FEATURE, "GUILD_STATE", function(active) if active and due then decide() end end)
+  ns.Bus.on(FEATURE, "GUILD_STATE", function() if due then decide() end end) -- now it is known where it lives
   C_Timer.NewTicker(ns.Config.SESSION_ACTIVE_TICK, function() ns.Log.safe(FEATURE, saveActive) end)
 end
 

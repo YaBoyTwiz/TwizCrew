@@ -320,6 +320,13 @@ return {
       W.state.guids.party1 = "Player-1-0007"
       ns.Where.forget()
       A.eq(ns.Guild.keyOfUnit("party1"), "Chaos")
+      -- not every member has a GUID in the list: the name fits Chaos, but his listed GUID is not the unit's
+      W.state.guild.members[2].guid = nil
+      W:fire("GUILD_ROSTER_UPDATE"); W:advance(2)
+      W.state.guids.party1 = "Player-9-9999"
+      A.eq(ns.Guild.keyOfUnit("party1"), nil, "never member Chaos's key")
+      W.state.units.party1.name = "Chaos Random"
+      A.eq(ns.Guild.keyOfUnit("party1"), "Chaos Random")
       A.eq(ns.Log.errors(10), {})
     end,
     unknown_never_becomes_different = function(ns, A, W)

@@ -817,5 +817,33 @@ return {
       A.eq(ns.Board.view(), "all")
       A.eq(ns.Log.errors(10), {})
     end,
+    -- Records hold full names; an old first-word record stays with the member that word was given to, even after
+    -- they left, and never goes to whoever has that word alone today. One record never counts a person twice.
+    a_departed_members_old_trophy_stays_his = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Test Guild", members = { { name = "Twiz", online = true, guid = "Player-1-0001" },
+        { name = "Chaos Other", online = true, guid = "Player-1-0002" } } }
+      W.env.TwizCrewDB = { guild = { name = "Test Guild",
+        keys = { twiz = "Twiz", ["chaos deathbringr"] = "Chaos", ["chaos other"] = "Chaos Other" } } }
+      boot(W)
+      W:advance(2)
+      A.eq(ns.Guild.keyOf("Chaos Other"), "Chaos Other")
+      A.eq(ns.Guild.fromWire("Chaos"), "Chaos Other", "(a message's first word would be Chaos Other today)")
+      A.eq(ns.Guild.fromRecord("Chaos"), "Chaos", "a record's first word: the one it was given to")
+      A.eq(ns.Guild.recordName("Chaos"), "Chaos Deathbringr", "his full name, from the saved keys")
+      A.eq(ns.Guild.recordName("Chaos Other"), "Chaos Other")
+      local corpse = ns.StatsDefs.AWARDS[1].id
+      ns.db.stats.trophies = {
+        ["Twiz-1"] = { sid = "Twiz-1", start = 1, people = { "Chaos", "Twiz" }, winners = { [corpse] = { "Chaos" } } },
+        ["Twiz-2"] = { sid = "Twiz-2", start = 2, people = { "Chaos", "Chaos Deathbringr", "Twiz" },
+          winners = { [corpse] = { "Chaos", "Chaos Deathbringr" } } },
+      }
+      ns.Bus.fire("TROPHIES_CHANGED")
+      local sum = ns.Trophies.summary()
+      A.eq(sum.Chaos and sum.Chaos.total, 2, "his, once per record")
+      A.eq(sum.Chaos.streaks[corpse], 2)
+      A.eq(sum["Chaos Other"], nil, "not credited to the namesake")
+      A.eq(ns.Log.errors(10), {})
+    end,
   },
 }

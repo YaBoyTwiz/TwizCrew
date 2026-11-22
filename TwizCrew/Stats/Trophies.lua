@@ -80,11 +80,15 @@ local function clownOf(r)
   if #list > 0 then r.winners.clown = list end
 end
 
--- A record names people by wire names (ns.wireName), the same on every copy, so copies agree on it by checksum.
-local function toWireNames(r)
+-- A record names people by full name (Guild.recordName), the same on every copy and for good, so copies agree on
+-- it by checksum and a later namesake never takes it over.
+local function toRecordNames(r)
   local function map(list)
-    local out = {}
-    for i, name in ipairs(list) do out[i] = ns.wireName(name) end
+    local out, seen = {}, {}
+    for _, name in ipairs(list) do
+      local full = ns.Guild and ns.Guild.recordName(name) or name
+      if not seen[full] then seen[full] = true; out[#out + 1] = full end
+    end
     table.sort(out)
     return out
   end
@@ -102,19 +106,23 @@ function Trophies.sessionEnded(sid, late)
   local r = L.record(sid, entries, ns.StatsLogic.awards(entries), ns.Config.COUCH_MIN_PLAYED)
   if r then
     clownOf(r)
-    toWireNames(r)
+    toRecordNames(r)
     if late then r.late, r.e = true, freshness(sid, entries) end
     add(r)
   end
 end
 
--- Per person, by my key: records are kept as received (wire names) and read with ns.fromWire only here; a name it
--- cannot place stays as it is. Rebuilt when the records or the guild list change.
+-- Per person, by my key: records are kept as received (full names; older ones first words) and read with
+-- Guild.fromRecord only here; a name it cannot place stays as it is; nobody counts twice in one record. Rebuilt when
+-- the records or the guild list change.
 function Trophies.summary()
   if not cache then
     local function mine(list)
-      local out = {}
-      for i, name in ipairs(type(list) == "table" and list or {}) do out[i] = ns.fromWire(name) or name end
+      local out, seen = {}, {}
+      for _, name in ipairs(type(list) == "table" and list or {}) do
+        local key = (type(name) == "string" and ns.Guild and ns.Guild.fromRecord(name)) or name
+        if not seen[key] then seen[key] = true; out[#out + 1] = key end
+      end
       return out
     end
     local shown = {}

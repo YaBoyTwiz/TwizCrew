@@ -112,8 +112,8 @@ local function shown(m) return m ~= nil and m.inGuild ~= false end
 -- A member who is shown (in the guild, or not known to be out of it yet); nil for a hidden one.
 -- Tidies the saved rows (once a session, when they are this character's guild's: Crew): a row without a saved
 -- time gets today (nobody vanishes on the update), a row not seen for FORGET_AFTER_DAYS goes (from saved and from
--- the roster). Returns the names that went, A-Z.
-function Roster:pruneOld(wall)
+-- the roster) unless keep(name) says so (they are on the guild list). Returns the names that went, A-Z.
+function Roster:pruneOld(wall, keep)
   local limit = ns.Config.FORGET_AFTER_DAYS * 86400
   local old = {}
   for name, row in pairs(self.saved) do
@@ -122,7 +122,7 @@ function Roster:pruneOld(wall)
       if num(row.lastSeen) == nil then
         row.lastSeen = wall
         if self.byName[name] then self.byName[name].lastSeen = wall end
-      elseif wall - row.lastSeen > limit then
+      elseif wall - row.lastSeen > limit and not (keep and keep(name)) then
         old[#old + 1] = name
       end
     end
@@ -130,6 +130,15 @@ function Roster:pruneOld(wall)
   table.sort(old)
   for _, name in ipairs(old) do self.saved[name] = nil; self.byName[name] = nil end
   return old
+end
+
+-- The saved rows were renamed or removed (Crew's tidy): rows follow them; what is known of a kept row stays.
+function Roster:reload()
+  local fresh = Roster.new(self.saved)
+  for name, m in pairs(self.byName) do
+    if fresh.byName[name] or ns.isTestName(name) then fresh.byName[name] = m end
+  end
+  self.byName = fresh.byName
 end
 
 function Roster:get(name)

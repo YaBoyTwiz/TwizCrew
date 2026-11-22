@@ -314,18 +314,30 @@ function Crew.forget(name)
   return true, row
 end
 
-local tidied = false -- the saved rows were pruned this session (only once they are known to be this guild's)
+local tidied = false -- the saved rows were tidied this session (only once they are known to be this guild's)
+
+-- Once a session, when the guild says the data in use is its own: old "Name-Realm" keys and my own ghost go
+-- (tidyNames), and friends not seen for FORGET_AFTER_DAYS go, unless they are on the guild list now.
+local function tidy()
+  tidied = true
+  local before = ns.Util.copy(ns.roster:allNames())
+  ns.Log.safe(FEATURE, tidyNames, ns.db.roster)
+  if type(ns.db.stats) == "table" then ns.Log.safe(FEATURE, tidyNames, ns.db.stats.crew) end
+  ns.roster:reload()
+  for _, name in ipairs(before) do
+    if not ns.roster:row(name) then ns.Bus.fire("MEMBER_REMOVED", name) end
+  end
+  local onList = function(name) return ns.Guild.get(name) ~= nil end
+  for _, name in ipairs(ns.roster:pruneOld(ns.wallclock(), onList)) do
+    if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
+    ns.Bus.fire("MEMBER_REMOVED", name)
+  end
+end
 
 -- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted for
--- that; friends not seen for FORGET_AFTER_DAYS go, once a session, when the data in use is this guild's.
+-- that (see tidy).
 local function followGuild()
-  if not tidied and ns.Guild and ns.Guild.writable() then
-    tidied = true
-    for _, name in ipairs(ns.roster:pruneOld(ns.wallclock())) do
-      if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
-      ns.Bus.fire("MEMBER_REMOVED", name)
-    end
-  end
+  if not tidied and ns.Guild and ns.Guild.writable() then tidy() end
   for _, name in ipairs(ns.roster:syncGuild()) do
     local m = ns.roster:row(name)
     ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = m and m.inGuild or false })
@@ -335,8 +347,6 @@ end
 function Crew.start()
   if started then return end
   started = true
-  ns.Log.safe(FEATURE, tidyNames, ns.db.roster)
-  if type(ns.db.stats) == "table" then ns.Log.safe(FEATURE, tidyNames, ns.db.stats.crew) end
   ns.roster = ns.Roster.new(ns.db.roster)
   ns.roster:setGuild(ns.Guild)
   ns.Log.safe(FEATURE, followGuild)

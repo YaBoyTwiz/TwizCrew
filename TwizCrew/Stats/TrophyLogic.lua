@@ -113,7 +113,7 @@ function L.summary(records)
 end
 
 -- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names, l = "1" and e when late.
--- Names are wire names (ns.wireName). A long people list goes in p, p2, p3 ... (whole names, each field short
+-- Names are full names (Guild.recordName). A long people list goes in p, p2, p3 ... (whole names, each field short
 -- enough for one piece) with pn = how many such fields; an older copy reads p alone.
 function L.toWire(r)
   local f = { s = r.sid, t = tostring(r.start or 0), l = r.late and "1" or nil }

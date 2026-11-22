@@ -262,13 +262,53 @@ function Calendar.openDay(day)
   Calendar.refresh()
 end
 
--- The menu when you right-click a day on the Events month.
+local ICON_REMOVE = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+local MENU_NOTES = 4 -- notes named in a day's menu; more: "See all"
+
+-- "8pm Deadmines" cut short, for a menu line.
+local function menuWords(n, off)
+  local when = ns.Notes.timeText(n, off)
+  local words = ns.Util.safeText(tostring(n.t or ""))
+  local short = ns.Util.truncateUTF8(words, 20)
+  return (when and (when .. " ") or "") .. short .. (short ~= words and "..." or "")
+end
+
+-- What can be done with one note (a row of a day's list, right-clicked): open it; edit or remove it when it is mine.
+function Calendar.noteMenuItems(key)
+  local items = { { label = "Open", icon = ICON_NOTES, onClick = function() ns.NoteView.open(key) end } }
+  if ns.Notes.isMine({ key = key }) then
+    items[#items + 1] = { label = "Edit", icon = ICON_NOTES, onClick = function() Calendar.openMaker({ edit = key }) end }
+    items[#items + 1] = { label = "Remove", icon = ICON_REMOVE, onClick = function() ns.Notes.remove(key) end }
+  end
+  return items
+end
+
+-- The menu when you right-click a day on the Events month: create, then that day's notes (open someone else's;
+-- edit or remove mine).
 function Calendar.dayMenuItems(day)
-  return {
+  local items = {
     { label = "Create a note on this day", icon = ICON_NOTES, onClick = function() Calendar.openMaker({ day = day }) end },
     { label = "Create a dungeon run on this day", icon = I .. "INV_Sword_04",
       onClick = function() Calendar.openMaker({ day = day, kind = "dungeon", minutes = 20 * 60 }) end },
   }
+  local off = ns.Diary.offsetOn(day)
+  local notes = ns.Notes.forDate(dateKeyOf(day))
+  for i, n in ipairs(notes) do
+    if i > MENU_NOTES then
+      items[#items + 1] = { label = "See all " .. #notes .. " notes", icon = ICON_NOTES,
+        onClick = function() Calendar.openEvents(day) end }
+      break
+    end
+    local key, words = n.key, menuWords(n, off)
+    if ns.Notes.isMine(n) then
+      items[#items + 1] = { label = "Edit: " .. words, icon = ICON_NOTES,
+        onClick = function() Calendar.openMaker({ edit = key }) end }
+      items[#items + 1] = { label = "Remove: " .. words, icon = ICON_REMOVE, onClick = function() ns.Notes.remove(key) end }
+    else
+      items[#items + 1] = { label = "Open: " .. words, icon = ICON_NOTES, onClick = function() ns.NoteView.open(key) end }
+    end
+  end
+  return items
 end
 
 function Calendar.open()

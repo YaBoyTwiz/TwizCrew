@@ -204,6 +204,11 @@ local function build()
   end, "danger", FEATURE)
   deleteButton:SetSize(130, 24)
   deleteButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 12)
+  deleteButton.edit = Widgets.button(frame, "Edit my note", function()
+    if shownKey then ns.Calendar.openMaker({ edit = shownKey }) end
+  end, nil, FEATURE)
+  deleteButton.edit:SetSize(110, 24)
+  deleteButton.edit:SetPoint("LEFT", deleteButton, "RIGHT", 6, 0)
   frame:Hide()
 end
 
@@ -274,7 +279,8 @@ function NoteView.refresh()
       row:Hide()
     end
   end
-  if ns.Notes.isMine(n) then deleteButton:Show() else deleteButton:Hide() end
+  if ns.Notes.isMine(n) then deleteButton:Show(); deleteButton.edit:Show()
+  else deleteButton:Hide(); deleteButton.edit:Hide() end
 end
 
 -- Opens a note by its key; a friend's note is marked "seen" for the crew.

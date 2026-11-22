@@ -176,10 +176,27 @@ function Notes.iconTexture(i)
   return e.tex
 end
 
+-- Mine: made by this copy (its key starts with my diary id), or by one of my own characters on another computer
+-- (a second install has its own diary id, so its notes carry that one; the author's name is then one of mine).
 function Notes.isMine(note)
   local me = ns.Diary and ns.Diary.myId()
-  return type(note) == "table" and type(note.key) == "string" and me ~= nil
-    and note.key:sub(1, #me + 1) == me .. "-"
+  if type(note) ~= "table" or type(note.key) ~= "string" or me == nil then return false end
+  if note.key:sub(1, #me + 1) == me .. "-" then return true end
+  local n = (store() or {})[note.key]
+  local by = type(n) == "table" and n.b or nil
+  if type(by) ~= "string" or by == "" then return false end
+  if by == ns.playerName() then return true end
+  local p = ns.Diary.people()[me]
+  return type(p) == "table" and type(p.alts) == "table" and p.alts[by] ~= nil
+end
+
+-- One note by its key (a copy, with its key), or nil when there is none or it was deleted.
+function Notes.get(key)
+  local n = (store() or {})[key]
+  if type(n) ~= "table" or n.x then return nil end
+  local copy = { key = key }
+  for k, v in pairs(n) do copy[k] = v end
+  return copy
 end
 
 -- The notes on a date ("2026-11-08") for someone whose local time is UTC + off seconds (default: that day's own
@@ -670,6 +687,26 @@ function Notes.remove(key)
   local n = s and s[key]
   if not n or n.x or not Notes.isMine({ key = key }) then return false end
   n.x, n.t, n.u = true, "", math.max(ns.Diary.now(), (n.u or 0) + 1)
+  send(key)
+  ns.Bus.fire("CALENDAR_CHANGED")
+  return true
+end
+
+-- Changes one of my notes: its day, time, words, icon or dungeon. The key stays, so its answers and comments stay
+-- with it; friends take it as a newer copy of the same note. Returns true when it did.
+function Notes.update(key, dateKey, text, icon, at, dungeon)
+  local s = store()
+  local n = s and s[key]
+  if not n or n.x or not Notes.isMine({ key = key }) then return false end
+  if not DUNGEON[dungeon] then dungeon = nil end
+  text = clean(text) or (dungeon and DUNGEON[dungeon].name) or nil
+  if not text or not dayOfKey(dateKey) then return false end
+  at = tonumber(at)
+  local z, zd
+  if at then z, zd = ns.Diary.zoneAt(at) end
+  n.d, n.t, n.at, n.g, n.z, n.zd = dateKey, text, at, dungeon, z, zd or nil
+  n.i = math.max(1, math.min(#Notes.ICONS, tonumber(icon) or 1))
+  n.u = math.max(ns.Diary.now(), (n.u or 0) + 1)
   send(key)
   ns.Bus.fire("CALENDAR_CHANGED")
   return true

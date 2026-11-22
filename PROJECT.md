@@ -13,6 +13,11 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Calendar notes: edit, remove and a fuller right-click menu (2026-11-22, owner asked: "I can't remove a note ...
+  let me right click on a date to create notes, edit and remove"):** on the same branch `feat/calendar-button`.
+  **Not tested in game, not released.** Details in the section "Calendar: edit and remove notes" below; checks in
+  `docs/TESTING.md` under the same name. He also asked whether notes can include images: not answered by a build
+  yet (an addon cannot send picture files; only art already in the game or shipped inside the addon can show).
 - **Calendar time zones by name, and the author's time on a note (2026-11-22, owner asked: "it's showing my
   timezone as UTC when I'm actually CST, make sure it uses the creator's real time zone"):** on the same branch
   `feat/calendar-button`. **Not tested in game, not released.** Details in the section "Calendar: time zones" below;
@@ -523,6 +528,22 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
 - **Older copies and notes:** v0.2.0 ignores `z` and drops it when it passes a note on; a copy that first heard a
   note that way takes the zone when it later hears the same note (same `u`) with one. Notes made before this have no
   zone: only the reader's time shows. The checksums do not change (they use key and `u`).
+
+## Calendar: edit and remove notes (2026-11-22)
+
+- **Why he could not remove his note:** the owner plays the same characters on two installs of the game. Each
+  install has its own diary id (`calendar.me`), and a note's key starts with its author's id, so a note made on the
+  other install looked like someone else's here: no remove control (and it counted as "new"). Seen in his saved data:
+  two ids, both with the alts Yaboytwiz and Warpedpathos. **Notes.isMine now also says yes when the note's author
+  name is my character or one of my own alts.** Only notes are covered: an answer (going / maybe) given on the other
+  install is still a second person's answer.
+- **Edit (Notes.update, new):** changes one of my notes in place (day, time, words, icon, dungeon). The key stays,
+  so answers and comments stay; `u` goes up, so every copy (v0.2.0 too) takes it as a newer copy of the same note.
+  The "Create a note" window opens filled in as "Edit note" (`Calendar.openMaker({ edit = key })`).
+- **Where:** right-click a day on the Events month: the two "Create" lines, then up to four of that day's notes
+  ("Edit: ..." and "Remove: ..." for mine, "Open: ..." for others; more: "See all N notes"). A row of a day's list:
+  "Edit" and "Remove" buttons on mine (the small "X" is gone), right-click for Open / Edit / Remove. The note's own
+  window: "Edit my note" next to "Delete my note". Remove asks nothing first.
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

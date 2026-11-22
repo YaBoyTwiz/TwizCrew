@@ -19,7 +19,7 @@ local iconTexture, arrowButton = P.iconTexture, P.arrowButton
 -- Save puts it on its day. A timed note is stored in one shared time (UTC), so every friend sees it at their own
 -- local time and date (what their computer's clock says, not the server's).
 local maker
-local mk = { day = 0, minutes = nil, kind = "note", dungeon = nil, icon = 1 }
+local mk = { day = 0, minutes = nil, kind = "note", dungeon = nil, icon = 1, edit = nil } -- edit: a note's key
 local KINDS = { { id = "note", label = "Note" }, { id = "dungeon", label = "Dungeon" }, { id = "raid", label = "Raid" } }
 
 -- A dungeon's small icon for menus: the game's group finder icon when this game version has it, else a sword
@@ -90,6 +90,8 @@ end
 
 drawMaker = function()
   if not maker then return end
+  maker.title:SetText(mk.edit and "Edit note" or "Create a note")
+  maker.save.text:SetText(mk.edit and "Save changes" or "Save note")
   local _, m, d = L.civil(mk.day)
   maker.dayText:SetText(L.WEEKDAYS[L.weekday(mk.day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
   -- time
@@ -196,6 +198,7 @@ local function buildMaker()
   local title = T.readable(T.text(maker, T.FONT.normal, C.title), 2)
   title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
   title:SetText("Create a note")
+  maker.title = title
 
   local function label(text, y)
     local fs = T.text(maker, T.FONT.small, C.muted)
@@ -380,23 +383,39 @@ local function buildMaker()
   local save = Widgets.button(maker, "Save note", function() Calendar.saveMaker() end, nil, FEATURE)
   save:SetSize(110, 26)
   save:SetPoint("BOTTOMRIGHT", maker, "BOTTOMRIGHT", -PADM, 12)
+  maker.save = save
   local cancel = Widgets.button(maker, "Cancel", function() maker:Hide() end, nil, FEATURE)
   cancel:SetSize(80, 26)
   cancel:SetPoint("RIGHT", save, "LEFT", -8, 0)
   maker:Hide()
 end
 
--- Opens "Create a note". opts: { day = local day number, minutes = time (local), kind =, dungeon = }.
+-- Opens "Create a note". opts: { day = local day number, minutes = time (local), kind =, dungeon = }, or
+-- { edit = the key of one of my notes }: the same window filled with that note, and Save changes it.
 function Calendar.openMaker(opts)
   opts = opts or {}
+  local words = ""
+  local n = opts.edit and ns.Notes.isMine({ key = opts.edit }) and ns.Notes.get(opts.edit) or nil
+  if opts.edit and not n then return end
   if not maker then buildMaker() end
+  if n then
+    local dg = n.g and ns.Notes.dungeon(n.g)
+    local day, minutes = ns.Notes.dayOfKey(n.d), nil
+    if type(n.at) == "number" then
+      local off = ns.Notes.offsetFor(n)
+      day, minutes = math.floor((n.at + off) / L.DAY), math.floor(((n.at + off) % L.DAY) / 60)
+    end
+    opts = { day = day, minutes = minutes, kind = dg and (dg.raid and "raid" or "dungeon") or "note", dungeon = dg and n.g }
+    words = (dg and n.t == dg.name) and "" or tostring(n.t or "")
+  end
+  mk.edit = n and n.key or nil
   mk.day = tonumber(opts.day) or ((P.view == "day" or P.view == "eventDay") and P.shownDay) or ns.Diary.localToday()
   mk.minutes = tonumber(opts.minutes)
   mk.kind = opts.kind or "note"
   mk.dungeon = opts.dungeon
-  mk.icon = 1
+  mk.icon = n and (tonumber(n.i) or 1) or 1
   listOffset = 0
-  maker.box:SetText("")
+  maker.box:SetText(words)
   drawMaker()
   maker:Show()
   if maker.Raise then maker:Raise() end
@@ -411,7 +430,12 @@ function Calendar.saveMaker(text)
   local at = mk.minutes and ns.Diary.utcOf(mk.day, mk.minutes) or nil -- (with that date's own offset)
   local icon = mk.icon
   if mk.kind ~= "note" and icon == 1 then icon = mk.kind == "raid" and 3 or 2 end
-  local key, why = ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon)
+  local key, why
+  if mk.edit then
+    key = ns.Notes.update(mk.edit, dateKeyOf(mk.day), text, icon, at, mk.dungeon) and mk.edit or nil
+  else
+    key, why = ns.Notes.add(dateKeyOf(mk.day), text, icon, at, mk.dungeon)
+  end
   if not key then
     print(why == "full" and "TwizCrew: the calendar is full (300 notes). Old notes go after 90 days."
       or "TwizCrew: type a few words for the note first.")

@@ -132,7 +132,8 @@ local function buildEvents()
           .. colored(n.b, n.c) .. "|r" .. (countsText(n.key)), 1, 0.9, 0.5, true)
       end
       if #(self.tcNotes or {}) == 0 then GameTooltip:AddLine("Nothing planned.", 0.8, 0.8, 0.8) end
-      GameTooltip:AddLine("Click for this day's notes. Right-click to add one.", 0.7, 0.7, 0.7)
+      GameTooltip:AddLine("Click for this day's notes. Right-click to add one, or to edit or remove yours.", 0.7, 0.7,
+        0.7, true)
       GameTooltip:Show()
     end)
     script(c, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -232,28 +233,36 @@ local function buildEventDay()
     r.icon:SetPoint("LEFT", r, "LEFT", 6, 0)
     r.text = T.readable(T.text(r, T.FONT.normal, C.text))
     r.text:SetPoint("TOPLEFT", r.icon, "TOPRIGHT", 8, -1)
-    r.text:SetWidth(WIDTH - 2 * PAD - 100)
+    r.text:SetWidth(WIDTH - 2 * PAD - 180)
     r.text:SetJustifyH("LEFT")
     if r.text.SetWordWrap then r.text:SetWordWrap(false) end
     r.sub = T.text(r, T.FONT.small, C.muted)
     r.sub:SetPoint("BOTTOMLEFT", r.icon, "BOTTOMRIGHT", 8, 1)
-    r.sub:SetWidth(WIDTH - 2 * PAD - 100)
+    r.sub:SetWidth(WIDTH - 2 * PAD - 180)
     r.sub:SetJustifyH("LEFT")
     if r.sub.SetWordWrap then r.sub:SetWordWrap(false) end
-    r.del = Widgets.button(r, "X", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE)
-    r.del:SetSize(24, 18)
+    r.del = Widgets.button(r, "Remove", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE)
+    r.del:SetSize(64, 20)
     r.del:SetPoint("RIGHT", r, "RIGHT", -6, 0)
+    r.edit = Widgets.button(r, "Edit", function() if r.tcKey then Calendar.openMaker({ edit = r.tcKey }) end end, nil,
+      FEATURE)
+    r.edit:SetSize(48, 20)
+    r.edit:SetPoint("RIGHT", r.del, "LEFT", -4, 0)
     r.hl = r:CreateTexture(nil, "HIGHLIGHT")
     r.hl:SetAllPoints(r)
     T.color(r.hl, C.title, 0.08)
     r:EnableMouse(true)
     script(r, "OnMouseUp", function(self, button)
       if button == "LeftButton" and self.tcKey and ns.NoteView then ns.NoteView.open(self.tcKey) end
+      if button == "RightButton" and self.tcKey then Widgets.menu(self, Calendar.noteMenuItems(self.tcKey)) end
     end)
     script(r, "OnEnter", function(self)
       if not GameTooltip or not self.tcKey then return end
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:SetText("Click to open: read it, say if you're going, comment", 1, 1, 1)
+      if ns.Notes.isMine({ key = self.tcKey }) then
+        GameTooltip:AddLine("Right-click to edit or remove it.", 0.7, 0.7, 0.7)
+      end
       GameTooltip:Show()
     end)
     script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -295,7 +304,7 @@ local function drawEventDay()
       r.sub:SetText("by " .. colored(n.b, n.c)
         .. (theirs and ("  |cff999999" .. theirs .. " " .. zone .. " their time|r") or "") .. counts
         .. (rp.mine and ("  |cff999999you: " .. (rp.mine == "yes" and "going" or rp.mine == "maybe" and "maybe" or "can't") .. "|r") or ""))
-      if ns.Notes.isMine(n) then r.del:Show() else r.del:Hide() end
+      if ns.Notes.isMine(n) then r.del:Show(); r.edit:Show() else r.del:Hide(); r.edit:Hide() end
       r:Show()
     else
       r:Hide()

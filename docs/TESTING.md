@@ -807,6 +807,23 @@ With a friend in another time zone (both on this build):
    `7pm CST your time · 8pm EST for Frostie`; the day's list says `8pm EST their time` after their name. Tell Claude
    if the line is cut off at the edge of the window.
 
+## Calendar: edit and remove notes (2026-11-22)
+
+`/reload` is enough if the game was restarted since the Events / Play times change. Alone:
+
+1. **The note from the other computer.** Right-click the day of the City of Dalaran run (made on your other
+   install): the menu has `Edit: ...` and `Remove: ...` for it. No red error.
+2. **Edit.** Pick `Edit`: the window says `Edit note` and holds the note's day, time, dungeon and words. Change the
+   time, `Save changes`: the same note shows the new time (not a second note).
+3. **A day's list.** Click a day with a note of yours: its row has `Edit` and `Remove` buttons; right-click the row
+   for the same choices. The buttons do not cover the words.
+4. **The note's window.** Open a note of yours: `Edit my note` sits next to `Delete my note`.
+5. **Remove.** Add a test note, right-click its day, `Remove: ...`: it is gone.
+
+With a friend:
+
+6. **They see the edit.** Edit a note they can see: their copy changes to the new words and time.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

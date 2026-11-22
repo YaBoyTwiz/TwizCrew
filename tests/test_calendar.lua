@@ -1128,6 +1128,62 @@ return {
       A.no(ns.NoteView.metaForTest():find("your time", 1, true), "mine: one time")
       ns.NoteView.close()
     end,
+    my_notes_can_be_edited_and_removed_from_a_days_menu = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local L, N, D = ns.CalendarLogic, ns.Notes, ns.Diary
+      local day = D.localToday() + 2
+      local date = N.dateKey(L.civil(day))
+      local function labels(items)
+        local out = {}
+        for _, it in ipairs(items) do out[#out + 1] = it.label end
+        return table.concat(out, " | ")
+      end
+      local function pick(items, label)
+        for _, it in ipairs(items) do if it.label:find(label, 1, true) then it.onClick(); return true end end
+        return false
+      end
+      ns.Calendar.open()
+      A.eq(#ns.Calendar.dayMenuItems(day), 2, "an empty day: only the two ways to create")
+      local mine = N.add(date, "Raid night at the usual place", 3)
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-900", d = date, t = "Deadmines", i = "1", b = "Frostie", u = "900" })
+      local menu = labels(ns.Calendar.dayMenuItems(day))
+      A.contains(menu, "Edit: Raid night at the us...","mine: edit (long words cut)")
+      A.contains(menu, "Remove: Raid night")
+      A.contains(menu, "Open: Deadmines", "a friend's: open")
+      A.no(menu:find("Edit: Deadmines", 1, true), "never edit a friend's")
+      A.eq(labels(ns.Calendar.noteMenuItems(mine)), "Open | Edit | Remove")
+      A.eq(labels(ns.Calendar.noteMenuItems("frost123-900")), "Open")
+      -- edit: the same window, filled in; saving changes the same note
+      A.ok(pick(ns.Calendar.dayMenuItems(day), "Edit: Raid"))
+      local mk = ns.Calendar.makerForTest()
+      A.eq({ mk.edit, mk.day, mk.icon, mk.kind }, { mine, day, 3, "note" })
+      A.eq(ns.Calendar.makerBoxForTest():GetText(), "Raid night at the usual place")
+      local before = ns.db.calendar.notes[mine].u
+      ns.Calendar.setMakerForTest("day", day + 1)
+      ns.Calendar.setMakerForTest("minutes", 20 * 60)
+      A.ok(ns.Calendar.saveMaker("Raid night, moved"))
+      local n = ns.db.calendar.notes[mine]
+      A.eq({ n.t, n.d, n.i }, { "Raid night, moved", N.dateKey(L.civil(day + 1)), 3 })
+      A.ok(n.at and n.u > before, "a time now, and newer than before so friends take it")
+      A.eq(#N.forDate(date), 1, "gone from the old day")
+      A.eq(#N.forDate(N.dateKey(L.civil(day + 1))), 1, "on the new day, once")
+      ns.Calendar.openMaker({ day = day })
+      A.eq(ns.Calendar.makerForTest().edit, nil, "create again: a new note, not an edit")
+      ns.Calendar.openMaker({ edit = "frost123-900" })
+      A.eq(ns.Calendar.makerForTest().edit, nil, "a friend's note does not open for editing")
+      A.no(N.update("frost123-900", date, "Mine now", 1), "nor change")
+      -- remove
+      A.ok(pick(ns.Calendar.dayMenuItems(day + 1), "Remove: "))
+      A.eq(#N.forDate(N.dateKey(L.civil(day + 1))), 0, "removed")
+      -- a note I made on my other computer (another diary id, my character's name) is mine too
+      receive(ns, W, "Frostie", "CALN", { k = "other999-950", d = date, t = "From my desktop", i = "1",
+        b = ns.playerName(), u = "950" })
+      A.ok(N.isMine({ key = "other999-950" }), "my character wrote it")
+      A.no(N.fresh(), "so it is not news")
+      A.contains(labels(ns.Calendar.dayMenuItems(day)), "Remove: From my desktop")
+      A.ok(N.remove("other999-950"), "and I can remove it")
+    end,
     fresh_marks_notes_by_others_and_answers_on_mine = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

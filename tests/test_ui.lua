@@ -505,7 +505,7 @@ return {
       boot(W)
       tc(W, "help")
       local text = table.concat(W.printed, "\n")
-      for _, cmd in ipairs({ "/tc awards", "/tc awards all", "/tc session new", "/tc stats reset" }) do
+      for _, cmd in ipairs({ "/tc awards", "/tc awards all", "/tc session new", "/tc stats reset", "/tc guild ", "/tc guildtest", "/tc forget" }) do
         A.contains(text, cmd)
       end
     end,

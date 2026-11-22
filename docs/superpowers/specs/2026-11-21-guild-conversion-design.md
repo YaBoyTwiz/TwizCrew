@@ -1,5 +1,40 @@
 # Guild conversion (part 1 of 3): design
 
+## Changed while building (2026-11-21)
+
+Everything below this section was written before building. Where it differs from this list, this list is right.
+The reasons and the owner's quotes are in PROJECT.md, section "Guild conversion (2026-11-21)".
+
+- **Data per guild (owner decision).** Crew data is kept per guild: roster, crew stats, crew session, trophies, the
+  clown, calendar notes and diaries, the activity feed, pins, member keys. Shared by all the player's characters:
+  settings, own status and mock lines, own characters' stats, the log. A character's first login in a different guild
+  than the loaded data needs one `/reload` (quiet, with a line). No readable guild name: one shared set "?".
+  (Replaces "Moving over saved data" for anything about alts, and "Friends outside the guild, alts outside the
+  guild".)
+- **Moving v0.1.24 data.** Attached to a guild automatically only when at least two and at least half of the saved
+  friends are in its member list (first word and class); otherwise one chat line and the player chooses with
+  `/tc guild` (lists the sets, numbered), `/tc guild use` (`use yes` to insist), `/tc guild new`, `/tc guild load
+  <number>` then `load <number> yes`. Nothing is deleted by these.
+- **No 30-day forgetting.** Removed. A member missing from the list is only hidden and returns with their data; the
+  only automatic forgetting is the existing 60 days not seen.
+- **Member identity.** First word is the key; a later namesake is stored under the full name; names inside messages
+  are the first word unless two current members share it, then the full name; trophy records store full names.
+- **Traffic.** Only about 3 "responder" copies answer a newcomer with shared data; replies are spread over a few
+  seconds; several asks for the same thing get one guild answer. Measured with 50 online and 1 newcomer in the first
+  minute: 47 copies send 2 messages, 2 responders 7, one copy about 57 (50 are calendar diaries, slow lane), the
+  newcomer about 10. (Replaces "a login gets a HELLO and STATE whisper from each online copy".)
+- **Panel.** My own row sits at the top with no heading and is not a pin; the header reads "N here · M online" and
+  "here" counts me; "+" is green text and the star is the raid-target star texture; three body lines for not in a
+  guild, needs `/reload` and waiting for the guild list.
+- **Notices.** Default "My party and pinned"; with the panel module off, everyone is in scope; the Congrats button on
+  a row stays for everyone.
+- **`/tc guildtest`** prints the guild name (or that the game gives none), "N counted, M readable", the guild send
+  outcome and own echo with the sender name form, who answered by whisper and that name form, and the lockdown
+  functions. It refuses a second run within 10 seconds.
+- **Planned, not built yet:** every saved friend starts pinned when v0.1.24 data is adopted; splitting
+  `Crew/Guild.lua` into three files; a lasting "do not prune" mark after `use yes` / `load`; the whole-branch review.
+  Parts 2 and 3 are designed only in outline (see "The three parts").
+
 Date: 2026-11-21. Owner approved the direction in conversation; everything marked **(Claude's call)** was decided by
 Claude and can be changed.
 

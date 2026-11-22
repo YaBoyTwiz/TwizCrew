@@ -3,8 +3,17 @@
 A World of Warcraft: Forever addon for Twiz and friends. See which layer your crew is on and what they're doing,
 roast each other with the Hall of Shame, and get told when there's an update.
 
-It only does something when your friends run it too. Everything is shared through hidden addon messages, so other
-players never see it.
+It only does something when your guildmates run it too. Everything is shared through hidden addon messages sent
+through the guild, so other players never see it, and only people in the guild are listened to.
+
+## Join the guild first
+
+TwizCrew works inside the guild: join it (ask Twiz) and make sure you are in it when you log in. There is no channel
+to join and no code to type. If you are not in the guild, TwizCrew just stays quiet.
+
+**More than one character?** Each guild keeps its own TwizCrew data, so a character in another guild (or in no guild)
+does not touch the crew's data. The first time such a character logs in, TwizCrew says it needs a `/reload`; type it
+once. Type `/tc guild` to see which data is in use.
 
 ## Install (once)
 
@@ -17,7 +26,8 @@ players never see it.
      minimized** (and **Minimize on Close**, so closing the window keeps it running in the tray).
 
    Then WowUp starts with your computer and downloads updates before you even open WoW.
-4. Start the game, click **AddOns** at character select and make sure **TwizCrew** is ticked.
+4. Restart the game fully (not just /reload), click **AddOns** at character select and make sure **TwizCrew** is
+   ticked.
 
 No WowUp? Download the `TwizCrew-…-forever.zip` from [Releases](https://github.com/YaBoyTwiz/TwizCrew/releases)
 and unzip it into `World of Warcraft/_forever_/Interface/AddOns/`, so you get `AddOns/TwizCrew/TwizCrew.toc`.
@@ -27,7 +37,7 @@ You'll have to do that again for every update.
 
 - `/tc` opens the settings. Every setting has an (i) that says what it does.
 - `/tc awards` runs the awards show.
-- **Finding each other:** friends in your group get a small arrow and the distance on their row in the Crew panel.
+- **Finding each other:** guildmates in your group get a small arrow and the distance on their row in the Crew panel.
   Click it for a big arrow that leads you there. To meet up, open the world map and **Ctrl + right-click** a spot,
   then pick your party or everyone. `/tc meet clear` takes the meet-up away. Your position only goes to your group.
 - `/tc report` prints a short report to paste to Twiz if something looks broken.

@@ -170,6 +170,20 @@ return {
         end
       end
     end,
+    -- The crew talks through the guild now: no text the player can read may mention the removed hidden channel, the crew
+    -- code, a "Connection" setting or whispers as a way to choose how messages travel. (Strings only, comments are
+    -- stripped; log lines are held to the same rule because the rule cannot cheaply tell them apart.)
+    no_player_text_about_the_removed_channel_settings = function(ns, A)
+      for _, f in ipairs(tocFiles()) do
+        local text = strip(readFile("TwizCrew/" .. f:gsub("\\", "/")), true):lower()
+        for _, phrase in ipairs({ "hidden channel", "hidden chat channel", "crew code", "crew channel",
+          "whisper mode", "whispers only", "automatic and whisper", "choose how messages travel" }) do
+          A.no(text:find(phrase, 1, true), f .. " has the text \"" .. phrase .. "\"")
+        end
+        A.no(text:find("label%s*=%s*[\"']connection[\"']"), f .. " has a setting labelled Connection")
+        A.no(text:find("%f[%w]choices%s*=%s*{[^}]-whisper"), f .. " offers whispers as a choice")
+      end
+    end,
     -- Find the crew: the game has one waypoint and one super-tracked target, and QuestMaster, OpenMap and Questie use
     -- them. TwizCrew draws its own arrow and icons and never touches those.
     never_touches_the_games_waypoint = function(ns, A)

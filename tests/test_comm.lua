@@ -608,7 +608,7 @@ return {
       A.eq(W.leaves, {}, "the game may not have rejoined it yet")
       W:advance(6)
       A.eq(W.leaves, { "TwizCrewHQ" }, "left once")
-      A.ok(logHas(ns, "left the old crew channel TwizCrewHQ"))
+      A.ok(logHas(ns, "left the old v0.1.24 channel TwizCrewHQ"))
       W:advance(3)
       A.eq(db.crew, nil, "out of it: the name goes too")
       W:fire("PLAYER_ENTERING_WORLD")
@@ -629,7 +629,7 @@ return {
       W:advance(10)
       A.eq(W.leaves, { "TwizCrewHQ", "TwizCrewHQ" })
       A.eq(db.crew, nil, "gone now")
-      A.ok(logHas(ns, "the old crew channel TwizCrewHQ is gone"))
+      A.ok(logHas(ns, "the old v0.1.24 channel TwizCrewHQ is gone"))
     end,
     -- The game may rejoin saved channels later than our first look: "not there" once is not "gone".
     old_channel_joined_after_the_first_check_is_still_left = function(ns, A, W)
@@ -642,7 +642,7 @@ return {
       W:advance(10)
       A.eq(W.leaves, { "TwizCrewHQ" })
       A.eq(db.crew, nil, "seen, left, gone")
-      A.ok(logHas(ns, "the old crew channel TwizCrewHQ is gone (left)"))
+      A.ok(logHas(ns, "the old v0.1.24 channel TwizCrewHQ is gone (left)"))
     end,
     nothing_left_of_the_channel = function(ns, A, W)
       boot(ns, W)

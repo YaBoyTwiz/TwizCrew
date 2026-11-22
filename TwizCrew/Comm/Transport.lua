@@ -90,7 +90,7 @@ end
 
 local function dropMarker(old, why)
   ns.db.crew = nil
-  ns.Log.add("info", "the old crew channel %s is gone (%s)", ns.Util.safeText(old), why)
+  ns.Log.add("info", "the old v0.1.24 channel %s is gone (%s)", ns.Util.safeText(old), why)
 end
 
 local function leaveOldChannel()
@@ -107,7 +107,7 @@ local function leaveOldChannel()
   end
   if type(LeaveChannelByName) ~= "function" then return end
   LeaveChannelByName(old)
-  ns.Log.add("info", "left the old crew channel %s", ns.Util.safeText(old))
+  ns.Log.add("info", "left the old v0.1.24 channel %s", ns.Util.safeText(old))
   if index == nil then dropMarker(old, "this game cannot tell more"); return end
   C_Timer.After(OLD_CHANNEL_CHECK, function()
     ns.Log.safe(FEATURE, function()

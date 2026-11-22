@@ -8,10 +8,16 @@ An addon for **World of Warcraft: Forever** that only my friends and I use. Ever
 copies **talk to each other**: they share information (who is where, what they are doing) and **trigger effects on
 each other's screens** (a sound, a picture, a message, an arrow on the map).
 
-Other players never see any of it. The messages are hidden addon messages, not chat.
+Other players never see any of it. The messages are hidden addon messages, not chat. Since 2026-11-21 the crew is
+the owner's **guild**: copies talk through the guild and only guild members are trusted.
 
 ## Where we are (2026-11-05)
 
+- **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released, never run in the game.**
+  The copies now talk through the guild, trust only guild members, keep the crew's data per guild, and the panel has
+  sections and pins. Everything is in the section "Guild conversion (2026-11-21)" below, including what is still
+  open. The version is still 0.1.24 until the owner says "release it"; the first thing to do in the game is
+  `/tc guildtest` (`docs/TESTING.md`, "Guild conversion").
 - **v1 design approved by the owner** (2026-11-05): `docs/superpowers/specs/2026-11-05-crew-panel-design.md`.
 - **Build plan:** `docs/superpowers/plans/2026-11-05-crew-panel.md`. The build was handed to a background agent at
   the owner's request ("do this work on a different agent").
@@ -67,19 +73,12 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Layer compare needs the same zone (owner, 2026-11-05):** two friends are compared only when both are in the
   same zone (stricter than "same continent"). Otherwise unknown, shown as nothing.
 - **Pop-ups (owner):** a small pop-up too, for **layer changes and deaths**. Other tags stay quiet on the panel.
-- **The crew (owner):** all on the **same realm and same faction**, **no guild yet**. So the copies talk over a
-  hidden custom channel (Claude's call), and over `PARTY` when grouped; switch to `GUILD` later if they make one.
-  **Update (owner, 2026-11-21): the owner is now a guild master.** The guild is the owner's gaming buddies and
-  stream regulars, small, may grow a little. Owner's decisions (2026-11-21): TwizCrew becomes **guild only** ("no fir
-  now make it guild only"), every guild member has the same powers ("its fine for now"; ranks maybe later), a
-  website tie-in may come later (not now). **Research 2026-11-21 (other addon makers, not tried by us):** `GUILD`
-  addon messages are delivered on Forever 1.60.1 (guild-vendetta probe: result 0, received, also by the sender;
-  ForeverGuild+ and LibGuildSync sync over it); `AreOutgoingAddonChatMessagesRestricted()` is true in the open world
-  although guild and whisper addon messages go through (use `InChatMessagingLockdown` and the send result); guild
-  roster names come "with spaces, without a realm" and carry GUID, class, level, rank, note, online, last online;
-  addons cannot write officer notes or the guild info text; `SendChatMessage` to `GUILD` (real chat) needs a key
-  press or click; trial and veteran accounts cannot send addon messages. Ideas for using the guild (not approved, nothing built): Claude's review of 2026-11-21 in the
-  conversation; the settings already have a plain "Guild chat" transport mode (GUILD only, no whispers or group).
+- **The crew (owner):** all on the **same realm and same faction**. Until 2026-11-21 there was **no guild**, so the
+  copies talked over a hidden custom channel (Claude's call, 2026-11-05) and whispers. **Update (owner, 2026-11-21):
+  the owner is now a guild master.** The guild is the owner's gaming buddies and stream regulars, small, may grow a
+  little, and TwizCrew now talks through it. What was decided and built is in the section "Guild conversion
+  (2026-11-21)" below; the research on what the game allows is in "What an addon can and cannot do". Ideas for using
+  the guild further (the Guild Board, guild-wide Hall of Shame and news) are designed only in outline there.
 - **Crew size (owner):** about **5**, probably more over time. Build the panel for ~5 but let it grow (scroll or a
   compact view past ~8; Claude's call).
 - **Crew panel can be hidden (owner)** but is **on by default**. Give it **plenty of settings** so people tailor
@@ -243,11 +242,11 @@ Other players never see any of it. The messages are hidden addon messages, not c
   "Hardening pass" in `docs/TESTING.md` (what to check in game). Built on the local branch `hardening`, on top of the
   minimize / activity feed work. **Not tested in game, not published.** The release needs `RESTART_SINCE` (files were
   added and the `.toc` changed).
-- **On hold (owner, 2026-11-12: "lets not worry about the crew code part just yet"):** nothing checks that a sender
-  belongs to the crew. The channel name and password are in the public repository, so anyone on the realm who installs
-  TwizCrew shows up in the panel and can send mocks (their own words on a streamed screen), "update" notices and
-  calendar notes. Ideas when it comes back: a crew code each crew picks once, or accept only friends-list / group
-  members.
+- **Solved by the guild (owner, 2026-11-12: "lets not worry about the crew code part just yet"; solved 2026-11-21):**
+  until then nothing checked that a sender belonged to the crew: the channel name and password were in the public
+  repository, so anyone on the realm who installed TwizCrew showed up in the panel and could send mocks (their own
+  words on a streamed screen), "update" notices and calendar notes. Now only guild members are trusted (the guild
+  master decides who is in), so no crew code is needed; it was removed with the channel.
 - **Game values (the 2026-11-08 dungeon bug, everywhere):** one helper, `ns.Util.plain(fn, ...)`, reads game
   functions (a secret or failing result becomes nil); a test (`test_lint`) fails when a file calls `UnitIsAFK`,
   `IsInInstance`, `UnitAffectingCombat` and the like directly. Combat is read with `InCombatLockdown()` only.
@@ -258,9 +257,8 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **A module that turned itself off comes back** after 5 minutes (10, 20, at most 30 on repeats). Crew, Self, Away,
   Quest, LayerSensor, MockShow and MockEditor have their own error ids, so a bug in one no longer switches off a
   whole feature.
-- **Messages:** bulk swaps (stats, trophies, calendar answers) wait in a second lane behind live messages. The copy
-  to the custom channel is sent only for PING until the channel has delivered something this session (on Forever it
-  never does). A send refused 20 times is dropped with a warning. The layer key no longer triggers a message by
+- **Messages:** bulk swaps (stats, trophies, calendar answers) wait in a second lane behind live messages. (The copy
+  to the custom channel, sent only for PING, is gone since 2026-11-21.) A send refused 20 times is dropped with a warning. The layer key no longer triggers a message by
   itself. PING carries a short checksum of what I last sent; a friend whose copy of my state differs twice in a row
   asks me for it once (`SREQ`), so a lost message repairs itself within about two minutes. The send rate stays 2 a
   second (not known whether Forever throttles lower; `/tc report` counts refused sends).
@@ -288,9 +286,100 @@ Other players never see any of it. The messages are hidden addon messages, not c
 - **Known gap with v0.1.23 friends:** when a friend still on v0.1.23 resets their stats, updated copies keep showing
   their old numbers (all-time until each number counts up again, session until the next session). It ends when they
   update. Also: older tests still run as if the custom channel delivered messages.
-- **Left alone on purpose (Claude's calls):** the channel join / retry code in `Comm/Transport.lua` (the one path
-  proven in game), the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
+- **Left alone on purpose (Claude's calls; the channel code was removed on 2026-11-21):** the channel join / retry
+  code in `Comm/Transport.lua` (the one path proven in game), the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
   (still a full snapshot, so v0.1.23 copies keep showing all-time numbers).
+
+## Guild conversion (2026-11-21)
+
+Built on the branch `guild-conversion` (tasks 1 to 7), **not released, nothing has run in the game**. Design:
+`docs/superpowers/specs/2026-11-21-guild-conversion-design.md` (its top section lists what changed while building).
+What to check in the game: `docs/TESTING.md`, "Guild conversion".
+
+**Why.** The owner became guild master of a small guild (gaming buddies, stream regulars). A guild fixes two things:
+one `GUILD` addon message reaches everyone online, and membership (which the guild master controls) says who is
+trusted.
+
+**Owner's words and decisions** (all quotes kept as written):
+- "no fir now make it guild only": TwizCrew works inside a guild only (so: no friends outside the guild).
+- "its fine for now": every guild member has the same powers; ranks maybe later.
+- The panel: "maybe by default just tge ones in your paty, but have a drop down tab just like we have with ofgline
+  wgere we can see the others and msybe a way to click to add them to the msin view orvrekove them".
+- The Guild Board (part 2): "do 1,2,3,and maybe a tyoe of cavan boatd or something..." (looking-for-group cards,
+  planned runs, matches from shared quests, with a canvas-like board).
+- Calendar sign-ups plan (the game's own calendar event first, copies passing cards on as a backup): "looks good we
+  will piviot latwr if needed".
+- Data per guild: "maybe we can have data saved by guild nane or sonething so this isnt an issue if someone has
+  other characters in different guilds".
+- A website tie-in may come later, not now.
+
+**What changed**
+- **Talking.** `Comm.send` is one `GUILD` message. `Comm.sendTo` (one person) is a whisper, only to a guild member.
+  Group-only messages (Find the crew positions) stay on `PARTY` / `RAID`. The queue (about 2 a second, bulk lane,
+  lockdown hold) stays. Only about 3 "responder" copies answer a newcomer with shared data (session, trophies,
+  calendar); replies are spread over a few seconds; several asks for the same thing get one guild answer. Measured in
+  the test with 50 online and 1 newcomer in the first minute: 47 copies send 2 messages, 2 responders 7, the one copy
+  that answers calendar diaries about 57 (50 of them diaries, slow lane), the newcomer about 10.
+- **Trust.** A `GUILD` message is from a member by definition. A whisper or group message counts only when the sender
+  is in the guild list; until the list has loaded (up to 10 s) the transport waits. Everyone else is dropped and
+  counted, not logged one by one. A same-named character from another realm is not told apart (the "-Realm" suffix
+  is cut; Claude's call, revisit after `/tc guildtest` shows the name forms).
+- **Members.** Who is in the guild comes from the game's guild list (`Crew/Guild.lua` and helpers). Member identity,
+  Claude's call: the **first word** of the name is the key (it is the same however the game writes a name); a later
+  namesake is stored under the **full name**; names inside messages are the first word unless two current members
+  share it, then the full name; trophy records store full names. "Is this me" uses the full name when it is known.
+- **Data per guild (owner decision).** Per guild: roster, crew stats, crew session, trophies, the clown, calendar
+  notes and diaries, the activity feed, pins, member keys. Shared by all the player's characters: settings, own
+  status and mock lines, own characters' stats, the log. The first login of a character in a different guild than
+  the loaded data needs one `/reload` (the addon is quiet and says so). If the game never gives the guild's name the
+  addon runs with one shared set named "?" and no per-guild separation (accepted limit).
+- **Data from v0.1.24** is attached to a guild by itself only when at least two and at least half of the saved
+  friends are in its member list (first word and class). Otherwise the addon stays quiet and prints one line, and the
+  player decides: `/tc guild` (this character's guild, the data in use, and every kept set with a number),
+  `/tc guild use` (`use yes` to insist when few friends match), `/tc guild new` (a fresh set for this guild after
+  `/reload`), `/tc guild load <number>` then `load <number> yes` (bring any kept set back for this guild after
+  `/reload`; the replaced set is kept). Nothing is ever deleted by these.
+- **Forgetting (Claude's call, replaces the design's 30 days).** A member missing from the guild list is only hidden
+  and comes back with their data. The only automatic forgetting is the old 60 days not seen. Reason: saved data is per
+  account and a partial list read or an alt in another guild must never delete a real member's data. `/tc forget
+  <name>` (also `/tc remove`, and "Forget this friend" on an offline row) deletes an offline member's saved data.
+- **Panel.** Sections: my party, pinned, a "Guild online (N)" bar (closed by default; open when there is no party and
+  no pin), an "Offline (N)" bar. My own row (when shown) sits at the top with no heading and is not a pin. The header
+  reads "N here · M online" ("here" counts me). A green "+" pins, the raid-target star unpins (also in the row menu).
+  Members without the addon are shown dimmed from the guild list ("Show guild members without the addon", on).
+  Three body lines say: not in a guild, needs `/reload`, waiting for the guild list.
+- **Notices.** Online, level-up and death notices (pop-ups, bar, chat) fire only for my party and pinned members by
+  default ("Tell me about"); the Recent list records everyone. With the panel module off everyone is in scope. The
+  Congrats button on a row stays for everyone. Mocks and congrats aimed at me always show.
+- **Words.** The settings "Connection", "Crew channel" and "Crew code" are gone; a test (`test_lint`) fails if player
+  text mentions the hidden channel, a crew code, a Connection setting or whispers as a choice. `/tc` help lists
+  `guild`, `guildtest` and `forget`. The addon still says "crew" and "friends" where that reads naturally.
+- **Removed.** The hidden channel (the addon leaves the old one once so it disappears from chat windows), the
+  Connection setting, the crew code, `/tc add`, the stored crew channel data (`db.crew`), the 30-day forgetting.
+
+**`/tc guildtest`** (needs one other member online with the addon; refuses a second run within 10 s) prints: the
+guild name (or that the game gives none); "N counted, M readable" (guild list rows); whether the guild send was
+accepted and whether my own copy heard it back, with the sender name form; who answered by whisper and that name
+form; and whether the chat-lockdown functions exist. `/tc report` has a "Guild" line and a "Connection" line.
+
+**Unproven until `/tc guildtest` runs in the game** (the three things only the game can tell): what `UnitName` gives
+for party members (one word or two); whether the guild list gives GUIDs; whether offline members are in the list
+when "show offline members" is unticked. Also: that `GUILD` addon messages are delivered at all (others report so;
+we have not seen it), the name forms on guild and whisper messages, and how the new panel textures look.
+
+**Open (planned, NOT built yet)**
+- When v0.1.24 data is adopted, every saved friend starts **pinned** (the old crew were chosen people).
+- Splitting `Crew/Guild.lua` (about 890 lines) into three files (Guild, GuildIdentity, GuildNames).
+- A lasting "do not prune" mark after `/tc guild use yes` or `load` (today the skip of the 60-day prune lasts one
+  session).
+- The whole-branch review. Nothing has run in the game. No version bump and no Changelog entry yet.
+- **Part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news** are designed only in outline (the
+  design's "three parts"; research on the game calendar and other addons in "What an addon can and cannot do").
+
+**Claude's calls in this work (change any):** first word as the key; stripping "-Realm"; waiting up to 10 s for the
+guild list; about 3 responders; guild identity is the name only (no realm, so same-named guilds on two realms share
+data); "?" data when no name is readable; the fit rule (two and half) for old data; per-account pins; hiding instead of
+deleting; the wording of every line in `/tc guild`.
 
 ## Website and Discord (on hold, owner 2026-11-11)
 
@@ -443,26 +532,32 @@ beta, not from Blizzard, so **test every one of them in the real game**.
 - **No playing for you:** it cannot move, cast, or target on its own. Every action needs a key press or a click.
 - **Short messages, few per second:** about 255 characters per message, and the game throttles bursts (send a few
   per second at most; queue the rest).
-- **One message is several sends (TwizCrew, 2026-11-09):** in automatic mode `Comm.send` sends one copy per
-  destination (the group, a whisper to each channel member outside it, and the channel), all through the ~2 a
-  second queue. A live feature must keep its message count low (or replace waiting ones), or it falls behind.
-- **A brand-new custom channel refuses addon messages for a moment (seen in game, 2026-11-05):** on the owner's
+- **One message is one send (TwizCrew, since 2026-11-21):** `Comm.send` sends one `GUILD` message whatever the
+  guild's size, through the ~2 a second queue. (Before, in the hidden-channel days, one message was several sends:
+  the group, a whisper to each channel member, and the channel.) Only answers to one person are whispers. A live
+  feature must still keep its message count low (or replace waiting ones), or it falls behind.
+- **History: a brand-new custom channel refuses addon messages for a moment (seen in game, 2026-11-05; the channel is gone since 2026-11-21):** on the owner's
   first login TwizCrew created `TwizCrewHQ`, and the sends in the same second as the join came back with result 7
   (very likely `InvalidChannel`). On the next login every send worked. TwizCrew now waits out refusals for 10 s
   after a join and tries a failed channel again after 1 minute (then 2, 4, 5 min…); details in the crew-panel plan.
-- **Sender names come in two forms (seen in game, 2026-11-05):** channel senders and `UnitName("player")` are
+- **Sender names come in two forms (seen in game, 2026-11-05; which form a guild message gives is checked by `/tc guildtest`):** channel senders and `UnitName("player")` are
   just the name ("Yaboytwiz"); party and whisper senders came as "Yaboytwiz Noodledog" (the WTF character folder
-  is `91/Yaboytwiz-Noodledog`). TwizCrew now uses the name before the first space or hyphen everywhere.
-- **WoW Forever never delivers addon messages sent to a custom channel (seen in game 2026-11-06, and reported by
+  is `91/Yaboytwiz-Noodledog`). TwizCrew uses the name before the first space or hyphen as the key (see the guild section for namesakes).
+- **Lesson, WoW Forever never delivers addon messages sent to a custom channel (seen in game 2026-11-06, and reported by
   other addon makers: [Blizzard forum](https://us.forums.blizzard.com/en/wow/t/add-on-messages-are-blocked-in-chat-channels/2403369),
   [BFF addon fix](https://github.com/Shtian/bff-wow/pull/133)):** the send says it worked, but nobody gets it,
   not even the sender. That is why friends saw each other as offline (v0.1.4 and older). Joining the channel, its
   member list (`ListChannelByName` → `CHAT_MSG_CHANNEL_LIST`) and join / leave notices still work, and addon
-  whispers arrive. So since v0.1.5 the channel is used to see who is in it; automatic mode whispers each member
+  whispers arrive. That is why the hidden channel was dropped for the guild on 2026-11-21. History: from v0.1.5 the channel was used to see who is in it; automatic mode whispered each member
   (the full name the game gives, e.g. "Yaboytwiz Noodledog"), sends to the group when grouped, and still sends one
-  copy to the channel in case the game delivers it again. Copies of v0.1.4 or older can hear a newer copy but not
-  be heard. `/tc report` shows "Crew in the channel" and "Channel echoes heard" (0 = the channel still does not
-  deliver).
+  copy to the channel in case the game delivers it again (all gone now; `/tc report` has a Guild line instead).
+- **Guild addon messages (research 2026-11-21, other addon makers, not tried by us until `/tc guildtest` runs):**
+  `GUILD` addon messages are delivered on Forever 1.60.1 (the guild-vendetta probe: result 0, received, also by the
+  sender; ForeverGuild+ and LibGuildSync sync over it). `AreOutgoingAddonChatMessagesRestricted()` is true in the
+  open world although guild and whisper addon messages go through (use `InChatMessagingLockdown` and the send
+  result). Guild roster names come "with spaces, without a realm" and carry GUID, class, level, rank, note, online and
+  last online. Addons cannot write officer notes or the guild info text. `SendChatMessage` to `GUILD` (real chat)
+  needs a key press or click. Trial and veteran accounts cannot send addon messages (they look like "no addon").
 - **NPC layer keys don't identify a layer on WoW Forever (seen in game 2026-11-07):** the owner and Chaos stood
   together in Darkshore on one layer, and TwizCrew read key "1" for the owner and "11" for Chaos from the zone part
   of NPC GUIDs. Forever Layer Hop's code says the same: since build 70450 two clients on one layer can get

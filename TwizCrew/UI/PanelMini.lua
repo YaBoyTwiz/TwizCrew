@@ -42,7 +42,7 @@ local startBarTicker -- (below)
 -- A notice's friend: their row drops open under the bar for a few seconds (never in a fight).
 local function startPeek(e)
   if not e or not setting("peek") or P.inCombat then return end
-  local raw = (tostring(e.who or ""):gsub("||", "|"))
+  local raw = FL.keyOf(e)
   if not (ns.roster and ns.roster:get(raw)) then return end
   P.peek = { name = raw, untilT = ns.now() + clamp(setting("peekSeconds"), 1, 30, 5) }
 end
@@ -124,9 +124,9 @@ function Panel.onFeed(e)
   -- no bar on screen (hidden in a fight, when alone, in a dungeon) or the panel is open under the mouse: the pop-up
   -- was shown, so the bar neither shows it nor counts it as missed
   if not P.shown or P.curView == "full" then return end
-  if not FL.isNoticeKind(e) or not noticeWanted(e) then return end
+  if not FL.isNoticeKind(e) then return end
   -- out of scope (a guildmate who is not in my party or pinned): no notice, no peek, not counted as missed
-  if not Panel.noticeInScope(e.kind, (tostring(e.who or ""):gsub("||", "|"))) then return end
+  if not Panel.noticeInScope(e.kind, FL.keyOf(e)) or not noticeWanted(e) then return end
   P.bar:addMissed()
   local started, promoted = P.bar:push(e, ns.now())
   if promoted then startPeek(promoted) elseif started then startPeek(e) end
@@ -174,7 +174,7 @@ function Panel.noticeClicked()
   if not P.bar then return end
   local e = P.bar:current()
   if not e or e ~= P.noticeShown then return end -- the notice drawn is not the one the bar holds now
-  local raw = (tostring(e.who or ""):gsub("||", "|"))
+  local raw = FL.keyOf(e)
   if e.kind == "levelup" then
     if not ns.isTestName(raw) then Panel.cheer({ tcModel = { name = raw } }) end
   elseif e.kind == "online" then

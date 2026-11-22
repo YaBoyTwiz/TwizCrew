@@ -217,6 +217,11 @@ function FeedLogic.inScope(kind, scope, close)
   return scope == "guild" or close == true
 end
 
+-- The member key an entry is about: its `who` is escaped for display ("||" for "|").
+function FeedLogic.keyOf(e)
+  return (tostring(type(e) == "table" and e.who or ""):gsub("||", "|"))
+end
+
 ---------------------------------------------------------------------------------------------------------- bar notices
 -- The events a minimized panel's bar shows: online, died, level-up, and congrats / mocks that came to ME.
 function FeedLogic.isNoticeKind(e)

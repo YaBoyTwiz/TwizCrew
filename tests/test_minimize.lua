@@ -307,6 +307,24 @@ return {
       A.eq(ns.Panel.barForTest().missed, 2, "a mock at me always counts")
     end,
 
+    default_scope_bar_and_peek = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      ns.db.modules.panel.settings.noticeScope = nil -- the default
+      ns.Panel.toggleMinimized(); W:advance(1)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 0)
+      A.eq(ns.Panel.noticeForTest(), nil, "no bar notice")
+      A.eq(ns.Panel.peekForTest(), nil, "no peek")
+      ns.db.pins = { Frostie = true }
+      receive(W, ns, "Frostie", "UPDATE", { lv = "14" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 1)
+      A.ok(ns.Panel.barForTest():current(), "a bar notice")
+      A.ok(ns.Panel.peekForTest(), "and the peek")
+    end,
+
     clicking_the_missed_number_opens_the_recent_list = function(ns, A, W)
       ready(W)
       friend(W, ns, "Frostie")

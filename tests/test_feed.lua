@@ -328,6 +328,23 @@ return {
       receive(W, ns, "Pewpew", "UPDATE", { lv = "13" })
       A.ok(printedLike(W, "reached level 13"), "everyone in the guild")
     end,
+    default_scope_chat_lines = function(ns, A, W)
+      ready(W)
+      ns.db.modules.panel.settings.noticeScope = nil -- the default
+      ns.Modules.set("activity", "chatOnline", true); ns.Modules.set("activity", "chatOffline", true)
+      friend(W, ns, "Ginkan")
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "13" })
+      ns.Bus.fire("MEMBER_ONLINE", "Ginkan"); ns.Bus.fire("MEMBER_OFFLINE", "Ginkan")
+      A.no(printedLike(W, "reached level 13")); A.no(printedLike(W, "came online")); A.no(printedLike(W, "went offline"))
+    end,
+    in_scope_rule_by_kind = function(ns, A)
+      local f = ns.FeedLogic.inScope
+      for _, k in ipairs({ "online", "offline", "died", "death", "levelup" }) do
+        A.no(f(k, "close", false), k); A.ok(f(k, "close", true), k); A.ok(f(k, "guild", false), k)
+        A.no(f(k, nil, false), k .. " with no scope")
+      end
+      for _, k in ipairs({ "congrats", "mock", "roast", "layer_diff" }) do A.ok(f(k, "close", false), k) end
+    end,
     chat_lines_follow_the_switches = function(ns, A, W)
       ready(W)
       friend(W, ns, "Frostie")

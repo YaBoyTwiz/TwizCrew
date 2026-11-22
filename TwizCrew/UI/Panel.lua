@@ -349,6 +349,7 @@ end
 
 -- Should a notice of this kind (feed or pop-up kind name) about this member be shown now? The "Tell me about" setting.
 function Panel.noticeInScope(kind, key)
+  if not ns.Modules.isEnabled(FEATURE) then return true end -- no panel: no pins and no setting to reach
   local scope = ns.Modules.setting(FEATURE, "noticeScope")
   return ns.FeedLogic.inScope(kind, scope, scope ~= "guild" and Panel.isClose(key))
 end
@@ -821,7 +822,7 @@ ns.Modules.register({
       info = "Who gets a pop-up, a bar notice or a chat line when they come online, go offline, die or level up. "
         .. "My party and pinned: only people in your party or raid and the ones you pinned. Everyone in the guild: "
         .. "every guild member. The Recent list keeps everyone either way, and mocks and congrats aimed at you "
-        .. "always show." },
+        .. "always show. The Congrats button on a row stays for everyone." },
     { key = "minimized", label = "Minimize the panel", kind = "toggle",
       info = "Shrinks the panel to just its title bar, so it takes almost no room on your screen. News from your "
         .. "crew (someone comes online, dies, levels up, congratulates or mocks you) shows on the bar for a few "

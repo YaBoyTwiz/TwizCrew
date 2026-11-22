@@ -42,7 +42,6 @@ local function ready(ns, W)
   start(ns, W)
   nearby(ns, W, "Frostie", true)
   receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest" })
-  W.state.inGroup = true
   W:advance(31)
 end
 
@@ -260,6 +259,25 @@ return {
       A.eq(ns.Feed.entries()[1].kind, "levelup", "but the Recent list has it")
       A.eq(ns.Feed.entries()[1].who, "Ginkan")
     end,
+    default_scope_pops_nothing_for_a_guildmate = function(ns, A, W)
+      ready(ns, W)
+      ns.db.modules.panel.settings.noticeScope = nil -- the default, nothing stored
+      A.eq(ns.Modules.setting("panel", "noticeScope"), "close")
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
+      A.eq(ns.Popups.textsForTest(), {}, "no online pop-up for a guildmate who is not close")
+      W:advance(40)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(ns.Popups.textsForTest(), {})
+    end,
+    panel_off_means_everyone_is_in_scope = function(ns, A, W)
+      ready(ns, W)
+      ns.db.modules.panel.settings.noticeScope = nil
+      ns.Modules.setEnabled("panel", false)
+      A.ok(ns.Panel.noticeInScope("levelup", "Ginkan"))
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(#ns.Popups.textsForTest(), 1, "no panel, no pins: the pop-up shows")
+    end,
     pinned_level_up_pops = function(ns, A, W)
       ready(ns, W)
       ns.Modules.set("panel", "noticeScope", "close")
@@ -271,6 +289,7 @@ return {
     end,
     party_death_pops = function(ns, A, W)
       ready(ns, W)
+      W.state.inGroup = true; W:advance(1)
       ns.Modules.set("panel", "noticeScope", "close")
       ns.Bus.fire("MEMBER_DIED", "Frostie", "Westfall", ""); W:advance(1)
       A.eq(#ns.Popups.textsForTest(), 1, "Frostie is in my party")
@@ -288,6 +307,7 @@ return {
     end,
     fake_friend_events_still_show = function(ns, A, W)
       ready(ns, W)
+      W.state.inGroup = true; W:advance(1)
       ns.Modules.set("panel", "noticeScope", "close")
       A.ok(ns.Panel.isClose("Frostie (test)"), "a test-tool fake always counts as close")
       A.ok(ns.Panel.noticeInScope("levelup", "Frostie (test)"))

@@ -387,16 +387,16 @@ local function redraw()
   P.curView = view
   local active = ns.Guild ~= nil and ns.Guild.active()
   local members, extra, ctx, grouped = crewOf(s, active)
-  if s.showSelf and ns.Self and active then
+  -- the header: people in the main view (party and pinned, and me), guild members online (the count follows the
+  -- no-addon setting)
+  local here, onlineAll = Logic.hereCount(members, ctx, s.showNoAddon, active), 0
+  if view ~= "peek" and s.showSelf and ns.Self and active then
     table.insert(members, 1, Logic.selfMember(ns.myKey(), ns.Self.lastSent()))
   end
   local hidden
-  models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
-    titleOf(), ns.maxLevel(), ctx)
-  -- the header: people in the main view, guild members online (the count follows the no-addon setting)
-  local here, onlineAll = 0, 0
-  for _, m in ipairs(models) do
-    if not m.offline and (not active or m.section == "party" or m.section == "pinned") then here = here + 1 end
+  if view ~= "peek" then
+    models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+      titleOf(), ns.maxLevel(), ctx)
   end
   if active then
     onlineAll = Logic.guildOnline((ns.Guild.count()), extra, s.showNoAddon)
@@ -554,7 +554,8 @@ local function redraw()
     noteText:SetWidth(width)
     noteText:SetText(note)
     noteText:Show()
-    y = y - GAP + 4 + ((#entries == 0 or stateLine) and math.max(2, math.ceil(#note / 34)) * LINE or LINE)
+    local real = noteText.GetStringHeight and noteText:GetStringHeight() or nil
+    y = y - GAP + 4 + Logic.noteHeight(note, width, LINE, real)
   else
     noteText:Hide()
   end
@@ -717,6 +718,7 @@ function Panel.isShown() return P.shown end
 function Panel.models() return models end
 function Panel.headerText() return P.header end
 function Panel.noteForTest() return note end
+function Panel.noteTextForTest() return noteText end
 function Panel.rowCountForTest() return P.visibleRows end
 function Panel.firstRowForTest() return firstRow end
 function Panel.redrawCountForTest() return redraws end

@@ -294,7 +294,7 @@ return {
       feedTwelve(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
-      A.eq(ns.Panel.headerText(), "0 here \194\183 5 online", "nobody pinned or in my party; the guild members online")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 5 online", "nobody pinned or in my party; the guild members online")
       A.eq(#ns.Panel.models(), 12)
       A.eq(ns.Panel.rowCountForTest(), ns.Config.PANEL_MAX_ROWS - 1, "the Guild online bar takes a slot")
       ns.Panel.scroll(-10)
@@ -435,7 +435,7 @@ return {
         "the Guild online bar starts closed once there is a party and a pin")
       A.ok(ns.Panel.guildBarForTest(), "its bar is drawn")
       A.ok(ns.Panel.headFrameForTest("My party")); A.ok(ns.Panel.headFrameForTest("Pinned"))
-      A.eq(ns.Panel.headerText(), "2 here \194\183 5 online", "party and pinned here; me, 3 friends, 1 more on the list")
+      A.eq(ns.Panel.headerText(), "3 here \194\183 5 online", "party, pinned and me here; 3 friends and 1 more on the list")
       ns.Panel.toggleGuildOnline(); W:advance(1)
       A.eq(ns.Modules.setting("panel", "showGuildOnline"), true, "remembered")
       A.eq(shape(ns.Panel.entriesForTest()), { "<My party>", "Frostie", "<Pinned>", "Ginkan", "[guild 2 open]", "Lurabe", "Pewpew" })
@@ -511,7 +511,7 @@ return {
       A.eq(ns.Panel.rowFrameForTest(rowIndexOf(ns, "Frostie")):GetAlpha(), 1, "a member with the addon is not dimmed")
       A.eq(frostie.noAddon, nil)
       -- pinning a no-addon member works; the header counts them while they show
-      A.eq(ns.Panel.headerText(), "0 here \194\183 7 online")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 7 online")
       ns.Modules.set("panel", "showNoAddon", false); W:advance(1)
       A.eq(shape(ns.Panel.entriesForTest()), { "[guild 1 open]", "Frostie" }, "only the one who talked")
     end,
@@ -521,8 +521,8 @@ return {
       ns.Modules.set("panel", "showNoAddon", true); W:advance(1)
       local on = ns.Panel.headerText()
       ns.Modules.set("panel", "showNoAddon", false); W:advance(1)
-      A.eq(on, "0 here \194\183 7 online")
-      A.eq(ns.Panel.headerText(), "0 here \194\183 2 online", "me and Frostie")
+      A.eq(on, "1 here \194\183 7 online")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 2 online", "me and Frostie")
       A.eq(#ns.Panel.models(), 1)
     end,
     not_in_a_guild_shows_the_one_line = function(ns, A, W)
@@ -571,8 +571,86 @@ return {
       A.eq(ns.Panel.rowCountForTest(), ns.Config.PANEL_MAX_ROWS - 1, "one slot is the bar")
       ns.Panel.scroll(-100); W:advance(1)
       A.eq(ns.Panel.firstRowForTest(), 51 - ns.Config.PANEL_MAX_ROWS + 1, "51 entries (the bar and 50 rows), scrolled to the end")
-      A.eq(ns.Panel.headerText(), "0 here \194\183 51 online")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 51 online")
       A.eq(ns.Log.errors(10), {})
+    end,
+    my_own_row_is_not_a_pinned_row = function(ns, A)
+      local L = ns.PanelLogic
+      local me = L.selfMember("Me", {})
+      local others = { { name = "Bob", online = true }, { name = "Cat", online = true } }
+      local function shapeOf(e)
+        local out = {}
+        for i, x in ipairs(e) do out[i] = x.head and ("<" .. x.head .. ">") or x.bar and ("[" .. x.bar .. "]") or x.key end
+        return out
+      end
+      local rows = L.rows({ me, others[1], others[2] }, {}, nil, false, 0, 0)
+      A.eq(rows[1].section, "self")
+      A.eq(shapeOf(L.entries(rows, { guildOpen = false })), { "Me", "[guild]", "Bob", "Cat" },
+        "no party, no pins: the guild list is open and nothing is headed Pinned")
+      rows = L.rows({ me, others[1], others[2] }, {}, nil, false, 0, 0, nil, nil, { pins = { Bob = true } })
+      A.eq(shapeOf(L.entries(rows, { guildOpen = false })), { "Me", "<Pinned>", "Bob", "[guild]" },
+        "my row on top, then the heading above the pinned friend")
+    end,
+    here_counts_party_pinned_and_me = function(ns, A)
+      local L = ns.PanelLogic
+      local list = { { name = "A", online = true }, { name = "B", online = true }, { name = "C", online = true },
+        { name = "D", online = false }, { name = "N", online = true, noAddon = true } }
+      local ctx = { party = { A = true, N = true }, pins = { B = true, D = true } }
+      A.eq(L.hereCount(list, ctx, true, true), 4, "A, B, the no-addon party member, and me")
+      A.eq(L.hereCount(list, ctx, false, true), 3, "no-addon members hidden: not counted")
+      A.eq(L.hereCount({}, {}, true, true), 1, "alone: just me")
+    end,
+    quest_mates_lookup_is_the_same_on_many_members = function(ns, A)
+      local L = ns.PanelLogic
+      local small = { { name = "A", online = true, questId = 7, questName = "Q" },
+        { name = "B", online = true, questId = 7, questName = "Q" }, { name = "C", online = true } }
+      local rows = L.rows(small, {}, nil, false, 0, 0)
+      A.eq(rows[1].questMates, { "B" }); A.eq(rows[2].questMates, { "A" }); A.eq(rows[3].questMates, nil)
+      local many = {}
+      for i = 1, 300 do many[i] = { name = "M" .. i, online = true, questId = i % 2, questName = "Q" } end
+      rows = L.rows(many, {}, nil, false, 0, 0)
+      A.eq(#rows, 300)
+      A.eq(#rows[1].questMates, 149, "the other 149 on the same quest")
+    end,
+    note_height_uses_the_real_height_else_a_guess = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.noteHeight("x", 230, 15, 42), 42)
+      A.eq(L.noteHeight("x", 230, 15, 0), 15, "no height from the game: the guess")
+      A.eq(L.noteHeight(string.rep("x", 60), 160, 15, nil), 45, "27 characters a line at 160 px: 3 lines")
+      A.eq(L.noteHeight(string.rep("x", 60), 230, 15, nil), 30, "38 a line at 230 px: 2 lines")
+    end,
+    note_uses_the_font_strings_height = function(ns, A, W)
+      W.state.guild = nil
+      start(ns, W)
+      W:advance(1)
+      local before = ns.Panel.rootForTest():GetHeight()
+      rawset(ns.Panel.noteTextForTest(), "GetStringHeight", function() return 100 end)
+      ns.Panel.refresh(); W:advance(1)
+      A.ok(ns.Panel.rootForTest():GetHeight() > before + 20, "the panel is as tall as the text says")
+    end,
+    pin_button_is_a_green_plus_or_a_star_and_fades_with_its_row = function(ns, A, W)
+      start(ns, W)
+      hear(ns, W, { "Frostie" })
+      W:advance(1)
+      local r = ns.Panel.rowFrameForTest(1)
+      A.ok(r.pin.plus:IsShown()); A.eq(r.pin.icon:IsShown(), false, "a plus on a guild row")
+      A.eq(r.pin.plus:GetText(), "+")
+      ns.Panel.pin("Frostie"); W:advance(1)
+      r = ns.Panel.rowFrameForTest(1)
+      A.ok(r.pin.icon:IsShown()); A.eq(r.pin.plus:IsShown(), false, "a star on a pinned row")
+    end,
+    lone_player_with_my_own_row_sees_the_guild_list_open = function(ns, A, W)
+      start(ns, W)
+      ns.Modules.set("panel", "showNoAddon", true)
+      ns.Modules.set("panel", "showSelf", true)
+      W:advance(1)
+      A.eq(shape(ns.Panel.entriesForTest()),
+        { "Twiz", "[guild 6 open]", "Chaos", "Frostie", "Ginkan", "Holybøi", "Lurabe", "Pewpew" })
+      A.eq(ns.Panel.headerText(), "1 here \194\183 7 online")
+      ns.Panel.pin("Frostie"); W:advance(1)
+      local e = shape(ns.Panel.entriesForTest())
+      A.eq({ e[1], e[2], e[3], e[4] }, { "Twiz", "<Pinned>", "Frostie", "[guild 5]" })
+      A.eq(ns.Panel.headerText(), "2 here \194\183 7 online", "me and the pinned friend (online in the guild list)")
     end,
     panel_draws_level_progress_in_every_style = function(ns, A, W)
       start(ns, W)
@@ -705,7 +783,7 @@ return {
       start(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
-      A.eq(ns.Panel.headerText(), "0 here \194\183 1 online")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 1 online")
       ns.Modules.set("panel", "hideWhenAlone", true); W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)

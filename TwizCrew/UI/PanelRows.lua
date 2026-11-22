@@ -18,7 +18,7 @@ local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a g
 local ARROW_SIZE = 26 -- big enough to read at a glance
 local PIN_SIZE = 16
 local PIN_ROOM = PIN_SIZE + 4 -- what a pin button takes from the corner texts
-local PIN_PLUS = "Interface\\Buttons\\UI-PlusButton-Up"
+local PIN_GREEN = "6fbf73"
 local PIN_STAR = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1" -- the yellow star
 local arrowTicker -- turns the visible row arrows between redraws (Find the crew)
 ---------------------------------------------------------------------------------------------------------- rows
@@ -128,7 +128,10 @@ local function createRow()
   r.pin:SetSize(PIN_SIZE, PIN_SIZE)
   r.pin:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
   r.pin.icon = r.pin:CreateTexture(nil, "ARTWORK")
-  r.pin.icon:SetAllPoints(r.pin)
+  r.pin.icon:SetAllPoints(r.pin) -- the gold star (unpin)
+  r.pin.plus = T.readable(T.text(r.pin, T.FONT.normal, PIN_GREEN)) -- the green "+" (pin)
+  r.pin.plus:SetPoint("CENTER", r.pin, "CENTER", 0, 0)
+  r.pin.plus:SetText("+")
   local pinHl = r.pin:CreateTexture(nil, "HIGHLIGHT")
   pinHl:SetAllPoints(r.pin)
   T.color(pinHl, C.white, 0.25)
@@ -142,7 +145,6 @@ local function createRow()
   end)
   script(r.pin, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   r.pin:Hide()
-  if r.pin.SetIgnoreParentAlpha then r.pin:SetIgnoreParentAlpha(true) end -- easy to spot on a dimmed row
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
@@ -333,8 +335,11 @@ local function layoutRow(r, m, style, s, width)
   local pinRoom = m.pinAction and PIN_ROOM or 0
   local roomRight = (style == "tiny" and 8 or 34) + pinRoom
   if m.pinAction then
-    r.pin.icon:SetTexture(m.pinAction == "unpin" and PIN_STAR or PIN_PLUS)
-    if m.pinAction == "unpin" then r.pin.icon:SetVertexColor(1, 1, 1) else r.pin.icon:SetVertexColor(0.3, 1, 0.4) end
+    if m.pinAction == "unpin" then
+      r.pin.icon:SetTexture(PIN_STAR); r.pin.icon:Show(); r.pin.plus:Hide()
+    else
+      r.pin.icon:Hide(); r.pin.plus:Show()
+    end
     r.pin:ClearAllPoints()
     r.pin:SetPoint("RIGHT", r, "TOPRIGHT", -6, -(5 + icon / 2))
     r.pin:Show()

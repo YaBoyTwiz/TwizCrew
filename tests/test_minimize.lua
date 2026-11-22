@@ -127,7 +127,7 @@ return {
       A.eq(ns.Panel.newsLineForTest(), nil, "the What's new line is hidden")
       A.eq(ns.Panel.updateLineForTest(), nil, "and the update line")
       A.ok(ns.Panel.isShown())
-      A.eq(ns.Panel.barTextForTest(), "0 here \194\183 2 online", "the title bar keeps the count (nobody pinned or in my party; me and a friend online)")
+      A.eq(ns.Panel.barTextForTest(), "1 here \194\183 2 online", "the title bar keeps the count (nobody pinned or in my party; me and a friend online)")
       tc(W, "mini")
       W:advance(1)
       A.eq(ns.Panel.viewForTest(), "full")
@@ -219,7 +219,7 @@ return {
       end
       ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
       A.eq(ns.Panel.titleVersionForTest(), "", "tiny: no version on the bar")
-      A.ok(ns.Panel.barTextForTest() == "0 here \194\183 1 online" or ns.Panel.barTextForTest() == "0/1")
+      A.ok(ns.Panel.barTextForTest() == "1 here \194\183 1 online" or ns.Panel.barTextForTest() == "1/1")
       -- fade: no error, and the bar keeps working
       ns.Modules.set("panel", "fadeOut", true); W:advance(1)
       -- panel off and on
@@ -247,7 +247,7 @@ return {
       A.ok(ns.Panel.noticeForTest(), "still there before 6 s")
       W:advance(1.5)
       A.eq(ns.Panel.noticeForTest(), nil, "gone after about 6 s")
-      A.ok(ns.Panel.barTextForTest() == "0 here \194\183 2 online" or ns.Panel.barTextForTest() == "0/2", "the count is back")
+      A.ok(ns.Panel.barTextForTest() == "1 here \194\183 2 online" or ns.Panel.barTextForTest() == "1/2", "the count is back")
       A.eq(ns.Log.errors(10), {})
     end,
 

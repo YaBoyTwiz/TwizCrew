@@ -137,7 +137,7 @@ return {
       A.eq(ns.Panel.rowTextsForTest(rowIndex(ns, BUDDY)).corner, "Lv 12 \194\183 63%")
       ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(0.1)
       A.eq(ns.Panel.rowTextsForTest(rowIndex(ns, BUDDY)).corner, "63%")
-      A.eq(ns.Panel.headerText(), "0 here \194\183 3 online", "me and two pretend friends")
+      A.eq(ns.Panel.headerText(), "1 here \194\183 3 online", "me and two pretend friends")
       A.ok(printedLike(W, "Testbuddy"), "chat says what was added")
       A.eq(ns.Log.errors(10), {})
     end,

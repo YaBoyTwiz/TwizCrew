@@ -188,6 +188,21 @@ function PanelLogic.noAddonMembers(guild, have, myKey)
   return out
 end
 
+-- How many people the main view holds: my party and my pinned members who are online, and me (always). Counted the
+-- way the rows are sectioned: list is the members (roster rows and noAddonMembers), ctx the one of PanelLogic.rows.
+function PanelLogic.hereCount(list, ctx, showNoAddon, active)
+  ctx = ctx or {}
+  local n = active and 1 or 0
+  for _, m in ipairs(list or {}) do
+    if m.online and not m.self and not (m.noAddon and showNoAddon == false) then
+      local key = m.name
+      if (ctx.party and ctx.party[key]) or (ctx.pins and ctx.pins[key] == true) then n = n + 1
+      elseif not active then n = n + 1 end
+    end
+  end
+  return n
+end
+
 -- The "online" half of the header: guild members online, without the no-addon ones while they are hidden.
 function PanelLogic.guildOnline(onlineAll, noAddon, showNoAddon)
   local n = tonumber(onlineAll) or 0
@@ -198,7 +213,7 @@ function PanelLogic.guildOnline(onlineAll, noAddon, showNoAddon)
 end
 
 local function sectionOf(m, online, pinned, party)
-  if m.self then return "pinned" end -- my own row is always in the main view
+  if m.self then return "self" end -- my own row: the top of the main view, no heading
   if not online then return "offline" end
   if party then return "party" end
   if pinned then return "pinned" end
@@ -296,9 +311,10 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
     if tonumber(id) then return "#" .. tonumber(id) end
     if type(name) == "string" and name ~= "" then return "=" .. name end
   end
+  local memberOf = {} -- key -> member, built once
+  for _, m in ipairs(members or {}) do memberOf[m.name] = m end
   for _, row in ipairs(out) do
-    local m
-    for _, cand in ipairs(members or {}) do if cand.name == row.key then m = cand; break end end
+    local m = memberOf[row.key]
     local k = m and m.online and not m.noAddon and questKey(m.questId, m.questName)
     if k then byQuest[k] = byQuest[k] or {}; table.insert(byQuest[k], row.name) end
   end
@@ -332,15 +348,17 @@ end
 -- (the guild is not usable yet; only pretend friends can be shown).
 function PanelLogic.entries(rows, opts)
   opts = opts or {}
-  local party, pinned, guild, off = {}, {}, {}, {}
+  local me, party, pinned, guild, off = {}, {}, {}, {}, {}
   for _, r in ipairs(rows or {}) do
-    if r.offline then off[#off + 1] = r
+    if r.section == "self" then me[#me + 1] = r
+    elseif r.offline then off[#off + 1] = r
     elseif r.section == "party" and opts.inGroup then party[#party + 1] = r
     elseif r.section == "pinned" then pinned[#pinned + 1] = r
     else guild[#guild + 1] = r end
   end
   local out = {}
   local offCount = #off + (tonumber(opts.hiddenOffline) or 0)
+  for _, r in ipairs(me) do out[#out + 1] = r end
   if #party > 0 then
     out[#out + 1] = { head = "My party" }
     for _, r in ipairs(party) do out[#out + 1] = r end
@@ -363,6 +381,14 @@ function PanelLogic.entries(rows, opts)
     if open then for _, r in ipairs(off) do out[#out + 1] = r end end
   end
   return out
+end
+
+-- Height of the note under the rows: the font string's real height when the game gives one, else a guess from how many
+-- characters fit on a line of `width` pixels (about 6 px each).
+function PanelLogic.noteHeight(text, width, line, real)
+  if type(real) == "number" and real > 0 then return real end
+  local perLine = math.max(8, math.floor((tonumber(width) or 160) / 5.9))
+  return math.max(1, math.ceil(#text / perLine)) * line
 end
 
 -- The bars' words: "Offline (3)" with a hint which way a click goes.

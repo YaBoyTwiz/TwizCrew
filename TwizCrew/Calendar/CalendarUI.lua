@@ -1,12 +1,15 @@
--- Crew calendar, the window (part of module "calendar"): Month (who played each day, with class icons and note
--- icons; the tooltip has everyone's times), a day's timeline (one bar per friend, AFK lighter, their times written
--- on it, hover for who was on at that moment) with that day's notes and a box to add one (with an
--- icon), and Usual times (when the crew is usually on, the best time to play together, everyone's habits).
+-- Crew calendar, the window (part of module "calendar"). Two tabs, so events are not lost among play times:
+-- "Events": a month that shows only the crew's notes and events, and a day's list of them (the window opens here).
+-- "Play times": a month of who played each day (class icons; the tooltip has everyone's times), a day's timeline
+-- (one bar per friend, AFK lighter, their times written on it, hover for who was on at that moment, the timed notes
+-- as small marks under it) and Usual times (when the crew is usually on, the best time to play together, everyone's
+-- habits); a small Month / Usual times switch sits next to the tabs while this tab is open.
 -- Opened by the Calendar button next to the panel's tabs, the wrench menu, /tc cal, or the button in the settings.
 -- This file: the window, moving between the views and the helpers they share. Each view, loaded right after it:
--- Calendar/CalendarMonth.lua, Calendar/CalendarDay.lua (the day timeline), Calendar/CalendarUsual.lua (usual times
--- and the real-week grid) and Calendar/CalendarMaker.lua ("+ Create note" and the dungeon picker). What more than
--- one of these files uses lives on ns.Calendar._ (P).
+-- Calendar/CalendarEvents.lua (the Events month and day), Calendar/CalendarMonth.lua (the Play times month),
+-- Calendar/CalendarDay.lua (the day timeline), Calendar/CalendarUsual.lua (usual times and the real-week grid) and
+-- Calendar/CalendarMaker.lua ("+ Create note" and the dungeon picker). What more than one of these files uses lives
+-- on ns.Calendar._ (P).
 local _, ns = ...
 
 local Calendar = {}
@@ -31,15 +34,17 @@ local TOP = 80 -- below the title and the tabs
 P.I, P.ICON_NOTES, P.PREV_TEX, P.NEXT_TEX = I, ICON_NOTES, PREV_TEX, NEXT_TEX
 P.WIDTH, P.HEIGHT, P.PAD, P.TOP = WIDTH, HEIGHT, PAD, TOP
 
-local tabs
+local tabs, subs
 local zoneText
+local PLAY = { month = true, day = true, usual = true } -- the views of the Play times tab
+local VIEWS = { events = true, eventDay = true, month = true, day = true, usual = true }
 -- Shared state (set and read by more than one of the window's files)
 -- Functions and constants on P are set once, at load, in this file; later files may copy them into locals; state
 -- that changes is always read as P.x.
 P.frame = nil
-P.view = "month" -- "month" | "day" | "usual"
+P.view = "events" -- Events: "events" | "eventDay"; Play times: "month" | "day" | "usual"
 P.shownYear, P.shownMonth, P.shownDay = nil, nil, nil
-P.monthPane, P.dayPane, P.usualPane = nil, nil, nil
+P.eventsPane, P.eventDayPane, P.monthPane, P.dayPane, P.usualPane = nil, nil, nil, nil, nil
 P.dayScroll = 0 -- the day view's first row (more people than rows: the mouse wheel scrolls)
 
 local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
@@ -176,7 +181,7 @@ local function build()
   title:SetText("Crew calendar")
   local sub = T.text(P.frame, T.FONT.small, C.muted)
   sub:SetPoint("LEFT", title, "RIGHT", 10, 0)
-  sub:SetText("who played when, and notes for the crew")
+  sub:SetText("events and notes for the crew, and who played when")
   local close = Widgets.button(P.frame, "Close", function() Calendar.close() end, nil, FEATURE)
   close:SetPoint("TOPRIGHT", P.frame, "TOPRIGHT", -PAD, -10)
   local create = Widgets.button(P.frame, "+ Create note", function() Calendar.openMaker({}) end, nil, FEATURE)
@@ -184,7 +189,16 @@ local function build()
   create:SetPoint("RIGHT", close, "LEFT", -8, 0)
   zoneText = T.text(P.frame, T.FONT.small, C.muted)
   zoneText:SetPoint("TOPRIGHT", P.frame, "TOPRIGHT", -PAD, -52)
-  tabs = { month = tabButton("Month", ICON_CAL, "month", PAD), usual = tabButton("Usual times", ICON_USUAL, "usual", PAD + 146) }
+  tabs = { events = tabButton("Events", ICON_NOTES, "events", PAD),
+    play = tabButton("Play times", ICON_USUAL, "month", PAD + 146) }
+  -- inside Play times: the month of who played, or the usual times
+  subs = {}
+  subs.month = Widgets.button(P.frame, "Month", function() Calendar.show("month") end, nil, FEATURE)
+  subs.month:SetPoint("TOPLEFT", P.frame, "TOPLEFT", PAD + 300, -46)
+  subs.usual = Widgets.button(P.frame, "Usual times", function() Calendar.show("usual") end, nil, FEATURE)
+  subs.usual:SetPoint("LEFT", subs.month, "RIGHT", 4, 0)
+  P.buildEvents()
+  P.buildEventDay()
   P.buildMonth()
   P.buildDay()
   P.buildUsual()
@@ -192,25 +206,34 @@ end
 
 -------------------------------------------------------------------------------------------------------- draw
 local function drawTabs()
+  local play = PLAY[P.view] == true
   for id, b in pairs(tabs) do
-    local active = (id == P.view) or (id == "month" and P.view == "day")
+    local active = (id == "play") == play
     if active then b.line:Show(); b.text:SetTextColor(T.rgb(C.title)) else b.line:Hide(); b.text:SetTextColor(T.rgb(C.text)) end
+  end
+  for id, b in pairs(subs) do
+    if play then b:Show() else b:Hide() end
+    local active = (id == "usual") == (P.view == "usual")
+    b.text:SetTextColor(T.rgb(active and C.title or C.white))
   end
 end
 
 function Calendar.refresh()
   if not P.frame or not Calendar.shownFlag then return end
-  P.monthPane:Hide(); P.dayPane:Hide(); P.usualPane:Hide()
+  P.eventsPane:Hide(); P.eventDayPane:Hide(); P.monthPane:Hide(); P.dayPane:Hide(); P.usualPane:Hide()
   drawTabs()
-  zoneText:SetText("Times are in your time zone (" .. zoneName() .. ")")
+  zoneText:SetText("Your time zone: " .. zoneName())
   if P.view == "day" then P.dayPane:Show(); P.drawDay()
   elseif P.view == "usual" then P.usualPane:Show(); P.drawUsual()
-  else P.monthPane:Show(); P.drawMonth() end
+  elseif P.view == "month" then P.monthPane:Show(); P.drawMonth()
+  elseif P.view == "eventDay" then P.eventDayPane:Show(); P.drawEventDay()
+  else P.eventsPane:Show(); P.drawEvents() end
 end
 
 -------------------------------------------------------------------------------------------------------- public
+-- "events" (the Events month), "eventDay", "month" (the Play times month), "day" (the timeline) or "usual".
 function Calendar.show(id)
-  P.view = (id == "day" or id == "usual") and id or "month"
+  P.view = VIEWS[id] and id or "events"
   Calendar.refresh()
 end
 
@@ -221,6 +244,18 @@ function Calendar.moveMonth(delta)
   Calendar.refresh()
 end
 
+-- A day's notes and events (the Events tab).
+function Calendar.openEvents(day)
+  if not P.frame then Calendar.open() end
+  if day ~= P.shownDay or P.view ~= "eventDay" then P.eventScroll = 0 end
+  P.shownDay = day
+  local y, m = L.civil(day)
+  P.shownYear, P.shownMonth = y, m
+  P.view = "eventDay"
+  Calendar.refresh()
+end
+
+-- A day's timeline of who played (the Play times tab).
 function Calendar.openDay(day)
   if not P.frame then Calendar.open() end
   if day ~= P.shownDay then P.dayScroll = 0 end
@@ -231,7 +266,7 @@ function Calendar.openDay(day)
   Calendar.refresh()
 end
 
--- The menu when you right-click a day on the month.
+-- The menu when you right-click a day on the Events month.
 function Calendar.dayMenuItems(day)
   return {
     { label = "Create a note on this day", icon = ICON_NOTES, onClick = function() Calendar.openMaker({ day = day }) end },
@@ -245,7 +280,7 @@ function Calendar.open()
   local today = ns.Diary.localToday()
   local y, m = L.civil(today)
   P.shownYear, P.shownMonth, P.shownDay = y, m, today
-  P.view = "month"
+  P.view = "events"
   P.frame:Show()
   Calendar.shownFlag = true
   if ns.Notes then ns.Notes.clearFresh() end -- looked at: the panel's Calendar button stops pulsing

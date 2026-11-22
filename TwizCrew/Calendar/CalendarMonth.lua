@@ -1,21 +1,21 @@
--- Crew calendar, the Month view: who played each day (class icons), the notes (icons, a dungeon's artwork) and the
--- tooltip with everyone's times. Part of the calendar window (Calendar/CalendarUI.lua); shared names live on
--- ns.Calendar._ (P).
+-- Crew calendar, the Play times month: who played each day (class icons, the hours together) and the tooltip
+-- with everyone's times. No notes here: they have their own tab (Calendar/CalendarEvents.lua). Part of the calendar
+-- window (Calendar/CalendarUI.lua); shared names live on ns.Calendar._ (P).
 local _, ns = ...
 
 local Calendar = ns.Calendar
 local P = Calendar._
 
-local T, Widgets = ns.Theme, ns.Widgets
+local T = ns.Theme
 local C = T.COLOR
 local L = ns.CalendarLogic
 local PREV_TEX, NEXT_TEX = P.PREV_TEX, P.NEXT_TEX
 local WIDTH, HEIGHT, PAD, TOP = P.WIDTH, P.HEIGHT, P.PAD, P.TOP
-local script, colored, people, setArt = P.script, P.colored, P.people, P.setArt
-local iconTexture, arrowButton = P.iconTexture, P.arrowButton
+local script, colored, people = P.script, P.colored, P.people
+local arrowButton = P.arrowButton
 
 local CELL_W, CELL_H = 96, 68
-local FACES = 7 -- class icons per day cell
+local FACES, FACES_ROW = 14, 7 -- class icons per day cell, in two rows
 local cells = {}
 -------------------------------------------------------------------------------------------------------- month
 local function buildMonth()
@@ -40,30 +40,11 @@ local function buildMonth()
     c:SetPoint("TOPLEFT", P.monthPane, "TOPLEFT", col * CELL_W, -(44 + row * CELL_H))
     local weekend = col == 0 or col == 6
     T.paint(c, weekend and C.backdrop or C.row, 0.9, C.rowBorder, 1)
-    c.art = c:CreateTexture(nil, "BORDER")
-    c.art:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
-    c.art:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
-    c.art:Hide()
-    c.shade = c:CreateTexture(nil, "BORDER", nil, 2) -- darker toward the bottom, so the words read on any picture
-    c.shade:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
-    c.shade:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
-    T.gradient(c.shade, "VERTICAL", "000000", "000000", 0.85, 0.1)
-    c.shade:Hide()
-    c.artText = T.readable(T.text(c, T.FONT.small, C.white), 1)
-    c.artText:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 4, 4)
-    c.artText:SetWidth(CELL_W - 12)
-    c.artText:SetJustifyH("LEFT")
-    if c.artText.SetShadowOffset then c.artText:SetShadowOffset(2, -2) end
-    if c.artText.SetShadowColor then c.artText:SetShadowColor(0, 0, 0, 1) end
     c.hl = c:CreateTexture(nil, "HIGHLIGHT")
     c.hl:SetAllPoints(c)
     T.color(c.hl, C.title, 0.10)
     c.num = T.readable(T.text(c, T.FONT.normal, C.text))
     c.num:SetPoint("TOPLEFT", c, "TOPLEFT", 5, -4)
-    c.note = iconTexture(c, nil, 16, "OVERLAY")
-    c.note:SetPoint("TOPRIGHT", c, "TOPRIGHT", -4, -4)
-    c.noteCount = T.readable(T.text(c, T.FONT.small, C.white))
-    c.noteCount:SetPoint("RIGHT", c.note, "LEFT", -1, 0)
     c.total = T.text(c, T.FONT.small, C.muted)
     c.total:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -5, 4)
     c.today = c:CreateTexture(nil, "OVERLAY")
@@ -79,32 +60,24 @@ local function buildMonth()
     for k = 1, FACES do
       local f = c:CreateTexture(nil, "ARTWORK")
       f:SetSize(12, 12)
-      f:SetPoint("TOPLEFT", c, "TOPLEFT", 5 + (k - 1) * 13, -26)
+      f:SetPoint("TOPLEFT", c, "TOPLEFT", 5 + ((k - 1) % FACES_ROW) * 13, -(22 + math.floor((k - 1) / FACES_ROW) * 14))
       f:Hide()
       c.faces[k] = f
     end
     c.more = T.text(c, T.FONT.small, C.muted)
-    c.more:SetPoint("TOPLEFT", c, "TOPLEFT", 5, -40)
+    c.more:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 5, 4)
     script(c, "OnClick", function(self) if self.tcDay then Calendar.openDay(self.tcDay) end end)
-    script(c, "OnMouseUp", function(self, button)
-      if button == "RightButton" and self.tcDay then Widgets.menu(self, Calendar.dayMenuItems(self.tcDay)) end
-    end)
     script(c, "OnEnter", function(self)
       if not GameTooltip or not self.tcDay then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       local _, m, d = L.civil(self.tcDay)
       GameTooltip:SetText(L.WEEKDAYS[L.weekday(self.tcDay) + 1] .. ", " .. L.MONTHS[m] .. " " .. d)
-      for _, n in ipairs(self.tcNotes or {}) do
-        local when = ns.Notes.timeText(n, ns.Diary.offsetOn(self.tcDay))
-        GameTooltip:AddLine("|T" .. ns.Notes.iconTexture(n.i) .. ":14|t " .. (when and (when .. "  ") or "")
-          .. ns.Util.safeText(n.t), 1, 0.9, 0.5, true)
-      end
       if #(self.tcPeople or {}) == 0 then GameTooltip:AddLine("Nobody played (that we know of).", 0.8, 0.8, 0.8) end
       for _, p in ipairs(self.tcPeople or {}) do
         GameTooltip:AddDoubleLine(colored(p.name, p.class), L.runText(p.runs) .. "  |cffaaaaaa(" .. L.duration(p.minutes) .. ")|r",
           1, 1, 1, 1, 1, 1)
       end
-      GameTooltip:AddLine("Click for the timeline and notes. Right-click to add a note.", 0.7, 0.7, 0.7)
+      GameTooltip:AddLine("Click for the timeline.", 0.7, 0.7, 0.7)
       GameTooltip:Show()
     end)
     script(c, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -125,31 +98,6 @@ local function drawMonth()
     local off = ns.Diary.offsetOn(cell.day) -- each day its own (a clock change moves it)
     local list = cell.day <= today and L.dayView(everyone, cell.day, off) or {}
     c.tcPeople = list
-    local notes = ns.Notes.forDate(ns.Notes.dateKey(cell.y, cell.m, cell.d))
-    c.tcNotes = notes
-    if #notes > 0 then
-      c.note:SetTexture(ns.Notes.iconTexture(notes[1].i))
-      c.note:Show()
-      c.noteCount:SetText(#notes > 1 and tostring(#notes) or "")
-    else
-      c.note:Hide()
-      c.noteCount:SetText("")
-    end
-    -- a dungeon or raid that day: its artwork fills the day, its time and name on top
-    local event
-    for _, n in ipairs(notes) do if n.g then event = n; break end end
-    c.tcArt = nil
-    if event then
-      c.tcArt = setArt(c.art, event.g, ns.Notes.iconTexture(event.i)) and "art" or "icon"
-      c.art:Show(); c.shade:Show()
-      local when = ns.Notes.timeText(event, off)
-      local going = #ns.Notes.repliesFor(event.key).yes
-      c.artText:SetText((when and ("|cffffd100" .. when .. "|r ") or "") .. ns.Util.safeText(event.t)
-        .. (going > 0 and ("\n|cff40ff40" .. going .. " going|r") or ""))
-      c.artText:Show()
-    else
-      c.art:Hide(); c.shade:Hide(); c.artText:Hide()
-    end
     local minutes = 0
     for k = 1, FACES do
       local p, f = list[k], c.faces[k]
@@ -157,9 +105,21 @@ local function drawMonth()
     end
     for _, p in ipairs(list) do minutes = minutes + p.minutes end
     c.more:SetText(#list > FACES and ("+" .. (#list - FACES) .. " more") or "")
-    c.total:SetText((#list > 0 and not event) and L.duration(minutes) or "")
+    c.total:SetText(#list > 0 and L.duration(minutes) or "")
     c:SetAlpha(cell.inMonth and (cell.day <= today and 1 or 0.6) or 0.3)
     if cell.day == today then c.today:Show(); c.todayLine:Show() else c.today:Hide(); c.todayLine:Hide() end
   end
 end
 P.drawMonth = drawMonth
+
+-- Test hook: what the Play times month shows for a local day ({ people, faces }), or nil when it is not on it.
+function Calendar.monthCellForTest(day)
+  for _, c in ipairs(cells) do
+    if c.tcDay == day then
+      local faces = 0
+      for _, f in ipairs(c.faces) do if f:IsShown() then faces = faces + 1 end end
+      return { people = #(c.tcPeople or {}), faces = faces, notes = c.tcNotes, art = c.art }
+    end
+  end
+  return nil
+end

@@ -1216,6 +1216,85 @@ return {
       A.ok(t.cal:IsShown())
       A.eq(ns.Log.errors(10), {})
     end,
+    ------------------------------------------------------------------------------------------- two calendars
+    events_and_play_times_are_apart = function(ns, A, W)
+      start(ns, W)
+      W:advance(70) -- (I have been on: my own play time is in the diary)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local N, L, Cal = ns.Notes, ns.CalendarLogic, ns.Calendar
+      Cal.open()
+      local _, _, _, today = Cal.viewForTest()
+      local function key(day) return N.dateKey(L.civil(day)) end
+      -- today: four plain notes, the last by Frostie; tomorrow: Frostie's dungeon run and one more; yesterday: Frostie's
+      for i = 1, 3 do A.ok(N.add(key(today), "Mine " .. i, 1)) end
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-5000", d = key(today), t = "Bring potions", i = "4", b = "Frostie",
+        c = "MAGE", u = "5000" })
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-5001", d = key(today + 1), t = "The Deadmines", i = "2",
+        b = "Frostie", c = "MAGE", u = "5001", g = "dm" })
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-5002", d = key(today + 1), t = "After party", i = "1", b = "Frostie",
+        c = "MAGE", u = "5002" })
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-5003", d = key(today - 1), t = "Old news", i = "1", b = "Frostie",
+        c = "MAGE", u = "5003" })
+      -- the Events month: notes only
+      Cal.show("events")
+      A.eq((Cal.viewForTest()), "events")
+      local c = Cal.eventCellForTest(today)
+      A.eq(c.notes, 4)
+      A.eq(#c.lines, 3, "three lines in a day")
+      A.contains(c.lines[1] .. "|" .. c.lines[2], "Mine", "the notes' words")
+      A.eq(c.lines[3], "+2 more", "the last line counts the rest")
+      A.ok(c.new, "Frostie's unopened note marks the day new")
+      local tomorrow = Cal.eventCellForTest(today + 1)
+      A.ok(tomorrow.art, "a dungeon run fills its day")
+      A.ok(tomorrow.new)
+      A.eq(#tomorrow.lines, 0, "no lines over the artwork")
+      A.no(Cal.eventCellForTest(today - 1).new, "a past day is never new")
+      A.eq(Cal.eventCellForTest(today + 3).notes, 0)
+      -- a day's list; opening Frostie's note takes its "new" away
+      Cal.openEvents(today)
+      A.eq((Cal.viewForTest()), "eventDay")
+      A.eq(#Cal.lastNotes, 4)
+      local mine, theirs
+      for i = 1, 4 do
+        local r = Cal.eventRowForTest(i)
+        if r.key == "frost123-5000" then theirs = r else mine = r end
+      end
+      A.ok(theirs and theirs.new, "new in the list")
+      A.no(mine.new, "my own note is not new")
+      A.ok(ns.NoteView.open("frost123-5000"))
+      for i = 1, 4 do A.no(Cal.eventRowForTest(i).new, "opened: no longer new") end
+      Cal.show("events")
+      A.no(Cal.eventCellForTest(today).new, "nor on the month")
+      -- more notes than rows: the wheel scrolls
+      for i = 4, 11 do A.ok(N.add(key(today), "Mine " .. i, 1)) end
+      Cal.openEvents(today)
+      A.eq(#Cal.lastNotes, 12)
+      local first = Cal.eventRowForTest(1).key
+      Cal.scrollEvents(3)
+      A.no(Cal.eventRowForTest(1).key == first, "scrolled")
+      Cal.scrollEvents(99)
+      A.ok(Cal.eventRowForTest(8), "the last page is full")
+      Cal.scrollEvents(-99)
+      A.eq(Cal.eventRowForTest(1).key, first, "back to the top")
+      -- the Play times month: people only
+      Cal.show("month")
+      local p = Cal.monthCellForTest(today)
+      A.eq(p.people, 1, "me, today")
+      A.eq(p.faces, 1)
+      A.eq(p.notes, nil, "no notes on the Play times month")
+      A.eq(p.art, nil, "and no artwork")
+      -- across: a day's events from the timeline, and back
+      Cal.openDay(today + 1)
+      A.eq((Cal.viewForTest()), "day")
+      A.eq(#Cal.lastNotes, 2, "the timeline still knows the day's notes (for its marks)")
+      Cal.openEvents(today + 1)
+      A.eq((Cal.viewForTest()), "eventDay")
+      Cal.show("bogus")
+      A.eq((Cal.viewForTest()), "events", "an unknown view is the Events month")
+      Cal.close(); Cal.show("usual"); Cal.open()
+      A.eq((Cal.viewForTest()), "events", "it always opens on Events")
+      A.eq(ns.Log.errors(10), {})
+    end,
     ------------------------------------------------------------------------------------------------ the window
     calendar_window = function(ns, A, W)
       start(ns, W)
@@ -1223,7 +1302,9 @@ return {
       W.env.SlashCmdList.TWIZCREW("cal")
       A.ok(ns.Calendar.isShown(), "/tc cal")
       local view, y, m, day = ns.Calendar.viewForTest()
-      A.eq(view, "month")
+      A.eq(view, "events", "it opens on the Events tab")
+      ns.Calendar.show("month")
+      A.eq((ns.Calendar.viewForTest()), "month", "the Play times month")
       ns.Calendar.openDay(day)
       A.eq((ns.Calendar.viewForTest()), "day")
       A.eq(#ns.Calendar.lastDay, 1, "me, today")
@@ -1247,7 +1328,8 @@ return {
       ns.Calendar.openMaker({ day = day })
       ns.Calendar.setMakerForTest("icon", 5)
       A.ok(ns.Calendar.saveMaker("Healer needed tonight"))
-      A.eq(#ns.Calendar.lastNotes, 1, "it lands on its day (the day view opens)")
+      A.eq((ns.Calendar.viewForTest()), "eventDay", "it lands on its day on the Events tab")
+      A.eq(#ns.Calendar.lastNotes, 1, "with the note on it")
       A.eq(ns.Calendar.lastNotes[1].i, 5)
       A.eq(ns.Calendar.lastNotes[1].t, "Healer needed tonight")
       -- right-click the timeline at 4:30pm: the window opens with that time; a dungeon, no words needed
@@ -1275,6 +1357,7 @@ return {
       A.ok(timed and timed.at, "a timed dungeon note")
       A.eq(timed.t, "The Deadmines", "its name when no words were typed")
       A.eq(ns.Notes.timeText(timed, ns.Diary.offset()), "4:30pm")
+      ns.Calendar.openDay(day)
       A.eq(ns.Calendar.lastMarkers, 1, "its icon on the timeline")
       -- the hour and minute menus, the time zone, the month art
       ns.Calendar.openMaker({ day = day })

@@ -390,7 +390,7 @@ end
 function Calendar.openMaker(opts)
   opts = opts or {}
   if not maker then buildMaker() end
-  mk.day = tonumber(opts.day) or (P.view == "day" and P.shownDay) or ns.Diary.localToday()
+  mk.day = tonumber(opts.day) or ((P.view == "day" or P.view == "eventDay") and P.shownDay) or ns.Diary.localToday()
   mk.minutes = tonumber(opts.minutes)
   mk.kind = opts.kind or "note"
   mk.dungeon = opts.dungeon
@@ -418,7 +418,8 @@ function Calendar.saveMaker(text)
     return
   end
   maker:Hide()
-  if Calendar.shownFlag then Calendar.openDay(mk.day) else Calendar.open(); Calendar.openDay(mk.day) end
+  if not Calendar.shownFlag then Calendar.open() end
+  Calendar.openEvents(mk.day)
   return true
 end
 

@@ -73,6 +73,7 @@ Calendar\CalendarLogic.lua
 Calendar\Notes.lua
 Calendar\Diary.lua
 Calendar\CalendarUI.lua
+Calendar\CalendarEvents.lua
 Calendar\CalendarMonth.lua
 Calendar\CalendarDay.lua
 Calendar\CalendarUsual.lua

@@ -1,5 +1,6 @@
--- Crew calendar, a day's timeline: one bar per friend (AFK lighter, their times written on it, hover for who was on
--- at that moment), the timed notes under it, that day's notes and the button to add one. Part of the calendar
+-- Crew calendar, a day's timeline (the Play times tab): one bar per friend (AFK lighter, their times written on
+-- it, hover for who was on at that moment) and the timed notes as small marks under it, so you see who was on at
+-- event time. The notes themselves are on the Events tab ("This day's events" goes there). Part of the calendar
 -- window (Calendar/CalendarUI.lua); shared names live on ns.Calendar._ (P).
 local _, ns = ...
 
@@ -10,15 +11,14 @@ local FEATURE = "calendar"
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local L = ns.CalendarLogic
-local I, ICON_NOTES, PREV_TEX, NEXT_TEX = P.I, P.ICON_NOTES, P.PREV_TEX, P.NEXT_TEX
+local I, PREV_TEX, NEXT_TEX = P.I, P.PREV_TEX, P.NEXT_TEX
 local WIDTH, HEIGHT, PAD, TOP = P.WIDTH, P.HEIGHT, P.PAD, P.TOP
 local script, classHex, colored, people, altsText = P.script, P.classHex, P.colored, P.people, P.altsText
 local dateKeyOf, iconTexture, arrowButton = P.dateKeyOf, P.iconTexture, P.arrowButton
 
 local ICON_TIME = I .. "INV_Misc_PocketWatch_01"
 local AXIS_X, BAR_W, ROW_H, DAY_ROWS = 160, 500, 22, 9
-local NOTE_ROWS = 5
-local dayRows, noteRows = {}, {}
+local dayRows = {}
 local markers = {}
 -------------------------------------------------------------------------------------------------------- day
 -- Where the mouse is on the timeline, in minutes after midnight (snapped to 15), or nil.
@@ -170,62 +170,19 @@ local function buildDay()
     dayRows[i] = r
   end
 
-  -- notes for this day
+  -- this day's notes live on the Events tab
   local notesTop = 50 + DAY_ROWS * ROW_H + 26 -- room for the timed notes' icons under the timeline
   local sep = P.dayPane:CreateTexture(nil, "ARTWORK")
   sep:SetHeight(1)
   sep:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, -(notesTop - 4))
   sep:SetPoint("TOPRIGHT", P.dayPane, "TOPRIGHT", 0, -(notesTop - 4))
   T.color(sep, C.line, 1)
-  local nIcon = iconTexture(P.dayPane, ICON_NOTES, 18)
-  nIcon:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, -notesTop)
-  local nTitle = T.text(P.dayPane, T.FONT.normal, C.title)
-  nTitle:SetPoint("LEFT", nIcon, "RIGHT", 6, 0)
-  nTitle:SetText("Notes for this day")
-  P.dayPane.noNotes = T.text(P.dayPane, T.FONT.small, C.muted)
-  P.dayPane.noNotes:SetPoint("LEFT", nTitle, "RIGHT", 10, 0)
-  P.dayPane.noNotes:SetText("none yet: add one below (the whole crew sees it)")
-  for i = 1, NOTE_ROWS do
-    local r = CreateFrame("Frame", nil, P.dayPane)
-    r:SetSize(WIDTH - 2 * PAD, 23)
-    r:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, -(notesTop + 24 + (i - 1) * 25))
-    r.icon = iconTexture(r, nil, 18)
-    r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
-    r.text = T.text(r, T.FONT.small, C.text)
-    r.text:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
-    r.text:SetWidth(WIDTH - 2 * PAD - 60)
-    r.text:SetJustifyH("LEFT")
-    if r.text.SetWordWrap then r.text:SetWordWrap(false) end
-    r.del = Widgets.button(r, "X", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE)
-    r.del:SetSize(24, 18)
-    r.del:SetPoint("RIGHT", r, "RIGHT", 0, 0)
-    r.hl = r:CreateTexture(nil, "HIGHLIGHT")
-    r.hl:SetAllPoints(r)
-    T.color(r.hl, C.title, 0.08)
-    r:EnableMouse(true)
-    script(r, "OnMouseUp", function(self, button)
-      if button == "LeftButton" and self.tcKey and ns.NoteView then ns.NoteView.open(self.tcKey) end
-    end)
-    script(r, "OnEnter", function(self)
-      if not GameTooltip or not self.tcKey then return end
-      GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      GameTooltip:SetText("Click to open: read it, say if you're going, comment", 1, 1, 1)
-      GameTooltip:Show()
-    end)
-    script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-    noteRows[i] = r
-  end
-
-  -- one button: "Create a note" for this day (the window has the time, the icon and the rest)
-  local addTop = notesTop + 24 + NOTE_ROWS * 25 + 8
-  local create = Widgets.button(P.dayPane, "Create a note for this day", function()
-    Calendar.openMaker({ day = P.shownDay })
-  end, nil, FEATURE)
-  create:SetSize(200, 26)
-  create:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, -addTop)
-  local tip = T.text(P.dayPane, T.FONT.small, C.muted)
-  tip:SetPoint("LEFT", create, "RIGHT", 10, 0)
-  tip:SetText("or right-click the timeline at a time")
+  P.dayPane.events = Widgets.button(P.dayPane, "This day's events", function() Calendar.openEvents(P.shownDay) end, nil,
+    FEATURE)
+  P.dayPane.events:SetSize(200, 26)
+  P.dayPane.events:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, -(notesTop + 6))
+  P.dayPane.eventsNote = T.text(P.dayPane, T.FONT.small, C.muted)
+  P.dayPane.eventsNote:SetPoint("LEFT", P.dayPane.events, "RIGHT", 10, 0)
 end
 P.buildDay = buildDay
 
@@ -381,26 +338,9 @@ local function drawDay()
   -- notes
   local notes = ns.Notes.forDate(dateKeyOf(P.shownDay))
   Calendar.lastNotes = notes
-  if #notes == 0 then P.dayPane.noNotes:Show() else P.dayPane.noNotes:Hide() end
-  for i, r in ipairs(noteRows) do
-    local n = notes[i]
-    r.tcKey = n and n.key or nil
-    if n then
-      r.icon:SetTexture(ns.Notes.iconTexture(n.i))
-      local when = ns.Notes.timeText(n, off)
-      local rp = ns.Notes.repliesFor(n.key)
-      local counts = ""
-      if #rp.yes > 0 then counts = counts .. "  |TInterface\\RaidFrame\\ReadyCheck-Ready:12|t" .. #rp.yes end
-      if #rp.maybe > 0 then counts = counts .. "  |TInterface\\RaidFrame\\ReadyCheck-Waiting:12|t" .. #rp.maybe end
-      if #rp.comments > 0 then counts = counts .. "  |cffaaaaaa" .. #rp.comments .. (#rp.comments == 1 and " comment" or " comments") .. "|r" end
-      r.text:SetText((when and ("|cffffd100" .. when .. "|r  ") or "") .. ns.Util.safeText(n.t)
-        .. "   |cff999999- " .. colored(n.b, n.c) .. "|r" .. counts)
-      if ns.Notes.isMine(n) then r.del:Show() else r.del:Hide() end
-      r:Show()
-    else
-      r:Hide()
-    end
-  end
+  P.dayPane.events.text:SetText(#notes > 0 and ("This day's events (" .. #notes .. ")") or "This day's events")
+  P.dayPane.eventsNote:SetText(#notes > 0 and "the marks under the timeline are the ones with a time"
+    or "nothing planned; right-click the timeline to add a note at that time")
   -- timed notes: an icon under the timeline at their time, and a faint line up through it
   local k = 0
   for _, n in ipairs(notes) do

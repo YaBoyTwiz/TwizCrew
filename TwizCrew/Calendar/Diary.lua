@@ -504,7 +504,8 @@ ns.Modules.register({
   settings = {
     { key = "open", label = "Open the crew calendar", kind = "button",
       onClick = function() if ns.Calendar then ns.Calendar.open() end end,
-      info = "Who played on each day, a day's timeline, and the times most of the crew usually plays." },
+      info = "The crew's events and notes, and on its second tab who played on each day, a day's timeline, and "
+        .. "the times most of the crew usually plays." },
     { key = "share", label = "Share my play times", kind = "toggle",
       info = "Lets the crew see when you were online (only the times, never where you were). Off: your copy still "
         .. "keeps your own diary, and you still see your friends'." },

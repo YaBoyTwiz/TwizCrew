@@ -13,6 +13,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Calendar split into Events and Play times (2026-11-22, owner asked, design approved in chat: "do this"):** on
+  the same branch `feat/calendar-button`. Tests outside the game pass. **Not tested in game, not released.** It adds
+  a file (`Calendar/CalendarEvents.lua`), so the game needs a full restart. Details in the section "Calendar: Events
+  and Play times" below; checks in `docs/TESTING.md` under the same name.
 - **Calendar button next to the tabs built (2026-11-22, owner asked, design approved in chat: "do it"):** on the
   branch `feat/calendar-button`, on top of v0.2.0. Tests outside the game pass. **Not tested in game, not released**
   (no version bump or Changelog entry yet: they come with "release it"). Details in the section "Calendar button
@@ -474,6 +478,30 @@ buttons, so it's easy to access, maybe make it pulsate or flash or blink when up
   had been rewritten by the release). The uncommitted work that was there (a quest list, feed and panel changes from
   2026-11-15, never released, not in v0.2.0) is kept on the local branch `old/0.1.24-quest-list`. The owner: "let's
   just use and keep the new stuff".
+
+## Calendar: Events and Play times (2026-11-22)
+
+The owner: "the calendar is too cluttered ... I want events to catch people's eyes and it's hard when it's mixed
+with the icons showing who has played recently." He picked one window with two tabs over two windows.
+
+- **Two tabs in the one calendar window (Calendar/CalendarUI.lua):** "Events" and "Play times". The window always
+  opens on Events (the panel's Calendar button, `/tc cal`, everywhere), and saving a note lands on its day there.
+  Views: `events`, `eventDay` (Events); `month`, `day`, `usual` (Play times). A small Month / Usual times switch
+  sits next to the tabs while Play times is open (Usual times used to be the second tab).
+- **Events month (Calendar/CalendarEvents.lua, new):** a day shows only its notes: icon, time and the first words,
+  three lines, the last one "+N more" when there are more. A dungeon or raid still fills its day with its artwork,
+  time, name and "N going". Past days are dimmer. Click a day for its list, right-click to add a note.
+- **"new":** a note by someone else that I have not opened (no "seen" reply of mine: Notes.isNew), on a day from
+  today on, carries a gold "new" on the month and in the day's list. Opening the note takes it away. This is apart
+  from the panel button's pulse (which opening the calendar clears).
+- **A day's events:** eight tall rows (icon, time and words, then the author, going / maybe / comment counts and my
+  own answer), the mouse wheel scrolls past eight, "Create a note for this day" under them.
+- **Play times month (Calendar/CalendarMonth.lua):** class icons (two rows now, 14) and the hours together; no note
+  icons, no artwork, no right-click menu. Click a day for the timeline.
+- **Timeline (Calendar/CalendarDay.lua):** the notes list under it is gone. The small marks for timed notes stay (who
+  was on at event time), and right-click still adds a note at that time.
+- **Across:** "Who played this day" on a day's events, "This day's events (N)" on the timeline.
+- **Nothing about the data changed:** the same notes, replies and messages, so copies on v0.2.0 are not affected.
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

@@ -768,6 +768,30 @@ note or answer):
    still pulses.
 10. **Minimized.** While it pulses, minimize the panel: no bar, no glow. Restore it: it pulses again.
 
+## Calendar: Events and Play times (2026-11-22)
+
+**Restart the game fully** (a file was added; `/reload` is not enough). Alone:
+
+1. **It opens on Events.** Click `Calendar` on the panel (or `/tc cal`): two tabs, `Events` and `Play times`, and
+   Events is the one open. The month shows no class icons and no hours. No red error.
+2. **Notes on the month.** Add a note for today and two more for a day next week (`+ Create note`, or right-click a
+   day). Each shows as a small line on its day: icon, time if it has one, the first words. A fourth note on one day
+   makes the last line `+2 more`. Tell Claude if the words are too small or cut off badly.
+3. **A dungeon run.** Create a dungeon run: its artwork fills the day, with the time and name on it.
+4. **A day's list.** Click a day with notes: tall rows, one per note, with who wrote it. Click a row: the note
+   opens as before. `Back to the month` goes back to the Events month. Past days look dimmer than today.
+5. **Play times.** Click the `Play times` tab: the month with class icons and hours, and no notes or artwork on it.
+   Click a day: the timeline, without a notes list under it. `Month` and `Usual times` next to the tabs switch
+   between the month and the usual times, and they do not overlap the time zone text on the right.
+6. **Across.** On a timeline, `This day's events` goes to that day on Events; on a day's events, `Who played this
+   day` goes to its timeline. A note with a time still shows as a small mark under the timeline.
+7. **It always opens on Events.** Leave the window on Play times, close it, open it again: Events.
+
+With a friend:
+
+8. **"new".** A friend adds a note for today or later. On the Events month that day has a gold `new`; in the day's
+   list the note says `new`. Open the note: both are gone. Tell Claude if `new` is too easy to miss.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

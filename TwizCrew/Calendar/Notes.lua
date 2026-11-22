@@ -512,6 +512,14 @@ function Notes.markSeen(noteKey)
   return true
 end
 
+-- Someone else's note that I have not opened yet (the Events tab marks it "new").
+function Notes.isNew(noteKey)
+  local me = ns.Diary and ns.Diary.myId()
+  if type(noteKey) ~= "string" or not me or noteKey:sub(1, #me + 1) == me .. "-" then return false end
+  local r = (Notes.replyStore() or {})[noteKey .. "|s|" .. me]
+  return not (type(r) == "table" and not r.x)
+end
+
 -- I'm going ("yes"), "maybe" or can't ("no"); nil takes my answer back.
 function Notes.rsvp(noteKey, status)
   local s, key, r = myReply(noteKey, "r")

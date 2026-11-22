@@ -104,34 +104,42 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    -- A member is forgotten by first word (when only one member has it) or by full name, any case; a first word two
-    -- members share asks which one.
+    -- /tc forget matches, any case: a member's full name, a member's key, a saved row's name (hidden rows too), and
+    -- only then a first word one row or member has; several: "which one?" with the names.
     tc_forget_accepts_first_word_or_full_name = function(ns, A, W)
       local list = {}
-      for i, name in ipairs({ "Twiz", "Ginkan Pebble", "Lurabe Moon", "Chaos Deathbringr", "Chaos Other" }) do
+      for i, name in ipairs({ "Twiz", "Ginkan Pebble", "Lurabe Moon", "Chaos Deathbringr", "Chaos Other", "Frost Bite",
+        "Frost Nova", "Pewpew Zed" }) do
         list[i] = { name = name, online = i == 1, guid = string.format("Player-1-%04d", i), lastOnline = { 0, 0, 1, 0 } }
       end
       W.state.guild = { name = "Test Guild", members = list }
-      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos", ["lurabe sun"] = "Lurabe" } },
-        roster = {} }
-      for _, key in ipairs({ "Ginkan", "Lurabe Moon", "Chaos", "Chaos Other" }) do
+      W.env.TwizCrewDB = { guild = { name = "Test Guild", keys = { ["chaos deathbringr"] = "Chaos",
+        ["lurabe sun"] = "Lurabe", ["frost old"] = "Frost" } }, roster = {} }
+      for _, key in ipairs({ "Ginkan", "Lurabe", "Lurabe Moon", "Chaos", "Chaos Other", "Frost Bite", "Frost Nova",
+        "Pewpew" }) do
         W.env.TwizCrewDB.roster[key] = { name = key, level = 5 }
       end
       boot(W)
-      A.eq(ns.roster:names(), { "Chaos", "Chaos Other", "Ginkan", "Lurabe Moon" })
+      A.ok(ns.roster:isHidden("Lurabe"), "the departed Lurabe Sun's row is hidden")
       tc(W, "forget ginkan pebble")
       A.eq(ns.db.roster.Ginkan, nil, "full name")
       A.ok(printedLine(W, "TwizCrew: forgot Ginkan."))
       tc(W, "forget lurabe")
-      A.eq(ns.db.roster["Lurabe Moon"], nil, "first word only one member has (its old holder left)")
-      W.printed = {}
+      A.eq(ns.db.roster.Lurabe, nil, "the saved row of that name (hidden), not Lurabe Moon")
+      A.ok(ns.db.roster["Lurabe Moon"])
+      tc(W, "forget LURABE")
+      A.eq(ns.db.roster["Lurabe Moon"], nil, "now the first word only Lurabe Moon has")
       tc(W, "forget chaos")
-      A.ok(ns.db.roster.Chaos and ns.db.roster["Chaos Other"], "two members start with it: nobody")
-      A.ok(printedLine(W, "TwizCrew: more than one member is called chaos; type the full name."))
+      A.eq(ns.db.roster.Chaos, nil, "an exact key: its holder")
+      A.ok(ns.db.roster["Chaos Other"])
+      W.printed = {}
+      tc(W, "forget frost")
+      A.ok(ns.db.roster["Frost Bite"] and ns.db.roster["Frost Nova"], "two start with it: nobody")
+      A.ok(printedLine(W, "TwizCrew: which one? Frost Bite, Frost Nova. Type the full name."))
+      tc(W, "forget pewpew zed")
+      A.eq(ns.db.roster.Pewpew, nil)
       tc(W, "remove Chaos Other")
       A.eq(ns.db.roster["Chaos Other"], nil)
-      tc(W, "forget chaos deathbringr")
-      A.eq(ns.db.roster.Chaos, nil, "his full name, his key")
       W.printed = {}
       tc(W, "forget twiz")
       A.ok(printedLine(W, "TwizCrew: that's you."))

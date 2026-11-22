@@ -9,6 +9,9 @@ ns.TrophyLogic = L
 
 local function isNumber(v) return type(v) == "number" and v == v end
 
+local NAME_CHARS = 32 -- a full name ("Chaos Deathbringr") fits
+local P_BYTES = 150   -- one people field (p, p2, ...) at most this long on the wire, so no piece ever cuts a name
+
 local function real(name) return type(name) == "string" and name ~= "" and not ns.isTestName(name) end
 
 local function sorted(set)
@@ -110,8 +113,22 @@ function L.summary(records)
 end
 
 -- Wire form of a record (TRP): s, t, p, k = number of w_ fields, w_<awardId> = names, l = "1" and e when late.
+-- Names are wire names (ns.wireName). A long people list goes in p, p2, p3 ... (whole names, each field short
+-- enough for one piece) with pn = how many such fields; an older copy reads p alone.
 function L.toWire(r)
-  local f = { s = r.sid, t = tostring(r.start or 0), p = table.concat(r.people or {}, ","), l = r.late and "1" or nil }
+  local f = { s = r.sid, t = tostring(r.start or 0), l = r.late and "1" or nil }
+  local fields, cur = {}, {}
+  for _, name in ipairs(r.people or {}) do
+    cur[#cur + 1] = name
+    if #cur > 1 and ns.Codec.size(table.concat(cur, ",")) > P_BYTES then
+      cur[#cur] = nil
+      fields[#fields + 1] = table.concat(cur, ",")
+      cur = { name }
+    end
+  end
+  fields[#fields + 1] = table.concat(cur, ",")
+  for i, text in ipairs(fields) do f[i == 1 and "p" or ("p" .. i)] = text end
+  if #fields > 1 then f.pn = tostring(#fields) end
   if r.late then f.e = tostring(math.floor(tonumber(r.e) or 0)) end
   local k = 0
   for id, names in pairs(r.winners or {}) do
@@ -126,7 +143,7 @@ local function split(s)
   local out = {}
   if type(s) ~= "string" then return out end
   for name in s:gmatch("[^,]+") do
-    name = ns.Util.truncateUTF8(ns.Util.safeText(name), 24)
+    name = ns.Util.truncateUTF8(ns.Util.safeText(name), NAME_CHARS)
     if real(name) then out[#out + 1] = name end
   end
   table.sort(out)
@@ -148,7 +165,14 @@ function L.fromPieces(f)
     end
   end
   if n < k then return nil end
-  local people = split(f.p)
+  local pn = tonumber(f.pn) or 1
+  if pn < 1 or pn > 50 or pn ~= math.floor(pn) then return nil end
+  local parts = { f.p }
+  for i = 2, pn do
+    if type(f["p" .. i]) ~= "string" then return nil end -- the rest of the people is still on its way
+    parts[i] = f["p" .. i]
+  end
+  local people = split(table.concat(parts, ","))
   if #people < 2 then return nil end
   local late = f.l == "1" or nil
   local e = late and math.floor(math.max(tonumber(f.e) or 0, 0)) or nil

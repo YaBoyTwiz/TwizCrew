@@ -127,13 +127,14 @@ local function onLevelUp(name, level)
   Feed.record("levelup", name, { level = level }, name)
 end
 
--- A mock or a congrats shown on this screen (the roasts module fires it): sender, who it is about, the words.
-local function onMock(sender, target, words, cheer)
+-- A mock or a congrats shown on this screen (the roasts module fires it): sender, who it is about, the words, and
+-- whether it is about me (the target's name on the wire was mine).
+local function onMock(sender, target, words, cheer, aboutMe)
   if type(sender) ~= "string" or type(target) ~= "string" then return end
   local kind = cheer and "congrats" or "mock"
   if ns.isMe(sender) then
     Feed.record(kind, target, { dir = "out", words = words }, nil)
-  elseif ns.isMe(target) then
+  elseif aboutMe then
     Feed.record(kind, sender, { dir = "in", words = words }, sender)
   else
     Feed.record(kind, sender, { dir = "seen", other = target, words = words }, sender)

@@ -606,8 +606,9 @@ return {
       A.eq(state(ns).text, "Clown of the Night: Lurabe & Twiz (1 vote)")
     end,
 
-    -- Two members start with "Chaos" (keys "Chaos" and "Chaos Other"): a ballot naming one by its full name (a newer
-    -- copy) or by its key counts for that one only; a viewer files the result under the right key.
+    -- Two members start with "Chaos" (keys "Chaos" and "Chaos Other"): the vote names them by full name (keys are
+    -- each copy's own); a ballot with the name the presenter sent counts for that one only, a key or a shared first
+    -- word counts for nobody; a viewer files the result under its own key.
     vote_for_a_namesake_counts_for_the_right_one = function(ns, A, W)
       local list = {}
       for i, name in ipairs({ "Twiz", "Chaos Deathbringr", "Chaos Other", "Frostie" }) do
@@ -630,15 +631,19 @@ return {
       A.eq(state(ns).phase, "vote")
       W:advance(3)
       local id = sentOf(ns, W, mark, "AWS")[1].id
-      A.eq(sentOf(ns, W, mark, "AWV")[1].c, "Chaos,Chaos Other,Frostie,Twiz")
-      receive(W, ns, "Chaos Other", "AWB", { id = id, c = "Chaos Deathbringr" }) -- his full name
-      receive(W, ns, "Frostie", "AWB", { id = id, c = "chaos" })                 -- his key, any case
+      A.eq(sentOf(ns, W, mark, "AWV")[1].c, "Chaos Deathbringr,Chaos Other,Frostie,Twiz")
+      receive(W, ns, "Frostie", "AWB", { id = id, c = "Chaos" })                 -- shared first word: nobody
+      A.eq(state(ns).voted, "0 of 4 voted")
+      receive(W, ns, "Chaos Other", "AWB", { id = id, c = "Chaos Deathbringr" })
+      receive(W, ns, "Frostie", "AWB", { id = id, c = "Chaos Deathbringr" })
       receive(W, ns, "Chaos Deathbringr", "AWB", { id = id, c = "Chaos Other" })
       A.eq(state(ns).voted, "3 of 4 voted")
       press(ns, "Frostie")
       A.eq(state(ns).phase, "clown", "everyone voted")
       A.eq(state(ns).text, "Clown of the Night: Chaos (2 votes)")
       A.eq(ns.db.stats.clown.names, { "Chaos" })
+      W:advance(3)
+      A.eq(sentOf(ns, W, mark, "AWR")[1].w, "Chaos Deathbringr", "the result by the name everyone reads alike")
       A.eq(ns.Log.errors(10), {})
     end,
 

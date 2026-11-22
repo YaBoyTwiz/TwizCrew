@@ -645,5 +645,109 @@ return {
       A.eq(snapshot(saved), before, "nothing rewritten")
       noErrors(A, altNs)
     end,
+
+    -- Two copies give a namesake pair OPPOSITE keys: names on the wire (first word, or full name when shared) still
+    -- land on the right person: a mock, a quest share ask, a vote (candidates, ballot, result) and an award card.
+    namesakes_with_opposite_keys_land_on_the_right_person = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      local fr, frNs = H.client("Frostie", { class = "MAGE" })
+      local cd, cdNs = H.client("Chaos Deathbringr", { class = "WARRIOR" })
+      local co, coNs = H.client("Chaos Other", { class = "ROGUE" })
+      tw.env.TwizCrewDB = { guild = { name = "Crew Guild",
+        keys = { ["chaos deathbringr"] = "Chaos", ["chaos other"] = "Chaos Other" } } }
+      fr.env.TwizCrewDB = { guild = { name = "Crew Guild",
+        keys = { ["chaos other"] = "Chaos", ["chaos deathbringr"] = "Chaos Deathbringr" } } }
+      H.link(tw, fr, cd, co)
+      for _, W in ipairs({ tw, fr, cd, co }) do login(W) end
+      H.advance(40)
+      A.eq(twNs.Guild.keyOf("Chaos Other"), "Chaos Other")
+      A.eq(frNs.Guild.keyOf("Chaos Other"), "Chaos", "Frostie's copy: the opposite keys")
+      -- a mock from Twiz at Chaos Other (his key "Chaos Other")
+      twNs.Roasts.mock("Chaos Other")
+      H.advance(2)
+      A.ok(coNs.MockShow.isShown(), "Chaos Other sees it is about him")
+      A.no(cdNs.MockShow.isShown(), "Deathbringr does not")
+      local about
+      for _, e in ipairs(frNs.Feed.entries()) do if e.kind == "mock" then about = e.other end end
+      A.eq(about, "Chaos", "Frostie's feed files it under her key for Chaos Other")
+      -- a quest share ask from Frostie to her "Chaos" (Chaos Other), seen by both namesakes in the group
+      local asked = {}
+      for _, x in ipairs({ { cdNs, "cd" }, { coNs, "co" } }) do
+        local ns, tag = x[1], x[2]
+        ns.Popups.questRequest = function(name) asked[tag] = name end
+      end
+      for _, W in ipairs({ tw, fr, cd, co }) do W.state.inGroup = true end
+      for _, text in ipairs(frNs.Codec.encode("QREQ", { t = frNs.wireName("Chaos"), q = "Kobold Camp Cleanup" })) do
+        cd:fire("CHAT_MSG_ADDON", "TwizCrew", text, "PARTY", "Frostie")
+        co:fire("CHAT_MSG_ADDON", "TwizCrew", text, "PARTY", "Frostie")
+      end
+      A.eq(asked.co, "Frostie", "Chaos Other is asked")
+      A.eq(asked.cd, nil, "Deathbringr is not")
+      -- a v0.1.24-style first word: dropped when shared, read when unique
+      A.no(coNs.wireIsMe("Chaos")); A.no(cdNs.wireIsMe("Chaos"))
+      A.eq(frNs.fromWire("Frostie"), "Frostie")
+      -- the vote and a card, Twiz presenting, Frostie's copy viewing
+      local wire = twNs.ShowLogic.voteToWire("Twiz-1", { "Chaos", "Chaos Other", "Frostie", "Twiz" }, 30)
+      A.eq(wire.c, "Chaos Deathbringr,Chaos Other,Frostie,Twiz")
+      for _, text in ipairs(twNs.Codec.encode("AWS", { id = "Twiz-1", v = "session" })) do
+        fr:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Twiz")
+      end
+      local card = twNs.ShowLogic.cardToWire("Twiz-1", 1, { kind = "award",
+        award = { def = twNs.StatsDefs.AWARDS[1], winners = { "Chaos Other" } } })
+      A.eq(card.w, "Chaos Other")
+      for _, text in ipairs(twNs.Codec.encode("AWC", card)) do
+        fr:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Twiz")
+      end
+      for _, text in ipairs(twNs.Codec.encode("AWV", wire)) do
+        fr:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Twiz")
+      end
+      local st = frNs.AwardsShow.stateForTest()
+      A.eq(st.buttons, { "Chaos", "Chaos Deathbringr", "Twiz" }, "candidates as Frostie's keys")
+      local mark = #fr.sent
+      A.ok(frNs.AwardsShow.pressForTest("Chaos"), "Frostie votes for her Chaos (Chaos Other)")
+      H.advance(2)
+      local ballot
+      for k = mark + 1, #fr.sent do
+        local msg = frNs.Codec.decode(fr.sent[k].text)
+        if msg and msg.type == "AWB" then ballot = msg.fields.c end
+      end
+      A.eq(ballot, "Chaos Other", "the ballot carries the presenter's name for him")
+      for _, text in ipairs(twNs.Codec.encode("AWR", { id = "Twiz-1", w = "Chaos Other", n = "1" })) do
+        fr:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", "Twiz")
+      end
+      A.eq(frNs.db.stats.clown.names, { "Chaos" }, "Frostie's copy files the clown under her key for him")
+      noErrors(A, twNs, frNs, cdNs, coNs)
+    end,
+
+    a_thirty_letter_full_name_survives_the_vote_and_the_trophy_record = function(_, A, _, H)
+      local long = "Abcdefghijklmn Opqrstuvwxyzabc" -- 30 letters
+      local tw, twNs = H.client("Twiz")
+      local lg, lgNs = H.client(long, { class = "MAGE" })
+      local ab = H.client("Abcdefghijklmn Other", { class = "ROGUE" })
+      H.link(tw, lg, ab)
+      login(tw); login(lg); login(ab)
+      H.advance(30)
+      local key = twNs.Guild.keyOf(long)
+      A.eq(twNs.wireName(key), long, "shared first word: the full name")
+      local f = twNs.ShowLogic.voteToWire("Twiz-1", { key, "Twiz" }, 30)
+      local v = lgNs.ShowLogic.voteFromWire(f)
+      A.ok(v.raw[long] or v.raw[lgNs.Util.safeText(long)], "the whole name arrives in AWV")
+      local people = {}
+      for i = 1, 9 do people[i] = string.format("Member%02d Withalongsurname", i) end
+      people[#people + 1] = long
+      table.sort(people)
+      local r = { sid = "Twiz-1", start = 1, people = people, winners = { [twNs.StatsDefs.AWARDS[1].id] = { long } } }
+      local merged = {}
+      for _, text in ipairs(twNs.Codec.encode("TRP", twNs.TrophyLogic.toWire(r),
+        { repeatKeys = { "s", "k", "t", "l", "e" } })) do
+        local msg = twNs.Codec.decode(text)
+        for k2, x in pairs(msg.fields) do merged[k2] = x end
+      end
+      local back = twNs.TrophyLogic.fromPieces(merged)
+      A.ok(back, "a whole record from the pieces")
+      A.eq(back.people, people, "every name whole")
+      A.eq(back.winners[twNs.StatsDefs.AWARDS[1].id], { long })
+      noErrors(A, twNs, lgNs)
+    end,
   },
 }

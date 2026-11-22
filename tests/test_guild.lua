@@ -345,44 +345,66 @@ return {
       A.no(ns.Guild.isMe("Chaos Other")); A.ok(ns.Guild.isMe("Chaos Deathbringr")); A.ok(ns.Guild.isMe("Chaos"))
     end,
 
-    -- resolve: names from message fields (keys, full names, an old copy's first words) and typed names
-    resolve_takes_keys_full_names_and_a_first_word_only_one_member_has = function(ns, A, W)
-      A.eq(ns.Guild.resolve("Twiz"), nil, "nothing before the list loads")
+    -- Names in message fields: wireName to send (first word, full name when shared), fromWire to read (never a key).
+    wire_names_are_the_same_on_every_copy = function(ns, A, W)
+      A.eq(ns.Guild.fromWire("Twiz"), nil, "nothing before the list loads")
       boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Other"),
         member("Ginkan Pebble") })
       A.eq(ns.Guild.get("Chaos").full, "Chaos Deathbringr")
-      A.eq(ns.Guild.resolve("Chaos"), "Chaos", "an exact key")
-      A.eq(ns.Guild.resolve("chaos other"), "Chaos Other", "any case")
-      A.eq(ns.Guild.resolve("Chaos Deathbringr"), "Chaos", "an exact full name")
-      A.eq(ns.Guild.resolve("Chaos Deathbringr-Realm"), "Chaos", "a realm is taken off")
-      A.eq(ns.Guild.resolve("Ginkan"), "Ginkan")
-      A.eq(ns.Guild.resolve("ginkan pebble"), "Ginkan")
-      A.eq(ns.Guild.resolve("Stranger"), nil)
-      A.eq(ns.Guild.resolve("Bob (test)"), nil)
-      A.eq(ns.Guild.resolve(nil), nil)
-      A.eq(ns.Guild.resolve(""), nil)
+      A.eq(ns.Guild.wireName("Chaos"), "Chaos Deathbringr", "a shared first word: the full name")
+      A.eq(ns.Guild.wireName("Chaos Other"), "Chaos Other")
+      A.eq(ns.Guild.wireName("Ginkan"), "Ginkan", "alone with the word: the first word")
+      A.eq(ns.Guild.wireName("Nobody"), "Nobody", "not listed: as it is")
+      A.eq(ns.Guild.fromWire("Chaos Deathbringr"), "Chaos")
+      A.eq(ns.Guild.fromWire("chaos other"), "Chaos Other", "any case")
+      A.eq(ns.Guild.fromWire("Chaos Deathbringr-Realm"), "Chaos", "a realm is taken off")
+      A.eq(ns.Guild.fromWire("Chaos"), nil, "a first word two members share: nobody (it is a key here, never read)")
+      A.eq(ns.Guild.fromWire("Ginkan"), "Ginkan", "an old copy's first word, when only one member has it")
+      A.eq(ns.Guild.fromWire("Stranger"), nil)
+      A.eq(ns.Guild.fromWire("Bob (test)"), nil)
+      A.eq(ns.Guild.fromWire(nil), nil)
+      A.eq(ns.fromWire("Ginkan Pebble"), "Ginkan")
+      A.eq(ns.wireName("Bob (test)"), "Bob (test)")
     end,
 
-    resolve_maps_a_first_word_whose_old_holder_left = function(ns, A, W)
+    from_wire_maps_a_first_word_whose_old_holder_left = function(ns, A, W)
       boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Abel") })
       ns.db.guild.keys = { twiz = "Twiz", ["chaos deathbringr"] = "Chaos", ["chaos abel"] = "Chaos Abel" }
       W.state.guild.members = { member("Twiz"), member("Chaos Abel") }
       W:advance(11)
       W.env.C_GuildInfo.GuildRoster()
       A.eq(ns.Guild.keyOf("Chaos"), nil, "a sender name: the word stays with whoever had it")
-      A.eq(ns.Guild.resolve("Chaos"), "Chaos Abel", "a field or typed name: the one member with that word now")
+      A.eq(ns.Guild.fromWire("Chaos"), "Chaos Abel", "a field: the one member with that word now")
+      A.eq(ns.Guild.wireName("Chaos Abel"), "Chaos")
     end,
 
-    resolve_typed_first_word_two_members_share_asks_which_one = function(ns, A, W)
+    typed_names_ask_which_one_for_a_shared_first_word = function(ns, A, W)
       boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr"), member("Chaos Other") })
-      A.eq(ns.Guild.resolve("Chaos"), "Chaos", "from a message: the key")
-      local key, why = ns.Guild.resolve("Chaos", true)
-      A.eq(key, nil, "typed: two members start with it"); A.eq(why, "ambiguous")
-      A.eq(ns.Guild.resolve("Chaos Other", true), "Chaos Other")
-      A.eq(ns.Guild.resolve("Chaos Deathbringr", true), "Chaos")
-      A.eq(ns.Guild.resolve("Twiz", true), "Twiz")
-      A.eq(ns.resolveName("chaos other"), "Chaos Other")
-      A.eq(ns.resolveName("Bob (test)"), "Bob (test)", "the text as it is when the list cannot tell")
+      local key, why = ns.Guild.resolveTyped("Chaos")
+      A.eq(key, nil); A.eq(why, "ambiguous")
+      A.eq(ns.Guild.resolveTyped("Chaos Other"), "Chaos Other")
+      A.eq(ns.Guild.resolveTyped("Chaos Deathbringr"), "Chaos")
+      A.eq(ns.Guild.resolveTyped("twiz"), "Twiz")
+    end,
+
+    data_guild_rules = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      A.eq(ns.Guild.name(), "Test Guild")
+      A.eq(ns.Guild.dataGuild(), "Test Guild", "an empty saved roster: adopted at once")
+      A.ok(ns.Guild.active())
+      ns.db.guild.name = "Main Guild"
+      A.no(ns.Guild.active(), "another guild's data on top"); A.ok(ns.Guild.inGuild(), "the game's answer")
+      W:advance(3)
+      A.no(ns.Guild.loaded(), "no list read for another guild's data")
+      A.ok(ns.Guild.needsReload())
+      A.eq(ns.db.guild.byChar[ns.DB.charId()], "Test Guild", "remembered for the next login")
+      local told = 0
+      for _, line in ipairs(W.printed) do
+        if line == "TwizCrew keeps separate data for each guild. Type /reload to switch to Test Guild." then
+          told = told + 1
+        end
+      end
+      A.eq(told, 1, "said once")
     end,
 
     my_key_is_saved_per_character_and_known_before_the_list = function(ns, A, W)

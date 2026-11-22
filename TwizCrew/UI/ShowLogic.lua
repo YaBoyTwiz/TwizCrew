@@ -6,14 +6,16 @@ local L = {}
 ns.ShowLogic = L
 
 local MAX_CARD = 100
-local NAME_CHARS = 24
+local NAME_CHARS = 32 -- a full name ("Chaos Deathbringr") fits
+L.NAME_CHARS = NAME_CHARS
 
 local function awardDef(id)
   if type(id) ~= "string" then return nil end
   return ns.StatsDefs.awardDef(id)
 end
 
--- "a,b" -> { "a", "b" }: cleaned, cut to 24 letters, fake crew members left out; the order is kept.
+-- "a,b" -> { "a", "b" }: cleaned, cut to NAME_CHARS letters, fake crew members left out; the order is kept.
+-- Names on the wire are ns.wireName names (a first word, or the full name when two members share it).
 local function names(s)
   local out = {}
   if type(s) ~= "string" then return out end
@@ -67,7 +69,7 @@ function L.cardToWire(id, i, card, streak, jump)
     f.a = a.def.id
     local real = {}
     for _, name in ipairs(a.winners or {}) do
-      if not ns.isTestName(name) then real[#real + 1] = name end
+      if not ns.isTestName(name) then real[#real + 1] = ns.wireName(name) end
     end
     if a.text ~= nil then f.x = tostring(a.text) end
     local n = tonumber(streak)
@@ -123,11 +125,12 @@ end
 L.VOTE_SECONDS = 30
 L.CLOWN_TITLE = "Clown of the Night"
 
--- An AWV's fields: the candidates that fit one message uncut (the last ones are left out), and that list.
+-- An AWV's fields: the candidates (my keys) that fit one message uncut (the last ones are left out), as wire names;
+-- that list of keys; and wireOf[key] = the name sent for it (ballots come back with exactly that name).
 function L.voteToWire(id, candidates, seconds)
-  local list = {}
+  local keys, list = {}, {}
   for _, name in ipairs(candidates or {}) do
-    if not ns.isTestName(name) then list[#list + 1] = name end
+    if not ns.isTestName(name) then keys[#keys + 1] = name; list[#list + 1] = ns.wireName(name) end
   end
   local f = { id = id, t = tostring(seconds or L.VOTE_SECONDS) }
   local kept = #list
@@ -136,23 +139,25 @@ function L.voteToWire(id, candidates, seconds)
     if kept == 0 or fits("AWV", f, { "c", "t" }) then break end
     kept = kept - 1
   end
-  local out = {}
-  for i = 1, kept do out[i] = list[i] end
-  return f, out
+  local out, wireOf = {}, {}
+  for i = 1, kept do out[i] = keys[i]; wireOf[keys[i]] = list[i] end
+  return f, out, wireOf
 end
 
--- An AWV as { candidates (sorted, no doubles, no fakes), seconds }, or nil with fewer than 2 candidates.
+-- An AWV as { candidates (cleaned, sorted, no doubles, no fakes), raw = { [cleaned] = the name as sent }, seconds },
+-- or nil with fewer than 2 candidates.
 function L.voteFromWire(f)
   if type(f) ~= "table" then return nil end
-  local seen, list = {}, {}
-  for _, name in ipairs(names(f.c)) do
-    if not seen[name] then seen[name] = true; list[#list + 1] = name end
+  local seen, list, raw = {}, {}, {}
+  for sent in (type(f.c) == "string" and f.c or ""):gmatch("[^,]+") do
+    local name = names(sent)[1]
+    if name and not seen[name] then seen[name] = true; list[#list + 1] = name; raw[name] = sent end
   end
   if #list < 2 then return nil end
   table.sort(list)
   local t = tonumber(f.t)
   if not t or t ~= math.floor(t) or t < 5 or t > 120 then t = L.VOTE_SECONDS end
-  return { candidates = list, seconds = t }
+  return { candidates = list, raw = raw, seconds = t }
 end
 
 -- An AWR as { skip = true } or { names (in the sent order), n }.

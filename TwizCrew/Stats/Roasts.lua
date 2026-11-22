@@ -332,12 +332,12 @@ local function showMock(sender, f)
     return
   end
   if not mockShowLimit:allow(sender, ns.now()) then return end
-  -- who it is about, as our key for them (a key, a full name or an old copy's first word on the wire)
-  local target = type(f.t) == "string" and ns.resolveName(f.t) or nil
+  -- who it is about: my key for them (ns.fromWire), else the name as sent (plain text)
+  local target = type(f.t) == "string" and (ns.fromWire(f.t) or f.t) or nil
   -- the activity feed records it: who sent it, who it is about, the words (plain), congrats or mock
-  ns.Bus.fire("MOCK_SEEN", sender, target or "", text, cheer)
+  ns.Bus.fire("MOCK_SEEN", sender, target or "", text, cheer, type(f.t) == "string" and ns.wireIsMe(f.t))
   -- about ME from a friend: their character laughs at me (a mock) or cheers for me (congrats), if that's on
-  if ns.MockShow and target and ns.isMe(target) and not ns.isMe(sender) and setting("mockModel") ~= false then
+  if ns.MockShow and f.t and ns.wireIsMe(f.t) and not ns.isMe(sender) and setting("mockModel") ~= false then
     shown[#shown + 1] = ns.Util.safeText(sender) .. ": " .. ns.Util.safeText(text)
     if #shown > SHOWN_MAX then table.remove(shown, 1) end
     ns.MockShow.show(sender, text, cheer and { cheer = true } or nil)
@@ -381,7 +381,7 @@ function Roasts.mock(target)
   end
   if not text then return nil end
   mockLimit:allow(target, ns.now()) -- the 10 s wait starts only now that a line was found
-  local fields = { t = target, x = text }
+  local fields = { t = ns.wireName(target), x = text }
   ns.Comm.send("MOCK", fields)
   showMock(ns.myKey(), fields)
   return text
@@ -464,7 +464,7 @@ function Roasts.cheer(target)
     if t and not t:find("{%a+}") then text = t break end
   end
   if not text then text = "Grats on the level, " .. target .. "!" end
-  local fields = { t = target, x = text, k = "g" }
+  local fields = { t = ns.wireName(target), x = text, k = "g" }
   ns.Comm.send("MOCK", fields)
   showMock(ns.myKey(), fields)
   return text

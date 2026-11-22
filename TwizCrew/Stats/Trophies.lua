@@ -80,6 +80,18 @@ local function clownOf(r)
   if #list > 0 then r.winners.clown = list end
 end
 
+-- A record names people by wire names (ns.wireName), the same on every copy, so copies agree on it by checksum.
+local function toWireNames(r)
+  local function map(list)
+    local out = {}
+    for i, name in ipairs(list) do out[i] = ns.wireName(name) end
+    table.sort(out)
+    return out
+  end
+  r.people = map(r.people)
+  for id, names in pairs(r.winners) do r.winners[id] = map(names) end
+end
+
 -- A session just ended (called by Stats before the session numbers are wiped). late: noticed at login, so my
 -- numbers may be from when I left; a friend who stayed can send a better record later.
 function Trophies.sessionEnded(sid, late)
@@ -90,13 +102,31 @@ function Trophies.sessionEnded(sid, late)
   local r = L.record(sid, entries, ns.StatsLogic.awards(entries), ns.Config.COUCH_MIN_PLAYED)
   if r then
     clownOf(r)
+    toWireNames(r)
     if late then r.late, r.e = true, freshness(sid, entries) end
     add(r)
   end
 end
 
+-- Per person, by my key: records are kept as received (wire names) and read with ns.fromWire only here; a name it
+-- cannot place stays as it is. Rebuilt when the records or the guild list change.
 function Trophies.summary()
-  if not cache then cache = L.summary(Trophies.records()) end
+  if not cache then
+    local function mine(list)
+      local out = {}
+      for i, name in ipairs(type(list) == "table" and list or {}) do out[i] = ns.fromWire(name) or name end
+      return out
+    end
+    local shown = {}
+    for sid, r in pairs(Trophies.records()) do
+      if type(r) == "table" then
+        local w = {}
+        for id, names in pairs(type(r.winners) == "table" and r.winners or {}) do w[id] = mine(names) end
+        shown[sid] = { sid = r.sid, start = r.start, people = mine(r.people), winners = w }
+      end
+    end
+    cache = L.summary(shown)
+  end
   return cache
 end
 
@@ -254,6 +284,7 @@ function Trophies.start()
   if started then return end
   started = true
   ns.Bus.on(FEATURE, "TROPHIES_CHANGED", function() cache = nil end)
+  ns.Bus.on(FEATURE, "GUILD_LIST", function() cache = nil end) -- names on records are read through the list
   local startedAt = ns.now()
   C_Timer.After(FIRST_DIGEST, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)
   C_Timer.NewTicker(DIGEST_EVERY, function() ns.Log.safe(FEATURE, Trophies.sendDigest) end)

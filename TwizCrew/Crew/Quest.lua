@@ -225,7 +225,7 @@ function Quest.request(name, title)
     return false, "soon"
   end
   askedAt[name] = now
-  local fields = { t = name, q = title }
+  local fields = { t = ns.wireName(name), q = title }
   if not ns.Comm.sendTo(name, "QREQ", fields) then ns.Comm.sendGroup("QREQ", fields) end
   print("TwizCrew: asked " .. ns.Util.safeText(name) .. " to share \"" .. ns.Util.safeText(title) .. "\".")
   return true
@@ -269,7 +269,7 @@ end
 
 local function onRequest(sender, f)
   if type(sender) ~= "string" or type(f) ~= "table" or type(f.q) ~= "string" or f.q == "" then return end
-  if f.t and not ns.isMe(f.t) then return end -- a group message meant for someone else
+  if f.t and not ns.wireIsMe(f.t) then return end -- a group message meant for someone else
   if ns.isMe(sender) then return end
   if not (ns.roster and ns.roster:get(sender)) then return end -- crew only
   if ns.Modules.setting("panel", "questRequests") == false then return end

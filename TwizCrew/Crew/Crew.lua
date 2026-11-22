@@ -254,19 +254,49 @@ function Crew.forgetRow(key)
   return true
 end
 
--- The row a typed name means: the member the guild list gives it (a full name, a key, a first word only one member
--- has), else a row of that name in any case (someone out of the guild, or the list not loaded). Returns the row (or
--- nil), the member's key (or nil), and "which one" when two members start with that word.
+-- The row a typed name means, in this order (any case): a current member's exact full name, a current member's
+-- exact key, a saved row's exact name (hidden rows too), and only then a first word exactly one row or member has.
+-- Returns the row (or nil), the member's key (or nil), and "which one" plus the names when the first word fits
+-- several.
 local function rowFor(name)
-  local key, why
-  if ns.Guild then key, why = ns.Guild.resolve(name, true) end
-  if why == "ambiguous" then return nil, nil, "which one" end
-  if key and ns.roster:row(key) then return key, key end
-  local low = name:lower()
-  for _, n in ipairs(ns.roster:allNames()) do
-    if n:lower() == low then return n, key end
+  local G = ns.Guild
+  local low = ns.Util.trim(name):lower()
+  local rows = ns.roster:allNames()
+  local function rowOf(key)
+    for _, n in ipairs(rows) do if n:lower() == key:lower() then return n end end
+    return nil
   end
-  return nil, key
+  if G and G.loaded() then
+    for _, e in ipairs(G.members()) do
+      if e.full:lower() == low then return rowOf(e.key), e.key end
+    end
+    for _, e in ipairs(G.members()) do
+      if e.key:lower() == low then return rowOf(e.key), e.key end
+    end
+  end
+  local exact = rowOf(low)
+  if exact then return exact, nil end
+  if low:find(" ", 1, true) then return nil, nil end
+  local found, list = {}, {}
+  local function add(key, shown)
+    if not found[key] then found[key] = true; list[#list + 1] = { key = key, shown = shown } end
+  end
+  for _, n in ipairs(rows) do
+    if (n:match("^(%S+)") or n):lower() == low then add(n, n) end
+  end
+  if G and G.loaded() then
+    for _, e in ipairs(G.members()) do
+      if e.first:lower() == low then add(e.key, e.full) end
+    end
+  end
+  if #list == 1 then return rowOf(list[1].key), list[1].key end
+  if #list > 1 then
+    local names = {}
+    for i, x in ipairs(list) do names[i] = x.shown end
+    table.sort(names)
+    return nil, nil, "which one", names
+  end
+  return nil, nil
 end
 
 -- Takes a friend who is offline out of the roster and the saved numbers, by a typed name (first word or full name,
@@ -275,8 +305,8 @@ end
 function Crew.forget(name)
   if type(name) ~= "string" or name == "" then return false, "no name" end
   if not ns.roster then return false, "not on your list" end
-  local row, key, why = rowFor(name)
-  if why then return false, why end
+  local row, key, why, names = rowFor(name)
+  if why then return false, why, names end
   if ns.isMe(key or row or name) then return false, "that is you" end
   if not row then return false, "not on your list" end
   local ok, reason = Crew.forgetRow(row)

@@ -58,11 +58,12 @@ end
 local function forgetName(rest)
   local name = Commands.normalizeName(rest)
   if not name then say("type a name after it, like /tc forget Frostie"); return end
-  local ok, why = ns.Crew.forget(name)
+  local ok, why, names = ns.Crew.forget(name)
   local safe = ns.Util.safeText(name)
   if ok then say("forgot " .. ns.Util.safeText(why or name) .. ".")
   elseif why == "that is you" then say("that's you.")
-  elseif why == "which one" then say("more than one member is called " .. ns.Util.safeText(rest) .. "; type the full name.")
+  elseif why == "which one" then
+    say("which one? " .. ns.Util.safeText(table.concat(names or {}, ", ")) .. ". Type the full name.")
   elseif why == "online right now" then say(safe .. " is online right now; try again when they are offline.")
   else say(safe .. " is not on your list.") end
 end
@@ -171,7 +172,7 @@ local function mock(rest)
     else say("type the number from /tc mock list, like: /tc mock remove 2") end
   elseif what ~= "" then
     local typed = Commands.normalizeName(rest)
-    local key, why = ns.Guild.resolve(typed, true)
+    local key, why = ns.Guild.resolveTyped(typed)
     if why == "ambiguous" then
       say("more than one member is called " .. ns.Util.safeText(rest) .. "; type the full name.")
       return

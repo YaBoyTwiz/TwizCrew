@@ -402,31 +402,18 @@ local function classOf(name)
   return m and m.class or nil
 end
 
--- Names from the wire, cleaned like the candidates a viewer got (ShowLogic names).
-local function wireName(s)
+-- A name cleaned for display like the candidates a viewer got (ShowLogic names).
+local function cleanName(s)
   if type(s) ~= "string" then return nil end
-  return ns.Util.truncateUTF8(ns.Util.safeText(s), 24)
+  return ns.Util.truncateUTF8(ns.Util.safeText(s), ns.ShowLogic.NAME_CHARS)
 end
 
--- A name from the wire, already cleaned (wireName / ShowLogic), as my key for that member (the presenter may name
--- them by full name, or by first word if an old copy), cleaned the same way.
+-- A name from the wire, already cleaned (cleanName / ShowLogic), as my key for that member (ns.fromWire), cleaned
+-- the same way; a name it cannot place stays as it is (plain text).
 local function myName(clean)
   if type(clean) ~= "string" then return nil end
-  local raw = (clean:gsub("||", "|"))
-  local key = ns.resolveName(raw)
-  if key == raw then return clean end
-  return wireName(key)
-end
-
--- Cleaned wire names as my keys, without doubles; sorted when asked.
-local function myNames(list, sorted)
-  local seen, out = {}, {}
-  for _, name in ipairs(list or {}) do
-    local key = myName(name)
-    if key and not seen[key] then seen[key] = true; out[#out + 1] = key end
-  end
-  if sorted then table.sort(out) end
-  return out
+  local key = ns.fromWire((clean:gsub("||", "|")))
+  return key and cleanName(key) or clean
 end
 
 ------------------------------------------------------------------------------------------------------------ vote
@@ -434,7 +421,8 @@ local function showIdNow() return showId or (follow and follow.id) end
 
 -- started: the clock runs from now (a viewer); the presenter's starts once its AWV has gone out.
 local function newVote(candidates, seconds, escaped, started)
-  local v = { candidates = candidates, isCandidate = {}, votes = {}, count = 0,
+  -- wireOf[candidate] = the name the presenter sent for them, keyOf[that name] = the candidate (ballots, result)
+  local v = { candidates = candidates, isCandidate = {}, votes = {}, count = 0, wireOf = {}, keyOf = {},
     endsAt = started and ns.now() + seconds or nil, escaped = escaped, seconds = seconds }
   for _, name in ipairs(candidates) do
     v.isCandidate[name] = true
@@ -493,7 +481,9 @@ end
 local function finishVote()
   if role ~= "presenter" or not vote or vote.closed then return end
   local w, n = ns.ShowLogic.tally(vote.votes, vote.candidates)
-  send("AWR", { id = showId, w = table.concat(w, ","), n = tostring(n) })
+  local sent = {}
+  for i, key in ipairs(w) do sent[i] = vote.wireOf[key] or ns.wireName(key) end
+  send("AWR", { id = showId, w = table.concat(sent, ","), n = tostring(n) })
   reveal(w, n)
 end
 
@@ -553,9 +543,10 @@ end
 local function startVote(endIndex)
   local list = sessionCandidates()
   if not showId or not list or #list < 2 then return false end
-  local f, kept = ns.ShowLogic.voteToWire(showId, list, ns.ShowLogic.VOTE_SECONDS)
+  local f, kept, wireOf = ns.ShowLogic.voteToWire(showId, list, ns.ShowLogic.VOTE_SECONDS)
   if #kept < 2 then return false end
   vote = newVote(kept, ns.ShowLogic.VOTE_SECONDS, false, false)
+  for key, sent in pairs(wireOf) do vote.wireOf[key], vote.keyOf[sent] = sent, key end
   vote.endIndex = endIndex
   cardSerial = cardSerial + 1
   idleClock()
@@ -674,18 +665,33 @@ local function onVoteStart(sender, f)
   if not fromPresenter(sender, f) or vote then return end -- one vote per show
   local v = ns.ShowLogic.voteFromWire(f)
   if not v then return end
-  local candidates = myNames(v.candidates, true)
+  -- each candidate as my key (or the name as sent when it places nobody); ballots go back with the presenter's name
+  local candidates, wireOf, keyOf, seen = {}, {}, {}, {}
+  for _, clean in ipairs(v.candidates) do
+    local sent = v.raw[clean]
+    local name = myName(clean)
+    if not seen[name] then
+      seen[name] = true
+      candidates[#candidates + 1] = name
+      wireOf[name], keyOf[sent] = sent, name
+    end
+  end
+  table.sort(candidates)
   if #candidates < 2 then return end
   vote = newVote(candidates, v.seconds, true, true)
+  vote.wireOf, vote.keyOf = wireOf, keyOf
   if latest({ kind = "vote" }) then enterVote() end
 end
 
 local function onBallot(sender, f)
   if not vote or type(f) ~= "table" or f.id == nil or f.id ~= showIdNow() or not known(sender) then return end
+  if type(f.c) ~= "string" then return end
+  -- the presenter's own name for a candidate, else a name that places one member (never a key: keys differ per copy)
+  local choice = vote.keyOf[f.c] or ns.fromWire(f.c)
   if vote.escaped then
-    countVote(wireName(sender), myName(wireName(f.c)))
+    countVote(cleanName(sender), vote.keyOf[f.c] or (choice and cleanName(choice)))
   else
-    countVote(sender, ns.resolveName(f.c))
+    countVote(sender, choice)
   end
 end
 
@@ -699,7 +705,9 @@ local function onResult(sender, f)
     if latest({ kind = "skip" }) then setPhase("end") end
     return
   end
-  reveal(myNames(r.names), r.n, false)
+  local names = {}
+  for i, clean in ipairs(r.names) do names[i] = vote.keyOf[(clean:gsub("||", "|"))] or myName(clean) end
+  reveal(names, r.n, false)
   if latest({ kind = "clown" }) then setPhase("clown") end
 end
 
@@ -829,7 +837,7 @@ function Show.vote(name)
   if not open or phase ~= "vote" or not vote or vote.mine or not canVote() then return end
   if type(name) ~= "string" or name == vote.me or not vote.isCandidate[name] then return end
   vote.mine = name
-  send("AWB", { id = showIdNow(), c = name })
+  send("AWB", { id = showIdNow(), c = vote.wireOf[name] or ns.wireName(name) }) -- the presenter's name for them
   countVote(vote.me, name)
   if phase == "vote" then draw() end
 end

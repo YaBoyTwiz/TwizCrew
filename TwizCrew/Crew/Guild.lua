@@ -533,27 +533,46 @@ function Guild.keyOf(raw)
   return e and e.key or nil
 end
 
--- The key of the member a name taken from a message field (a mock's target, a vote) or typed by the player stands
--- for: an exact key (what new copies send), else an exact full name, else (one word) the first word of exactly one
--- current member. Unlike keyOf (names the game gives: a sender, a unit), a key comes first, and a first word is not
--- kept for a member who has left: typed, or sent by an old copy, it means the one member who has that word now.
--- typed: an exact full name first, and a single word that two members start with is "which one?" even when it is
--- one of their keys (the panel shows both full names). Returns nil (and "ambiguous" when two members share the word) for anyone else, an
--- unreadable name, or while the list is not loaded.
-function Guild.resolve(raw, typed)
+-- How a member is named in a message field (a mock's target, a quest share ask, a vote, a winner, a trophy record):
+-- their first word when no other current member starts with it (any case), else their full name; a key the list
+-- does not have, as it is. Keys are this copy's own (another copy may have given a namesake pair the opposite keys),
+-- names are the same for every copy: fromWire reads them back.
+function Guild.wireName(key)
+  local e = Guild.get(key)
+  if not e then return key end
+  local same = byFirst[e.first:lower()]
+  if same and #same > 1 then return e.full end
+  return e.first
+end
+
+-- My key for the member a name from a message field stands for: an exact full name among current members, else a
+-- first word exactly one current member has (an old copy's first word too). Never a key. nil for anyone else, a
+-- first word two members share, an unreadable name, or while the list is not loaded.
+function Guild.fromWire(raw)
   if not loaded then return nil end
   local l = lowerFull(raw)
   if not l then return nil end
-  local oneWord = not l:find(" ", 1, true)
-  local same = oneWord and byFirst[l] or nil
-  if typed then
-    if byFull[l] then return byFull[l].key end -- exactly a name the panel shows
-    if same and #same > 1 then return nil, "ambiguous" end
-  end
-  local e = byKey[l] or byFull[l]
+  local e = byFull[l]
   if e then return e.key end
+  if not l:find(" ", 1, true) then
+    local same = byFirst[l]
+    if same and #same == 1 then return same[1].key end
+  end
+  return nil
+end
+
+-- A name the player typed: an exact full name (what the panel shows), else a single word: "which one?" when two
+-- current members start with it, else an exact key, else the first word of exactly one member. Returns the key, or
+-- nil (and "ambiguous" for a shared first word); nil while the list is not loaded.
+function Guild.resolveTyped(raw)
+  if not loaded then return nil end
+  local l = lowerFull(raw)
+  if not l then return nil end
+  if byFull[l] then return byFull[l].key end
+  local same = not l:find(" ", 1, true) and byFirst[l] or nil
+  if same and #same > 1 then return nil, "ambiguous" end
+  if byKey[l] then return byKey[l].key end
   if same and #same == 1 then return same[1].key end
-  if same then return nil, "ambiguous" end
   return nil
 end
 

@@ -126,12 +126,26 @@ function ns.myKey()
   return key or ns.playerName()
 end
 
--- A member name from a message field (a key, a full name, an old copy's first word) as this copy's key for them;
--- the text as it is when the guild list cannot tell (not loaded yet, a fake, someone outside the guild).
-function ns.resolveName(name)
-  local G = ns.Guild
-  if type(name) ~= "string" or not G or ns.isTestName(name) then return name end
-  return G.resolve(name) or name
+-- Names in message fields (who a mock, a quest ask, a vote or a trophy is about): ns.wireName(key) to send (the
+-- member's first word, or full name when shared), ns.fromWire(name) to read (my key, or nil), ns.wireIsMe(name):
+-- that name is me (before the guild list loads: ns.isMe decides).
+function ns.wireName(key)
+  if ns.Guild and type(key) == "string" and not ns.isTestName(key) then return ns.Guild.wireName(key) end
+  return key
+end
+
+function ns.fromWire(name)
+  if ns.Guild and type(name) == "string" and not ns.isTestName(name) then return ns.Guild.fromWire(name) end
+  return nil
+end
+
+function ns.wireIsMe(name)
+  if type(name) ~= "string" then return false end
+  if ns.Guild and ns.Guild.loaded() and not ns.isTestName(name) then
+    local key = ns.Guild.fromWire(name)
+    return key ~= nil and key == ns.myKey()
+  end
+  return ns.isMe(name)
 end
 
 -- Is this name (a raw sender, a full name or a member key) mine? The guild list knows namesakes ("Chaos Other" is not

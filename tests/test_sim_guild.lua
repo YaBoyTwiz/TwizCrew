@@ -441,6 +441,32 @@ return {
     end,
 
     -- Copies agree on who answers for the crew without talking: with the same rosters exactly k say yes.
+    -- A stranger whose name is "<a member's first word> <realm>" is not that member in the " Realm" space form.
+    stranger_named_first_word_and_realm_changes_nothing = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      H.guild("Crew", tw, { { name = "Chaos Deathbringr", class = "WARRIOR", online = true } })
+      H.link(tw)
+      login(tw)
+      H.advance(35)
+      A.eq(tw.state.realm, "Realm")
+      local before = twNs.roster:get("Chaos") and twNs.roster:get("Chaos").level
+      whisper(tw, twNs, "Chaos Realm", "STATE", { cl = "MAGE", lv = "55", zn = "Stranger Land" })
+      whisper(tw, twNs, "Chaos Realm", "MOCK", { t = "Twiz", x = "Rest in pieces, Twiz." })
+      H.advance(5)
+      A.no(twNs.MockShow.isShown(), "no mock show")
+      A.eq(#twNs.Roasts.forTest.shown(), 0, "no mock line")
+      local row = twNs.roster:get("Chaos")
+      A.eq(row and row.level, before, "Chaos's row did not change")
+      A.eq(twNs.roster:get("Chaos Realm"), nil, "not on the panel")
+      A.eq(twNs.Log.counts()["recv not in guild"], 2)
+      -- the real space form of the member's name still lands on Chaos
+      whisper(tw, twNs, "Chaos Deathbringr Realm", "MOCK", { t = "Twiz", x = "Rest in pieces, Twiz." })
+      H.advance(1)
+      A.ok(twNs.MockShow.isShown(), "a member's mock shows")
+      A.eq(twNs.Log.counts()["recv not in guild"], 2)
+      noErrors(A, twNs)
+    end,
+
     responders_are_the_same_few_on_every_copy = function(_, A, _, H)
       local all = {}
       for i = 1, 8 do

@@ -99,6 +99,19 @@ local function realmSuffix()
   if type(realm) == "string" and realm ~= "" then return " " .. realm:lower() end
 end
 
+-- A lower-case name without our realm in the " Realm" space form ("chaos deathbringr realm" -> "chaos deathbringr"),
+-- but only when what is left is a full name known(rest) accepts; otherwise the name as it is. So a stranger called
+-- "Chaos Realm" stays "chaos realm" and never becomes member Chaos Deathbringr's first word.
+local function withoutRealm(l, known)
+  if known(l) then return l end
+  local suffix = realmSuffix()
+  if suffix and #l > #suffix and l:sub(-#suffix) == suffix then
+    local rest = l:sub(1, #l - #suffix)
+    if known(rest) then return rest end
+  end
+  return l
+end
+
 -- Seconds before now from GetGuildRosterLastOnline's years, months, days, hours (30-day months, 365-day years).
 local function offlineSeconds(y, mo, d, h)
   if type(y) ~= "number" and type(mo) ~= "number" and type(d) ~= "number" and type(h) ~= "number" then return nil end
@@ -855,17 +868,16 @@ function Guild.count()
   return online, #members
 end
 
--- The member a raw game name belongs to, in any form: the first word, the full name, with or without "-Realm" (or the
--- space form " Realm"). nil for a stranger, an unreadable name, or while the list is not loaded.
+local function listedFull(l) return byFull[l] ~= nil end
+
+-- The member a raw game name belongs to, in any form: the first word, the full name, with or without "-Realm" (the
+-- space form " Realm" only after a listed full name). nil for a stranger, an unreadable name, or while the list is
+-- not loaded.
 local function lookup(raw)
   if not loaded then return nil end
   local name = clean(raw)
   if not name then return nil end
-  local l = name:lower()
-  local suffix = realmSuffix()
-  if suffix and #l > #suffix and l:sub(-#suffix) == suffix and not byFull[l] then
-    l = l:sub(1, #l - #suffix)
-  end
+  local l = withoutRealm(name:lower(), listedFull)
   -- order: an exact full name, then an exact key, then (one word only) the first-word fallback; unless the word
   -- was once given to someone else (then it is theirs, even while they are away)
   local e = byFull[l] or byKey[l]
@@ -880,14 +892,18 @@ end
 -- "Chaos Deathbringr-Realm" -> "Chaos Deathbringr" (nil when there is no usable name). The one place names are cleaned.
 Guild.cleanName = clean
 
--- lower(full name) of a raw name, with our realm taken off in the " Realm" form too.
+-- A full name the list gives now, or one it gave before (the saved keys: also while the list is not loaded).
+local function knownFull(l)
+  if byFull[l] then return true end
+  local key = savedKeys()[l]
+  return type(key) == "string" and key ~= ""
+end
+
+-- lower(full name) of a raw name, with our realm taken off in the " Realm" form too (only after a known full name).
 local function lowerFull(raw)
   local name = clean(raw)
   if not name then return nil end
-  local l = name:lower()
-  local suffix = realmSuffix()
-  if suffix and #l > #suffix and l:sub(-#suffix) == suffix and not byFull[l] then l = l:sub(1, #l - #suffix) end
-  return l
+  return withoutRealm(name:lower(), knownFull)
 end
 
 -- The key saved for this member the first time the guild list showed them (any name form, any case), also while the
@@ -1077,11 +1093,9 @@ end
 function Guild.isMe(raw)
   local name = clean(raw)
   if not name then return false end
-  local l = name:lower()
-  local suffix = realmSuffix()
-  if suffix and #l > #suffix and l:sub(-#suffix) == suffix then l = l:sub(1, #l - #suffix) end
   local full = myFull()
   full = full and full:lower()
+  local l = withoutRealm(name:lower(), function(x) return x == full end) -- the space form only after my full name
   if l == full then return true end
   local uname = clean(plain(UnitName, "player"))
   local mine = full or (uname and uname:lower())

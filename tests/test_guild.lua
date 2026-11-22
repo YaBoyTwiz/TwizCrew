@@ -153,6 +153,35 @@ return {
       A.ok(ns.Guild.isMember("Chaos-Realm")); A.no(ns.Guild.isMember("Stranger"))
     end,
 
+    -- "<a member's first word> <realm>" is a stranger, not that member in the " Realm" space form (the review's C1).
+    a_stranger_named_first_word_and_realm_is_no_member = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Chaos Deathbringr") })
+      A.eq(W.state.realm, "Realm")
+      A.no(ns.Guild.isMember("Chaos Realm"))
+      A.eq(ns.Guild.keyOf("Chaos Realm"), nil)
+      A.eq(ns.Guild.keyOfName("Chaos Realm"), "Chaos Realm", "an outsider under their own name")
+      A.eq(ns.Guild.savedKeyOf("Chaos Realm"), nil)
+      A.eq(ns.Guild.fromWire("Chaos Realm"), nil)
+      A.eq(ns.Guild.fromRecord("Chaos Realm"), nil)
+      A.eq(ns.Guild.resolveTyped("Chaos Realm"), nil)
+      A.ok(ns.Guild.keyTakenByOther("Chaos", "Chaos Realm"), "Chaos's key is someone else's")
+      A.eq(ns.Guild.keyOf("Chaos Deathbringr Realm"), "Chaos", "the real space form still resolves")
+      A.eq(ns.Guild.savedKeyOf("Chaos Deathbringr Realm"), "Chaos")
+      A.eq(ns.Guild.fromWire("Chaos Deathbringr Realm"), "Chaos")
+      A.eq(ns.Guild.resolveTyped("Chaos Deathbringr Realm"), "Chaos")
+      A.eq(ns.Guild.keyOf("Twiz Realm"), "Twiz", "a one-word member's space form")
+      A.no(ns.Guild.isMe("Twiz Other"))
+    end,
+
+    isMe_never_takes_my_first_word_and_the_realm = function(ns, A, W)
+      W.state.guids.player = "Player-1-ME"
+      boot(ns, W, "Chaos Deathbringr", { member("Chaos Deathbringr", { guid = "Player-1-ME" }), member("Ginkan Pebble") })
+      A.no(ns.Guild.isMe("Chaos Realm"))
+      A.ok(ns.Guild.isMe("Chaos Deathbringr Realm"))
+      A.ok(ns.Guild.isMe("chaos deathbringr realm"))
+      A.ok(ns.Guild.isMe("Chaos"))
+    end,
+
     names_in_the_list_may_carry_the_realm = function(ns, A, W)
       boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") }, function(w) w.state.rosterRealm = true end)
       A.eq(ns.Guild.get("Ginkan").full, "Ginkan Pebble")

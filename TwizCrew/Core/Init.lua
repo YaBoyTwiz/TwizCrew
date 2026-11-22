@@ -128,7 +128,8 @@ function ns.myKey()
   return key or ns.playerName()
 end
 
--- Names in message fields (who a mock, a quest ask, a vote or a trophy is about): ns.wireName(key) to send (the
+-- Names in short-lived message fields (who a mock, a quest ask, a vote or an award card is about; trophy records
+-- hold full names: Guild.recordName): ns.wireName(key) to send (the
 -- member's first word, or full name when shared), ns.fromWire(name) to read (my key, or nil), ns.wireIsMe(name):
 -- that name is me (before the guild list loads: ns.isMe decides).
 function ns.wireName(key)

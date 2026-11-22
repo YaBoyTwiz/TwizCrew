@@ -39,6 +39,8 @@ local function connection()
     text = "waiting for the guild list"
   elseif s.pending then
     text = "waiting for the game to say whether you are in a guild"
+  elseif s.notOurs then
+    text = "in a guild, but the saved data is not this guild's (see /tc guild), so nothing is sent"
   else
     text = "not in a guild, so nothing is sent"
   end

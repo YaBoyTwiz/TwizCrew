@@ -299,6 +299,7 @@ return {
     resume_after_reload = function(ns, A, W)
       local changes = {}
       boot(W, function()
+        ns.db.guild.name = "Test Guild" -- the saved session is this guild's
         ns.db.stats.session = { id = "Twiz-1", start = 1, manual = true, lastActive = ns.wallclock() - 600 }
         ns.Bus.on("test", "SESSION_CHANGED", function(new, old, keep)
           changes[#changes + 1] = { new = new, old = old, keep = keep }
@@ -314,6 +315,7 @@ return {
     resume_with_friend_in_same_session_keeps_counts = function(ns, A, W)
       local changes = {}
       boot(W, function()
+        ns.db.guild.name = "Test Guild" -- the saved session is this guild's
         ns.db.stats.session = { id = "Twiz-1", start = 1, manual = true, lastActive = ns.wallclock() - 600 }
         ns.Bus.on("test", "SESSION_CHANGED", function(new, old, keep)
           changes[#changes + 1] = { new = new, old = old, keep = keep }
@@ -404,6 +406,7 @@ return {
 
     stale_saved_session_starts_new = function(ns, A, W)
       boot(W, function()
+        ns.db.guild.name = "Test Guild" -- the saved session is this guild's
         ns.db.stats.session = { id = "Twiz-1", start = 1, manual = true, lastActive = ns.wallclock() - 4000 }
       end)
       W:advance(21)

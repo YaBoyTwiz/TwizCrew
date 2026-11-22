@@ -238,5 +238,5 @@ function Transport.status()
   return { mode = sending() and "guild" or "none", pending = not settled, waitingList = waitingList,
     guild = type(guild) == "string" and guild or nil, lockdown = Transport.lockdown(), lastResult = lastResult,
     reload = G ~= nil and G.needsReload() or false, dataGuild = G and G.dataGuild() or nil,
-    guildId = G and G.id() or nil }
+    guildId = G and G.id() or nil, notOurs = G ~= nil and G.quiet() or false }
 end

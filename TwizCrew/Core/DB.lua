@@ -15,15 +15,19 @@ end
 -- Saved data is of two kinds. Account-wide: module settings, my status and mocks, my own characters' stats
 -- (stats.chars), the log, update notices and other one-time flags. Per guild: everything about other people or
 -- shared with them (GUILD_PATHS). The top level always holds the per-guild data of ONE guild, db.guild.name (nil:
--- data from before guilds had names, or a fresh install, until a guild adopts it); other guilds' data is parked in
--- db.guilds[name], with the same shape. db.guilds[""] holds unnamed (v0.1.24) data parked until its guild shows up.
+-- data from before guilds had names, or a fresh install, until a guild adopts it or the player chooses with /tc
+-- guild; "?": taken while the game named no guild); other guilds' data is parked in db.guilds[name], with the same
+-- shape. db.guilds[""] holds unnamed (v0.1.24) data parked by /tc guild new, until the player picks it up again.
 -- db.guild.byChar[character] = that character's guild in its last session decides, at login, which set is on top
--- (DB.useGuildOf). Parked data is never deleted; broken parked values go to db.guilds_bad; fields of a set that are
--- not in GUILD_PATHS ride along in db.guild.extra while it is on top.
+-- (DB.useGuildOf); a guild without a parked set gets the unnamed set (or a "?" set) back so it can never be stranded,
+-- unless /tc guild new asked for a fresh one (db.guild.fresh[name], used once). Parked data is never deleted; broken
+-- parked values go to db.guilds_bad; fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while
+-- it is on top.
 local GUILD_PATHS = { "roster", "feed", "calendar", "pins", "stats.crew", "stats.session", "stats.trophies",
-  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine" }
+  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell" }
 DB.GUILD_PATHS = GUILD_PATHS
-local UNNAMED = ""
+local UNNAMED = ""      -- the parked slot of unnamed (v0.1.24) data
+local PLACEHOLDER = "?" -- data taken while the game named no guild (Crew/Guild.lua)
 
 local function split(path)
   local parent, key = path:match("^(%w+)%.(%w+)$")
@@ -36,8 +40,9 @@ local function guildDefaults(db)
   ns.Util.mergeDefaults(db, {
     roster = {},
     -- keys[lower(full name)] = the key a guild member was given the first time (never changed), mine[GUID] = my key
-    -- on that character (see Crew/Guild.lua); name, byChar, notLegacy: see above and DB.useGuildOf
-    guild = { keys = {}, mine = {}, byChar = {}, notLegacy = {} },
+    -- on that character, spell[lower(full name)] = the full name as the game spells it (see Crew/Guild.lua); name,
+    -- byChar, fresh: see above and DB.useGuildOf
+    guild = { keys = {}, mine = {}, spell = {}, byChar = {} },
     guilds = {},
     stats = { crew = {}, session = {} },
     feed = {}, -- the activity feed: the newest FeedLogic.MAX events (kept by Reset everything)
@@ -106,6 +111,7 @@ local function putSet(db, set)
 end
 
 -- Keeps a value aside under db.guilds_bad (never thrown away): name (numbered: name#1), then name#2, name#3 ...
+-- Returns the key it went under.
 local function keepAside(db, name, value, numbered)
   if type(db.guilds_bad) ~= "table" then db.guilds_bad = {} end
   local n = 1
@@ -113,6 +119,7 @@ local function keepAside(db, name, value, numbered)
   while db.guilds_bad[key] ~= nil do n = n + 1; key = name .. "#" .. n end
   db.guilds_bad[key] = value
   ns.Log.add("warn", "saved data kept aside as guilds_bad[%s]", key)
+  return key
 end
 
 -- This character's id for db.guild.byChar: its GUID, else its name.
@@ -124,11 +131,12 @@ function DB.charId()
 end
 
 -- At login, before any module reads per-guild data: when this character's guild (byChar, from its last session)
--- is not the one whose data is on top, the top set is parked under its name and that guild's set (a parked one,
--- the unnamed v0.1.24 set unless that guild already turned it down, or a fresh one) comes up. A character with no
--- known guild leaves everything as it is. Everything is checked first; broken parked values are kept aside in
--- db.guilds_bad, never thrown away; a top set and a parked set that both claim one guild keep the top one (the
--- parked one goes aside); an error halfway puts everything back. Returns true when it swapped.
+-- is not the one whose data is on top, the top set is parked under its name and that guild's set comes up: its
+-- parked set; else (unless /tc guild new asked for a fresh one) the unnamed set, else the "?" set; else a fresh one.
+-- A character with no known guild leaves everything as it is. Everything is checked first: a parked value that is
+-- not a usable set (not a table, or its stats / guild part not a table) is kept aside in db.guilds_bad and counts as
+-- absent; a guild parked twice keeps the top set (the parked copy goes aside); unnamed top data never overwrites a
+-- parked unnamed set (it goes aside instead); an error halfway puts everything back. Returns true when it swapped.
 function DB.useGuildOf(db, charId)
   if type(db) ~= "table" or type(db.guild) ~= "table" or type(db.guild.byChar) ~= "table" then return false end
   local g = db.guild
@@ -139,33 +147,49 @@ function DB.useGuildOf(db, charId)
     db.guilds = {}
   end
   local here = type(g.name) == "string" and g.name ~= "" and g.name or UNNAMED
-  for _, name in ipairs({ want, here, UNNAMED }) do
+  for _, name in ipairs({ want, here, UNNAMED, PLACEHOLDER }) do
     local v = db.guilds[name]
-    if v ~= nil and type(v) ~= "table" then keepAside(db, name, v); db.guilds[name] = nil end
+    if v ~= nil and (type(v) ~= "table" or (rawget(v, "stats") ~= nil and type(rawget(v, "stats")) ~= "table")
+      or (rawget(v, "guild") ~= nil and type(rawget(v, "guild")) ~= "table")) then
+      keepAside(db, name, v)
+      db.guilds[name] = nil
+    end
   end
-  if db.guilds[here] ~= nil then -- both the top and a parked set claim this guild: the top one stays
-    keepAside(db, here, db.guilds[here], true)
-    db.guilds[here] = nil
+  local topAside = false -- unnamed top data and a parked unnamed set: the top set goes aside
+  if db.guilds[here] ~= nil then
+    if here == UNNAMED then
+      topAside = true
+    else -- both the top and a parked set claim this guild: the top one stays
+      keepAside(db, here, db.guilds[here], true)
+      db.guilds[here] = nil
+    end
   end
-  local notLegacy = type(g.notLegacy) == "table" and g.notLegacy or {}
-  local incoming, from = db.guilds[want], want
-  if incoming == nil and db.guilds[UNNAMED] ~= nil and here ~= UNNAMED and not notLegacy[want] then
-    incoming, from = db.guilds[UNNAMED], UNNAMED -- maybe this guild's data from before: its list decides (Guild)
+  local fresh = type(g.fresh) == "table" and g.fresh[want]
+  local incoming, from = nil, want
+  if not fresh then
+    incoming = db.guilds[want]
+    if incoming == nil and here ~= UNNAMED and db.guilds[UNNAMED] ~= nil then
+      incoming, from = db.guilds[UNNAMED], UNNAMED -- maybe this guild's data from before: its list decides (Guild)
+    elseif incoming == nil and here ~= PLACEHOLDER and db.guilds[PLACEHOLDER] ~= nil then
+      incoming, from = db.guilds[PLACEHOLDER], PLACEHOLDER
+    end
   end
   local outgoing = topSet(db)
   mergeInto(outgoing, type(g.extra) == "table" and g.extra or nil)
   local before = { name = g.name, extra = g.extra }
+  local asideKey
   local ok, err = pcall(function()
     local extra = incoming and extraOf(incoming) or nil
-    db.guilds[here] = outgoing
+    if topAside then asideKey = keepAside(db, here, outgoing, true) else db.guilds[here] = outgoing end
     if incoming ~= nil then db.guilds[from] = nil end
     putSet(db, incoming or {})
     g.extra = extra
-    g.name = from ~= UNNAMED and want or nil
+    if from == UNNAMED then g.name = nil else g.name = from end
+    if fresh then g.fresh[want] = nil end
   end)
   if not ok then
     putSet(db, outgoing) -- everything back as it was
-    db.guilds[here] = nil
+    if asideKey then db.guilds_bad[asideKey] = nil elseif not topAside then db.guilds[here] = nil end
     if incoming ~= nil then db.guilds[from] = incoming end
     g.name, g.extra = before.name, before.extra
     ns.Log.add("error", "switching saved data to %s failed (%s): nothing changed", want, tostring(err))
@@ -196,6 +220,7 @@ function DB.init(saved, defs)
     ns.Util.mergeDefaults(e, moduleDefaults(def))
   end
   for id in pairs(REMOVED) do db.modules[id] = nil end
+  db.guild.notLegacy = nil -- a test build's "this guild turned the old data down": nothing a guess decides is kept
   return db
 end
 

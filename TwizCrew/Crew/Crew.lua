@@ -337,7 +337,7 @@ end
 -- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted for
 -- that (see tidy).
 local function followGuild()
-  if not tidied and ns.Guild and ns.Guild.writable() then tidy() end
+  if not tidied and ns.Guild and ns.Guild.writable() and ns.Guild.complete() then tidy() end
   for _, name in ipairs(ns.roster:syncGuild()) do
     local m = ns.roster:row(name)
     ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = m and m.inGuild or false })

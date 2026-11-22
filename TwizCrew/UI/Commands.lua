@@ -31,6 +31,7 @@ local HELP = {
   "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
   "/tc debug - turn technical chat messages on or off",
   "/tc forget <name> - forget an offline friend's saved data; first or full name (/tc remove does the same)",
+  "/tc guild - whose saved data is in use; /tc guild use - make it this guild's; /tc guild new - start fresh here",
   "/tc awards - the awards show for this session, great on stream",
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
@@ -53,6 +54,55 @@ function Commands.normalizeName(text)
   local name = ns.Util.trim(tostring(text or ""))
   if name == "" then return nil end
   return name:sub(1, 1):upper() .. name:sub(2)
+end
+
+-- /tc guild: whose saved data is in use and what else is saved; "use": the data in use becomes this guild's;
+-- "new": this guild starts fresh at the next /reload (nothing saved is deleted).
+local function rosterSize(set)
+  local n = 0
+  for name in pairs(type(set) == "table" and type(set.roster) == "table" and set.roster or {}) do
+    if not ns.isTestName(name) then n = n + 1 end
+  end
+  return n
+end
+
+local function guildCommand(rest)
+  local G, safe = ns.Guild, ns.Util.safeText
+  local what = rest:lower()
+  local why
+  if what == "use" or what == "new" then
+    local ok
+    if what == "use" then ok, why = G.useHere() else ok, why = G.newHere() end
+    local here = safe(tostring(G.id()))
+    if ok and what == "use" then say("the saved data in use now belongs to " .. here .. ".")
+    elseif ok then say(here .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.")
+    elseif why == "noguild" then say("this character is not in a guild.")
+    elseif why == "noname" then say("the game has not named your guild yet, so TwizCrew cannot tell which one it is.")
+    elseif why == "named" then
+      say("the saved data in use is " .. safe(tostring(G.dataGuild())) .. "'s. Type /reload to switch to " .. here
+        .. ".")
+    elseif why == "parked" then say(here .. " already has its own saved data. Type /reload to use it.")
+    elseif why == "inuse" then say("the saved data in use is already " .. here .. "'s.") end
+    return
+  end
+  local name = G.inGuild() and (G.id() and safe(G.id()) or "(the game gives no name)") or "none"
+  say("this character's guild: " .. name)
+  local dg = G.dataGuild()
+  local inUse
+  if dg == nil then inUse = G.dataEmpty() and "new (nothing saved yet)" or "data from before guilds"
+  elseif dg == G.PLACEHOLDER then inUse = "a guild whose name the game did not give (\"?\")"
+  else inUse = safe(dg) end
+  say("saved data in use: " .. inUse .. ", " .. rosterSize(ns.db) .. " friends")
+  local parked = {}
+  for key, set in pairs(type(ns.db.guilds) == "table" and ns.db.guilds or {}) do
+    local label = key == "" and "data from before guilds" or key == G.PLACEHOLDER and "\"?\"" or safe(key)
+    parked[#parked + 1] = label .. " (" .. rosterSize(set) .. " friends)"
+  end
+  table.sort(parked)
+  say(#parked > 0 and ("also saved: " .. table.concat(parked, ", ")) or "no other saved data.")
+  if G.inGuild() and not G.active() then
+    say("type /tc guild use to make the data in use this guild's, or /tc guild new to start fresh for it.")
+  end
 end
 
 local function forgetName(rest)
@@ -265,6 +315,7 @@ local ACTIONS = {
   debug = toggleDebug,
   remove = forgetName,
   forget = forgetName,
+  guild = guildCommand,
   awards = awards,
   session = session,
   stats = stats,

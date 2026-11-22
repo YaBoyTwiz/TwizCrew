@@ -615,7 +615,7 @@ return {
         list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
       end
       W.state.guild = { name = "Test Guild", members = list }
-      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      W.env.TwizCrewDB = { guild = { name = "Test Guild", keys = { ["chaos deathbringr"] = "Chaos" } } }
       start(ns, W)
       A.eq(ns.Guild.keyOf("Chaos Other"), "Chaos Other")
       local S = ns.Session.current().id
@@ -653,7 +653,7 @@ return {
         list[i] = { name = name, online = true, guid = string.format("Player-1-%04d", i) }
       end
       W.state.guild = { name = "Test Guild", members = list }
-      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      W.env.TwizCrewDB = { guild = { name = "Test Guild", keys = { ["chaos deathbringr"] = "Chaos" } } }
       local id = frostieShow(ns, W)
       hello(W, ns, "Chaos Other", "ROGUE")
       card(W, ns, "Frostie", { id = id, i = "1", k = "nobody" })

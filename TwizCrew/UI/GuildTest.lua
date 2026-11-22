@@ -118,8 +118,8 @@ function GuildTest.run()
     say(lockdownText())
     return
   end
-  -- what the game gives: the guild's name, and how many list rows it counts and gives readably (the last read)
-  local countedRows, readable = ns.Guild.readStats()
+  -- what the game gives: the guild's name, and how many list rows it counts and gives readably (counted now)
+  local countedRows, readable = ns.Guild.countRows()
   facts.counted, facts.readable = countedRows, readable
   say(facts.guildName and ("The game names the guild \"" .. ns.Util.safeText(facts.guildName) .. "\".")
     or "The game gives no guild name.")

@@ -92,7 +92,7 @@ return {
       end
       W.state.player = "Chaos Other"
       W.state.guild = { name = "Test Guild", members = list }
-      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } },
+      W.env.TwizCrewDB = { guild = { name = "Test Guild", keys = { ["chaos deathbringr"] = "Chaos" } },
         stats = { chars = { Chaos = { sid = "old", s = {}, a = { dt = 50 } } }, crew = {}, session = {} } }
       start(ns, W)
       A.eq(ns.myKey(), "Chaos Other")
@@ -125,7 +125,7 @@ return {
       -- I am the later namesake: the other one holds the word "Chaos"
       W.state.player = "Chaos Other"
       guild("Chaos Deathbringr", "Chaos Other", "Frostie")
-      W.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      W.env.TwizCrewDB = { guild = { name = "Test Guild", keys = { ["chaos deathbringr"] = "Chaos" } } }
       start(ns, W)
       A.eq(ns.Guild.myKey(), "Chaos Other")
       receive(ns, W, "Frostie", "MOCK", { t = "Chaos", x = "Rest in pieces, Chaos." })

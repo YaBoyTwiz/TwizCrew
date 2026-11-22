@@ -101,7 +101,7 @@ return {
       A.contains(W.sent[2].text, "PING")
       A.eq(W.sent[1].chatType, "GUILD")
       A.eq(ns.Transport.status(), { mode = "guild", pending = false, waitingList = false, guild = "Late Guild", lockdown = false,
-        lastResult = 0, reload = false, dataGuild = "Late Guild", guildId = "Late Guild" })
+        lastResult = 0, reload = false, dataGuild = "Late Guild", guildId = "Late Guild", notOurs = false })
     end,
     not_in_a_guild_settles_after_the_grace_and_sends_nothing = function(ns, A, W)
       boot(ns, W, function(w) w.state.guild = nil end)
@@ -186,7 +186,7 @@ return {
         local list = w.state.guild.members
         list[#list + 1] = { name = "Frost Bite", online = true, guid = "Player-1-0901" }
         list[#list + 1] = { name = "Frost", online = true, guid = "Player-1-0902" }
-      end, { guild = { keys = { ["frost bite"] = "Frost" } } })
+      end, { guild = { name = "Test Guild", keys = { ["frost bite"] = "Frost" } } })
       A.eq(ns.Guild.get("Frost").full, "Frost Bite")
       A.eq(ns.Guild.get("Frost (2)").full, "Frost")
       A.eq(ns.Transport.destinationFor("Frost"), { chatType = "WHISPER", target = "Frost Bite" })
@@ -462,7 +462,7 @@ return {
       boot(ns, W, function(w)
         local real = w.env.GetNumGuildMembers
         w.env.GetNumGuildMembers = function() if rows == 0 then return 0, 0, 0 end return real() end
-      end, { guild = { keys = { ["frostie pebble"] = "Frostie", ["frostie snow"] = "Frostie Snow",
+      end, { guild = { name = "Test Guild", keys = { ["frostie pebble"] = "Frostie", ["frostie snow"] = "Frostie Snow",
         ["ginkan pebble"] = "Ginkan" } } })
       A.no(ns.Guild.loaded())
       local got = pingSenders(ns)

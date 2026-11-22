@@ -300,6 +300,7 @@ return {
       W.state.guild = { name = "G", members = { member("Twiz"), member("Zed Zed") } }
       local db = ns.DB.init(nil, ns.Modules.list())
       db.guild.keys["zed zed"] = "twiz"
+      db.guild.name = "G"
       ns.db = db; ns.Modules.attach(db)
       ns.Guild.start()
       A.eq(ns.Guild.get("twiz").full, "Zed Zed")
@@ -390,11 +391,18 @@ return {
     data_guild_rules = function(ns, A, W)
       boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
       A.eq(ns.Guild.name(), "Test Guild")
-      A.eq(ns.Guild.dataGuild(), "Test Guild", "an empty saved roster: adopted at once")
+      A.eq(ns.Guild.dataGuild(), "Test Guild", "nothing saved: this guild's at once")
       A.ok(ns.Guild.active())
-      ns.db.guild.name = "Main Guild"
+    end,
+
+    another_guilds_data_on_top_is_quiet_and_says_reload_once = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Test Guild", members = { member("Twiz"), member("Ginkan Pebble") } }
+      ns.db = ns.DB.init({ guild = { name = "Main Guild" } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(20)
       A.no(ns.Guild.active(), "another guild's data on top"); A.ok(ns.Guild.inGuild(), "the game's answer")
-      W:advance(3)
       A.no(ns.Guild.loaded(), "no list read for another guild's data")
       A.ok(ns.Guild.needsReload())
       A.eq(ns.db.guild.byChar[ns.DB.charId()], "Test Guild", "remembered for the next login")
@@ -420,7 +428,7 @@ return {
       W.state.guild = { name = "Test Guild", members = {} }
       W.state.guids = W.state.guids or {}
       W.state.guids.player = "Player-1-0002"
-      local db = ns.DB.init({ guild = { keys = {}, mine = { ["Player-1-0002"] = "Chaos Other" } } }, ns.Modules.list())
+      local db = ns.DB.init({ guild = { name = "Test Guild", keys = {}, mine = { ["Player-1-0002"] = "Chaos Other" } } }, ns.Modules.list())
       ns.db = db
       ns.Modules.attach(db)
       ns.Guild.start()
@@ -454,7 +462,13 @@ return {
       W:advance(3)
       A.eq(ns.Guild.dataGuild(), nil, "one match of ten: not adopted")
       A.no(ns.Guild.active())
-      A.ok(ns.db.guild.notLegacy["Guild B"], "turned down for good")
+      local said = 0
+      for _, line in ipairs(W.printed) do if line:find("/tc guild use", 1, true) then said = said + 1 end end
+      A.eq(said, 1, "told once how to choose")
+      W:advance(60)
+      said = 0
+      for _, line in ipairs(W.printed) do if line:find("/tc guild use", 1, true) then said = said + 1 end end
+      A.eq(said, 1, "only once")
     end,
 
     two_coincidental_matches_of_ten_do_not_adopt = function(ns, A, W)
@@ -509,9 +523,8 @@ return {
       ns.Guild.start()
       W:advance(3)
       A.eq(ns.Guild.dataGuild(), nil)
-      ns.db.guild.notLegacy = {}
       ns.db.stats.trophies = {}
-      W:advance(2)
+      W:advance(6)
       A.eq(ns.Guild.dataGuild(), "Guild A", "nothing else saved: an empty roster fits at once")
     end,
 
@@ -543,10 +556,13 @@ return {
       A.no(ns.Guild.active())
     end,
 
-    a_guild_of_another_realm_is_named_with_its_realm = function(ns, A, W)
+    -- The guild's identity is its name alone: a realm the game gives now and then never flips it.
+    a_realm_given_with_the_guild_name_is_ignored = function(ns, A, W)
       boot(ns, W, "Twiz", { member("Twiz") }, function(w) w.state.guild.realm = "Faraway" end)
-      A.eq(ns.Guild.id(), "Test Guild-Faraway")
-      A.eq(ns.Guild.dataGuild(), "Test Guild-Faraway")
+      A.eq(ns.Guild.id(), "Test Guild")
+      W.state.guild.realm = nil
+      W:advance(15)
+      A.eq(ns.Guild.id(), "Test Guild"); A.ok(ns.Guild.active())
     end,
 
     -- The game counts one row more than it gives: complete after three reads with one readable count, 5 s apart.
@@ -625,6 +641,28 @@ return {
       ns.Guild.start()
       W:advance(ns.Config.GUILD_NAME_WAIT + 2)
       A.ok(ns.Guild.active(), "this character's last guild was the data guild")
+    end,
+
+    a_departed_members_spelling_is_kept_for_records = function(ns, A, W)
+      local db = boot(ns, W, "Twiz", { member("Twiz"), member("Chaos DeathBringr") })
+      A.eq(db.guild.spell["chaos deathbringr"], "Chaos DeathBringr")
+      W.state.guild.members = { member("Twiz") }
+      W:advance(11); W.env.C_GuildInfo.GuildRoster(); W:advance(2)
+      A.eq(ns.Guild.recordName("Chaos"), "Chaos DeathBringr", "the game's spelling, not a rebuilt one")
+    end,
+
+    question_mark_data_meeting_a_guild_with_its_own_set_warns_once = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Crew Guild", members = { member("Twiz") } }
+      ns.db = ns.DB.init({ guild = { name = "?" }, guilds = { ["Crew Guild"] = { roster = {} } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(60)
+      A.eq(ns.Guild.dataGuild(), "?", "kept: Crew Guild has its own set")
+      local warned, said = 0, 0
+      for _, line in ipairs(ns.Log.lines()) do if line:find("keeps no guild name", 1, true) then warned = warned + 1 end end
+      for _, line in ipairs(W.printed) do if line:find("has its own saved data", 1, true) then said = said + 1 end end
+      A.eq(warned, 1); A.eq(said, 1)
     end,
 
     the_module_is_registered = function(ns, A)

@@ -267,5 +267,41 @@ return {
       A.eq(db.guilds_bad["Guild A#1"].roster.Old.name, "Old", "the older parked copy is kept aside")
       A.eq(db.guilds["Guild A"].roster.A1.name, "A1", "the top one is parked")
     end,
+    swap_keeps_a_set_with_a_broken_part_aside_whole = function(ns, A)
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["Guild B"] = { roster = { B1 = { name = "B1" } }, stats = true } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guilds_bad["Guild B"].roster.B1.name, "B1", "the whole set kept aside")
+      A.eq(db.roster, {}, "Guild B counts as having no set")
+    end,
+
+    swap_never_strands_unnamed_or_question_mark_data = function(ns, A)
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["?"] = { roster = { Q1 = { name = "Q1" } } } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "?", "no set of its own: the \"?\" set comes up (its name is decided in the game)")
+      A.eq(db.roster.Q1.name, "Q1")
+      db.guilds[""] = { roster = { L1 = { name = "L1" } } }
+      db.guild.byChar.c2 = "Guild C"
+      A.ok(ns.DB.useGuildOf(db, "c2"))
+      A.eq(db.guild.name, nil, "the unnamed set first")
+      A.eq(db.roster.L1.name, "L1")
+      A.eq(db.guilds["?"].roster.Q1.name, "Q1", "the \"?\" set parked again")
+    end,
+
+    swap_with_a_fresh_request_parks_unnamed_data_and_never_overwrites = function(ns, A)
+      local db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { byChar = { c1 = "Guild A" },
+        fresh = { ["Guild A"] = true } }, guilds = { [""] = { roster = { Older = { name = "Older" } } } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "Guild A"); A.eq(db.roster, {}, "fresh")
+      A.eq(db.guilds[""].roster.Older.name, "Older", "the parked unnamed set is never overwritten")
+      A.eq(db.guilds_bad["#1"].roster.L1.name, "L1", "the top unnamed set went aside")
+      A.eq(db.guild.fresh["Guild A"], nil)
+    end,
+
+    not_legacy_from_a_test_build_is_dropped = function(ns, A)
+      local db = ns.DB.init({ guild = { notLegacy = { ["Guild B"] = true } } }, {})
+      A.eq(db.guild.notLegacy, nil)
+    end,
   },
 }

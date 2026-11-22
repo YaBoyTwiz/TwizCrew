@@ -6,14 +6,15 @@
 -- member is seen (only on a complete read) and never change. Keys, like all data about other people, are kept per
 -- guild (Core/DB.lua: the set on top belongs to ns.db.guild.name, the "data guild").
 --
--- active(): in a guild and the data on top belongs to it. Only then is the list read (but see readMode), are keys
--- given out, and does the addon send, accept, hide or write anything for the crew; otherwise it acts as if in no
--- guild. GUILD_STATE(active) fires when active() changes; inGuild() stays the game's answer. The guild's identity
--- (guildId: name, plus realm when the game gives one) is sticky for the session. A character whose guild is not the
--- data guild is remembered in ns.db.guild.byChar and told once to /reload (the login swap brings its guild's data).
--- Unnamed data (v0.1.24, or a fresh install) is adopted by the first guild whose complete list fits it (rosterFits,
--- keysFit); a guild it does not fit stays quiet and gets its own fresh data at the next login (ns.db.guild.notLegacy).
--- When the game never names the guild, the list decides after GUILD_NAME_WAIT s (probe; unnamed data becomes "?").
+-- active(): in a guild, nothing pending, and the data on top belongs to it. Only then is the list read (but see
+-- readMode), are keys given out, and does the addon send, accept, hide or write anything for the crew; otherwise it
+-- acts as if in no guild. GUILD_STATE(active) fires when active() changes; inGuild() stays the game's answer. The
+-- guild's identity is its name, sticky for the session. A character whose guild is not the data guild is remembered
+-- in ns.db.guild.byChar and told once to /reload (the login swap brings its guild's data). Unnamed data (v0.1.24, or
+-- a fresh install) is adopted by a guild whose complete list fits it (rosterFits), or at once when nothing is saved;
+-- otherwise TwizCrew stays quiet this session and the player chooses with /tc guild use or /tc guild new (nothing a
+-- guess decides is permanent). When the game never names the guild, unnamed data that fits becomes "?", and "?" data
+-- is used in any guild without a readable name (single-guild mode); a real name read later renames it.
 --
 -- My own key is saved per character GUID (ns.db.guild.mine) so myKey() can answer before the list loads.
 local _, ns = ...
@@ -34,13 +35,12 @@ local complete = false       -- the last read gave as many readable rows as the 
 local announced              -- nil until known, then true / false: is the character in a guild (the game, after grace)
 local activeAnnounced        -- nil until known, then what GUILD_STATE last said (in my TwizCrew guild)
 local nameWaitSince          -- ns.now() since when we are in a guild that is not (yet) known to be the data guild
-local curId                  -- this session's guild identity (guildId), sticky: an unreadable answer keeps it
-local otherId, otherSince    -- a different readable identity the game gave, and since when (it counts after grace)
+local curId                  -- this session's guild name, sticky: an unreadable answer keeps it
+local otherId, otherSince    -- a different readable name the game gave, and since when (it counts after grace)
 local inSince                -- ns.now() since the game says "in a guild"
-local nameless               -- the game names no guild: nil undecided, true the data on top is this guild's, false not
-local stableReadable, stableN, stableAt = nil, 0, nil -- the same readable row count on reads >= STABLE_GAP s apart
-local counted, readableRows  -- the last read: rows the game counted, rows it gave readably (for /tc guildtest)
-local toldReload             -- the /reload line was printed this session
+local stableKey, stableN, stableAt = nil, 0, nil -- the same (counted, readable) on reads >= STABLE_GAP s apart
+local counted, readableRows  -- the last read: rows the game counted, rows it gave readably
+local told = {}              -- chat lines already printed this session (each at most once)
 local seenIn                 -- what the game last said about being in a guild (nil: nothing usable yet)
 local absentSince            -- ns.now() when the game first said "no guild" (nil while it says yes)
 local lastRefresh, lastRead
@@ -50,7 +50,7 @@ local started = false
 local ticker
 local signature = ""
 local heldBy = {}            -- lower(key) -> lower(full name) of whoever was ever given that key (saved keys)
-local fallback = { keys = {}, mine = {} } -- used while saved data is not attached (tests, very early)
+local fallback = { keys = {}, mine = {}, spell = {} } -- used while saved data is not attached (tests, very early)
 
 local function saved()
   local db = ns.db
@@ -59,6 +59,7 @@ local function saved()
   local g = db.guild
   if type(g.keys) ~= "table" then g.keys = {} end
   if type(g.mine) ~= "table" then g.mine = {} end
+  if type(g.spell) ~= "table" then g.spell = {} end
   return g
 end
 
@@ -125,6 +126,9 @@ local function savedClassOf(first)
   return type(row) == "table" and type(row.class) == "string" and row.class or nil
 end
 
+-- The full name as the game spells it (guild.spell[lower(full)]), for lasting records (recordName).
+local function saveSpelling(e) saved().spell[e.full:lower()] = e.full end
+
 -- Gives every entry its key (entries are sorted A-Z by full name). allowNew false (a partial read): only saved keys,
 -- an entry without one gets none.
 local function assignKeys(entries, allowNew)
@@ -178,6 +182,7 @@ local function assignKeys(entries, allowNew)
     for _, e in ipairs(group) do
       e.key = free((e == winner) and e.first or e.full, e.full:lower())
       saved[e.full:lower()] = e.key
+      saveSpelling(e)
     end
   end
   heldBy = holder
@@ -208,23 +213,15 @@ local function install(entries)
   end
 end
 
--- The name the game gives for this character's guild (nil when it gives none, or a secret).
-local function guildName()
+-- This character's guild name as the game gives it (nil when it gives none, or a secret). The guild's identity is
+-- its name alone (a realm the game gives now and then would make it flip).
+local function guildId()
   local name = plain(GetGuildInfo, "player")
   if type(name) == "string" and name ~= "" then return name end
   return nil
 end
 
--- The guild's identity, the one string that names a guild's saved data: its name, plus "-" and its realm when the
--- game gives a realm (a guild of another realm). nil when the game gives no readable name.
-local function guildId()
-  local name, _, _, realm = plain(GetGuildInfo, "player")
-  if type(name) ~= "string" or name == "" then return nil end
-  if type(realm) == "string" and realm ~= "" then return name .. "-" .. realm end
-  return name
-end
-
-local PLACEHOLDER = "?" -- the data guild's name while the game never names the guild (see the name-less fallback)
+local PLACEHOLDER = "?" -- the data guild's name when the game never named the guild (single-guild mode)
 
 local function dataGuild()
   local g = ns.db and ns.db.guild
@@ -233,6 +230,29 @@ local function dataGuild()
 end
 
 local function nonEmpty(t) return type(t) == "table" and next(t) ~= nil end
+
+-- Is v empty: nil, or a table holding only empty tables (skip: a field to leave out, e.g. the calendar's own id)?
+local function hollow(v, skip)
+  if v == nil then return true end
+  if type(v) ~= "table" then return false end
+  for k, x in pairs(v) do
+    if k ~= skip and not hollow(x) then return false end
+  end
+  return true
+end
+
+-- Nothing at all is saved on top for a crew: every per-guild field of DB.GUILD_PATHS is missing or empty (the
+-- calendar's "me", this account's own diary id made when the calendar is first used, is not about anyone).
+local function dataEmpty()
+  local db = ns.db
+  for _, path in ipairs(ns.DB.GUILD_PATHS) do
+    local parent, key = path:match("^(%w+)%.(%w+)$")
+    local from = parent and db[parent] or db
+    local v = type(from) == "table" and from[key or path] or nil
+    if not hollow(v, path == "calendar" and "me" or nil) then return false end
+  end
+  return true
+end
 
 -- Real (not test) rows of the saved roster: { name, row }.
 local function savedRows()
@@ -248,16 +268,10 @@ end
 
 -- Does the saved roster on top belong to the guild of this list? Rows whose first word a listed member has (and,
 -- when both sides know a class, the same class) count: at least 2 of them and at least half of the rows; a roster of
--- one row only when its class is known and equal. An empty roster fits only when nothing else about a crew is saved
--- on top (crew numbers, trophies, notes, feed).
+-- one row only when its class is known and equal. An empty roster fits only when nothing at all is saved (dataEmpty).
 local function rosterFits(entries)
   local rows = savedRows()
-  if #rows == 0 then
-    local db = ns.db
-    local stats = type(db.stats) == "table" and db.stats or {}
-    local cal = type(db.calendar) == "table" and db.calendar or {}
-    return not (nonEmpty(stats.crew) or nonEmpty(stats.trophies) or nonEmpty(cal.notes) or nonEmpty(db.feed))
-  end
+  if #rows == 0 then return dataEmpty() end
   local byF = {}
   for _, e in ipairs(entries or {}) do
     local lw = e.first:lower()
@@ -279,43 +293,23 @@ local function rosterFits(entries)
   return matches >= 2 and matches * 2 >= #rows
 end
 
--- Are at least half (and at least 2) of the full names in the saved keys in this list?
-local function keysFit(entries)
-  local listed, total, found = {}, 0, 0
-  for _, e in ipairs(entries or {}) do listed[e.full:lower()] = true end
-  for lf in pairs(savedKeys()) do
-    if type(lf) == "string" then
-      total = total + 1
-      if listed[lf] then found = found + 1 end
-    end
-  end
-  return found >= 2 and found * 2 >= total
+-- Says a line once per session.
+local function tell(id, text)
+  if told[id] then return end
+  told[id] = true
+  print(text)
 end
 
--- May unnamed data on top become guild `id`'s? Never when that guild turned it down, or already has parked data.
-local function mayAdopt(id)
+-- Unnamed data on top becomes guild `name`'s (a real name, or "?" without one), unless that guild has a parked set.
+-- Returns true when it did.
+local function nameData(name)
   local g = ns.db and ns.db.guild
-  if type(g) ~= "table" or dataGuild() ~= nil then return false end
-  if type(g.notLegacy) == "table" and g.notLegacy[id] then return false end
-  if type(ns.db.guilds) == "table" and ns.db.guilds[id] ~= nil then return false end
+  if type(g) ~= "table" or dataGuild() ~= nil and dataGuild() ~= PLACEHOLDER then return false end
+  if type(ns.db.guilds) == "table" and ns.db.guilds[name] ~= nil then return false end
+  g.name = name
+  ns.Log.add("info", "saved data now belongs to %s", name == PLACEHOLDER and "a guild the game does not name"
+    or ns.Util.safeText(name))
   return true
-end
-
--- The data on top becomes guild `id`'s when it fits (rosterFits or keysFit). final: a complete list that does not
--- fit turns it down for good (a real id only). Returns true when adopted.
-local function tryAdopt(id, entries, final)
-  if not mayAdopt(id) then return false end
-  if rosterFits(entries) or keysFit(entries) then
-    ns.db.guild.name = id
-    ns.Log.add("info", "saved data adopted by the guild %s", ns.Util.safeText(id))
-    return true
-  end
-  if final and id ~= PLACEHOLDER then
-    ns.db.guild.notLegacy = type(ns.db.guild.notLegacy) == "table" and ns.db.guild.notLegacy or {}
-    ns.db.guild.notLegacy[id] = true
-    ns.Log.add("info", "saved data is not %s's: TwizCrew stays quiet here until the next login", ns.Util.safeText(id))
-  end
-  return false
 end
 
 local function byFullName(a, b)
@@ -338,39 +332,39 @@ end
 
 local updateActive -- (below)
 
--- Why the list may be read now: "active" (the data on top is this guild's), "adopt" (unnamed data, the guild named:
--- does it fit?), "probe" (the game names no guild after GUILD_NAME_WAIT s: is the data on top this guild's?), or nil.
+-- A guild switch or "no guild" is pending: nothing counts until the game settles.
+local function settling() return otherId ~= nil or (absentSince ~= nil and announced ~= false) end
+
+-- The game has not named the guild for GUILD_NAME_WAIT s since we are in it.
+local function nameless()
+  return curId == nil and inSince ~= nil and ns.now() - inSince >= ns.Config.GUILD_NAME_WAIT
+end
+
+-- Why the list may be read now: "active" (the data on top is this guild's), "adopt" (unnamed data: does it fit this
+-- guild?), or nil (another guild's data, a switch pending, not in a guild).
 local function readMode()
+  if not Guild.inGuild() or settling() or not ns.db then return nil end
   if Guild.active() then return "active" end
-  if not Guild.inGuild() or not ns.db then return nil end
-  if curId then return mayAdopt(curId) and "adopt" or nil end
-  if nameless == nil and inSince and ns.now() - inSince >= ns.Config.GUILD_NAME_WAIT then return "probe" end
+  if dataGuild() == nil and (curId or nameless()) then return "adopt" end
   return nil
 end
 
--- The game names no guild: the data on top is this guild's when this character's last guild was it, or when the
--- list has at least half of the saved keys' full names; unnamed data is adopted under "?" when it fits. Decided
--- only on a complete list unless it already fits (never writes byChar).
-local function probe(entries, isComplete)
-  local dg = dataGuild()
-  local g = ns.db.guild
-  local id = ns.DB.charId()
-  if dg then
-    if (id and type(g.byChar) == "table" and g.byChar[id] == dg) or keysFit(entries) then nameless = true
-    elseif isComplete then nameless = false end
-  elseif isComplete then
-    nameless = tryAdopt(PLACEHOLDER, entries, false)
-  end
-  if nameless ~= nil then
-    ns.Log.add("info", "the game names no guild: the saved data on top is %s",
-      nameless and "taken as this guild's" or "not this guild's (TwizCrew stays quiet)")
+-- Unnamed data and a complete list that does not fit it: quiet this session, and the player is told how to choose.
+local function tellChoice()
+  if curId then
+    tell("legacy", "TwizCrew has saved data from before it used guilds. If " .. ns.Util.safeText(curId)
+      .. " is your crew's guild, type /tc guild use. To start fresh for " .. ns.Util.safeText(curId)
+      .. ", type /tc guild new.")
+  else
+    tell("legacy", "TwizCrew cannot read this guild's name and has saved data from before it used guilds. Type /tc"
+      .. " guild for your choices.")
   end
 end
 
 -- Reads the game's list (see readMode). A list that cannot be read (secret values, nothing yet) changes nothing.
--- A partial read (fewer readable rows than the game counts, unless the readable count stayed the same on
--- STABLE_READS reads STABLE_GAP s apart) updates the members it did read, keeps the others as they were and gives
--- out no new keys; complete() tells which one the last read was.
+-- A partial read (fewer readable rows than the game counts, unless the same counts came back on STABLE_READS reads
+-- STABLE_GAP s apart) updates the members it did read, keeps the others as they were and gives out no new keys;
+-- complete() tells which one the last read was.
 local function read()
   lastRead = ns.now()
   local mode = readMode()
@@ -391,25 +385,20 @@ local function read()
   end
   counted, readableRows = count, readable
   if #entries == 0 then return end
-  local now = ns.now()
-  if readable ~= stableReadable then
-    stableReadable, stableN, stableAt = readable, 1, now
+  local now, key = ns.now(), count .. "/" .. readable
+  if key ~= stableKey then
+    stableKey, stableN, stableAt = key, 1, now
   elseif now - stableAt >= STABLE_GAP then
     stableN, stableAt = stableN + 1, now
   end
   local isComplete = readable == count or stableN >= STABLE_READS
   if mode == "adopt" then
     if not isComplete then return end -- whose data it is waits for a complete list
-    if not tryAdopt(curId, entries, true) then return end
-  elseif mode == "probe" then
-    probe(entries, isComplete)
-    if not Guild.active() then
-      if nameless ~= nil then updateActive() end
-      return
-    end
+    if not (rosterFits(entries) and nameData(curId or PLACEHOLDER)) then tellChoice(); return end
   end
   table.sort(entries, byFullName) -- keys are given out A-Z
   assignKeys(entries, isComplete)
+  if isComplete then for _, e in ipairs(entries) do if e.key then saveSpelling(e) end end end
   local kept = {}
   for _, e in ipairs(entries) do if e.key then kept[#kept + 1] = e end end
   if not isComplete then -- members this read could not see stay as they were
@@ -448,22 +437,25 @@ end
 local function dropList()
   local had = loaded or #members > 0
   loaded, complete, signature = false, false, ""
+  stableKey, stableN, stableAt = nil, 0, nil
   install({})
   if had then ns.Bus.fire("GUILD_LIST") end
 end
 
--- This session's guild is known and the data on top is another guild's.
+-- This session's guild is known and the data on top is another guild's (a real name).
 local function otherGuild(id)
-  return id ~= nil and dataGuild() ~= nil and dataGuild() ~= id
+  local dg = dataGuild()
+  return id ~= nil and dg ~= nil and dg ~= PLACEHOLDER and dg ~= id
 end
 
--- GUILD_STATE follows active(). While in a guild that is not known to be the data guild yet (no name, unnamed data
--- waiting for a complete list, the name-less fallback still deciding), nothing is said for up to GUILD_ABSENT_GRACE
--- seconds.
+-- GUILD_STATE follows active(). While the guild is not known to be the data guild yet (no name, unnamed data
+-- waiting for a complete list), nothing is said for up to GUILD_ABSENT_GRACE seconds; while a switch or "no guild"
+-- is pending, a true already said stays said (nothing is sent meanwhile: active() is false).
 updateActive = function()
   if announced == nil then return end
   local now = Guild.active()
-  if announced and not now and not otherGuild(curId) and nameless == nil then
+  if not now and settling() and activeAnnounced == true then return end
+  if announced and not now and not otherGuild(curId) then
     nameWaitSince = nameWaitSince or ns.now()
     if activeAnnounced == nil and ns.now() - nameWaitSince < ns.Config.GUILD_ABSENT_GRACE then return end
   else
@@ -481,33 +473,36 @@ updateActive = function()
   end
 end
 
--- The game named the guild (id is this session's identity now): unnamed or "?" data, byChar, the /reload line.
+-- The game named the guild, or named another one (curId changed): "?" data gets the name, byChar, the lines.
 local function onIdentity(id)
   local g = ns.db and type(ns.db.guild) == "table" and ns.db.guild or nil
   if not g then return end
-  if dataGuild() == PLACEHOLDER then -- data taken as this guild's while the game named none: now it has a name
+  dropList()
+  if dataGuild() == PLACEHOLDER then -- data taken while the game named no guild: now it has a name
     if type(ns.db.guilds) == "table" and ns.db.guilds[id] ~= nil then
-      ns.Log.add("warn", "saved data of %s exists already: the data taken without a name stays \"?\"",
+      ns.Log.add("warn", "%s has its own saved data: the data in use keeps no guild name (\"?\")",
         ns.Util.safeText(id))
+      tell("rename", "TwizCrew: " .. ns.Util.safeText(id) .. " has its own saved data, and the data in use has no"
+        .. " guild name. Type /tc guild for your choices.")
     else
       g.name = id
       ns.Log.add("info", "saved data taken without a guild name is %s's", ns.Util.safeText(id))
     end
   end
-  if dataGuild() == nil and #savedRows() == 0 then tryAdopt(id, {}, false) end -- an empty roster: maybe at once
+  if dataGuild() == nil and dataEmpty() then nameData(id) end -- nothing saved yet: this guild's at once
   local char = ns.DB.charId()
   if char and type(g.byChar) == "table" then g.byChar[char] = id end
-  if otherGuild(id) and not toldReload then
-    toldReload = true
-    print("TwizCrew keeps separate data for each guild. Type /reload to switch to " .. ns.Util.safeText(id) .. ".")
+  if otherGuild(id) then
+    tell("reload:" .. id, "TwizCrew keeps separate data for each guild. Type /reload to switch to "
+      .. ns.Util.safeText(id) .. ".")
     ns.Log.add("info", "this character's guild %s uses other saved data than %s", ns.Util.safeText(id),
       ns.Util.safeText(dataGuild()))
   end
 end
 
--- Membership: true at once, false only after the grace time of the game saying so. The guild's identity is sticky
--- for the session: the first readable one counts, an unreadable answer keeps it, and only a different readable one
--- that stays for GUILD_ABSENT_GRACE seconds replaces it.
+-- Membership: true at once, false only after the grace time of the game saying so. The guild's name is sticky for
+-- the session: the first readable one counts, an unreadable answer keeps it, and only a different readable one that
+-- stays for GUILD_ABSENT_GRACE seconds replaces it. While a switch or "no guild" is pending nothing is read or sent.
 local function checkState()
   local now = plain(IsInGuild)
   if now == nil then return end
@@ -518,30 +513,39 @@ local function checkState()
     announced = true
     inSince = inSince or t
     local id = guildId()
+    local changed
     if id and id ~= curId then
       if not curId then
-        curId, otherId = id, nil
+        curId, otherId, changed = id, nil, true
       elseif otherId ~= id then
         otherId, otherSince = id, t
+        dropList()
       elseif t - otherSince >= ns.Config.GUILD_ABSENT_GRACE then
-        curId, otherId, toldReload = id, nil, false
+        curId, otherId, changed = id, nil, true
       end
     elseif id then
       otherId = nil
     end
-    if curId then onIdentity(curId) end
+    if changed then onIdentity(curId) end
+    if nameless() and dataGuild() == nil and dataEmpty() then nameData(PLACEHOLDER) end
+    if nameless() and dataGuild() and dataGuild() ~= PLACEHOLDER and not Guild.active() then
+      tell("nameless", "TwizCrew cannot read this guild's name, and the saved data in use is "
+        .. ns.Util.safeText(dataGuild()) .. "'s. Type /tc guild for your choices.")
+    end
   else
-    absentSince = absentSince or t
-    otherId = nil
+    if not absentSince then -- any "no guild" answer: nothing counts until the game settles
+      absentSince = t
+      otherId = nil
+      dropList()
+    end
     if announced ~= false and t - absentSince >= ns.Config.GUILD_ABSENT_GRACE then
-      announced, curId, inSince, nameless = false, nil, nil, nil
+      announced, curId, inSince = false, nil, nil
       local g = ns.db and type(ns.db.guild) == "table" and ns.db.guild or nil
       local char = g and ns.DB.charId()
       if char and type(g.byChar) == "table" then g.byChar[char] = nil end
     end
   end
-  -- the game names no guild: look at the list now and then (every STABLE_GAP s) until it decides
-  if readMode() == "probe" and (not lastRead or ns.now() - lastRead >= STABLE_GAP) then read() end
+  if readMode() == "adopt" and (not lastRead or ns.now() - lastRead >= STABLE_GAP) then read() end
   updateActive()
 end
 
@@ -551,35 +555,86 @@ function Guild.known() return announced ~= nil end
 function Guild.loaded() return loaded end
 function Guild.complete() return loaded and complete end
 
--- The guild's name as the game gives it now (nil: none, or a secret); this session's guild identity (name, plus the
--- realm for a guild of another realm; sticky); the guild the saved data on top belongs to (nil: unnamed, not
--- adopted yet; "?": taken as this guild's while the game named none).
-Guild.name = guildName
+-- This session's guild name (sticky; nil while the game names none); the guild the saved data on top belongs to
+-- (nil: unnamed, from before guilds; "?": taken while the game named no guild).
+Guild.name = guildId
 function Guild.id() return curId end
 Guild.dataGuild = dataGuild
+Guild.PLACEHOLDER = PLACEHOLDER
+Guild.dataEmpty = dataEmpty
 
 -- The last read: rows the game counted and rows it gave readably (nil before any read).
 function Guild.readStats() return counted, readableRows end
 
--- In a guild and the data on top is this guild's (by its sticky identity, or by the name-less fallback): the only
+-- Counts the guild list's rows now, read or not (for /tc guildtest, also while TwizCrew is quiet).
+function Guild.countRows()
+  local count = plain(GetNumGuildMembers)
+  if type(count) ~= "number" or count <= 0 then return count, 0 end
+  local readable = 0
+  for i = 1, math.min(count, MAX_MEMBERS) do if readRow(i) then readable = readable + 1 end end
+  return count, readable
+end
+
+-- In a guild, nothing pending, and the data on top is this guild's: by its name; without a readable name (after
+-- GUILD_NAME_WAIT s), "?" data always, real-named data when this character's last guild was it (byChar). The only
 -- state in which the addon reads the list, gives out keys, sends, accepts, hides or writes anything for the crew.
 function Guild.active()
-  if not Guild.inGuild() then return false end
+  if not Guild.inGuild() or settling() then return false end
   local dg = dataGuild()
   if not dg then return false end
   if curId then return curId == dg end
-  return nameless == true
+  if not nameless() then return false end
+  if dg == PLACEHOLDER then return true end
+  local char = ns.DB.charId()
+  local by = ns.db.guild.byChar
+  return char ~= nil and type(by) == "table" and by[char] == dg
 end
 
--- In a guild whose identity is known and not the data guild's: TwizCrew stays quiet until a /reload.
+-- In a guild whose name is known and another guild's data is on top: TwizCrew stays quiet until a /reload.
 function Guild.needsReload() return Guild.inGuild() and otherGuild(curId) end
 
--- In a guild, but the data on top is not (known to be) its own: TwizCrew waits (or stays quiet until a /reload).
+-- In a guild, but the data on top is not (known to be) its own: TwizCrew waits (or stays quiet).
 function Guild.quiet() return Guild.inGuild() and not Guild.active() end
 
 -- May this character write to the per-guild saved data (my session, my calendar marks)? Only while active: a
 -- character in no guild or in another guild leaves the data on top as it is.
 function Guild.writable() return Guild.active() end
+
+-- /tc guild use: the data on top (unnamed or "?") becomes this guild's, at once. Returns true, or false and why:
+-- "noguild", "noname", "inuse" (it is already), "named" (another guild's data is on top: /reload), "parked" (this
+-- guild has its own set: it comes up at the next login).
+function Guild.useHere()
+  if not Guild.inGuild() then return false, "noguild" end
+  if not curId then return false, "noname" end
+  local dg = dataGuild()
+  if dg == curId then return false, "inuse" end
+  if dg and dg ~= PLACEHOLDER then return false, "named" end
+  if type(ns.db.guilds) == "table" and ns.db.guilds[curId] ~= nil then
+    local char = ns.DB.charId()
+    if char then ns.db.guild.byChar[char] = curId end -- its own set comes up at the next login
+    return false, "parked"
+  end
+  ns.db.guild.name = curId
+  local char = ns.DB.charId()
+  if char then ns.db.guild.byChar[char] = curId end
+  ns.Log.add("info", "/tc guild use: the saved data is %s's", ns.Util.safeText(curId))
+  updateActive()
+  return true
+end
+
+-- /tc guild new: this guild gets a fresh set of its own at the next login. Returns true, or false and why.
+function Guild.newHere()
+  if not Guild.inGuild() then return false, "noguild" end
+  if not curId then return false, "noname" end
+  if dataGuild() == curId then return false, "inuse" end
+  local g = ns.db.guild
+  local char = ns.DB.charId()
+  if char then g.byChar[char] = curId end
+  if type(g.fresh) ~= "table" then g.fresh = {} end
+  g.fresh[curId] = true
+  ns.Log.add("info", "/tc guild new: %s gets fresh saved data at the next login", ns.Util.safeText(curId))
+  return true
+end
 
 -- Asks the game for a fresh list, at most once per GUILD_REFRESH_MIN seconds. Returns true when it asked.
 function Guild.refresh()
@@ -684,7 +739,8 @@ function Guild.keyOf(raw)
   return e and e.key or nil
 end
 
--- How a member is named in a message field (a mock's target, a quest share ask, a vote, a winner, a trophy record):
+-- How a member is named in a short-lived message field (a mock's target, a quest share ask, a vote, an award card's
+-- winners; trophy records hold full names instead, see recordName):
 -- their first word when no other current member starts with it (any case), else their full name; a key the list
 -- does not have, as it is. Keys are this copy's own (another copy may have given a namesake pair the opposite keys),
 -- names are the same for every copy: fromWire reads them back.
@@ -712,14 +768,17 @@ function Guild.fromWire(raw)
   return nil
 end
 
--- The full name to write into a lasting record (a trophy record) for a member key: from the list, else from the
--- saved keys (written there in lower case: each word gets its capital back), else the key as it is.
+-- The full name to write into a lasting record (a trophy record) for a member key: from the list, else the spelling
+-- saved for them (guild.spell), else (last resort) the lower-case saved key name with each word's capital rebuilt,
+-- else the key as it is.
 function Guild.recordName(key)
   if type(key) ~= "string" or ns.isTestName(key) then return key end
   local e = Guild.get(key)
   if e then return e.full end
+  local spell = saved().spell
   for lf, k in pairs(savedKeys()) do
     if k == key and type(lf) == "string" then
+      if type(spell[lf]) == "string" then return spell[lf] end
       return (lf:gsub("(%S)(%S*)", function(a, b) return a:upper() .. b end))
     end
   end

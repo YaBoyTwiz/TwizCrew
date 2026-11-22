@@ -90,6 +90,34 @@ local function printed(W, text)
   return false
 end
 
+
+-- v0.1.24-style saved data: ten friends (first-word keys, mixed classes), their numbers, a trophy and a note.
+local function oldSave()
+  local saved = { roster = {}, stats = { crew = {}, trophies = { old = { sid = "old", people = { "FriendA", "Twiz" } } },
+    chars = { Twiz = { sid = "x", s = {}, a = { dt = 1 } } } },
+    calendar = { notes = { n1 = { d = "2026-11-01", t = "old note", b = "FriendA" } } } }
+  for k = 1, 10 do
+    local name = "Friend" .. string.char(64 + k)
+    saved.roster[name] = { name = name, level = 10 + k, lastSeen = 1700000000 }
+    saved.stats.crew[name] = { sid = "x", s = {}, a = { dt = k } }
+  end
+  return saved
+end
+
+-- Guild members for oldSave's friends: the first n of them (with surnames), plus a few others.
+local function guildOf(n)
+  local list = {}
+  for k = 1, n do list[#list + 1] = { name = "Friend" .. string.char(64 + k) .. " Surname" } end
+  for k = 1, 4 do list[#list + 1] = { name = "Other" .. k .. " Person" } end
+  return list
+end
+
+local function countPrinted(W, sub)
+  local n = 0
+  for _, line in ipairs(W.printed) do if line:find(sub, 1, true) then n = n + 1 end end
+  return n
+end
+
 return {
   files = {},
   tests = {
@@ -759,7 +787,7 @@ return {
       end
       local me, meNs = H.client("Chaos Other", { class = "ROGUE" })
       H.guild("Guild A", me, { { name = "Chaos Deathbringr", class = "WARRIOR" } })
-      me.env.TwizCrewDB = { guild = { keys = { ["chaos deathbringr"] = "Chaos" } } }
+      me.env.TwizCrewDB = { guild = { name = "Guild A", keys = { ["chaos deathbringr"] = "Chaos" } } }
       H.link(me)
       login(me)
       H.advance(30)
@@ -821,6 +849,173 @@ return {
       H.advance(30)
       A.eq(lo2Ns.Session.current().id, first, "the same session after a short break")
       noErrors(A, lo2Ns)
+    end,
+
+    -- Round 3 sequences: unnamed (v0.1.24) data that does not fit by itself waits for the player (/tc guild).
+    -- (1) 3 of 10 old friends still in the guild: quiet, one line; /tc guild use → active with all the old data.
+    old_data_with_three_of_ten_waits_for_tc_guild_use = function(_, A, _, H)
+      local saved = oldSave()
+      local tw, twNs = H.client("Twiz")
+      H.guild("Crew Guild", tw, guildOf(3))
+      tw.env.TwizCrewDB = saved
+      H.link(tw)
+      login(tw)
+      H.advance(60)
+      A.eq(groupless(tw.sent), 0, "quiet")
+      A.no(twNs.Guild.active())
+      A.eq(countPrinted(tw, "If Crew Guild is your crew's guild, type /tc guild use."), 1, "told once")
+      A.eq(saved.guild.name, nil, "nothing decided for good")
+      tc(tw, "report")
+      A.eq(countPrinted(tw, "in a guild, but the saved data is not this guild's (see /tc guild)"), 1)
+      tc(tw, "guild")
+      A.ok(printed(tw, "TwizCrew: saved data in use: data from before guilds, 10 friends"))
+      tc(tw, "guild use")
+      A.ok(printed(tw, "TwizCrew: the saved data in use now belongs to Crew Guild."))
+      H.advance(15)
+      A.ok(twNs.Guild.active())
+      A.eq(saved.guild.name, "Crew Guild")
+      A.ok(groupless(tw.sent) > 0, "sends now")
+      A.eq(#twNs.roster:allNames(), 10, "every old friend kept (7 of them hidden)")
+      A.eq(twNs.roster:names(), { "FriendA", "FriendB", "FriendC" })
+      A.eq(saved.stats.crew.FriendJ.a.dt, 10); A.eq(saved.stats.trophies.old.sid, "old")
+      A.eq(saved.calendar.notes.n1.t, "old note")
+      noErrors(A, twNs)
+    end,
+
+    -- (2) The same start, /tc guild new and a /reload: a fresh set for the guild; the old data parked under "" and
+    -- listed by /tc guild. Later, /tc guild use says the data in use is already this guild's: the old data stays
+    -- parked (nothing lost); it comes back on top only for a guild that has no set of its own.
+    old_data_with_three_of_ten_and_tc_guild_new = function(_, A, _, H)
+      local saved = oldSave()
+      local tw, twNs = H.client("Twiz")
+      H.guild("Crew Guild", tw, guildOf(3))
+      tw.env.TwizCrewDB = saved
+      H.link(tw)
+      login(tw)
+      H.advance(30)
+      tc(tw, "guild new")
+      A.ok(printed(tw, "TwizCrew: Crew Guild gets its own fresh saved data. Type /reload to start it; nothing saved is deleted."))
+      retire(H, tw)
+      local tw2, tw2Ns = H.client("Twiz")
+      tw2.state.guild = tw.state.guild
+      tw2.env.TwizCrewDB = saved
+      H.link(tw2)
+      login(tw2)
+      H.advance(30)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(tw2Ns.Guild.active())
+      A.eq(next(saved.roster), nil, "a fresh set")
+      A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "the old data, parked")
+      A.eq(saved.guilds[""].stats.trophies.old.sid, "old")
+      A.eq(saved.guild.fresh["Crew Guild"], nil, "the fresh request was used once")
+      tc(tw2, "guild")
+      A.ok(printed(tw2, "TwizCrew: also saved: data from before guilds (10 friends)"))
+      tc(tw2, "guild use")
+      A.ok(printed(tw2, "TwizCrew: the saved data in use is already Crew Guild's."))
+      A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "still parked, nothing lost")
+      noErrors(A, tw2Ns)
+    end,
+
+    -- (3) An alt in an unrelated guild opens the old data first: quiet (one line), and its next login gets a fresh
+    -- set while the old data is parked under "". The main (8 of 10 fit): first login says /reload (the alt's set is
+    -- on top), the next brings the old data up and the guild adopts it. Nothing lost.
+    old_data_first_on_an_alt_then_the_main_with_eight_of_ten = function(_, A, _, H)
+      local saved = oldSave()
+      local alt, altNs = altIn(H, "Other Guild", saved)
+      H.advance(30)
+      A.eq(groupless(alt.sent), 0)
+      A.eq(countPrinted(alt, "If Other Guild is your crew's guild, type /tc guild use."), 1)
+      retire(H, alt)
+      local alt2, alt2Ns = altIn(H, "Other Guild", saved)
+      H.advance(30)
+      A.eq(saved.guild.name, "Other Guild"); A.ok(alt2Ns.Guild.active())
+      A.eq(saved.guilds[""].roster.FriendA.name, "FriendA", "the old data parked unnamed")
+      retire(H, alt2)
+      local main = H.client("Twiz")
+      H.guild("Crew Guild", main, guildOf(8))
+      main.env.TwizCrewDB = saved
+      H.link(main)
+      login(main)
+      H.advance(30)
+      A.ok(printed(main, "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew Guild."))
+      retire(H, main)
+      local main2, main2Ns = H.client("Twiz")
+      main2.state.guild = main.state.guild
+      main2.env.TwizCrewDB = saved
+      H.link(main2)
+      login(main2)
+      H.advance(30)
+      A.eq(saved.guild.name, "Crew Guild", "8 of 10: adopted")
+      A.ok(main2Ns.Guild.active())
+      A.eq(#main2Ns.roster:allNames(), 10)
+      A.eq(saved.stats.crew.FriendJ.a.dt, 10); A.eq(saved.calendar.notes.n1.t, "old note")
+      A.eq(saved.guilds[""], nil)
+      A.ok(saved.guilds["Other Guild"], "the alt's set parked")
+      noErrors(A, main2Ns)
+    end,
+
+    -- (4) The game never names the guild: the main's old data becomes "?" and stays in use across logins whatever the
+    -- members do; an alt in another (also unnamed) guild uses the same "?" data (the accepted limitation); a name
+    -- read later renames it.
+    no_guild_name_single_guild_mode = function(_, A, _, H)
+      local saved = oldSave()
+      local function session(name, guildName, members, nameHidden)
+        local W, ns = H.client(name)
+        W.state.guildNameHidden = nameHidden
+        H.guild(guildName, W, members)
+        W.env.TwizCrewDB = saved
+        H.link(W)
+        login(W)
+        H.advance(ns.Config.GUILD_NAME_WAIT + 20)
+        return W, ns
+      end
+      local w, ns = session("Twiz", "Crew Guild", guildOf(8), true)
+      A.eq(saved.guild.name, "?"); A.ok(ns.Guild.active())
+      retire(H, w)
+      for round = 1, 3 do -- heavy churn: nobody from before is listed any more
+        local churn = {}
+        for k = 1, 6 do churn[k] = { name = "Newbie" .. round .. k .. " Person" } end
+        w, ns = session("Twiz", "Crew Guild", churn, true)
+        A.ok(ns.Guild.active(), "login " .. round .. ": still in use")
+        A.eq(saved.guild.name, "?")
+        retire(H, w)
+      end
+      w, ns = session("Altie", "Other Guild", { { name = "Zed Zed" } }, true)
+      A.ok(ns.Guild.active(), "the alt uses the same \"?\" data")
+      retire(H, w)
+      w, ns = session("Twiz", "Crew Guild", guildOf(8), false)
+      A.eq(saved.guild.name, "Crew Guild", "renamed once the name is readable")
+      A.ok(ns.Guild.active())
+      A.eq(#ns.roster:allNames(), 10)
+      noErrors(A, ns)
+    end,
+
+    -- (5) A switch from guild A to guild B mid-session: no key written into A's data, nothing sent, the /reload line.
+    a_guild_switch_mid_session_touches_nothing = function(_, A, _, H)
+      local tw, twNs = H.client("Twiz")
+      H.guild("Guild A", tw, { { name = "Frostie Snow" } })
+      H.link(tw)
+      login(tw)
+      H.advance(30)
+      A.eq(twNs.Guild.dataGuild(), "Guild A")
+      local keys = {}
+      for k, v in pairs(twNs.db.guild.keys) do keys[k] = v end
+      local mark = #tw.sent
+      tw.state.guild = { name = "Guild B", members = { { name = "Twiz", online = true, guid = "Player-1-0001" },
+        { name = "Bob Builder", online = true, guid = "Player-1-0042" } } }
+      tw:fire("PLAYER_GUILD_UPDATE")
+      tw:fire("GUILD_ROSTER_UPDATE")
+      H.advance(3)
+      A.no(twNs.Guild.active(), "a switch pending: nothing counts")
+      tw.state.zone = "Westfall"; tw:fire("ZONE_CHANGED_NEW_AREA")
+      H.advance(30)
+      tw:fire("GUILD_ROSTER_UPDATE")
+      H.advance(30)
+      local sent = 0
+      for k = mark + 1, #tw.sent do if tw.sent[k].chatType ~= "PARTY" then sent = sent + 1 end end
+      A.eq(sent, 0, "nothing sent into the new guild")
+      A.eq(twNs.db.guild.keys, keys, "no key written into A's data")
+      A.ok(printed(tw, "TwizCrew keeps separate data for each guild. Type /reload to switch to Guild B."))
+      noErrors(A, twNs)
     end,
   },
 }

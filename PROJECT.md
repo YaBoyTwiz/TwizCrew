@@ -52,6 +52,9 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 - **v0.2.0 released (2026-11-22, owner: "release it"):** the guild conversion (section "Guild conversion
   (2026-11-21)"). Released after one clean session on the owner's main; two copies of the new version talking over
   the guild is still unproven. `RESTART_SINCE` is 0.2.0.
+- **After v0.2.0, not released (branch `pin-party`, 2026-11-22):** the owner could not pin someone in their party
+  (a party row had no "+"; the Find-the-crew arrow sat where it would be). A party row now has the "+" and the
+  right-click entry "Pin to main view" like every other row. Not yet seen in the game.
 - **First run in the game (owner's main, 2026-11-22, read from the saved log and `/tc report`):** the final guild
   code loaded with no errors or problems. The game gives the guild's name; old data attached by itself and the old
   friends were pinned; the guild list came with offline members (8 members, 3 online) and names with first and last

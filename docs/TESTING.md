@@ -690,7 +690,8 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
 5. **Panel look.** Sections top to bottom: my party, pinned, "Guild online (N)" bar, "Offline (N)" bar. Click the
    Guild online bar: it opens and stays as you left it after `/reload`. Click the green **+** on a row to pin it: it
    moves up; click the star to unpin (the row menu also has Pin to main view / Unpin). Members without the addon are
-   dimmed with "no addon". With no party and no pins the Guild online list starts open. Right-click the title bar:
+   dimmed with "no addon". A party row has the **+** too (left of it sits the arrow, they must not overlap); pinned,
+   that member stays in the main view after the group ends. With no party and no pins the Guild online list starts open. Right-click the title bar:
    "Row style" there switches Full, Compact, Tiny, one step on each click; check all three: the **+** and the star
    must not sit on the Mock or Congrats buttons and must not look cut off. The header reads "N here · M online"
    (with a middle dot; "here" counts you). The star should be the raid-target star.

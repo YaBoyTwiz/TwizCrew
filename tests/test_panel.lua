@@ -329,7 +329,7 @@ return {
       A.eq(by.Dan.section, "offline", "a pinned member who is offline sits in Offline")
       A.eq(by.Dan.pinned, true, "...with the star")
       A.eq(by.Dan.pinAction, "unpin"); A.eq(by.Amy.pinAction, "unpin"); A.eq(by.Bob.pinAction, "pin")
-      A.eq(by.Zed.pinAction, nil, "a party row has no button")
+      A.eq(by.Zed.pinAction, "pin", "a party row can be pinned too (they stay after the group ends)")
       local e = L.entries(rows, { inGroup = true, guildOpen = true, offlineOpen = true })
       local out = {}
       for i, x in ipairs(e) do out[i] = x.head and ("<" .. x.head .. ">") or x.bar and ("[" .. x.bar .. "]") or x.key end

@@ -246,8 +246,8 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         section = sectionOf(m, not offline, pinned, ctx.party ~= nil and ctx.party[key] == true),
       }
       if ctx.canPin and not m.self and not ns.isTestName(key) then
-        if pinned then row.pinAction = "unpin"
-        elseif row.section == "guild" or row.section == "offline" then row.pinAction = "pin" end
+        -- a party row too: pinned, they stay in the main view after the group ends
+        row.pinAction = pinned and "unpin" or "pin"
       end
       if m.noAddon then
         -- the guild list tells name, class, level and zone; nothing else is known

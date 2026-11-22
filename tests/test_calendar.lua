@@ -1128,6 +1128,27 @@ return {
       A.no(ns.NoteView.metaForTest():find("your time", 1, true), "mine: one time")
       ns.NoteView.close()
     end,
+    days_with_something_planned_are_colored_by_kind = function(ns, A, W)
+      start(ns, W)
+      local L, N, D = ns.CalendarLogic, ns.Notes, ns.Diary
+      local y, m = L.civil(D.localToday())
+      local first = L.daysFrom(y, m, 1)
+      local function on(d) return N.dateKey(L.civil(first + d)) end
+      local raid
+      for _, dg in ipairs(N.DUNGEONS) do if dg.raid then raid = dg.key; break end end
+      A.ok(raid, "(there is a raid)")
+      N.add(on(3), "Bring flasks", 1)
+      N.add(on(4), "", 2, nil, "dm")
+      N.add(on(5), "A note first", 1)
+      N.add(on(5), "", 2, nil, "dm")
+      N.add(on(5), "", 3, nil, raid)
+      ns.Calendar.open()
+      local function kind(d) return ns.Calendar.eventCellForTest(first + d).kind end
+      A.eq(kind(2), nil, "an empty day: no color")
+      A.eq(kind(3), "note")
+      A.eq(kind(4), "dungeon")
+      A.eq(kind(5), "raid", "the biggest thing that day wins")
+    end,
     the_calendar_is_bigger_and_its_size_is_a_setting = function(ns, A, W)
       start(ns, W)
       ns.Calendar.open()

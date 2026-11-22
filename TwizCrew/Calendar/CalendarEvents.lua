@@ -22,7 +22,21 @@ local LINES = 3          -- note lines in a day cell (the last one says "+2 more
 local ROWS, ROW_H = 8, 46 -- a day's list
 local READY = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12|t"
 local WAITING = "|TInterface\\RaidFrame\\ReadyCheck-Waiting:12|t"
+-- What a day holds, by its color on the month: a raid over a dungeon over a plain note.
+local KIND_COLOR = { note = "ffd100", dungeon = "3fa9f5", raid = "a335ee" }
+local TINT_ALPHA, EDGE = 0.22, 2
 local cells, rows = {}, {}
+
+-- "raid", "dungeon" or "note" for a day's notes; nil for an empty day.
+local function dayKind(notes)
+  local kind
+  for _, n in ipairs(notes) do
+    local dg = n.g and ns.Notes.dungeon(n.g)
+    if dg and dg.raid then return "raid" end
+    if dg then kind = "dungeon" elseif not kind then kind = "note" end
+  end
+  return kind
+end
 P.eventScroll = 0 -- the day list's first row (more notes than rows: the mouse wheel scrolls)
 
 -- New for me: someone else's note that I have not opened, on a day from today on.
@@ -86,10 +100,25 @@ local function buildEvents()
     c.artText:SetJustifyH("LEFT")
     if c.artText.SetShadowOffset then c.artText:SetShadowOffset(2, -2) end
     if c.artText.SetShadowColor then c.artText:SetShadowColor(0, 0, 0, 1) end
+    -- a day with something planned: a see-through color over the square and an edge in the same color
+    c.tint = c:CreateTexture(nil, "BACKGROUND", nil, 7)
+    c.tint:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -1)
+    c.tint:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -1, 1)
+    c.tint:Hide()
+    c.edge = {}
+    for k, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+      { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+      local e = c:CreateTexture(nil, "ARTWORK", nil, 2)
+      e:SetPoint(side[1], c, side[1], 0, 0)
+      e:SetPoint(side[2], c, side[2], 0, 0)
+      if k <= 2 then e:SetHeight(EDGE) else e:SetWidth(EDGE) end
+      e:Hide()
+      c.edge[k] = e
+    end
     c.hl = c:CreateTexture(nil, "HIGHLIGHT")
     c.hl:SetAllPoints(c)
     T.color(c.hl, C.title, 0.10)
-    c.num = T.readable(T.text(c, T.FONT.normal, C.text))
+    c.num =T.readable(T.text(c, T.FONT.normal, C.text))
     c.num:SetPoint("TOPLEFT", c, "TOPLEFT", 5, -4)
     c.fresh = T.readable(T.text(c, T.FONT.small, C.title), 1)
     c.fresh:SetPoint("TOPRIGHT", c, "TOPRIGHT", -4, -5)
@@ -156,6 +185,15 @@ local function drawEvents()
     for _, n in ipairs(notes) do if isNew(n, cell.day, today) then fresh = true end end
     c.tcNew = fresh
     if fresh then c.fresh:Show() else c.fresh:Hide() end
+    c.tcKind = dayKind(notes)
+    if c.tcKind then
+      T.color(c.tint, KIND_COLOR[c.tcKind], TINT_ALPHA)
+      c.tint:Show()
+      for _, e in ipairs(c.edge) do T.color(e, KIND_COLOR[c.tcKind], 0.9); e:Show() end
+    else
+      c.tint:Hide()
+      for _, e in ipairs(c.edge) do e:Hide() end
+    end
     -- a dungeon or raid that day: its artwork fills the day, its time and name on top
     local event
     for _, n in ipairs(notes) do if n.g then event = n; break end end
@@ -198,7 +236,9 @@ P.drawEvents = drawEvents
 -- Test hook: what the Events month shows for a local day ({ lines, new, art, notes }), or nil when it is not on it.
 function Calendar.eventCellForTest(day)
   for _, c in ipairs(cells) do
-    if c.tcDay == day then return { lines = c.tcLines, new = c.tcNew, art = c.tcArt, notes = #(c.tcNotes or {}) } end
+    if c.tcDay == day then
+      return { lines = c.tcLines, new = c.tcNew, art = c.tcArt, notes = #(c.tcNotes or {}), kind = c.tcKind }
+    end
   end
   return nil
 end

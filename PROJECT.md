@@ -17,9 +17,11 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   the window is drawn at 125% of its design size (700 x 570), and "Calendar size" (70% to 180%) is a slider in the
   calendar's settings (`size`, read in Calendar.refresh). The note window and "Create a note" keep their size.
   Same branch, **not tested in game, not released.** Check: `docs/TESTING.md`, "Calendar size".
-- **Idea, not decided (owner, 2026-11-22, "just thinking"):** make days with events stand out at a glance on the
-  Events month, with background art or a see-through color per square. Claude proposed a color tint by kind of
-  event; waiting for the owner.
+- **Event days are colored (2026-11-22, owner's idea, approved: "do it"):** on the Events month a day with
+  something planned has a see-through color over its square and an edge in the same color; empty days stay dark.
+  Gold = a plain note, blue = a dungeon run, purple = a raid (the biggest thing that day wins). Dungeon artwork
+  stays as it was, now with the edge. Calendar/CalendarEvents.lua (`KIND_COLOR`, `TINT_ALPHA` 0.22, `EDGE` 2).
+  Same branch, **not tested in game, not released.** Check: `docs/TESTING.md`, "Colored event days".
 - **Calendar notes: edit, remove and a fuller right-click menu (2026-11-22, owner asked: "I can't remove a note ...
   let me right click on a date to create notes, edit and remove"):** on the same branch `feat/calendar-button`.
   **Not tested in game, not released.** Details in the section "Calendar: edit and remove notes" below; checks in

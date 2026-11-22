@@ -833,6 +833,16 @@ With a friend:
 2. **The slider.** Settings, the calendar's part, `Calendar size`: drag it with the calendar open. The window
    changes at once; the words stay sharp.
 
+## Colored event days (2026-11-22)
+
+`/reload` is enough if the game was restarted since the Events / Play times change.
+
+1. **Colors.** On the Events month: a day with a plain note is tinted gold with a gold edge, a dungeon run has a
+   blue edge around its artwork, a raid a purple one. Empty days are dark, with no edge.
+2. **At a glance.** Look at the month from a step back: the planned days should be the first thing you see. Tell
+   Claude if the color is too weak or too strong, and if the note words are still easy to read on the gold.
+3. **Today.** Today's square still shows its gold line on top, with or without an event.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

@@ -12,8 +12,9 @@ TwizCrew works inside the guild: join it (ask Twiz) and make sure you are in it 
 to join and no code to type. If you are not in the guild, TwizCrew just stays quiet.
 
 **More than one character?** Each guild keeps its own TwizCrew data, so a character in another guild (or in no guild)
-does not touch the crew's data. The first time such a character logs in, TwizCrew says it needs a `/reload`; type it
-once. Type `/tc guild` to see which data is in use.
+does not touch the crew's data. A character in another guild: the first time it logs in, TwizCrew says it needs a
+`/reload`; type it once. A character in no guild: TwizCrew just stays quiet. Type `/tc guild` to see which data is in
+use.
 
 ## Install (once)
 

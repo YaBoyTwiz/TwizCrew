@@ -11,7 +11,7 @@ each other's screens** (a sound, a picture, a message, an arrow on the map).
 Other players never see any of it. The messages are hidden addon messages, not chat. Since 2026-11-21 the crew is
 the owner's **guild**: copies talk through the guild and only guild members are trusted.
 
-## Where we are (2026-11-05)
+## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
 - **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released, never run in the game.**
   The copies now talk through the guild, trust only guild members, keep the crew's data per guild, and the panel has
@@ -281,13 +281,13 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   a hearthstone or a flight; the Furniture award counts the panel's own AFK; settings of a module whose file failed
   to load are no longer erased; the bar setting "instead of pop-ups" is off by default.
 - **Tests are stricter:** the stub knows the real method names of each kind of frame (a typo fails), refuses sends
-  over 255 bytes, and its secret values raise on use. Still open: most older tests run as if the custom channel
-  delivered messages (78 of them count that extra send); new tests run in the game's real state.
+  over 255 bytes, and its secret values raise on use. (History: until 2026-11-21 most older tests ran as if the
+  custom channel delivered messages; the channel and those tests were removed then.)
 - **Known gap with v0.1.23 friends:** when a friend still on v0.1.23 resets their stats, updated copies keep showing
   their old numbers (all-time until each number counts up again, session until the next session). It ends when they
-  update. Also: older tests still run as if the custom channel delivered messages.
-- **Left alone on purpose (Claude's calls; the channel code was removed on 2026-11-21):** the channel join / retry
-  code in `Comm/Transport.lua` (the one path proven in game), the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
+  update.
+- **Left alone on purpose (Claude's calls; history: the channel join / retry code that was left alone here was
+  removed on 2026-11-21, only the code that leaves the old channel once remains):** the dungeon artwork fallbacks in the calendar (need the game to judge), the periodic stats send
   (still a full snapshot, so v0.1.23 copies keep showing all-time numbers).
 
 ## Guild conversion (2026-11-21)
@@ -329,7 +329,7 @@ trusted.
   namesake is stored under the **full name**; names inside messages are the first word unless two current members
   share it, then the full name; trophy records store full names. "Is this me" uses the full name when it is known.
 - **Data per guild (owner decision).** Per guild: roster, crew stats, crew session, trophies, the clown, calendar
-  notes and diaries, the activity feed, pins, member keys. Shared by all the player's characters: settings, own
+  notes and diaries, the activity feed, pins, member keys (pins are per guild). Shared by all the player's characters: settings, own
   status and mock lines, own characters' stats, the log. The first login of a character in a different guild than
   the loaded data needs one `/reload` (the addon is quiet and says so). If the game never gives the guild's name the
   addon runs with one shared set named "?" and no per-guild separation (accepted limit).
@@ -337,10 +337,16 @@ trusted.
   friends are in its member list (first word and class). Otherwise the addon stays quiet and prints one line, and the
   player decides: `/tc guild` (this character's guild, the data in use, and every kept set with a number),
   `/tc guild use` (`use yes` to insist when few friends match), `/tc guild new` (a fresh set for this guild after
-  `/reload`), `/tc guild load <number>` then `load <number> yes` (bring any kept set back for this guild after
-  `/reload`; the replaced set is kept). Nothing is ever deleted by these.
+  `/reload`; `new yes` when the game gives no guild names), `/tc guild load <number>` previews and `load <number>
+  yes` (same session) brings a kept set back for this guild at the next `/reload`; the replaced set is kept as
+  "<name> (replaced)". A request that could not be carried out is explained in one chat line at that character's
+  next login. Nothing is ever deleted by these. When the old data is adopted, every saved friend starts pinned (once).
+  A character's guild is remembered only once the data on top is that guild's, so a quick `/reload` or disconnect
+  before the guild list loads cannot swap data away.
 - **Forgetting (Claude's call, replaces the design's 30 days).** A member missing from the guild list is only hidden
-  and comes back with their data. The only automatic forgetting is the old 60 days not seen. Reason: saved data is per
+  and comes back with their data. The only automatic forgetting is the old 60 days not seen, and it runs only when the complete guild list fits the
+  saved friends (at least two and at least half match); data loaded in a guild it does not fit is never cleaned.
+  (The design's 30-day forgetting was an idea dropped before release.) Reason: saved data is per
   account and a partial list read or an alt in another guild must never delete a real member's data. `/tc forget
   <name>` (also `/tc remove`, and "Forget this friend" on an offline row) deletes an offline member's saved data.
 - **Panel.** Sections: my party, pinned, a "Guild online (N)" bar (closed by default; open when there is no party and
@@ -355,9 +361,9 @@ trusted.
   text mentions the hidden channel, a crew code, a Connection setting or whispers as a choice. `/tc` help lists
   `guild`, `guildtest` and `forget`. The addon still says "crew" and "friends" where that reads naturally.
 - **Removed.** The hidden channel (the addon leaves the old one once so it disappears from chat windows), the
-  Connection setting, the crew code, `/tc add`, the stored crew channel data (`db.crew`), the 30-day forgetting.
+  Connection setting, the crew code, `/tc add`, the stored crew channel data (`db.crew`).
 
-**`/tc guildtest`** (needs one other member online with the addon; refuses a second run within 10 s) prints: the
+**`/tc guildtest`** (needs one other member online with the addon; takes about 8 s; a second run within 10 s only asks to wait) prints: the
 guild name (or that the game gives none); "N counted, M readable" (guild list rows); whether the guild send was
 accepted and whether my own copy heard it back, with the sender name form; who answered by whisper and that name
 form; and whether the chat-lockdown functions exist. `/tc report` has a "Guild" line and a "Connection" line.
@@ -367,19 +373,29 @@ for party members (one word or two); whether the guild list gives GUIDs; whether
 when "show offline members" is unticked. Also: that `GUILD` addon messages are delivered at all (others report so;
 we have not seen it), the name forms on guild and whisper messages, and how the new panel textures look.
 
-**Open (planned, NOT built yet)**
-- When v0.1.24 data is adopted, every saved friend starts **pinned** (the old crew were chosen people).
-- Splitting `Crew/Guild.lua` (about 890 lines) into three files (Guild, GuildIdentity, GuildNames).
-- A lasting "do not prune" mark after `/tc guild use yes` or `load` (today the skip of the 60-day prune lasts one
-  session).
-- The whole-branch review. Nothing has run in the game. No version bump and no Changelog entry yet.
-- **Part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news** are designed only in outline (the
-  design's "three parts"; research on the game calendar and other addons in "What an addon can and cannot do").
+**Open**
+- *Must be checked in the game* (`docs/TESTING.md`, "Guild conversion"): the three only-the-game-can-tell items
+  above; whether the game gives the guild's name and GUIDs; whether the pin button overlaps the Mock / Congrats
+  buttons on the right edge of Compact and Tiny rows (and how the star texture and the state lines look); whether a
+  one-word namesake from another realm can whisper (and so be trusted as a member).
+- *Known small limits:* v0.1.24 copies read only part of a long trophy name list and cut names at 24 letters (a
+  bounded resend until they update); a newcomer with an empty calendar gets about 50 diaries from one copy in the slow
+  lane (about 100 s); a few places still write while the addon is quiet (the local mock echo, `/tc session new`,
+  typed notes); a stale remembered guild costs one extra `/reload` and may leave an empty set; after a downgrade to
+  v0.1.24 and back, its writes are counted into the set on top; in a gap in the game's guild names a set loaded
+  there becomes the shared "?" set and the named character brings its own back later (no data lost, may repeat).
+- *Follow-up work:* the whole-branch review; splitting `Crew/Guild.lua` (about 1090 lines; it cannot be a pure
+  move, parked); **part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news**, designed only in
+  outline (the design's "three parts"; research on the game calendar and other addons in "What an addon can and
+  cannot do"). No version bump and no Changelog entry yet.
 
-**Claude's calls in this work (change any):** first word as the key; stripping "-Realm"; waiting up to 10 s for the
-guild list; about 3 responders; guild identity is the name only (no realm, so same-named guilds on two realms share
-data); "?" data when no name is readable; the fit rule (two and half) for old data; per-account pins; hiding instead of
-deleting; the wording of every line in `/tc guild`.
+**Claude's calls in this work (change any):** the details are in the design document's "Changed while building"
+section; the list: first word as the key; stripping "-Realm"; sending and whispers wait for the guild list up to
+10 s; about 3 responders; guild identity is the name only (no realm, so same-named guilds on two realms share data);
+the guild name is remembered for the session; no readable name after 10 s means one shared "?" set; the guild list
+counts as complete after three identical reads; the fit rule (two and half) for old data and for the 60-day clean-up;
+old friends start pinned; pins are per guild; hiding instead of deleting; the `/tc guild` commands and the wording of
+their lines; `Crew/Guild.lua` not split.
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

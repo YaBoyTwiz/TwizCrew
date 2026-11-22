@@ -652,51 +652,65 @@ TwizCrew now talks through your guild instead of the hidden channel. **None of t
 first; stop at the first thing that looks wrong and tell Claude. You need the branch loaded (a `/reload` is enough)
 and, for most checks, one guildmate online who also runs this version. Turn on `/console scriptErrors 1` first.
 
-1. **`/tc guildtest`, with one other member online.** Type it once; it needs about 10 seconds and refuses a second
-   run within 10 seconds. You should see these lines, in this order:
+1. **`/tc guildtest`, with one other member online.** Type it once; it takes about 8 seconds. Typing it again within
+   10 seconds only says "Wait N seconds before testing again." Lines, in this order:
    - `The game names the guild "<your guild>".` Bad: `The game gives no guild name.` **Tell Claude** (the addon then
      keeps one shared set of data for all your characters).
    - `Guild list: N counted, M readable.` N is how many members the game counted, M how many the addon could read.
      Good: M equals N (or is close). Bad: M much smaller, or `?`.
-   - `You are in the guild <name>: X members, Y online.` Good: plausible numbers. Bad: "the guild list has not loaded
-     yet" after more than a minute (try again later).
+   - `You are in the guild <name>: X members, Y online.` Good: plausible numbers. If instead you see
+     `You are in the guild <name>, but the guild list has not loaded yet.` followed by `The guild list has not loaded
+     yet, so there is no name to show.`, wait a minute and run it again (the addon asked the game for the list).
    - `A guild list name looks like "<First Last>", and zones are given / not given.` Write down what you see.
    - `Guild send: accepted; my own copy heard it back, sender shown as "<name>".` This is the big one: it says guild
      messages are delivered. Bad: `refused (result code ...)` or `did not hear it back`: **tell Claude, the whole
-     conversion depends on it.** The name in quotes is how the game writes a sender on a guild message (one word or two).
+     conversion depends on it.** The name in quotes is how the game writes a sender on a guild message.
    - `These answered: <Name> in 0.4 s (whisper sender shown as "<name>").` Good: your guildmate's name and a short
-     time. Bad: `Nobody answered` while they are online with TwizCrew (they may be on the old version, or the whisper
-     did not arrive). If it says "Replies could not be tested", the game gave only a first name; tell Claude.
+     time. Bad: `Nobody answered (nobody else online with TwizCrew, or guild messages are not delivered).`, or
+     `Nobody answered. If a friend with TwizCrew is online, replies may not be reaching you: the game gave only a first
+     name.` while they are online with this version: **tell Claude.**
    - A last line about chat lockdown (whether the game's lockdown check exists). Just report it.
 2. **After `/reload`, a member with the addon appears.** Open the panel (`/tc show`). Your guildmate shows up within a
    minute, in the Guild online list (the bar "Guild online (N)": click it to open) or under your party if grouped.
-3. **The first login after the update: does the old data attach by itself?** Your friends, stats, trophies and
-   calendar notes from v0.1.24 should still be there (look at the Hall of Shame and `/tc cal`). If instead chat says
-   something like "the saved data is not this guild's ... /tc guild", nothing was lost: type `/tc guild`, read the
-   numbered sets, and use `/tc guild use` (data is yours) or `/tc guild new`. Tell Claude which one happened and how
-   many friends the line named.
+3. **The first login after the update: does the old data attach by itself?** Look for your friends, stats, trophies
+   and calendar notes from v0.1.24 (the Hall of Shame, `/tc cal`). Two outcomes are fine:
+   - It attaches quietly (most of your saved friends are in the guild): everything is there, and **all the old
+     friends are pinned** (a star on each row) in the main view.
+   - Chat says: `TwizCrew has saved data from before it used guilds. If <your guild> is your crew's guild, type /tc
+     guild use. To start fresh for <your guild>, type /tc guild new.` Nothing is lost. Type `/tc guild use`. The
+     friend count is in two places: `/tc guild` shows each saved set with its number of friends, and if too few of
+     them are in the guild `/tc guild use` answers `Only a of b saved friends are in <guild>. If this really is your
+     crew's guild, type /tc guild use yes.` Normally you then type `/tc guild use yes`. After it, friends and stats
+     are back and the old friends are pinned. (Do not type `new` here unless you want to start empty.)
+   Tell Claude which one happened and the numbers.
 4. **A non-member with the addon.** Ask someone not in your guild (same realm) to run the addon. They must not appear
    on your panel, and their mock or update notices must show nothing. (Skip if nobody can.)
 5. **Panel look.** Sections top to bottom: my party, pinned, "Guild online (N)" bar, "Offline (N)" bar. Click the
    Guild online bar: it opens and stays as you left it after `/reload`. Click the green **+** on a row to pin it: it
    moves up; click the star to unpin (the row menu also has Pin to main view / Unpin). Members without the addon are
-   dimmed with "no addon". With no party and no pins the Guild online list starts open. Check Full, Compact and Tiny
-   row styles (right-click the title, Row style): the **+** and the star must not sit on the Mock or Congrats buttons
-   and must not look cut off. The header reads "N here . M online" ("here" counts you). The star should be the
-   raid-target star.
+   dimmed with "no addon". With no party and no pins the Guild online list starts open. Right-click the title bar:
+   "Row style" there switches Full, Compact, Tiny, one step on each click; check all three: the **+** and the star
+   must not sit on the Mock or Congrats buttons and must not look cut off. The header reads "N here . M online"
+   ("here" counts you). The star should be the raid-target star.
 6. **Notices.** A guildmate who is not pinned and not in your party levels up: no pop-up, but the line is in the
-   Recent list (`/tc recent`). Pin them, level up again: the pop-up shows. Setting "Tell me about" (in `/tc`, panel
-   settings) can be changed to everyone. The Congrats button on a row works for anyone.
+   Recent list (`/tc recent`). Pin them, level up again: the pop-up shows. In `/tc`, the panel setting "Tell me
+   about" has two choices, "My party and pinned" (default) and "Everyone in the guild". The Congrats button on a row
+   works for anyone.
 7. **A dungeon run with a guild party.** Go in, fight, come out. No red errors, and after `/reload` `/tc report` shows
    nothing under **Problems**.
-8. **The old hidden channel is gone.** After a couple of logins, `/chatlist` (or the chat window's channel list) no
-   longer shows the old TwizCrew channel.
-9. **An alt in another guild, or in no guild.** Log in with it: the addon is quiet and prints one line asking for a
-   `/reload` (another guild) or says it works inside a guild (no guild); no errors. Then log back in with your main:
-   its friends and stats are untouched. After the alt's `/reload` its guild has its own (empty) set; the main's set
-   is listed by `/tc guild` and never deleted.
-10. **`/tc guild` reads sensibly.** It shows this character's guild, then "saved data" with numbered sets (name, how
-    many friends, last seen), the one in use marked, and one line on what to type next.
+8. **The old hidden channel is gone.** The addon leaves it on the first login (about 5 seconds after login); after
+   that `/chatlist` (or the chat window's channel list) no longer shows the old TwizCrew channel.
+9. **An alt in another guild, or in no guild.**
+   - Another guild: chat says `TwizCrew keeps separate data for each guild. Type /reload to switch to <that guild>.`
+     (or `TwizCrew: <guild> has its own saved data. Type /reload to switch to it.`). Type `/reload` once; after it the
+     alt has its own data.
+   - No guild: **no chat line**; the panel says `TwizCrew works inside a guild. Join one and it starts by itself.`
+   - No red errors either way. Then log the main back in: friends and stats are untouched, and `/tc guild` on the main
+     lists the alt's guild as a kept set.
+10. **`/tc guild` reads sensibly.** It shows this character's guild, then "saved data" with numbered sets (0 is the
+    one in use, with name, how many friends, last seen), and one line on what to type next if anything. Only read it.
+    Do **not** try `new` or `load` on your main: they change which data is in use (nothing is deleted, but it is a
+    recovery tool). Claude will say if you need them.
 11. **Two members with the same first name** (only if your guild has such a pair). Both show on the panel, with
     separate stats; a mock aimed at one does not land on the other. `/tc forget` with the shared first word asks
     "which one?" and wants the full name.

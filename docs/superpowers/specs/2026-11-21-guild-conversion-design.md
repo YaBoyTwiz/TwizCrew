@@ -31,9 +31,23 @@ The reasons and the owner's quotes are in PROJECT.md, section "Guild conversion 
 - **`/tc guildtest`** prints the guild name (or that the game gives none), "N counted, M readable", the guild send
   outcome and own echo with the sender name form, who answered by whisper and that name form, and the lockdown
   functions. It refuses a second run within 10 seconds.
-- **Planned, not built yet:** every saved friend starts pinned when v0.1.24 data is adopted; splitting
-  `Crew/Guild.lua` into three files; a lasting "do not prune" mark after `use yes` / `load`; the whole-branch review.
-  Parts 2 and 3 are designed only in outline (see "The three parts").
+- **The `/tc guild` commands.** `/tc guild` lists every saved set with a number (0 = the data in use); `use` (`use
+  yes` when few saved friends are in the guild); `new` (`new yes` when the game gives no guild names); `load
+  <number>` previews and `load <number> yes` (same session) brings a kept set back for this guild at the next
+  `/reload`, the replaced set kept as "<name> (replaced)". A request that could not be carried out is explained in
+  one chat line at that character's next login. Nothing is ever deleted by these commands.
+- **A character's guild is remembered only once the data on top is that guild's**, so a quick `/reload` or
+  disconnect before the guild list loads cannot swap data away.
+- **The 60-day clean-up** runs only when the complete guild list fits the saved friends (at least two and at least
+  half match); data loaded in a guild it does not fit is never cleaned. When v0.1.24 data is adopted, every saved
+  friend starts pinned (once). The design's 30-day forgetting was dropped before release.
+- **Identity and timing rulings:** a guild's identity is its name only (no realm; same-named guilds on two realms
+  share data); the name is remembered for the session; no readable name after 10 s means one shared "?" set (with
+  the same fit check as old data); the guild list counts as complete after three identical reads; sending and
+  whispers wait for the guild list up to 10 s; a same-named character from another realm is not told apart ("-Realm"
+  is cut).
+- **`Crew/Guild.lua` is not split** (parked follow-up; it cannot be a pure move).
+- **Not built:** the whole-branch review; parts 2 and 3 are designed only in outline (see "The three parts").
 
 Date: 2026-11-21. Owner approved the direction in conversation; everything marked **(Claude's call)** was decided by
 Claude and can be changed.

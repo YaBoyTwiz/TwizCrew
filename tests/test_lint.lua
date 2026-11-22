@@ -181,7 +181,20 @@ return {
           A.no(text:find(phrase, 1, true), f .. " has the text \"" .. phrase .. "\"")
         end
         A.no(text:find("label%s*=%s*[\"']connection[\"']"), f .. " has a setting labelled Connection")
-        A.no(text:find("%f[%w]choices%s*=%s*{[^}]-whisper"), f .. " offers whispers as a choice")
+        -- every `choices = { ... }` block, to its balancing brace (the choices are nested tables)
+        local from = 1
+        while true do
+          local _, e = text:find("%f[%w]choices%s*=%s*{", from)
+          if not e then break end
+          local depth, i = 1, e + 1
+          while depth > 0 and i <= #text do
+            local c = text:sub(i, i)
+            if c == "{" then depth = depth + 1 elseif c == "}" then depth = depth - 1 end
+            i = i + 1
+          end
+          A.no(text:sub(e, i):find("whisper"), f .. " offers whispers as a choice")
+          from = i
+        end
       end
     end,
     -- Find the crew: the game has one waypoint and one super-tracked target, and QuestMaster, OpenMap and Questie use

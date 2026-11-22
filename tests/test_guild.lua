@@ -525,7 +525,9 @@ return {
       A.eq(ns.Guild.dataGuild(), nil)
       ns.db.stats.trophies = {}
       W:advance(6)
-      A.eq(ns.Guild.dataGuild(), "Guild A", "nothing else saved: an empty roster fits at once")
+      A.eq(ns.Guild.dataGuild(), nil, "a list that did not fit is read again only once a minute")
+      W:advance(55)
+      A.eq(ns.Guild.dataGuild(), "Guild A", "nothing else saved: an empty roster fits")
     end,
 
     adoption_never_takes_a_guild_that_has_parked_data = function(ns, A, W)
@@ -663,6 +665,230 @@ return {
       for _, line in ipairs(ns.Log.lines()) do if line:find("keeps no guild name", 1, true) then warned = warned + 1 end end
       for _, line in ipairs(W.printed) do if line:find("has its own saved data", 1, true) then said = said + 1 end end
       A.eq(warned, 1); A.eq(said, 1)
+    end,
+
+    -- Item 5: "?" data is renamed for a readable guild only when the list fits (like unnamed data).
+    question_mark_data_is_renamed_only_when_the_list_fits = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed"), member("Yan Yan") } }
+      local saved = { guild = { name = "?" }, roster = {} }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+      end
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(30)
+      A.eq(ns.Guild.dataGuild(), "?", "does not fit: kept as it is")
+      A.no(ns.Guild.active())
+      A.eq(ns.db.guild.byChar[ns.DB.charId()], nil)
+      local said = 0
+      for _, line in ipairs(W.printed) do
+        if line:find("If Guild B is your crew's guild, type /tc guild use.", 1, true) then said = said + 1 end
+      end
+      A.eq(said, 1, "the choice line, once")
+      for i = 1, 4 do table.insert(W.state.guild.members, member("Friend" .. string.char(64 + i) .. " Surname")) end
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      A.eq(ns.Guild.dataGuild(), "Guild B", "the friends are there now: renamed")
+      A.ok(ns.Guild.active())
+      A.eq(ns.db.guild.byChar[ns.DB.charId()], "Guild B")
+    end,
+
+    -- Item 7: a guild change (or "no guild") that the game takes back within the grace time: the list is read again
+    -- at once, not at the next refresh.
+    a_flip_back_within_the_grace_time_reads_the_list_again_at_once = function(ns, A, W)
+      local seen = listen(ns)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      A.ok(ns.Guild.active()); A.eq(ns.Guild.keyOf("Ginkan Pebble"), "Ginkan")
+      W.state.guild.name = "Other Guild"
+      W:fire("PLAYER_GUILD_UPDATE"); W:advance(1)
+      A.no(ns.Guild.active()); A.eq(ns.Guild.keyOf("Ginkan Pebble"), nil, "a change pending: the list is dropped")
+      W.state.guild.name = "Test Guild"
+      W:fire("PLAYER_GUILD_UPDATE"); W:advance(1)
+      A.ok(ns.Guild.active()); A.eq(ns.Guild.keyOf("Ginkan Pebble"), "Ginkan", "read again at once")
+      local g = W.state.guild
+      W.state.guild = nil
+      W:fire("PLAYER_GUILD_UPDATE"); W:advance(1)
+      A.eq(ns.Guild.keyOf("Ginkan Pebble"), nil, "\"no guild\" pending")
+      W.state.guild = g
+      W:fire("PLAYER_GUILD_UPDATE"); W:advance(1)
+      A.ok(ns.Guild.active()); A.eq(ns.Guild.keyOf("Ginkan Pebble"), "Ginkan", "and again")
+      A.eq(seen.states, { true }, "never withdrawn")
+    end,
+
+    -- Item 8: use, new and load wait while a guild change is pending.
+    guild_commands_wait_while_the_guild_is_changing = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      W.state.guild.name = "Other Guild"
+      W:fire("PLAYER_GUILD_UPDATE"); W:advance(1)
+      for _, cmd in ipairs({ "guild use", "guild use yes", "guild new", "guild load 1", "guild load 1 yes" }) do
+        W.env.SlashCmdList.TWIZCREW(cmd)
+      end
+      local n = 0
+      for _, line in ipairs(W.printed) do
+        if line == "TwizCrew: Your guild is changing. Try again in a few seconds." then n = n + 1 end
+      end
+      A.eq(n, 5)
+      A.eq(ns.db.guild.request, nil); A.eq(ns.Guild.dataGuild(), "Test Guild")
+    end,
+
+    -- Item 9: on a game that never names guilds, the lines say what is true, and use / load still work ("?").
+    no_name_client_says_what_is_true_and_use_works = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      local saved = { roster = {} }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+      end
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 10)
+      A.no(ns.Guild.active())
+      local true_line, bad = 0, 0
+      for _, line in ipairs(W.printed) do
+        if line:find("This game does not tell addons the guild's name, so TwizCrew uses one shared set of saved data.",
+          1, true) then true_line = true_line + 1 end
+        if line:find("/tc guild new", 1, true) then bad = bad + 1 end
+      end
+      A.eq(true_line, 1); A.eq(bad, 0, "no line points at a command that refuses here")
+      W.env.SlashCmdList.TWIZCREW("guild use")
+      A.eq(W.printed[#W.printed], "TwizCrew: Only 0 of 4 saved friends are in this guild. If this really is your crew's"
+        .. " guild, type /tc guild use yes.")
+      W.env.SlashCmdList.TWIZCREW("guild use yes")
+      W:advance(2)
+      A.eq(ns.Guild.dataGuild(), "?"); A.ok(ns.Guild.active())
+      A.eq(ns.Log.errors(20), {})
+    end,
+
+    no_name_client_lists_the_sets_and_load_makes_the_chosen_one_question_mark = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init({ guild = { name = "?" }, roster = { Q1 = { name = "Q1", lastSeen = 1700000000 } },
+        guilds = { [""] = { roster = { L1 = { name = "L1" }, L2 = { name = "L2" } } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 5)
+      A.ok(ns.Guild.active(), "\"?\" data: the one shared set")
+      W.env.SlashCmdList.TWIZCREW("guild")
+      local listed = {}
+      for _, line in ipairs(W.printed) do listed[#listed + 1] = line end
+      local text = table.concat(listed, "\n")
+      A.ok(text:find("0: \"?\" (in use), 1 friend", 1, true), text)
+      A.ok(text:find("1: from before guilds, 2 friends", 1, true), text)
+      W.env.SlashCmdList.TWIZCREW("guild load 1")
+      A.eq(W.printed[#W.printed], "TwizCrew: This will make set 1 (from before guilds, 2 friends) the data for this"
+        .. " guild. The data in use now is kept as a parked set. Type /tc guild load 1 yes.")
+      W.env.SlashCmdList.TWIZCREW("guild load 1 yes")
+      A.eq(W.printed[#W.printed], "TwizCrew: Type /reload.")
+      A.ok(ns.DB.useGuildOf(ns.db, ns.DB.charId()), "the next login carries it out")
+      A.eq(ns.db.guild.name, "?"); A.ok(ns.db.roster.L1)
+      A.eq(ns.db.guilds["? (replaced)"].roster.Q1.name, "Q1", "the set that was in use, parked")
+      A.eq(ns.db.guilds[""], nil)
+      A.eq(next(ns.db.guild.byChar), nil, "no byChar without a readable name")
+    end,
+
+    -- No name ever, and the shared "?" set is parked: use / new point at load (a /reload would not bring it up).
+    no_name_client_with_a_parked_question_mark_set_points_at_load = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init({ roster = { L1 = { name = "L1" }, L2 = { name = "L2" } },
+        guilds = { ["?"] = { roster = { Q1 = { name = "Q1" } } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 5)
+      local want = "TwizCrew: the shared set (\"?\") is parked. To use it, type /tc guild load <number> (the numbers"
+        .. " are in /tc guild)."
+      W.env.SlashCmdList.TWIZCREW("guild use")
+      A.eq(W.printed[#W.printed], want)
+      W.env.SlashCmdList.TWIZCREW("guild new")
+      A.eq(W.printed[#W.printed], want)
+      A.eq(ns.db.guild.request, nil); A.eq(next(ns.db.guild.byChar), nil)
+    end,
+
+    -- Item 10: /tc report tells "still deciding" from "not this guild's".
+    report_tells_still_deciding_from_not_this_guilds = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildListDelay = 8
+      local saved = { roster = {} }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+      end
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Transport.start()
+      ns.Guild.start()
+      W:advance(2)
+      local function connection()
+        for _, line in ipairs(ns.Report.lines()) do if line:find("^Connection: ") then return line end end
+      end
+      A.eq(connection(), "Connection: in a guild; TwizCrew is still finding out whether the saved data is this"
+        .. " guild's, so nothing is sent yet")
+      W:advance(20)
+      A.eq(connection(), "Connection: in a guild, but the saved data is not this guild's (see /tc guild), so nothing"
+        .. " is sent")
+    end,
+
+    -- Item 11: quiet with unnamed data that did not fit: the list is read again at most once a minute, and at once on
+    -- a roster update (which adopts when the friends are there now).
+    quiet_unnamed_data_rereads_the_list_once_a_minute = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz"), member("FriendA Surname") } }
+      local calls = 0
+      local real = W.env.GetNumGuildMembers
+      W.env.GetNumGuildMembers = function(...) calls = calls + 1; return real(...) end
+      local saved = { roster = {} }
+      for i = 1, 10 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+      end
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(20)
+      A.eq(ns.Guild.dataGuild(), nil)
+      local before = calls
+      W:advance(300)
+      A.ok(calls - before <= 10, "read " .. (calls - before) .. " times in 5 minutes")
+      for i = 2, 8 do table.insert(W.state.guild.members, member("Friend" .. string.char(64 + i) .. " Surname")) end
+      before = calls
+      W:fire("GUILD_ROSTER_UPDATE")
+      W:advance(2)
+      A.ok(calls > before, "a roster update reads")
+      A.eq(ns.Guild.dataGuild(), "Guild A", "and adopts")
+    end,
+
+    -- Item 12: odd saved guild data is repaired on load, and /tc guild prints it without an error.
+    odd_saved_guild_data_is_repaired_and_listed = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Test Guild", members = { member("Twiz") } }
+      ns.db = ns.DB.init({ guild = { name = 7, byChar = 5, request = "x", fresh = { A = true } },
+        guilds = { [1] = { roster = {} }, Good = { roster = { X = { name = "X", lastSeen = 1700000000 } } }, Bad = true,
+          Half = { roster = {}, stats = 3 } },
+        guilds_bad = { [2] = { roster = { Y = { name = "Y" } } } } }, ns.Modules.list())
+      local g = ns.db.guild
+      A.eq(g.byChar, {}); A.eq(g.name, nil); A.eq(g.request, nil); A.eq(g.fresh, nil)
+      local keys = {}
+      for k in pairs(ns.db.guilds) do keys[#keys + 1] = k end
+      A.eq(keys, { "Good" }, "only usable sets under string names stay parked")
+      A.eq(ns.db.guilds_bad.Bad, true); A.ok(ns.db.guilds_bad["1"]); A.ok(ns.db.guilds_bad["2"])
+      A.eq(ns.db.guilds_bad.Half.stats, 3, "kept aside whole")
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(5)
+      W.env.SlashCmdList.TWIZCREW("guild")
+      local text = table.concat(W.printed, "\n")
+      A.ok(text:find("1: Good, 1 friend, last seen ", 1, true), text)
+      A.ok(text:find("kept aside", 1, true), text)
+      A.eq(ns.Log.errors(20), {})
     end,
 
     the_module_is_registered = function(ns, A)

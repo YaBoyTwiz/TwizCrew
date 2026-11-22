@@ -907,16 +907,27 @@ return {
       end
     end,
 
-    -- Round 3 sequences: unnamed (v0.1.24) data that does not fit by itself waits for the player (/tc guild).
-    -- (1) 3 of 10 old friends still in the guild: quiet, one line; /tc guild use → active with all the old data.
-    old_data_with_three_of_ten_waits_for_tc_guild_use = function(_, A, _, H)
+    -- (a) v0.1.24 main, 8 of 10 fit, a normal login: adopted at once, everything kept, nothing parked. (A friend not
+    -- seen for 70 days and not in the guild is forgotten, as always once the data is this guild's.)
+    old_data_with_eight_of_ten_is_adopted_at_login = function(_, A, _, H)
       local saved = oldSave()
-      local tw, twNs = H.client("Twiz")
-      H.guild("Crew Guild", tw, guildOf(3))
-      tw.env.TwizCrewDB = saved
-      H.link(tw)
-      login(tw)
-      H.advance(60)
+      saved.roster.Oldpal = { name = "Oldpal", level = 9, lastSeen = 1700000000 - 70 * 86400 }
+      local W, ns = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(ns.Guild.active())
+      oldDataOnTop(A, saved, "adopted")
+      A.eq(saved.roster.Oldpal, nil, "the usual 60-day rule")
+      A.eq(next(saved.guilds), nil); A.eq(saved.guild.byChar[MAIN], "Crew Guild")
+      noErrors(A, ns)
+      retire(H, W)
+    end,
+
+    -- (b) 3 of 10 (and a friend unseen for 70 days): quiet, one line. /tc guild use says why it will not and how to
+    -- insist; /tc guild use yes adopts, and nothing old is forgotten in that session.
+    old_data_with_three_of_ten_and_tc_guild_use_yes = function(_, A, _, H)
+      local saved = oldSave()
+      saved.roster.Oldpal = { name = "Oldpal", level = 9, lastSeen = 1700000000 - 70 * 86400 }
+      saved.stats.crew.Oldpal = { sid = "x", s = {}, a = { dt = 5 } }
+      local tw, twNs = mainSession(H, saved, "Crew Guild", guildOf(3), 60, nil, true)
       A.eq(groupless(tw.sent), 0, "quiet")
       A.no(twNs.Guild.active())
       A.eq(countPrinted(tw, "If Crew Guild is your crew's guild, type /tc guild use."), 1, "told once")
@@ -924,51 +935,207 @@ return {
       tc(tw, "report")
       A.eq(countPrinted(tw, "in a guild, but the saved data is not this guild's (see /tc guild)"), 1)
       tc(tw, "guild")
-      A.ok(printed(tw, "TwizCrew: saved data in use: data from before guilds, 10 friends"))
+      A.eq(countPrinted(tw, "0: from before guilds (in use), 11 friends, last seen "), 1)
       tc(tw, "guild use")
+      A.ok(printed(tw, "TwizCrew: Only 3 of 11 saved friends are in Crew Guild. If this really is your crew's guild,"
+        .. " type /tc guild use yes."))
+      H.advance(5)
+      A.no(twNs.Guild.active(), "refused"); A.eq(saved.guild.name, nil)
+      tc(tw, "guild use yes")
       A.ok(printed(tw, "TwizCrew: the saved data in use now belongs to Crew Guild."))
       H.advance(15)
       A.ok(twNs.Guild.active())
-      A.eq(saved.guild.name, "Crew Guild")
+      A.eq(saved.guild.name, "Crew Guild"); A.eq(saved.guild.byChar[MAIN], "Crew Guild")
       A.ok(groupless(tw.sent) > 0, "sends now")
-      A.eq(#twNs.roster:allNames(), 10, "every old friend kept (7 of them hidden)")
+      A.eq(#twNs.roster:allNames(), 11, "every old friend kept (8 of them hidden)")
       A.eq(twNs.roster:names(), { "FriendA", "FriendB", "FriendC" })
-      A.eq(saved.stats.crew.FriendJ.a.dt, 10); A.eq(saved.stats.trophies.old.sid, "old")
-      A.eq(saved.calendar.notes.n1.t, "old note")
+      A.ok(saved.roster.Oldpal, "nothing old forgotten in the session of /tc guild use yes")
+      A.eq(saved.stats.crew.Oldpal.a.dt, 5)
+      oldDataOnTop(A, saved, "use yes")
+      A.eq(next(saved.guilds), nil)
       noErrors(A, twNs)
     end,
 
-    -- (2) The same start, /tc guild new and a /reload: a fresh set for the guild; the old data parked under "" and
-    -- listed by /tc guild. Later, /tc guild use says the data in use is already this guild's: the old data stays
-    -- parked (nothing lost); it comes back on top only for a guild that has no set of its own.
-    old_data_with_three_of_ten_and_tc_guild_new = function(_, A, _, H)
+    -- (c) /tc guild new and a /reload: a fresh set, the old data parked and listed. The player regrets it: /tc guild
+    -- load brings the old data back on top for this guild after a /reload; the fresh set is parked and listed.
+    old_data_with_three_of_ten_tc_guild_new_then_load_back = function(_, A, _, H)
       local saved = oldSave()
-      local tw, twNs = H.client("Twiz")
-      H.guild("Crew Guild", tw, guildOf(3))
-      tw.env.TwizCrewDB = saved
-      H.link(tw)
-      login(tw)
-      H.advance(30)
+      local tw = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
       tc(tw, "guild new")
-      A.ok(printed(tw, "TwizCrew: Crew Guild gets its own fresh saved data. Type /reload to start it; nothing saved is deleted."))
+      A.ok(printed(tw, "TwizCrew: Crew Guild gets its own fresh saved data. Type /reload to start it; nothing saved is"
+        .. " deleted."))
+      A.eq(saved.guild.request, { kind = "new", guild = "Crew Guild", char = MAIN })
       retire(H, tw)
-      local tw2, tw2Ns = H.client("Twiz")
-      tw2.state.guild = tw.state.guild
-      tw2.env.TwizCrewDB = saved
-      H.link(tw2)
-      login(tw2)
-      H.advance(30)
+      local tw2, tw2Ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
       A.eq(saved.guild.name, "Crew Guild"); A.ok(tw2Ns.Guild.active())
       A.eq(next(saved.roster), nil, "a fresh set")
       A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "the old data, parked")
       A.eq(saved.guilds[""].stats.trophies.old.sid, "old")
-      A.eq(saved.guild.fresh["Crew Guild"], nil, "the fresh request was used once")
+      A.eq(saved.guild.request, nil, "the request was used once")
+      A.eq(saved.guild.byChar[MAIN], "Crew Guild")
       tc(tw2, "guild")
-      A.ok(printed(tw2, "TwizCrew: also saved: data from before guilds (10 friends)"))
+      A.eq(countPrinted(tw2, "0: Crew Guild (in use), 0 friends"), 1)
+      A.eq(countPrinted(tw2, "1: from before guilds, 10 friends, last seen "), 1)
       tc(tw2, "guild use")
       A.ok(printed(tw2, "TwizCrew: the saved data in use is already Crew Guild's."))
-      A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "still parked, nothing lost")
+      tc(tw2, "guild load 1")
+      A.ok(printed(tw2, "TwizCrew: This will make set 1 (from before guilds, 10 friends) the data for Crew Guild. The"
+        .. " data in use now is kept as a parked set. Type /tc guild load 1 yes."))
+      A.eq(saved.guild.request, nil, "asked first")
+      tc(tw2, "guild load 1 yes")
+      A.ok(printed(tw2, "TwizCrew: Type /reload."))
+      A.eq(saved.guild.request, { kind = "load", guild = "Crew Guild", char = MAIN, from = "guilds", key = "" })
+      retire(H, tw2)
+      local tw3, tw3Ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(tw3Ns.Guild.active())
+      oldDataOnTop(A, saved, "loaded back")
+      A.eq(saved.guilds[""], nil)
+      A.eq(next(saved.guilds["Crew Guild (replaced)"].roster), nil, "the fresh set, parked")
+      A.eq(saved.guild.request, nil)
+      tc(tw3, "guild")
+      A.eq(countPrinted(tw3, "1: Crew Guild (replaced), 0 friends"), 1, "and listed")
+      noErrors(A, tw3Ns)
+    end,
+
+    -- Item 2: /tc guild new when this guild already has a parked set: refused, and the /reload switches to that set.
+    tc_guild_new_never_makes_a_second_set_for_a_guild = function(_, A, _, H)
+      local saved = oldSave()
+      saved.guild = { byChar = {} }
+      saved.guilds = { ["Crew Guild"] = { roster = { Mine = { name = "Mine", level = 3, lastSeen = 1700000000 } } } }
+      local tw, twNs = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      A.no(twNs.Guild.active())
+      A.eq(countPrinted(tw, "TwizCrew: Crew Guild has its own saved data. Type /reload to switch to it."), 1)
+      tc(tw, "guild new")
+      A.ok(printed(tw, "TwizCrew: Crew Guild already has saved TwizCrew data. Type /reload to switch to it."))
+      A.eq(saved.guild.request, nil, "no fresh set asked for")
+      A.eq(saved.guild.byChar[MAIN], "Crew Guild")
+      retire(H, tw)
+      local tw2, tw2Ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(tw2Ns.Guild.active())
+      A.eq(saved.roster.Mine.level, 3, "its own set")
+      A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "the old data parked, unnamed")
       noErrors(A, tw2Ns)
+    end,
+
+    -- Item 3: a /tc guild new request is one shot: /tc guild use cancels it, and any other login uses it up.
+    tc_guild_new_request_never_goes_stale = function(_, A, _, H)
+      local saved = oldSave()
+      local tw = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      tc(tw, "guild new")
+      tc(tw, "guild use yes")
+      A.eq(saved.guild.request, nil, "use cancels it")
+      retire(H, tw)
+      local _, ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30)
+      A.eq(saved.guild.name, "Crew Guild"); oldDataOnTop(A, saved, "after use")
+      A.eq(next(saved.guilds), nil, "no fresh set")
+      noErrors(A, ns)
+      -- another new request, then an alt logs in first: used up, never carried out later
+      local saved2 = oldSave()
+      local tw3 = mainSession(H, saved2, "Crew Guild", guildOf(3), 30, nil, true)
+      tc(tw3, "guild new")
+      retire(H, tw3)
+      local alt = altIn(H, "Other Guild", saved2)
+      H.advance(30)
+      retire(H, alt)
+      A.eq(saved2.guild.request, nil, "used up at the alt's login")
+      A.eq(saved2.guild.name, nil); A.eq(next(saved2.guilds), nil)
+      mainSession(H, saved2, "Crew Guild", guildOf(3), 30)
+      A.eq(saved2.guild.name, nil, "the main's next login: nothing made by an old request")
+      oldDataOnTop(A, saved2, "after the alt")
+      A.eq(next(saved2.guilds), nil)
+    end,
+
+    -- (e) An alt types /tc guild use yes on the main's old data by mistake (nothing forgotten that session). The main
+    -- recovers it with /tc guild load: every row and number is back, friends unseen for 60+ days included.
+    a_mistaken_use_yes_on_an_alt_is_undone_with_load = function(_, A, _, H)
+      local saved = oldSave()
+      for _, name in ipairs({ "Oldpal", "Oldbuddy" }) do
+        saved.roster[name] = { name = name, level = 9, lastSeen = 1700000000 - 70 * 86400 }
+        saved.stats.crew[name] = { sid = "x", s = {}, a = { dt = 7 } }
+      end
+      local function everything(when)
+        oldDataOnTop(A, saved, when)
+        A.ok(saved.roster.Oldpal and saved.roster.Oldbuddy, when .. ": friends unseen for 70 days")
+        A.eq(saved.stats.crew.Oldbuddy.a.dt, 7, when)
+      end
+      local alt, altNs = altIn(H, "Other Guild", saved)
+      H.advance(30)
+      tc(alt, "guild use")
+      A.ok(printed(alt, "TwizCrew: Only 0 of 12 saved friends are in Other Guild. If this really is your crew's guild,"
+        .. " type /tc guild use yes."))
+      tc(alt, "guild use yes")
+      H.advance(30)
+      A.eq(saved.guild.name, "Other Guild"); A.ok(altNs.Guild.active())
+      everything("the alt's session")
+      noErrors(A, altNs)
+      retire(H, alt)
+      local main = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      A.ok(printed(main, "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew Guild."))
+      retire(H, main)
+      local main2, main2Ns = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.eq(next(saved.roster), nil, "a set of its own, empty")
+      A.ok(saved.guilds["Other Guild"].roster.Oldpal, "the old data, parked as Other Guild's")
+      tc(main2, "guild")
+      A.eq(countPrinted(main2, "1: Other Guild, 13 friends, last seen "), 1, "(the alt met Stranger)")
+      tc(main2, "guild load 1 yes")
+      A.ok(printed(main2, "TwizCrew: Type /reload."))
+      noErrors(A, main2Ns)
+      retire(H, main2)
+      local main3, main3Ns = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(main3Ns.Guild.active())
+      everything("recovered")
+      A.eq(saved.guilds["Other Guild"], nil)
+      A.ok(saved.guilds["Crew Guild (replaced)"], "the empty set, parked")
+      A.eq(saved.guild.byChar[MAIN], "Crew Guild"); A.eq(saved.guild.byChar[ALT], "Other Guild")
+      noErrors(A, main3Ns)
+      retire(H, main3)
+    end,
+
+    -- (f) A main in guild A and an alt in guild B, both with sets, alternating five times: each login is on its own
+    -- guild's data at once (no /reload), and nothing mixes.
+    main_and_alt_alternate_between_their_guild_sets = function(_, A, _, H)
+      local saved = {}
+      local function main(n)
+        local W, ns = mainSession(H, saved, "Guild A", { { name = "Annie Alpha", class = "MAGE" } }, 20, nil, true)
+        return W, ns
+      end
+      local W, ns = main()
+      A.eq(saved.guild.name, "Guild A")
+      retire(H, W)
+      local alt = altIn(H, "Guild B", saved) -- first login: Guild A's set on top: the /reload line
+      H.advance(20)
+      retire(H, alt)
+      for n = 1, 5 do
+        local a, aNs = altIn(H, "Guild B", saved)
+        H.advance(20)
+        A.eq(saved.guild.name, "Guild B", "round " .. n .. ": the alt on Guild B's set")
+        A.ok(aNs.Guild.active(), "round " .. n .. ": at once")
+        A.ok(saved.guild.keys.stranger and not saved.guild.keys["annie alpha"], "round " .. n .. ": B's keys only")
+        A.eq(saved.guilds["Guild A"].guild.keys["annie alpha"], "Annie", "round " .. n .. ": A's set parked whole")
+        noErrors(A, aNs)
+        retire(H, a)
+        W, ns = main()
+        A.eq(saved.guild.name, "Guild A", "round " .. n .. ": the main on Guild A's set")
+        A.ok(ns.Guild.active(), "round " .. n .. ": at once")
+        A.ok(saved.guild.keys["annie alpha"] and not saved.guild.keys.stranger, "round " .. n .. ": A's keys only")
+        A.ok(saved.guilds["Guild B"].guild.keys.stranger, "round " .. n .. ": B's set parked whole")
+        A.eq(saved.guild.byChar, { [MAIN] = "Guild A", [ALT] = "Guild B" })
+        noErrors(A, ns)
+        retire(H, W)
+      end
+      local count = 0
+      for _ in pairs(saved.guilds) do count = count + 1 end
+      A.eq(count, 1, "one parked set, never a copy")
+    end,
+
+    -- (j) A fresh install: the first guild takes the empty data at once.
+    a_fresh_install_belongs_to_the_first_guild = function(_, A, _, H)
+      local saved = {}
+      local W, ns = mainSession(H, saved, "Crew Guild", guildOf(2), 20, nil, true)
+      A.eq(saved.guild.name, "Crew Guild"); A.ok(ns.Guild.active())
+      A.eq(saved.guild.byChar[MAIN], "Crew Guild"); A.eq(next(saved.guilds), nil)
+      noErrors(A, ns)
+      retire(H, W)
     end,
 
     -- (d) An alt in an unrelated guild opens the old data first and types nothing, three logins: quiet, one line each
@@ -1027,10 +1194,12 @@ return {
       w, ns = session("Altie", "Other Guild", { { name = "Zed Zed" } }, true)
       A.ok(ns.Guild.active(), "the alt uses the same \"?\" data")
       retire(H, w)
+      A.eq(next(saved.guild.byChar), nil, "no byChar without a readable name"); A.eq(next(saved.guilds), nil)
       w, ns = session("Twiz", "Crew Guild", guildOf(8), false)
-      A.eq(saved.guild.name, "Crew Guild", "renamed once the name is readable")
+      A.eq(saved.guild.name, "Crew Guild", "renamed once the name is readable (8 of 10 fit)")
       A.ok(ns.Guild.active())
       A.eq(#ns.roster:allNames(), 10)
+      A.eq(next(saved.guilds), nil); A.eq(saved.guild.byChar[ns.DB.charId()], "Crew Guild")
       noErrors(A, ns)
     end,
 
@@ -1060,6 +1229,8 @@ return {
       A.eq(sent, 0, "nothing sent into the new guild")
       A.eq(twNs.db.guild.keys, keys, "no key written into A's data")
       A.ok(printed(tw, "TwizCrew keeps separate data for each guild. Type /reload to switch to Guild B."))
+      A.eq(twNs.db.guild.name, "Guild A"); A.eq(next(twNs.db.guilds), nil)
+      A.eq(twNs.db.guild.byChar[twNs.DB.charId()], "Guild B", "the next login parks Guild A's set")
       noErrors(A, twNs)
     end,
   },

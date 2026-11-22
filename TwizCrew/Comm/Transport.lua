@@ -232,11 +232,13 @@ end
 
 -- mode: "guild" (sending to the guild) or "none" (not in a guild, or not known yet: pending = true). reload: this
 -- character's guild keeps other saved data than the set in use (dataGuild = whose it is); a /reload switches.
+-- notOurs: in a guild but the data in use is not (known to be) its own; deciding: and TwizCrew is still finding out.
 function Transport.status()
   local guild = plain(GetGuildInfo, "player")
   local G = ns.Guild
   return { mode = sending() and "guild" or "none", pending = not settled, waitingList = waitingList,
     guild = type(guild) == "string" and guild or nil, lockdown = Transport.lockdown(), lastResult = lastResult,
     reload = G ~= nil and G.needsReload() or false, dataGuild = G and G.dataGuild() or nil,
-    guildId = G and G.id() or nil, notOurs = G ~= nil and G.quiet() or false }
+    guildId = G and G.id() or nil, notOurs = G ~= nil and G.quiet() or false,
+    deciding = G ~= nil and G.deciding() or false }
 end

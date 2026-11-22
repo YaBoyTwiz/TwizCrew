@@ -32,11 +32,15 @@ local function connection()
   if s.mode == "guild" then
     text = "through the guild " .. tostring(s.guild or "(name not known yet)")
   elseif s.reload then
+    local inUse = s.dataGuild == nil and "data from before guilds" or s.dataGuild == ns.Guild.PLACEHOLDER and "\"?\""
+      or ns.Util.safeText(tostring(s.dataGuild))
     text = "TwizCrew keeps separate data for each guild. Type /reload to switch to "
-      .. ns.Util.safeText(tostring(s.guildId or s.guild)) .. " (in use now: " .. ns.Util.safeText(tostring(s.dataGuild))
+      .. ns.Util.safeText(tostring(s.guildId or s.guild)) .. " (in use now: " .. inUse
       .. "); nothing is sent until then"
   elseif s.waitingList then
     text = "waiting for the guild list"
+  elseif s.deciding then
+    text = "in a guild; TwizCrew is still finding out whether the saved data is this guild's, so nothing is sent yet"
   elseif s.pending then
     text = "waiting for the game to say whether you are in a guild"
   elseif s.notOurs then

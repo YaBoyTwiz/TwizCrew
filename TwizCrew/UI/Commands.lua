@@ -31,7 +31,8 @@ local HELP = {
   "/tc guildtest - check that guild messages reach your friends' copies (needs a friend online with TwizCrew)",
   "/tc debug - turn technical chat messages on or off",
   "/tc forget <name> - forget an offline friend's saved data; first or full name (/tc remove does the same)",
-  "/tc guild - whose saved data is in use; /tc guild use - make it this guild's; /tc guild new - start fresh here",
+  "/tc guild - every set of saved crew data, numbered; /tc guild use - make the one in use this guild's",
+  "/tc guild new - start fresh for this guild; /tc guild load <number> - use another set (nothing is deleted)",
   "/tc awards - the awards show for this session, great on stream",
   "/tc awards all - the awards show for all time",
   "/tc session new - start a new crew session, everyone's session stats start from 0",
@@ -56,53 +57,128 @@ function Commands.normalizeName(text)
   return name:sub(1, 1):upper() .. name:sub(2)
 end
 
--- /tc guild: whose saved data is in use and what else is saved; "use": the data in use becomes this guild's;
--- "new": this guild starts fresh at the next /reload (nothing saved is deleted).
-local function rosterSize(set)
-  local n = 0
-  for name in pairs(type(set) == "table" and type(set.roster) == "table" and set.roster or {}) do
-    if not ns.isTestName(name) then n = n + 1 end
+-- /tc guild: every set of saved crew data, numbered (0 = the one in use), and what to type; "use [yes]": the data in
+-- use becomes this guild's; "new": this guild starts fresh at the next /reload; "load <number> [yes]": that set
+-- becomes this guild's at the next /reload. Nothing saved is ever deleted (Core/DB.lua, Crew/Guild.lua).
+local NO_NAMES = "This game does not tell addons the guild's name, so TwizCrew uses one shared set of saved data."
+
+local function friends(n) return n == 1 and "1 friend" or (n .. " friends") end
+
+-- A set's real friends (test rows left out) and the newest last-seen date ("2026-11-21"; nil when none).
+local function setInfo(set)
+  local n, newest = 0, nil
+  local roster = type(set) == "table" and set.roster
+  for name, row in pairs(type(roster) == "table" and roster or {}) do
+    if type(name) == "string" and not ns.isTestName(name) then
+      n = n + 1
+      local seen = type(row) == "table" and tonumber(row.lastSeen) or nil
+      if seen and (not newest or seen > newest) then newest = seen end
+    end
   end
-  return n
+  local ok, day = false, nil
+  if newest then ok, day = pcall(date, "%Y-%m-%d", newest) end
+  return n, ok and type(day) == "string" and day or nil
+end
+
+-- How a set's name reads: a guild's name, "from before guilds" (unnamed), "?"; kept-aside names say so.
+local function nameOf(name)
+  if name == "" then return "from before guilds" end
+  if name == ns.Guild.PLACEHOLDER then return "\"?\"" end
+  return ns.Util.safeText(name)
+end
+
+local function setLabel(entry)
+  if entry.from ~= "bad" then return nameOf(entry.name) end
+  local base, n = entry.key:match("^(.*)#(%d+)$")
+  if base then return nameOf(base) .. " (kept aside " .. n .. ")" end
+  return nameOf(entry.key) .. " (kept aside)"
+end
+
+-- "Old Guild, 14 friends"
+local function setText(entry)
+  return setLabel(entry) .. ", " .. friends((setInfo(entry.set)))
+end
+
+local REFUSED = {
+  noguild = "this character is not in a guild.",
+  changing = "Your guild is changing. Try again in a few seconds.",
+  noname = "the game has not named your guild yet, so TwizCrew cannot tell which one it is.",
+}
+
+local function listSets(G)
+  local name = G.inGuild() and (G.id() and ns.Util.safeText(G.id()) or "(the game gives no name)") or "none"
+  say("this character's guild: " .. name)
+  local here = G.inGuild() and G.here() or nil
+  if here == G.PLACEHOLDER then say(NO_NAMES) end
+  local sets = ns.DB.sets(ns.db)
+  say("saved data (the number is for /tc guild load):")
+  for _, entry in ipairs(sets) do
+    local n, day = setInfo(entry.set)
+    local label = setLabel(entry)
+    if entry.from == "top" then
+      if entry.name == "" and G.dataEmpty() then label = "new (nothing saved yet)" end
+      label = label .. " (in use)"
+    end
+    print("  " .. entry.number .. ": " .. label .. ", " .. friends(n) .. (day and (", last seen " .. day) or ""))
+  end
+  if not G.inGuild() then return end
+  if G.settling() then say(REFUSED.changing); return end
+  if not here then say(REFUSED.noname); return end
+  local shown = here == G.PLACEHOLDER and "this guild" or ns.Util.safeText(here)
+  if G.needsReload() then
+    say("type /reload to switch to " .. shown .. "'s own saved data.")
+  elseif not G.active() then
+    say("type /tc guild use to make set 0 " .. shown .. "'s, /tc guild new to start fresh, or /tc guild load"
+      .. " <number> to use another set.")
+  elseif #sets > 1 then
+    say("/tc guild load <number> makes another set " .. shown .. "'s data.")
+  end
 end
 
 local function guildCommand(rest)
   local G, safe = ns.Guild, ns.Util.safeText
-  local what = rest:lower()
-  local why
-  if what == "use" or what == "new" then
-    local ok
-    if what == "use" then ok, why = G.useHere() else ok, why = G.newHere() end
-    local here = safe(tostring(G.id()))
-    if ok and what == "use" then say("the saved data in use now belongs to " .. here .. ".")
-    elseif ok then say(here .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.")
-    elseif why == "noguild" then say("this character is not in a guild.")
-    elseif why == "noname" then say("the game has not named your guild yet, so TwizCrew cannot tell which one it is.")
-    elseif why == "named" then
-      say("the saved data in use is " .. safe(tostring(G.dataGuild())) .. "'s. Type /reload to switch to " .. here
-        .. ".")
-    elseif why == "parked" then say(here .. " already has its own saved data. Type /reload to use it.")
-    elseif why == "inuse" then say("the saved data in use is already " .. here .. "'s.") end
+  local what, arg = rest:lower():match("^(%S*)%s*(.-)$")
+  if what == "" then listSets(G); return end
+  local here = G.here()
+  local shown = here == G.PLACEHOLDER and "this guild" or safe(tostring(here))
+  local ok, why, a, b
+  if what == "use" and (arg == "" or arg == "yes") then
+    ok, why, a, b = G.useHere(arg == "yes")
+    if ok then say("the saved data in use now belongs to " .. shown .. ".")
+    elseif why == "nofit" then
+      say("Only " .. a .. " of " .. b .. " saved friends are in " .. shown .. ". If this really is your crew's guild,"
+        .. " type /tc guild use yes.")
+    elseif why == "nolist" then say("the guild list has not come in yet. Try again in a few seconds.") end
+  elseif what == "new" and arg == "" then
+    ok, why = G.newHere()
+    if ok then say(shown .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.") end
+  elseif what == "load" then
+    local n, yes = arg:match("^(%d+)%s*(%a*)$")
+    n = tonumber(n)
+    if not n or (yes ~= "" and yes ~= "yes") then
+      say("type the number from /tc guild, like /tc guild load 1.")
+      return
+    end
+    ok, why = G.loadHere(n, yes == "yes")
+    if ok and yes == "yes" then say("Type /reload.")
+    elseif ok then
+      say("This will make set " .. n .. " (" .. setText(why) .. ") the data for " .. shown .. ". The data in use now is"
+        .. " kept as a parked set. Type /tc guild load " .. n .. " yes.")
+    elseif why == "nonumber" then say("there is no set " .. n .. ". Type /tc guild to see the numbers.")
+    elseif why == "inuse" then say("set 0 is the data in use already.") end
+  else
+    say("type /tc guild, /tc guild use, /tc guild new or /tc guild load <number>.")
     return
   end
-  local name = G.inGuild() and (G.id() and safe(G.id()) or "(the game gives no name)") or "none"
-  say("this character's guild: " .. name)
-  local dg = G.dataGuild()
-  local inUse
-  if dg == nil then inUse = G.dataEmpty() and "new (nothing saved yet)" or "data from before guilds"
-  elseif dg == G.PLACEHOLDER then inUse = "a guild whose name the game did not give (\"?\")"
-  else inUse = safe(dg) end
-  say("saved data in use: " .. inUse .. ", " .. rosterSize(ns.db) .. " friends")
-  local parked = {}
-  for key, set in pairs(type(ns.db.guilds) == "table" and ns.db.guilds or {}) do
-    local label = key == "" and "data from before guilds" or key == G.PLACEHOLDER and "\"?\"" or safe(key)
-    parked[#parked + 1] = label .. " (" .. rosterSize(set) .. " friends)"
-  end
-  table.sort(parked)
-  say(#parked > 0 and ("also saved: " .. table.concat(parked, ", ")) or "no other saved data.")
-  if G.inGuild() and not G.active() then
-    say("type /tc guild use to make the data in use this guild's, or /tc guild new to start fresh for it.")
-  end
+  if ok then return end
+  if REFUSED[why] then say(REFUSED[why])
+  elseif why == "named" then
+    say("the saved data in use is " .. safe(tostring(G.dataGuild())) .. "'s. Type /reload to switch to " .. shown
+      .. ".")
+  elseif why == "parked" then say(shown .. " already has saved TwizCrew data. Type /reload to switch to it.")
+  elseif why == "parkedShared" then
+    say("the shared set (\"?\") is parked. To use it, type /tc guild load <number> (the numbers are in /tc guild).")
+  elseif why == "inuse" and what ~= "load" then say("the saved data in use is already " .. shown .. "'s.") end
 end
 
 local function forgetName(rest)

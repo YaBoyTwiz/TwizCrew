@@ -101,7 +101,8 @@ return {
       A.contains(W.sent[2].text, "PING")
       A.eq(W.sent[1].chatType, "GUILD")
       A.eq(ns.Transport.status(), { mode = "guild", pending = false, waitingList = false, guild = "Late Guild", lockdown = false,
-        lastResult = 0, reload = false, dataGuild = "Late Guild", guildId = "Late Guild", notOurs = false })
+        lastResult = 0, reload = false, dataGuild = "Late Guild", guildId = "Late Guild", notOurs = false,
+        deciding = false })
     end,
     not_in_a_guild_settles_after_the_grace_and_sends_nothing = function(ns, A, W)
       boot(ns, W, function(w) w.state.guild = nil end)

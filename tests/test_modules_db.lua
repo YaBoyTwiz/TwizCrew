@@ -304,14 +304,83 @@ return {
       A.eq(db.guild.name, "?"); A.eq(db.roster.Q1.name, "Q1"); A.eq(next(db.guilds), nil)
     end,
 
-    swap_with_a_fresh_request_parks_unnamed_data_and_never_overwrites = function(ns, A)
-      local db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { byChar = { c1 = "Guild A" },
-        fresh = { ["Guild A"] = true } }, guilds = { [""] = { roster = { Older = { name = "Older" } } } } }, {})
+    swap_with_a_new_request_parks_unnamed_data_and_never_overwrites = function(ns, A, W)
+      W.state.guild = nil
+      local db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = {
+        request = { kind = "new", guild = "Guild A", char = "c1" } },
+        guilds = { [""] = { roster = { Older = { name = "Older" } } } } }, {})
       A.ok(ns.DB.useGuildOf(db, "c1"))
       A.eq(db.guild.name, "Guild A"); A.eq(db.roster, {}, "fresh")
       A.eq(db.guilds[""].roster.Older.name, "Older", "the parked unnamed set is never overwritten")
       A.eq(db.guilds_bad["#1"].roster.L1.name, "L1", "the top unnamed set went aside")
-      A.eq(db.guild.fresh["Guild A"], nil)
+      A.eq(db.guild.request, nil, "used once")
+      A.eq(db.guild.byChar.c1, "Guild A", "remembered when carried out")
+    end,
+
+    -- Item 3: a new request is carried out only by the character that made it, while it still makes sense; any
+    -- start-up uses it up.
+    a_new_request_is_one_shot_and_never_shadows_a_set = function(ns, A, W)
+      W.state.guild = nil
+      local req = function() return { kind = "new", guild = "Guild A", char = "c1" } end
+      local db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { request = req() } }, {})
+      A.no(ns.DB.useGuildOf(db, "c2"), "another character logs in")
+      A.eq(db.guild.request, nil, "used up"); A.eq(db.roster.L1.name, "L1"); A.eq(next(db.guilds), nil)
+      A.no(ns.DB.useGuildOf(db, "c1"), "nothing left to carry out")
+      db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { request = req() },
+        guilds = { ["Guild A"] = { roster = { A1 = { name = "A1" } } } } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"), "Guild A has a set: never a second one")
+      A.eq(db.roster.L1.name, "L1"); A.eq(db.guilds["Guild A"].roster.A1.name, "A1"); A.eq(db.guild.request, nil)
+      db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", request = req() } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"), "the data on top is Guild A's already")
+      A.eq(db.roster.A1.name, "A1")
+      db = ns.DB.init({ roster = { B1 = { name = "B1" } }, guild = { name = "Guild B", request = req() } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"), "only for unnamed or \"?\" data on top")
+      A.eq(db.guild.name, "Guild B")
+      W.state.guild = { name = "Guild C", members = {} }
+      db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { request = req() } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"), "the game says this character is in another guild now")
+      A.eq(db.roster.L1.name, "L1")
+    end,
+
+    -- Item 6: a load request puts the chosen set on top named for the guild; the set in use is parked under its own
+    -- name, or "<name> (replaced)" when that is this guild's; never two sets for one guild; nothing deleted.
+    a_load_request_brings_the_chosen_set_up = function(ns, A, W)
+      W.state.guild = nil
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A",
+        request = { kind = "load", guild = "Guild A", char = "c1", from = "guilds", key = "Old Guild" } },
+        guilds = { ["Old Guild"] = { roster = { O1 = { name = "O1" } } } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "Guild A"); A.eq(db.roster.O1.name, "O1")
+      A.eq(db.guilds["Guild A (replaced)"].roster.A1.name, "A1"); A.eq(db.guilds["Old Guild"], nil)
+      A.eq(db.guild.byChar.c1, "Guild A"); A.eq(db.guild.request, nil)
+      db.guilds_bad = { ["#1"] = { roster = { K1 = { name = "K1" } } } }
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "#1" }
+      A.ok(ns.DB.useGuildOf(db, "c1"), "a set kept aside can be loaded too")
+      A.eq(db.roster.K1.name, "K1"); A.eq(db.guilds_bad["#1"], nil)
+      A.eq(db.guilds["Guild A (replaced 2)"].roster.O1.name, "O1", "numbered")
+      -- unnamed data on top, and this guild has a parked set besides the chosen one
+      db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = {
+        request = { kind = "load", guild = "Guild A", char = "c1", from = "guilds", key = "Old Guild" } },
+        guilds = { ["Guild A"] = { roster = { A1 = { name = "A1" } } }, ["Old Guild"] = { roster = { O1 = {} } } } },
+        {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "Guild A"); A.ok(db.roster.O1)
+      A.eq(db.guilds[""].roster.L1.name, "L1", "the unnamed set parked under its own (empty) name")
+      A.eq(db.guilds["Guild A (replaced)"].roster.A1.name, "A1", "Guild A's other set steps aside, kept")
+      A.eq(db.guilds["Guild A"], nil); A.eq(db.guilds["Old Guild"], nil)
+      -- a request whose set is gone does nothing (and is used up)
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "guilds", key = "Nope" }
+      A.no(ns.DB.useGuildOf(db, "c1")); A.eq(db.guild.request, nil)
+    end,
+
+    sets_are_numbered_in_a_stable_order = function(ns, A)
+      local db = ns.DB.init({ roster = { T1 = {} }, guild = { name = "Guild A" },
+        guilds = { zed = { roster = {} }, ["?"] = { roster = {} }, [""] = { roster = {} }, Alpha = { roster = {} } },
+        guilds_bad = { ["Guild A#1"] = { roster = {} }, junk = true } }, {})
+      local list = {}
+      for _, s in ipairs(ns.DB.sets(db)) do list[#list + 1] = s.number .. ":" .. s.from .. ":" .. tostring(s.key) end
+      A.eq(list, { "0:top:nil", "1:guilds:", "2:guilds:?", "3:guilds:Alpha", "4:guilds:zed", "5:bad:Guild A#1" })
+      A.eq(ns.DB.sets(db)[1].set.roster.T1, db.roster.T1, "set 0 is the data in use")
     end,
 
     not_legacy_from_a_test_build_is_dropped = function(ns, A)

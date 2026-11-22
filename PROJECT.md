@@ -13,7 +13,15 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
-- **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released, never run in the game.**
+- **First run in the game (owner's main, 2026-11-22, read from the saved log and `/tc report`):** the final guild
+  code loaded with no errors or problems. The game gives the guild's name; old data attached by itself and the old
+  friends were pinned; the guild list came with offline members (8 members, 3 online) and names with first and last
+  word. `/tc guildtest`: guild send accepted and our own echo came back (as the full name), so `GUILD` addon messages
+  are delivered; nobody answered because nobody else has this version. A friend still on the released v0.1.24 was
+  heard normally (positions, stats, state) and showed online, so old and new copies still reach each other at least
+  for a guild member in the party. Still unproven: two copies of the new version talking over the guild. The one
+  error in the log (`Crew.lua:331`, 20:02 on 2026-11-21) came from the game loading files in the middle of the build.
+- **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released.**
   The copies now talk through the guild, trust only guild members, keep the crew's data per guild, and the panel has
   sections and pins. The whole-branch review and its fix wave are done. Everything is in the section "Guild
   conversion (2026-11-21)" below, including what is still open. The version is still 0.1.24 until the owner says "release it"; the first thing to do in the game is
@@ -598,7 +606,7 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   whispers arrive. That is why the hidden channel was dropped for the guild on 2026-11-21. History: from v0.1.5 the channel was used to see who is in it; automatic mode whispered each member
   (the full name the game gives, e.g. "Yaboytwiz Noodledog"), sends to the group when grouped, and still sends one
   copy to the channel in case the game delivers it again (all gone now; `/tc report` has a Guild line instead).
-- **Guild addon messages (research 2026-11-21, other addon makers, not tried by us until `/tc guildtest` runs):**
+- **Guild addon messages (research 2026-11-21, other addon makers; our own send and echo seen in game 2026-11-22):**
   `GUILD` addon messages are delivered on Forever 1.60.1 (the guild-vendetta probe: result 0, received, also by the
   sender; ForeverGuild+ and LibGuildSync sync over it). `AreOutgoingAddonChatMessagesRestricted()` is true in the
   open world although guild and whisper addon messages go through (use `InChatMessagingLockdown` and the send

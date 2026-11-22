@@ -380,6 +380,24 @@ return {
       A.ok(ns.Log.counts()["send failed"] >= 1)
       A.eq(ns.Transport.status().lastResult, 7)
     end,
+    -- In a dungeon IsInGuild may answer a secret value for minutes: Guild.active() still holds, so sends go on.
+    sends_go_on_while_IsInGuild_is_unreadable = function(ns, A, W)
+      boot(ns, W)
+      W:advance(2)
+      A.ok(ns.Guild.active())
+      local real = W.env.IsInGuild
+      W.env.IsInGuild = function() return W.secret() end
+      for minute = 1, 4 do
+        local before = #W.sent
+        ns.Comm.send("UPDATE", { zn = "Deadmines " .. minute })
+        W:advance(60)
+        A.eq(#W.sent - before, 1, "minute " .. minute .. ": the guild message went out")
+        A.eq(W.sent[#W.sent].chatType, "GUILD")
+      end
+      A.eq(ns.Transport.destinations(), { { chatType = "GUILD" } })
+      W.env.IsInGuild = real
+      noErrors(ns, A)
+    end,
     a_refused_send_is_given_up_after_the_retry_cap = function(ns, A, W)
       boot(ns, W)
       W.state.sendResult = 3 -- "try again later", for good
@@ -457,6 +475,31 @@ return {
       W:advance(2)
       addon(W, "1^PING^c", "WHISPER", "Frostie Snow")
       A.eq(got, { "Frostie", "Frostie" })
+    end,
+    -- An alt in guild B logs in with guild A's data on top; the game does not answer IsInGuild yet (the guild state is
+    -- not known): nothing is accepted until TwizCrew uses this guild's data.
+    nothing_is_accepted_while_the_guild_state_is_not_known = function(ns, A, W)
+      local answer = false
+      local db = boot(ns, W, function(w)
+        local real = w.env.IsInGuild
+        w.env.IsInGuild = function() if not answer then return nil end return real() end
+      end, { guild = { name = "Guild A" } })
+      A.no(ns.Guild.known(), "the game has not said yet")
+      local got = pingSenders(ns)
+      addon(W, "1^PING^", "GUILD", "Frostie Snow")
+      addon(W, "1^PING^", "WHISPER", "Ginkan Pebble")
+      A.eq(got, {}, "nothing accepted while not known")
+      A.eq(ns.Log.counts()["recv not in guild"], 2)
+      answer = true
+      W:advance(2)
+      A.ok(ns.Guild.inGuild()); A.no(ns.Guild.active(), "guild A's data, guild B")
+      addon(W, "1^PING^a", "GUILD", "Frostie Snow")
+      A.eq(got, {}, "another guild's data: still nothing")
+      db.guild.name = "Test Guild" -- (as if this guild's data were on top)
+      W:advance(2)
+      A.ok(ns.Guild.active())
+      addon(W, "1^PING^b", "GUILD", "Frostie Snow")
+      A.eq(got, { "Frostie" }, "this guild's data in use: accepted")
     end,
     guild_message_before_the_list_loads_uses_the_saved_key = function(ns, A, W)
       local rows = 0

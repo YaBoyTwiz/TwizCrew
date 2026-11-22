@@ -297,7 +297,12 @@ local function build(W)
     W.leaves[#W.leaves + 1] = name
     if not W.state.leaveFails then W.state.channels[name] = nil end
   end
-  env.GetChannelName = function(name) return W.state.channels[name] or 0 end
+  -- like the game: id, name, instance id (0, nil, 0 when not in it)
+  env.GetChannelName = function(name)
+    local id = W.state.channels[name]
+    if id then return id, name, 0 end
+    return 0, nil, 0
+  end
   env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
   W.messageFilters = {}      -- { event, fn } for every ChatFrame_AddMessageEventFilter call
   env.ChatFrame_AddMessageEventFilter = function(event, fn)

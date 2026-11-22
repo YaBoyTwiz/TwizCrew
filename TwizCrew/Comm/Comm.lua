@@ -153,7 +153,9 @@ end
 -- never mixes). Any other chat type (whisper, party, raid) only from someone the guild list has.
 local function senderKey(raw, chatType)
   local G = ns.Guild
-  if G and G.inGuild() and not G.active() then return nil end -- another guild's data, or not known yet: as if no guild
+  -- nothing at all unless TwizCrew uses this guild's data: not in a guild, the guild state not known yet (an alt in
+  -- guild B with guild A's data on top, the first seconds after login), another guild's data
+  if G and ns.Modules.isEnabled("guild") and not G.active() then return nil end
   local key = G and G.keyOf(raw)
   if key then return key end
   if chatType ~= "GUILD" then

@@ -83,9 +83,12 @@ local function forgetOldChannel()
   if type(comm) == "table" and type(comm.settings) == "table" then comm.settings.transport = nil end
 end
 
+-- The channel's number (0: not in it). GetChannelName gives id, name, instance id: only the first is wanted (all of
+-- them in tonumber would make the name its number base, an error exactly while the channel is joined).
 local function channelIndex(old)
   if type(GetChannelName) ~= "function" then return nil end
-  return tonumber(plain(GetChannelName, old))
+  local id = plain(GetChannelName, old)
+  return tonumber(id)
 end
 
 local function dropMarker(old, why)
@@ -166,7 +169,14 @@ function Transport.start()
   end)
 end
 
-local function sending() return settled and inGuild and gameInGuild() and (not ns.Guild or ns.Guild.active()) end
+-- Guild.active() already follows the game with grace rules: an unreadable IsInGuild (a secret in a dungeon) must not
+-- stop the sends; only a readable "no guild" stops them at once (a kick: the guild module says so a moment later).
+-- Without the guild module, the game's answer.
+local function sending()
+  if not (settled and inGuild) then return false end
+  if ns.Guild then return ns.Guild.active() and plain(IsInGuild) ~= false end
+  return gameInGuild()
+end
 
 -- Everyone: one GUILD message (nothing outside a guild). msgType is not needed any more; kept for the callers.
 function Transport.destinations(_msgType)

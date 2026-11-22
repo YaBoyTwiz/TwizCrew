@@ -23,7 +23,12 @@ end
 
 local function names(models)
   local out = {}
-  for i, m in ipairs(models) do out[i] = m.bar and ("[Offline " .. m.count .. (m.open and " open]" or "]")) or m.name end
+  for i, m in ipairs(models) do
+    if m.bar == "offline" then out[i] = "[Offline " .. m.count .. (m.open and " open]" or "]")
+    elseif m.bar then out[i] = "[" .. m.bar .. " " .. m.count .. (m.open and " open]" or "]")
+    elseif m.head then out[i] = "<" .. m.head .. ">"
+    else out[i] = m.name end
+  end
   return out
 end
 
@@ -111,9 +116,11 @@ return {
     entries_rules = function(ns, A)
       local L = ns.PanelLogic
       local rows = { { name = "A" }, { name = "Z", offline = true }, { name = "B" } }
-      A.eq(names(L.entries(rows, 0, true)), { "A", "B", "[Offline 1 open]", "Z" }, "offline after the bar")
-      A.eq(names(L.entries({ { name = "A" } }, 3, false)), { "A", "[Offline 3]" })
-      A.eq(names(L.entries({ { name = "A" } }, 0, false)), { "A" })
+      local flat = { flat = true }
+      A.eq(names(L.entries(rows, { offlineOpen = true, flat = true })), { "A", "B", "[Offline 1 open]", "Z" },
+        "offline after the bar")
+      A.eq(names(L.entries({ { name = "A" } }, { hiddenOffline = 3, flat = true })), { "A", "[Offline 3]" })
+      A.eq(names(L.entries({ { name = "A" } }, flat)), { "A" })
       A.eq(L.offlineBarText(3, false), "Offline (3)  -  click to show")
       A.eq(L.offlineBarText(3, true), "Offline (3)  -  click to hide")
       local _, hidden = L.rows({ { name = "X", online = false }, { name = "Y", online = true } }, { showOffline = false })

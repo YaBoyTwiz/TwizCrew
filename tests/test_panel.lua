@@ -281,6 +281,115 @@ return {
       A.eq(#ns.Panel.models(), 12, "my own row is off by default")
       A.eq(ns.Log.errors(10), {})
     end,
+    ------------------------------------------------------------------------------------------ sections (logic)
+    sections_in_order_party_pinned_guild_offline = function(ns, A)
+      local L = ns.PanelLogic
+      local members = {
+        { name = "Zed", online = true }, { name = "Amy", online = true }, { name = "Bob", online = true },
+        { name = "Cat", online = true }, { name = "Dan", online = false, lastSeen = 100 },
+      }
+      local rows = L.rows(members, {}, nil, false, 0, 200, nil, nil,
+        { party = { Zed = true }, pins = { Amy = true, Dan = true }, canPin = true })
+      local by = {}
+      for _, r in ipairs(rows) do by[r.key] = r end
+      A.eq(by.Zed.section, "party"); A.eq(by.Amy.section, "pinned"); A.eq(by.Bob.section, "guild")
+      A.eq(by.Dan.section, "offline", "a pinned member who is offline sits in Offline")
+      A.eq(by.Dan.pinned, true, "...with the star")
+      A.eq(by.Dan.pinAction, "unpin"); A.eq(by.Amy.pinAction, "unpin"); A.eq(by.Bob.pinAction, "pin")
+      A.eq(by.Zed.pinAction, nil, "a party row has no button")
+      local e = L.entries(rows, { inGroup = true, guildOpen = true, offlineOpen = true })
+      local out = {}
+      for i, x in ipairs(e) do out[i] = x.head and ("<" .. x.head .. ">") or x.bar and ("[" .. x.bar .. "]") or x.key end
+      A.eq(out, { "<My party>", "Zed", "<Pinned>", "Amy", "[guild]", "Bob", "Cat", "[offline]", "Dan" })
+    end,
+    no_party_no_heading = function(ns, A)
+      local L = ns.PanelLogic
+      local rows = L.rows({ { name = "Amy", online = true }, { name = "Bob", online = true } }, {}, nil, false, 0, 0, nil, nil,
+        { party = { Amy = true } })
+      -- not grouped: nobody is a party row, no "My party" heading
+      local e = L.entries(rows, { inGroup = false, guildOpen = false })
+      for _, x in ipairs(e) do A.eq(x.head, nil, "no heading") end
+      -- grouped but nobody in the guild is in it: no heading either
+      e = L.entries(L.rows({ { name = "Bob", online = true } }, {}, nil, false, 0, 0), { inGroup = true })
+      for _, x in ipairs(e) do A.eq(x.head, nil) end
+      -- pinned rows alone: no "Pinned" heading, nothing else is shown with them
+      e = L.entries(L.rows({ { name = "Amy", online = true } }, {}, nil, false, 0, 0, nil, nil, { pins = { Amy = true } }), {})
+      A.eq(#e, 1)
+    end,
+    guild_bar_closed_by_default_hides_its_rows = function(ns, A)
+      local L = ns.PanelLogic
+      local rows = L.rows({ { name = "Amy", online = true }, { name = "Bob", online = true }, { name = "Cat", online = true } },
+        {}, nil, false, 0, 0, nil, nil, { pins = { Amy = true } })
+      local e = L.entries(rows, { guildOpen = false })
+      A.eq(#e, 3, "the Pinned heading, Amy, the bar, nothing under it")
+      A.eq(e[3].bar, "guild"); A.eq(e[3].count, 2); A.eq(e[3].open, false)
+      e = L.entries(rows, { guildOpen = true })
+      A.eq(#e, 5); A.eq(e[3].open, true)
+    end,
+    empty_main_view_opens_the_guild_list = function(ns, A)
+      local L = ns.PanelLogic
+      local rows = L.rows({ { name = "Bob", online = true }, { name = "Cat", online = true } }, {}, nil, false, 0, 0)
+      local e = L.entries(rows, { guildOpen = false })
+      A.eq(e[1].bar, "guild"); A.eq(e[1].open, true, "no party, no pins: open whatever the saved state says")
+      A.eq(#e, 3)
+    end,
+    no_addon_member_row_from_guild_list = function(ns, A)
+      local L = ns.PanelLogic
+      local guild = {
+        { key = "Me", class = "MAGE", level = 5, zone = "A", online = true },
+        { key = "Heard", class = "MAGE", level = 5, zone = "A", online = true },
+        { key = "Quiet", class = "ROGUE", level = 12, zone = "Durotar", online = true },
+        { key = "Gone", class = "PRIEST", level = 30, zone = "Tanaris", online = false, lastOnline = 1000 },
+      }
+      local extra = L.noAddonMembers(guild, { Heard = true }, "Me")
+      A.eq(#extra, 2, "not me, not the one with a roster row")
+      local rows = L.rows(extra, {}, nil, false, 0, 1000 + 7200, nil, nil, { canPin = true })
+      A.eq(rows[1].key, "Quiet"); A.eq(rows[1].noAddon, true); A.eq(rows[1].class, "ROGUE"); A.eq(rows[1].level, 12)
+      A.eq(rows[1].zoneText, "Durotar"); A.eq(rows[1].section, "guild"); A.eq(rows[1].tags, {})
+      A.eq(rows[1].pinAction, "pin")
+      A.eq(rows[2].section, "offline"); A.eq(rows[2].offlineText, "Offline, last seen 2h ago")
+    end,
+    show_no_addon_off_hides_them_and_the_counts_follow = function(ns, A)
+      local L = ns.PanelLogic
+      local extra = L.noAddonMembers({ { key = "Q", online = true }, { key = "G", online = false } }, {}, "Me")
+      local members = { { name = "Heard", online = true }, extra[1], extra[2] }
+      local rows, hidden = L.rows(members, { showNoAddon = false, showOffline = false }, nil, false, 0, 0)
+      A.eq(#rows, 1); A.eq(rows[1].key, "Heard"); A.eq(hidden, 0, "a hidden no-addon member is not counted in the bar")
+      rows, hidden = L.rows(members, { showNoAddon = true, showOffline = false }, nil, false, 0, 0)
+      A.eq(#rows, 2); A.eq(hidden, 1)
+      A.eq(L.guildOnline(5, extra, true), 5)
+      A.eq(L.guildOnline(5, extra, false), 4, "the online no-addon member leaves the header count")
+    end,
+    namesakes_show_full_names = function(ns, A)
+      local L = ns.PanelLogic
+      local names = { Chaos = "Chaos Deathbringr", Other = "Other" }
+      local rows = L.rows({ { name = "Chaos", online = true }, { name = "Other", online = true } }, {}, nil, false, 0, 0, nil,
+        nil, { display = function(k) return names[k] end })
+      A.eq(rows[1].name, "Chaos Deathbringr"); A.eq(rows[1].key, "Chaos"); A.eq(rows[2].name, "Other")
+    end,
+    header_says_here_and_online = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.headerCount(3, 14), "3 here \194\183 14 online")
+      A.eq(L.headerCount(3, 14, true), "3/14")
+      A.eq(L.headerCount(nil, nil), "0 here \194\183 0 online")
+    end,
+    state_lines_when_the_addon_cannot_work = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq(L.stateLine({ inGuild = false }), "TwizCrew works inside a guild. Join one and it starts by itself.")
+      A.eq(L.stateLine({ inGuild = true, needsReload = true, guildName = "Crew X" }),
+        "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew X.")
+      A.eq(L.stateLine({ inGuild = true, active = false }), "Waiting for the guild list\226\128\166")
+      A.eq(L.stateLine({ inGuild = true, active = true }), nil)
+    end,
+    offline_last_seen_falls_back_to_guild_list = function(ns, A)
+      local L = ns.PanelLogic
+      local get = function(k) return k == "Old" and { lastOnline = 500 } or nil end
+      local rows = L.rows({ { name = "Old", online = false }, { name = "Own", online = false, lastSeen = 900 },
+        { name = "None", online = false } }, {}, nil, false, 0, 1000, nil, nil, { get = get })
+      A.eq(rows[1].offlineText, "Offline, last seen " .. ns.Util.ago(500), "the guild list's time")
+      A.eq(rows[2].offlineText, "Offline, last seen " .. ns.Util.ago(100), "the addon's own record first")
+      A.eq(rows[3].offlineText, "Offline")
+    end,
     panel_draws_level_progress_in_every_style = function(ns, A, W)
       start(ns, W)
       ns.Modules.set("panel", "showSelf", false)

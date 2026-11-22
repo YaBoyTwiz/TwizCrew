@@ -174,23 +174,69 @@ function PanelLogic.tooltipLines(m, now, maxLevel)
   return lines
 end
 
--- members: already sorted. titleOf(name) -> award title | nil (optional; online rows only). maxLevel: the game's
--- max level (optional). Returns row models, and how many offline friends were left out (showOffline off).
-function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf, maxLevel)
+-- The guild members the addon has never heard from (no roster row), as members for the panel: { name = key, class,
+-- level, zone, online, lastSeen = their last-online time, noAddon = true }. guild: ns.Guild.members(); have: set of
+-- keys the roster has a row for; myKey: left out. A member who stays in the list is one row per key.
+function PanelLogic.noAddonMembers(guild, have, myKey)
+  local out = {}
+  for _, e in ipairs(guild or {}) do
+    if type(e) == "table" and type(e.key) == "string" and e.key ~= myKey and not (have and have[e.key]) then
+      out[#out + 1] = { name = e.key, class = e.class, level = e.level, zone = e.zone, online = e.online and true or false,
+        lastSeen = e.lastOnline, noAddon = true }
+    end
+  end
+  return out
+end
+
+-- The "online" half of the header: guild members online, without the no-addon ones while they are hidden.
+function PanelLogic.guildOnline(onlineAll, noAddon, showNoAddon)
+  local n = tonumber(onlineAll) or 0
+  if showNoAddon == false then
+    for _, m in ipairs(noAddon or {}) do if m.online then n = n - 1 end end
+  end
+  return math.max(0, n)
+end
+
+local function sectionOf(m, online, pinned, party)
+  if m.self then return "pinned" end -- my own row is always in the main view
+  if not online then return "offline" end
+  if party then return "party" end
+  if pinned then return "pinned" end
+  return "guild"
+end
+
+-- members: already sorted (roster rows and noAddonMembers together). titleOf(name) -> award title | nil (optional;
+-- online rows only). maxLevel: the game's max level (optional). ctx (optional): { party = set of keys in my group,
+-- pins = set of pinned keys, canPin, get = fn(key) -> guild entry, display = fn(key) -> shown name }.
+-- Returns row models (each with key, section "party" | "pinned" | "guild" | "offline", pinned, pinAction "pin" |
+-- "unpin" | nil), and how many offline members were left out (showOffline off).
+function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, titleOf, maxLevel, ctx)
   settings = settings or {}
+  ctx = ctx or {}
   local style = settings.rowStyle or "full"
   local out = {}
   local hidden = 0
   for _, m in ipairs(members or {}) do
     local offline = not m.online
-    if offline and settings.showOffline == false then hidden = hidden + 1 end
-    if not (offline and settings.showOffline == false) then
+    local skip = m.noAddon and settings.showNoAddon == false
+    if offline and settings.showOffline == false and not skip then hidden = hidden + 1 end
+    if not (skip or (offline and settings.showOffline == false)) then
+      local key = m.name
+      local pinned = ctx.pins ~= nil and ctx.pins[key] == true
       local row = {
-        name = text(m.name), class = m.class, level = level(m.level), zoneText = zoneText(m),
-        status = text(m.status), xp = percent(m.xp), tags = tagList(m, settings, relationOf, tagsOn),
-        offline = offline,
+        key = key, name = text(ctx.display and ctx.display(key) or key), class = m.class, level = level(m.level),
+        zoneText = zoneText(m), status = text(m.status), xp = percent(m.xp),
+        tags = m.noAddon and {} or tagList(m, settings, relationOf, tagsOn), offline = offline,
+        noAddon = m.noAddon and true or nil, pinned = pinned,
+        section = sectionOf(m, not offline, pinned, ctx.party ~= nil and ctx.party[key] == true),
       }
-      if not offline then
+      if ctx.canPin and not m.self and not ns.isTestName(key) then
+        if pinned then row.pinAction = "unpin"
+        elseif row.section == "guild" or row.section == "offline" then row.pinAction = "pin" end
+      end
+      if m.noAddon then
+        -- the guild list tells name, class, level and zone; nothing else is known
+      elseif not offline then
         row.quest = ns.Quest and ns.Quest.short(m.questName, m.questObjectives, m.questComplete) or nil
         if type(m.questName) == "string" and m.questName ~= "" then
           row.questName = m.questName
@@ -216,17 +262,27 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
         if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end
       end
-      local tip = settings.xpTooltip ~= false and PanelLogic.tooltipLines(m, now, maxLevel) or {}
-      if not offline then row.info = PanelLogic.infoLines(m) end
-      local ver = PanelLogic.versionLine(m.ver)
-      if ver then tip[#tip + 1] = ver end
-      if #tip > 0 then row.tip = tip end
+      if not m.noAddon then
+        local tip = settings.xpTooltip ~= false and PanelLogic.tooltipLines(m, now, maxLevel) or {}
+        if not offline then row.info = PanelLogic.infoLines(m) end
+        local ver = PanelLogic.versionLine(m.ver)
+        if ver then tip[#tip + 1] = ver end
+        if #tip > 0 then row.tip = tip end
+      end
       if offline then
-        if type(m.lastSeen) == "number" and type(wall) == "number" then
-          row.offlineText = "Offline, last seen " .. ns.Util.ago(wall - m.lastSeen)
+        -- last seen: what the addon recorded, else the guild list's last-online time
+        local seen = type(m.lastSeen) == "number" and m.lastSeen or nil
+        if seen == nil and ctx.get then
+          local e = ctx.get(key)
+          if type(e) == "table" and type(e.lastOnline) == "number" then seen = e.lastOnline end
+        end
+        if seen ~= nil and type(wall) == "number" then
+          row.offlineText = "Offline, last seen " .. ns.Util.ago(math.max(0, wall - seen))
         else
           row.offlineText = "Offline"
         end
+      elseif m.noAddon then
+        -- (no title)
       elseif titleOf then
         local title = titleOf(m.name)
         if type(title) == "string" and title ~= "" then row.title = text(title) end
@@ -240,9 +296,11 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
     if tonumber(id) then return "#" .. tonumber(id) end
     if type(name) == "string" and name ~= "" then return "=" .. name end
   end
-  for _, m in ipairs(members or {}) do
-    local k = m.online and questKey(m.questId, m.questName)
-    if k then byQuest[k] = byQuest[k] or {}; table.insert(byQuest[k], text(m.name)) end
+  for _, row in ipairs(out) do
+    local m
+    for _, cand in ipairs(members or {}) do if cand.name == row.key then m = cand; break end end
+    local k = m and m.online and not m.noAddon and questKey(m.questId, m.questName)
+    if k then byQuest[k] = byQuest[k] or {}; table.insert(byQuest[k], row.name) end
   end
   local mine = ns.Self and ns.Self.lastSent and ns.Self.lastSent() or {}
   local myKey = questKey(mine.qi, mine.qn)
@@ -251,7 +309,7 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
     if k then
       local others = {}
       for _, n in ipairs(byQuest[k] or {}) do if n ~= row.name then others[#others + 1] = n end end
-      if myKey == k and not (ns.isMe and ns.isMe(row.name)) then others[#others + 1] = "you" end
+      if myKey == k and not (ns.isMe and ns.isMe(row.key)) then others[#others + 1] = "you" end
       if #others > 0 then
         row.questMates = others
         row.info = row.info or {}
@@ -265,26 +323,67 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
   return out, hidden
 end
 
--- What the panel draws, top to bottom: the online rows, then the "Offline (N)" bar (when anyone is offline), then
--- the offline rows when the bar is open. rows: from PanelLogic.rows; hidden: its second result; open: showOffline.
-function PanelLogic.entries(rows, hidden, open)
-  local on, off = {}, {}
+-- What the panel draws, top to bottom: { head = "My party" } and the party rows (when grouped and there are any);
+-- { head = "Pinned" } and the pinned online rows (the heading only when something else is shown with them); the
+-- "Guild online (N)" bar and, when it is open, its rows; the "Offline (N)" bar and its rows when open.
+-- rows: from PanelLogic.rows; hidden: its second result (offline members left out).
+-- opts: { inGroup, guildOpen, offlineOpen, hiddenOffline, flat }. With no party row and no pinned online row the
+-- Guild online list is open whatever guildOpen says. flat: no guild bar, the online rows are listed as they are
+-- (the guild is not usable yet; only pretend friends can be shown).
+function PanelLogic.entries(rows, opts)
+  opts = opts or {}
+  local party, pinned, guild, off = {}, {}, {}, {}
   for _, r in ipairs(rows or {}) do
-    if r.offline then off[#off + 1] = r else on[#on + 1] = r end
+    if r.offline then off[#off + 1] = r
+    elseif r.section == "party" and opts.inGroup then party[#party + 1] = r
+    elseif r.section == "pinned" then pinned[#pinned + 1] = r
+    else guild[#guild + 1] = r end
   end
   local out = {}
-  for _, r in ipairs(on) do out[#out + 1] = r end
-  local count = #off + (tonumber(hidden) or 0)
-  if count > 0 then
-    out[#out + 1] = { bar = true, count = count, open = open and true or false }
+  local offCount = #off + (tonumber(opts.hiddenOffline) or 0)
+  if #party > 0 then
+    out[#out + 1] = { head = "My party" }
+    for _, r in ipairs(party) do out[#out + 1] = r end
+  end
+  if #pinned > 0 then
+    if #party > 0 or ((#guild > 0 or offCount > 0) and not opts.flat) then out[#out + 1] = { head = "Pinned" } end
+    for _, r in ipairs(pinned) do out[#out + 1] = r end
+  end
+  if opts.flat then
+    for _, r in ipairs(guild) do out[#out + 1] = r end
+  elseif #guild > 0 then
+    local open = opts.guildOpen and true or false
+    if #party == 0 and #pinned == 0 then open = true end
+    out[#out + 1] = { bar = "guild", count = #guild, open = open }
+    if open then for _, r in ipairs(guild) do out[#out + 1] = r end end
+  end
+  if offCount > 0 then
+    local open = opts.offlineOpen and true or false
+    out[#out + 1] = { bar = "offline", count = offCount, open = open }
     if open then for _, r in ipairs(off) do out[#out + 1] = r end end
   end
   return out
 end
 
--- The offline bar's words: "Offline (3)" with a hint which way a click goes.
+-- The bars' words: "Offline (3)" with a hint which way a click goes.
 function PanelLogic.offlineBarText(count, open)
   return "Offline (" .. (tonumber(count) or 0) .. ")" .. (open and "  -  click to hide" or "  -  click to show")
+end
+
+function PanelLogic.guildBarText(count, open)
+  return "Guild online (" .. (tonumber(count) or 0) .. ")" .. (open and "  -  click to hide" or "  -  click to show")
+end
+
+-- The words in the body while the addon cannot work (nil when it can). state: { inGuild, needsReload, guildName }.
+function PanelLogic.stateLine(state)
+  state = state or {}
+  if not state.inGuild then return "TwizCrew works inside a guild. Join one and it starts by itself." end
+  if state.needsReload then
+    return "TwizCrew keeps separate data for each guild. Type /reload to switch to "
+      .. text(state.guildName or "your guild") .. "."
+  end
+  if not state.active then return "Waiting for the guild list\226\128\166" end
+  return nil
 end
 
 -- ctx = { inCombat, inInstance, onlineCount }
@@ -314,6 +413,12 @@ function PanelLogic.headerText(online, total)
   return (online or 0) .. " of " .. (total or 0) .. " online"
 end
 
+-- The header count: "3 here · 14 online" (people in the main view, guild members online); the short form "3/14".
+function PanelLogic.headerCount(here, online, short)
+  if short then return (here or 0) .. "/" .. (online or 0) end
+  return (here or 0) .. " here " .. DOT .. " " .. (online or 0) .. " online"
+end
+
 -- My own row, from what I last sent (wire fields) and my name.
 function PanelLogic.selfMember(name, fields)
   fields = fields or {}
@@ -321,6 +426,7 @@ function PanelLogic.selfMember(name, fields)
     name = name, class = fields.cl, level = tonumber(fields.lv), xp = tonumber(fields.xp),
     xpCur = tonumber(fields.xc), xpMax = tonumber(fields.xm), rested = tonumber(fields.rx),
     zone = fields.zn, subzone = fields.sz, status = fields.st, tags = ns.Tags.decode(fields.tg), online = true,
+    self = true,
   }
 end
 

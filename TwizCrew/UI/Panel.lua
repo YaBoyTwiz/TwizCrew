@@ -360,7 +360,7 @@ local function redraw()
       end
     end
   end
-  entries = view == "peek" and models or Logic.entries(models, hidden, s.showOffline ~= false)
+  entries = view == "peek" and models or Logic.entries(models, { flat = true, offlineOpen = s.showOffline ~= false, hiddenOffline = hidden })
   P.header = Logic.headerText(online, total)
   P.headerShort = (online or 0) .. "/" .. (total or 0)
   P.countText:SetText(P.header)

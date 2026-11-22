@@ -10,6 +10,7 @@ local function start(ns, W)
   ns.Self.start()
   ns.LayerSensor.start()
   ns.Modules.startAll()
+  ns.Modules.set("panel", "showNoAddon", false) -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
   return db
@@ -54,6 +55,37 @@ end
 
 local function never() return "unknown" end
 local function different() return "different" end
+
+-- What the panel draws, one word each: "<heading>", "[guild 3]" / "[offline 2]" (+ " open"), or the member's key.
+local function has(list, value)
+  for _, v in ipairs(list) do if v == value then return true end end
+  return false
+end
+
+local function shape(entries)
+  local out = {}
+  for i, e in ipairs(entries) do
+    if e.head then out[i] = "<" .. e.head .. ">"
+    elseif e.bar then out[i] = "[" .. e.bar .. " " .. e.count .. (e.open and " open]" or "]")
+    else out[i] = e.key end
+  end
+  return out
+end
+
+local function rowIndexOf(ns, key)
+  for i, m in ipairs(ns.Panel.models()) do if m.key == key then return i end end
+end
+
+local function inMyParty(W, names)
+  W.state.inGroup = true
+  W.state.groupMembers = names
+  for i, n in ipairs(names) do W.state.units["party" .. i] = { name = n, player = true } end
+  W:fire("GROUP_ROSTER_UPDATE")
+end
+
+local function hear(ns, W, names)
+  for _, n in ipairs(names) do receive(ns, W, n, "STATE", { cl = "MAGE", lv = "12", zn = "Elwynn Forest" }) end
+end
 
 local NAMES = { "Ginkan", "Frostie", "Holyboi", "Pewpew", "Stabz", "Moonie", "Bubbles", "Axel", "Zapp", "Nimble",
   "Grumpy", "Holybøi" }
@@ -246,7 +278,7 @@ return {
       for i, s in ipairs(d.settings) do keys[i] = s.key end
       A.eq(keys, { "minimized", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "showXP",
         "xpText", "xpTooltip",
-        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
+        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
@@ -262,12 +294,12 @@ return {
       feedTwelve(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
-      A.eq(ns.Panel.headerText(), "12 of 12 online")
+      A.eq(ns.Panel.headerText(), "0 here \194\183 5 online", "nobody pinned or in my party; the guild members online")
       A.eq(#ns.Panel.models(), 12)
-      A.eq(ns.Panel.rowCountForTest(), ns.Config.PANEL_MAX_ROWS)
+      A.eq(ns.Panel.rowCountForTest(), ns.Config.PANEL_MAX_ROWS - 1, "the Guild online bar takes a slot")
       ns.Panel.scroll(-10)
       W:advance(1)
-      A.eq(ns.Panel.firstRowForTest(), 5)
+      A.eq(ns.Panel.firstRowForTest(), 6, "13 entries with the bar, 8 shown")
       W:fire("PLAYER_REGEN_DISABLED")
       W:advance(1)
       ns.Modules.set("panel", "rowStyle", "tiny")
@@ -277,6 +309,7 @@ return {
       A.eq(#ns.Panel.models(), 13)
       A.eq(ns.Panel.models()[1].name, "Twiz")
       ns.Modules.resetAll()
+      ns.Modules.set("panel", "showNoAddon", false)
       W:advance(31)
       A.eq(#ns.Panel.models(), 12, "my own row is off by default")
       A.eq(ns.Log.errors(10), {})
@@ -390,6 +423,157 @@ return {
       A.eq(rows[2].offlineText, "Offline, last seen " .. ns.Util.ago(100), "the addon's own record first")
       A.eq(rows[3].offlineText, "Offline")
     end,
+    ------------------------------------------------------------------------------------------ sections (frames)
+    frames_draw_party_pinned_guild_and_offline = function(ns, A, W)
+      start(ns, W)
+      hear(ns, W, { "Frostie", "Ginkan", "Lurabe", "Pewpew" })
+      inMyParty(W, { "Frostie" })
+      W:advance(1)
+      A.eq(ns.Panel.pin("Ginkan"), true)
+      W:advance(1)
+      A.eq(shape(ns.Panel.entriesForTest()), { "<My party>", "Frostie", "<Pinned>", "Ginkan", "[guild 2]" },
+        "the Guild online bar starts closed once there is a party and a pin")
+      A.ok(ns.Panel.guildBarForTest(), "its bar is drawn")
+      A.ok(ns.Panel.headFrameForTest("My party")); A.ok(ns.Panel.headFrameForTest("Pinned"))
+      A.eq(ns.Panel.headerText(), "2 here \194\183 5 online", "party and pinned here; me, 3 friends, 1 more on the list")
+      ns.Panel.toggleGuildOnline(); W:advance(1)
+      A.eq(ns.Modules.setting("panel", "showGuildOnline"), true, "remembered")
+      A.eq(shape(ns.Panel.entriesForTest()), { "<My party>", "Frostie", "<Pinned>", "Ginkan", "[guild 2 open]", "Lurabe", "Pewpew" })
+      local bar = ns.Panel.guildBarForTest()
+      bar._scripts.OnClick(bar, "LeftButton"); W:advance(1)
+      A.eq(ns.Modules.setting("panel", "showGuildOnline"), false, "a click on the bar closes it")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    pin_then_unpin_moves_the_row = function(ns, A, W)
+      local db = start(ns, W)
+      hear(ns, W, { "Frostie", "Lurabe" })
+      W:advance(1)
+      A.eq(shape(ns.Panel.entriesForTest()), { "[guild 2 open]", "Frostie", "Lurabe" }, "no party, no pins: the list is open")
+      A.eq(ns.Panel.rowPinForTest(1), "pin", "a green plus on a guild row")
+      local r = ns.Panel.rowFrameForTest(1) -- Frostie (the bar is not a row frame)
+      r.pin._scripts.OnClick(r.pin, "LeftButton"); W:advance(1)
+      A.eq(db.pins.Frostie, true, "saved per guild")
+      A.eq(ns.Panel.isPinned("Frostie"), true)
+      A.eq(shape(ns.Panel.entriesForTest()), { "<Pinned>", "Frostie", "[guild 1]" }, "closed bar: the pin moved up")
+      A.eq(ns.Panel.rowPinForTest(1), "unpin", "a star on a pinned row")
+      local items = {}
+      for _, it in ipairs(ns.Panel.rowMenu(ns.Panel.models()[rowIndexOf(ns, "Frostie")])) do items[#items + 1] = it.label end
+      A.ok(has(items, "Unpin"), "the menu says Unpin")
+      local star = ns.Panel.rowFrameForTest(1).pin
+      star._scripts.OnClick(star, "LeftButton"); W:advance(1)
+      A.eq(db.pins.Frostie, nil); A.eq(ns.Panel.isPinned("Frostie"), false)
+      A.eq(shape(ns.Panel.entriesForTest()), { "[guild 2 open]", "Frostie", "Lurabe" })
+      items = {}
+      for _, it in ipairs(ns.Panel.rowMenu(ns.Panel.models()[rowIndexOf(ns, "Lurabe")])) do items[#items + 1] = it.label end
+      A.ok(has(items, "Pin to main view"))
+      A.eq(ns.Panel.pin("Nobody"), false, "only guild members")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    pins_survive_a_reload = function(ns, A, W, H)
+      start(ns, W)
+      hear(ns, W, { "Frostie" })
+      W:advance(1)
+      ns.Panel.pin("Frostie")
+      W:fire("PLAYER_LOGOUT")
+      local saved = ns.Util.copy(ns.db)
+      local W2, ns2 = H.client("Twiz")
+      W2.state.guild = ns.Util.copy(W.state.guild)
+      W2.env.TwizCrewDB = saved
+      W2:fire("ADDON_LOADED", "TwizCrew"); W2:fire("PLAYER_LOGIN"); W2:fire("PLAYER_ENTERING_WORLD"); W2:advance(6)
+      A.eq(ns2.Panel.isPinned("Frostie"), true, "still pinned")
+      A.eq(ns2.db.pins.Frostie, true)
+    end,
+    pins_are_not_written_while_the_guild_is_not_active = function(ns, A, W)
+      W.state.guild = nil
+      local db = start(ns, W)
+      A.eq(ns.Panel.pin("Frostie"), false)
+      A.eq(next(db.pins), nil)
+      A.eq(ns.Panel.unpin("Frostie"), false)
+    end,
+    no_addon_rows_are_dimmed_and_say_so = function(ns, A, W)
+      start(ns, W)
+      ns.Modules.set("panel", "showNoAddon", true)
+      hear(ns, W, { "Frostie" })
+      W:advance(1)
+      A.eq(shape(ns.Panel.entriesForTest()), { "[guild 6 open]", "Chaos", "Frostie", "Ginkan", "Holybøi", "Lurabe", "Pewpew" },
+        "every other guild member online: the ones without the addon too")
+      local chaos = rowIndexOf(ns, "Chaos")
+      local m = ns.Panel.models()[chaos]
+      A.eq(m.noAddon, true)
+      local r = ns.Panel.rowFrameForTest(chaos)
+      A.eq(r:GetAlpha(), 0.55, "dimmed")
+      A.contains(r.zone:GetText(), "no addon")
+      A.eq(ns.Panel.rowPinForTest(chaos), "pin")
+      local labels = {}
+      for _, it in ipairs(ns.Panel.rowMenu(m)) do labels[#labels + 1] = it.label end
+      A.eq(labels, { "Whisper", "Invite to group", "Pin to main view" }, "whisper, invite and pin only")
+      local frostie = ns.Panel.models()[rowIndexOf(ns, "Frostie")]
+      A.eq(ns.Panel.rowFrameForTest(rowIndexOf(ns, "Frostie")):GetAlpha(), 1, "a member with the addon is not dimmed")
+      A.eq(frostie.noAddon, nil)
+      -- pinning a no-addon member works; the header counts them while they show
+      A.eq(ns.Panel.headerText(), "0 here \194\183 7 online")
+      ns.Modules.set("panel", "showNoAddon", false); W:advance(1)
+      A.eq(shape(ns.Panel.entriesForTest()), { "[guild 1 open]", "Frostie" }, "only the one who talked")
+    end,
+    show_no_addon_off_counts_follow = function(ns, A, W)
+      start(ns, W)
+      hear(ns, W, { "Frostie" })
+      ns.Modules.set("panel", "showNoAddon", true); W:advance(1)
+      local on = ns.Panel.headerText()
+      ns.Modules.set("panel", "showNoAddon", false); W:advance(1)
+      A.eq(on, "0 here \194\183 7 online")
+      A.eq(ns.Panel.headerText(), "0 here \194\183 2 online", "me and Frostie")
+      A.eq(#ns.Panel.models(), 1)
+    end,
+    not_in_a_guild_shows_the_one_line = function(ns, A, W)
+      W.state.guild = nil
+      start(ns, W)
+      W:advance(1)
+      A.eq(ns.Panel.isShown(), true)
+      A.eq(ns.Panel.noteForTest(), "TwizCrew works inside a guild. Join one and it starts by itself.")
+      A.eq(#ns.Panel.entriesForTest(), 0)
+      A.eq(ns.Panel.rowCountForTest(), 0)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    pretend_friends_still_show_without_a_usable_guild = function(ns, A, W)
+      W.state.guild = nil
+      start(ns, W)
+      W.env.SlashCmdList.TWIZCREW("test fake")
+      W:advance(1)
+      local seen = {}
+      for _, m in ipairs(ns.Panel.models()) do seen[#seen + 1] = m.key end
+      A.ok(#seen >= 1, "the fake is a row")
+      A.contains(ns.Panel.noteForTest(), "works inside a guild", "with the line under it")
+      A.eq(ns.Panel.guildBarForTest(), nil, "no guild bar without a guild")
+    end,
+    party_member_outside_the_guild_is_not_shown = function(ns, A, W)
+      start(ns, W)
+      hear(ns, W, { "Frostie" })
+      inMyParty(W, { "Frostie", "Stranger" })
+      W.state.units.party2 = { name = "Stranger", player = true }
+      W:advance(1)
+      local keys = {}
+      for _, m in ipairs(ns.Panel.models()) do keys[#keys + 1] = m.key end
+      A.eq(keys, { "Frostie" }, "Stranger is in my party but not in the guild")
+      A.eq(shape(ns.Panel.entriesForTest()), { "<My party>", "Frostie" })
+    end,
+    fifty_online_members_scroll_and_do_not_error = function(ns, A, W)
+      local members = { { name = "Twiz", online = true, guid = "Player-1-0001" } }
+      for i = 1, 50 do
+        members[#members + 1] = { name = "Mem" .. string.char(64 + (i % 26) + 1) .. i, online = true, guid = "Player-1-" .. (100 + i) }
+      end
+      W.state.guild = { name = "Big Guild", members = members }
+      start(ns, W)
+      ns.Modules.set("panel", "showNoAddon", true)
+      for i = 2, 51 do receive(ns, W, members[i].name, "STATE", { cl = "MAGE", lv = "12" }) end
+      W:advance(2)
+      A.eq(#ns.Panel.models(), 50)
+      A.eq(ns.Panel.rowCountForTest(), ns.Config.PANEL_MAX_ROWS - 1, "one slot is the bar")
+      ns.Panel.scroll(-100); W:advance(1)
+      A.eq(ns.Panel.firstRowForTest(), 51 - ns.Config.PANEL_MAX_ROWS + 1, "51 entries (the bar and 50 rows), scrolled to the end")
+      A.eq(ns.Panel.headerText(), "0 here \194\183 51 online")
+      A.eq(ns.Log.errors(10), {})
+    end,
     panel_draws_level_progress_in_every_style = function(ns, A, W)
       start(ns, W)
       ns.Modules.set("panel", "showSelf", false)
@@ -409,6 +593,7 @@ return {
       ns.Modules.set("panel", "rowStyle", "full"); W:advance(1)
       A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "full without numbers: as before")
       ns.Modules.resetAll(); W:advance(1)
+      ns.Modules.set("panel", "showNoAddon", false)
       A.eq(ns.Modules.setting("panel", "xpText"), true)
       ns.Modules.set("panel", "showSelf", false)
       receive(ns, W, "Ginkan", "UPDATE", { lv = "60", xm = "0", xc = "0", xp = "0" }); W:advance(1)
@@ -520,7 +705,7 @@ return {
       start(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
-      A.eq(ns.Panel.headerText(), "0 of 0 online")
+      A.eq(ns.Panel.headerText(), "0 here \194\183 1 online")
       ns.Modules.set("panel", "hideWhenAlone", true); W:advance(1)
       A.eq(ns.Panel.isShown(), false)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)

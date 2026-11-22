@@ -30,6 +30,7 @@ local function ready(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.panel.settings.showNoAddon = false -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(40)
 end
@@ -126,7 +127,7 @@ return {
       A.eq(ns.Panel.newsLineForTest(), nil, "the What's new line is hidden")
       A.eq(ns.Panel.updateLineForTest(), nil, "and the update line")
       A.ok(ns.Panel.isShown())
-      A.eq(ns.Panel.barTextForTest(), "1 of 1 online", "the title bar keeps the online count")
+      A.eq(ns.Panel.barTextForTest(), "0 here \194\183 2 online", "the title bar keeps the count (nobody pinned or in my party; me and a friend online)")
       tc(W, "mini")
       W:advance(1)
       A.eq(ns.Panel.viewForTest(), "full")
@@ -218,7 +219,7 @@ return {
       end
       ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
       A.eq(ns.Panel.titleVersionForTest(), "", "tiny: no version on the bar")
-      A.ok(ns.Panel.barTextForTest() == "0 of 0 online" or ns.Panel.barTextForTest() == "0/0")
+      A.ok(ns.Panel.barTextForTest() == "0 here \194\183 1 online" or ns.Panel.barTextForTest() == "0/1")
       -- fade: no error, and the bar keeps working
       ns.Modules.set("panel", "fadeOut", true); W:advance(1)
       -- panel off and on
@@ -246,7 +247,7 @@ return {
       A.ok(ns.Panel.noticeForTest(), "still there before 6 s")
       W:advance(1.5)
       A.eq(ns.Panel.noticeForTest(), nil, "gone after about 6 s")
-      A.eq(ns.Panel.barTextForTest(), "1 of 1 online", "the count is back")
+      A.ok(ns.Panel.barTextForTest() == "0 here \194\183 2 online" or ns.Panel.barTextForTest() == "0/2", "the count is back")
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -456,6 +457,26 @@ return {
       A.eq(ns.Panel.viewForTest(), "mini", "closed again after 5 s")
       A.eq(root(ns).tcH, 24)
       A.eq(ns.Panel.peekForTest(), nil)
+    end,
+
+    peek_finds_the_friend_in_any_section_with_the_guild_bar_closed = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie"); friend(W, ns, "Ginkan")
+      ns.Panel.pin("Ginkan"); W:advance(1)
+      A.eq(ns.Panel.guildBarForTest() ~= nil, true, "the Guild online bar is there, closed (Ginkan is pinned)")
+      A.eq(ns.Modules.setting("panel", "showGuildOnline"), false)
+      ns.Panel.toggleMinimized(); W:advance(1)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.viewForTest(), "peek")
+      A.eq(ns.Panel.rowCountForTest(), 1, "only that friend's row, though his section is closed")
+      A.eq(ns.Panel.models()[1].key, "Frostie")
+      A.eq(ns.Panel.guildBarForTest(), nil, "no bars in a peek")
+      W:advance(8)
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.models()[1].key, "Ginkan", "a pinned friend too")
+      A.eq(ns.Log.errors(10), {})
     end,
 
     peek_seconds_and_switch = function(ns, A, W)

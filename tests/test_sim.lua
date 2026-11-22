@@ -60,8 +60,8 @@ local function seeEachOther(H, A, c)
   local t = c.frNs.roster:get("Twiz")
   A.ok(t, "Frostie knows Twiz")
   A.eq(t.class, "WARRIOR"); A.eq(t.level, 10); A.eq(t.zone, "Elwynn Forest"); A.ok(t.online)
-  A.eq(c.twNs.Panel.headerText(), "1 of 1 online")
-  A.eq(c.frNs.Panel.headerText(), "1 of 1 online")
+  A.eq(c.twNs.Panel.headerText(), "0 here \194\183 2 online")
+  A.eq(c.frNs.Panel.headerText(), "0 here \194\183 2 online")
   A.ok(rowOf(c.twNs, "Frostie"), "Frostie has a row on Twiz's panel")
 end
 
@@ -122,7 +122,7 @@ local function newerVersion(H, A, c)
   end
   A.ok(found, "Twiz was told about the newer version")
   A.eq(c.twNs.Version.summary(), "Pewpew has v0.2.0, you have v0.1.0. Update in WowUp.")
-  A.eq(c.twNs.Panel.headerText(), "2 of 2 online")
+  A.eq(c.twNs.Panel.headerText(), "0 here \194\183 3 online")
   return pwNs
 end
 
@@ -399,7 +399,7 @@ return {
         local m = pair[1].roster:get(pair[2])
         A.ok(m and m.online, pair[1].playerName() .. " sees " .. pair[2])
       end
-      A.eq(giNs.Panel.headerText(), "2 of 2 online")
+      A.eq(giNs.Panel.headerText(), "0 here \194\183 3 online")
       local hellos = 0
       for _, m in ipairs(gi.sent) do
         if m.text:find("^%d+%^HELLO%^") then hellos = hellos + 1; A.eq(m.chatType, "GUILD") end
@@ -640,7 +640,7 @@ return {
       tc(c.fr, "")
       local pwNs = newerVersion(H, A, c)
       H.advance(200)           -- pings, offline ticks, layer ticks
-      A.eq(c.twNs.Panel.headerText(), "2 of 2 online", "pings keep everyone online")
+      A.eq(c.twNs.Panel.headerText(), "0 here \194\183 3 online", "pings keep everyone online")
       noErrors(A, c.twNs, c.frNs, pwNs)
     end,
   },

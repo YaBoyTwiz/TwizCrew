@@ -10,6 +10,7 @@ local function start(ns, W)
   ns.Self.start()
   ns.LayerSensor.start()
   ns.Modules.startAll()
+  ns.Modules.set("panel", "showNoAddon", false) -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
   return db

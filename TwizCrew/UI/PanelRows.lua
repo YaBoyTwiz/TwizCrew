@@ -13,8 +13,13 @@ local setting, clamp, script, openMenu, draggable = P.setting, P.clamp, P.script
 local requestRedraw, rowFrames = P.requestRedraw, P.rowFrames
 
 local ICON_SIZE = { full = 26, compact = 23, tiny = 19 }
+local DOT = "\194\183" -- the middle dot "·"
 local ARROW_TEXTURE = "Interface\\Minimap\\MinimapArrow" -- the row arrow to a group member (Find the crew)
 local ARROW_SIZE = 26 -- big enough to read at a glance
+local PIN_SIZE = 16
+local PIN_ROOM = PIN_SIZE + 4 -- what a pin button takes from the corner texts
+local PIN_PLUS = "Interface\\Buttons\\UI-PlusButton-Up"
+local PIN_STAR = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1" -- the yellow star
 local arrowTicker -- turns the visible row arrows between redraws (Find the crew)
 ---------------------------------------------------------------------------------------------------------- rows
 local function createRow()
@@ -118,6 +123,26 @@ local function createRow()
   script(r.arrow, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   r.arrow:Hide()
   r.arrow.dist:Hide()
+  -- Pin: a green "+" on a guild or offline row (pin to the main view), a gold star on a pinned one (unpin)
+  r.pin = T.frame("Button", nil, r)
+  r.pin:SetSize(PIN_SIZE, PIN_SIZE)
+  r.pin:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
+  r.pin.icon = r.pin:CreateTexture(nil, "ARTWORK")
+  r.pin.icon:SetAllPoints(r.pin)
+  local pinHl = r.pin:CreateTexture(nil, "HIGHLIGHT")
+  pinHl:SetAllPoints(r.pin)
+  T.color(pinHl, C.white, 0.25)
+  script(r.pin, "OnClick", function(self) Panel.pinClicked(self:GetParent()) end)
+  script(r.pin, "OnEnter", function(self)
+    local m = self:GetParent().tcModel
+    if not GameTooltip or not m then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    GameTooltip:SetText(m.pinAction == "unpin" and "Unpin" or "Pin to main view")
+    GameTooltip:Show()
+  end)
+  script(r.pin, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  r.pin:Hide()
+  if r.pin.SetIgnoreParentAlpha then r.pin:SetIgnoreParentAlpha(true) end -- easy to spot on a dimmed row
   r.name = T.text(r, T.FONT.normal)
   r.level = T.text(r, T.FONT.small, C.title)
   r.zone = T.text(r, T.FONT.small, C.zone)
@@ -226,8 +251,8 @@ local DIST_WIDTH = 44 -- room for "999 yd" / "1.2k yd", so a changing distance n
 -- The row arrow for a model (Find the crew), worked out in that module's own guard: an error there means "no
 -- arrow", never a broken panel.
 local function rowArrow(m, me, facing)
-  if type(m) ~= "table" or m.offline or not ns.Find or not ns.Find.arrowFor then return nil end
-  local ok, a = ns.Log.safe("find", ns.Find.arrowFor, m.name, me, facing)
+  if type(m) ~= "table" or m.offline or m.noAddon or not ns.Find or not ns.Find.arrowFor then return nil end
+  local ok, a = ns.Log.safe("find", ns.Find.arrowFor, m.key or m.name, me, facing)
   if ok and type(a) == "table" then return a end
   return nil
 end
@@ -237,7 +262,7 @@ local function paintArrow(r, a, m, withDist)
   local cr, cg, cb = T.classColor(m.class)
   r.arrow.tex:SetVertexColor(math.min(1, cr + 0.25), math.min(1, cg + 0.25), math.min(1, cb + 0.25))
   -- running off: flashing red and yellow, pulsing bigger, until the alarm runs out
-  local alarm = ns.Find and ns.Find.isRunningOff and ns.Find.isRunningOff(m.name)
+  local alarm = ns.Find and ns.Find.isRunningOff and ns.Find.isRunningOff(m.key or m.name)
   r.tcAlarm = alarm or nil
   if alarm then
     local t = ns.now()
@@ -305,13 +330,23 @@ local function layoutRow(r, m, style, s, width)
   if style ~= "full" and m.xpText then corner = m.xpText
   elseif style ~= "tiny" and m.level and not (style == "full" and m.xpText) then corner = tostring(m.level) end
   r.tcCorner = corner
-  local roomRight = style == "tiny" and 8 or 34
+  local pinRoom = m.pinAction and PIN_ROOM or 0
+  local roomRight = (style == "tiny" and 8 or 34) + pinRoom
+  if m.pinAction then
+    r.pin.icon:SetTexture(m.pinAction == "unpin" and PIN_STAR or PIN_PLUS)
+    if m.pinAction == "unpin" then r.pin.icon:SetVertexColor(1, 1, 1) else r.pin.icon:SetVertexColor(0.3, 1, 0.4) end
+    r.pin:ClearAllPoints()
+    r.pin:SetPoint("RIGHT", r, "TOPRIGHT", -6, -(5 + icon / 2))
+    r.pin:Show()
+  else
+    r.pin:Hide()
+  end
   if corner then
     r.level:ClearAllPoints()
-    r.level:SetPoint("RIGHT", r, "TOPRIGHT", -8, -(5 + icon / 2))
+    r.level:SetPoint("RIGHT", r, "TOPRIGHT", -8 - pinRoom, -(5 + icon / 2))
     r.level:SetText(corner)
     r.level:Show()
-    roomRight = math.max(roomRight, textWidth(r.level, corner) + 14)
+    roomRight = math.max(roomRight, textWidth(r.level, corner) + 14 + pinRoom)
   else
     r.level:Hide()
   end
@@ -319,7 +354,7 @@ local function layoutRow(r, m, style, s, width)
   local a = rowArrow(m)
   r.tcArrow = a
   if a then
-    local right = corner and (textWidth(r.level, corner) + 12) or 8
+    local right = (corner and (textWidth(r.level, corner) + 12) or 8) + pinRoom
     r.arrow:ClearAllPoints()
     r.arrow:SetPoint("RIGHT", r, "TOPRIGHT", -right, -(5 + icon / 2))
     local withDist = not a.still and style ~= "tiny"
@@ -355,6 +390,9 @@ local function layoutRow(r, m, style, s, width)
   r.tcBarText = nil
   if style == "full" then
     local line = m.offline and m.offlineText or (s.showZone and m.zoneText ~= "" and m.zoneText)
+    if m.noAddon then -- the guild list's zone (or last seen) and the words "no addon"
+      line = (line or "") .. ((line and line ~= "") and "  " .. DOT .. "  " or "") .. "no addon"
+    end
     if line then placeLine(r, r.zone, line, y, width); y = y + LINE end
     if not m.offline and s.showStatus and m.status ~= "" then
       placeLine(r, r.status, '"' .. m.status .. '"', y, width)
@@ -429,7 +467,7 @@ local function layoutRow(r, m, style, s, width)
   if away and not m.offline then r.afk:Show() else r.afk:Hide() end
   local dead = false
   for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
-  local mockOn = dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.name)
+  local mockOn = dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.key or m.name)
   if mockOn then
     r.mock:ClearAllPoints()
     r.mock:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)
@@ -438,7 +476,7 @@ local function layoutRow(r, m, style, s, width)
     r.mock:Hide()
   end
   r.tcCheer = nil
-  if m.dinged and not m.offline and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(m.name) then
+  if m.dinged and not m.offline and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(m.key or m.name) then
     r.cheer:ClearAllPoints()
     if mockOn then
       r.cheer:SetPoint("RIGHT", r.mock, "LEFT", -4, 0)
@@ -450,7 +488,7 @@ local function layoutRow(r, m, style, s, width)
   else
     r.cheer:Hide()
   end
-  r:SetAlpha(m.offline and 0.4 or (away and 0.75 or 1))
+  r:SetAlpha(m.offline and 0.4 or (m.noAddon and 0.55 or (away and 0.75 or 1)))
   layoutPills(r, m.tags)
   return height
 end
@@ -469,7 +507,7 @@ function Panel.showRowTip(r)
   for _, line in ipairs(m.info or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
   -- live: how far they are (group members, Find the crew)
   if ns.Find and ns.Find.arrowFor and not m.offline then
-    local ok, a = pcall(ns.Find.arrowFor, m.name)
+    local ok, a = pcall(ns.Find.arrowFor, m.key or m.name)
     if ok and type(a) == "table" and type(a.text) == "string" and a.text ~= "" then
       GameTooltip:AddLine("Distance: " .. a.text, cr, cg, cb)
     end
@@ -549,10 +587,16 @@ end
 function Panel.arrowClicked(r)
   local m = r and r.tcModel
   if not m or not ns.BigArrow then return end
-  ns.Log.safe("find", ns.BigArrow.toggle, m.name)
+  ns.Log.safe("find", ns.BigArrow.toggle, m.key or m.name)
 end
 
 function Panel.rowFrameForTest(i) return rowFrames[i] end
+-- The pin button of row i: nil when hidden, else its action ("pin" | "unpin") as drawn.
+function Panel.rowPinForTest(i)
+  local r = rowFrames[i]
+  if not r or i > P.visibleRows or not r.pin:IsShown() then return nil end
+  return rawget(r, "tcModel").pinAction
+end
 -- What row i shows as level / XP text: { corner = top-right text, bar = text next to the XP bar } (nil = hidden).
 function Panel.rowTextsForTest(i)
   local r = rowFrames[i]

@@ -22,6 +22,8 @@ local MENU_ICONS = {
   { "^Congratulate", "Interface\\Icons\\INV_Misc_Gift_01" },
   { "^Mock", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01" },
   { "^Add to friends", "Interface\\Icons\\Spell_Holy_GreaterHeal" },
+  { "^Pin to main view", "Interface\\Buttons\\UI-PlusButton-Up" },
+  { "^Unpin", "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1" },
   { "^Forget this friend", "Interface\\Icons\\INV_Misc_Bone_HumanSkull_02" },
   { "set my status", "Interface\\Icons\\INV_Misc_Note_01" },
   { "^Set my status", "Interface\\Icons\\INV_Misc_Note_01" },
@@ -236,7 +238,7 @@ end
 -- The right-click menu of a row: what you can do for (or to) that friend right now.
 function Panel.rowMenu(m)
   local items = {}
-  local name = m and m.name
+  local name = m and (m.key or m.name)
   if type(name) ~= "string" or name == "" then return items end
   if ns.isMe(name) then
     items[#items + 1] = { label = "Set my status", onClick = function() Panel.openStatusBox() end }
@@ -245,6 +247,23 @@ function Panel.rowMenu(m)
     return compact(items)
   end
   local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name
+  local function pinItem()
+    if m.pinAction == "unpin" then
+      items[#items + 1] = { label = "Unpin", onClick = function() Panel.unpin(name) end }
+    elseif m.pinAction == "pin" then
+      items[#items + 1] = { label = "Pin to main view", onClick = function() Panel.pin(name) end }
+    end
+  end
+  if m.noAddon then -- nothing is known about them but the guild list: whisper, invite, pin
+    if not m.offline then
+      items[#items + 1] = { label = "Whisper", onClick = function() ns.Util.whisper(name) end }
+      if not inMyGroup(name) then
+        items[#items + 1] = { label = "Invite to group", onClick = function() inviteName(full) end }
+      end
+    end
+    pinItem()
+    return compact(items)
+  end
   if not m.offline then
     items[#items + 1] = { label = "Whisper", onClick = function() ns.Util.whisper(name) end }
     if not inMyGroup(name) then
@@ -282,6 +301,7 @@ function Panel.rowMenu(m)
       end }
     end
   end
+  pinItem()
   items[#items + 1] = { label = "Add to friends", onClick = function() addFriend(full) end }
   if m.offline then
     items[#items + 1] = { label = "Forget this friend", onClick = function()
@@ -311,7 +331,7 @@ function Panel.askShare(r)
   if not m or not m.questName or not ns.Quest or not ns.Quest.request then return end
   if m.questShare == "no" then print("TwizCrew: no use asking: " .. tostring(m.questWhy or "you can't get it") .. "."); return end
   if m.questShare == "same" then print("TwizCrew: you're on that quest too."); return end
-  ns.Quest.request(m.name, m.questName)
+  ns.Quest.request(m.key or m.name, m.questName)
 end
 
 function Panel.rowShareShownForTest(i)
@@ -320,12 +340,21 @@ function Panel.rowShareShownForTest(i)
   return rawget(r, "tcShare") -- "yes" | "no" | "same" | nil
 end
 
+-- The pin button on a row: the "+" pins that member, the star unpins them.
+function Panel.pinClicked(r)
+  local m = r and r.tcModel
+  if not m then return end
+  if m.pinAction == "unpin" then Panel.unpin(m.key or m.name)
+  elseif m.pinAction == "pin" then Panel.pin(m.key or m.name) end
+end
+
 -- The Congrats button (or menu entry): congratulate them once; the button goes away.
 function Panel.cheer(r)
   local m = r and r.tcModel
   if not m or not ns.Roasts or not ns.Roasts.cheer then return end
-  if ns.Roasts.cheer(m.name) then
-    cheered[m.name] = true
+  local key = m.key or m.name
+  if ns.Roasts.cheer(key) then
+    cheered[key] = true
     requestRedraw()
   end
 end
@@ -338,7 +367,9 @@ end
 function Panel.mock(r)
   local m = r and r.tcModel
   if not m or not ns.Roasts then return end
-  if not ns.Roasts.mock(m.name) then print("TwizCrew: give it a few seconds before mocking " .. m.name .. " again.") end
+  if not ns.Roasts.mock(m.key or m.name) then
+    print("TwizCrew: give it a few seconds before mocking " .. m.name .. " again.")
+  end
 end
 
 function Panel.toggleAway()

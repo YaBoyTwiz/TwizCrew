@@ -3,6 +3,7 @@
 local function boot(W)
   W:fire("ADDON_LOADED", "TwizCrew")
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.panel.settings.showNoAddon = false -- these tests are about friends who talk, not "no addon" rows
   W.env.TwizCrewDB.modules.tags.settings.autoAway = false -- no mouse in the fake game: not idle-away (AFK time counts)
   W:fire("PLAYER_ENTERING_WORLD")
 end
@@ -179,6 +180,7 @@ return {
       ns.Bus.on("test", "TROPHIES_CHANGED", function() fired = fired + 1 end)
       local small = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Twiz" }, winners = { corpse = { "Twiz" } } }
       ns.Trophies.records()["Twiz-500"] = small
+      ns.Bus.fire("GUILD_LIST") -- (a direct write: drop the summary the panel's first draw already built)
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy")
       -- same number of people: the smaller checksum wins (on every copy)
       local tie = { sid = "Twiz-500", start = 500, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }
@@ -230,6 +232,7 @@ return {
       boot(W)
       local recs = ns.Trophies.records()
       recs.a = { sid = "a", start = 1, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Twiz" } } }
+      ns.Bus.fire("GUILD_LIST") -- (a direct write: drop the summary the panel's first draw already built)
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy")
       recs.b = { sid = "b", start = 2, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Twiz" } } }
       ns.Trophies.sessionEnded("zzz") -- nothing to record; also must not break
@@ -290,6 +293,7 @@ return {
       local late = { sid = "Twiz-500", start = 500, people = { "Ginkan", "Lurabe", "Twiz" },
         winners = { corpse = { "Twiz" } }, late = true }
       ns.Trophies.records()["Twiz-500"] = late
+      ns.Bus.fire("GUILD_LIST") -- (a direct write: drop the summary the panel's first draw already built)
       A.eq(ns.Trophies.lineFor("Twiz"), "1 trophy")
       -- a full record replaces a late one, even with fewer people
       local full = { sid = "Twiz-500", start = 500, people = { "Lurabe", "Twiz" }, winners = { corpse = { "Lurabe" } } }

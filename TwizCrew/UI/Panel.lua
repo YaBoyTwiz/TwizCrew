@@ -1,4 +1,6 @@
--- The Crew panel: a movable window with one row per friend. Registers the module "panel".
+-- The Crew panel: a movable window with one row per guild member, in four sections: My party, Pinned (online),
+-- the "Guild online (N)" bar and its rows, the "Offline (N)" bar and its rows (rules: UI/PanelLogic.lua). Guild
+-- members without the addon are rows too, dimmed. Pins are saved per guild (ns.db.pins). Registers the module "panel".
 -- Hiding the panel = turning the module off. Redraws are coalesced: many requests in one frame -> one redraw.
 -- While the stats module is on, two tabs sit under the header: "Crew" (the rows, with award titles under the
 -- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved.
@@ -20,7 +22,8 @@ local C = T.COLOR
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 15
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
-local OFF_HEIGHT = 20    -- the "Offline (N)" bar between online and offline friends
+local OFF_HEIGHT = 20    -- the "Guild online (N)" and "Offline (N)" bars
+local HEAD_HEIGHT = 14   -- the thin "My party" / "Pinned" headings
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
@@ -28,7 +31,8 @@ local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTE
 local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
-  "MEMBER_REMOVED", "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED" }
+  "MEMBER_REMOVED", "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED", "GUILD_LIST", "GUILD_STATE",
+  "PINS_CHANGED" }
 P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD, P.LINE = ROW_WIDTH, HEADER_HEIGHT, PAD, LINE
 
 -- Shared state (set and read by more than one of the panel's files)
@@ -51,8 +55,9 @@ P.peek = nil           -- { name, untilT, held } while a friend's row is dropped
 P.curView = "full"     -- see settle()
 
 local noteText
-local offBar -- the "Offline (N)" bar
-local offBarShown, entries = false, {}
+local offBar, guildBar -- the "Offline (N)" and "Guild online (N)" bars
+local offBarShown, guildBarShown, entries = false, false, {}
+local headFrames = {}      -- "My party" / "Pinned" heading -> its frame
 local CHEER_FOR = 300 -- seconds the Congrats button stays on a friend's row after they level up
 local dingAt, cheered = {}, {} -- name -> when they leveled up; name -> true once we congratulated them
 P.cheered = cheered
@@ -280,6 +285,7 @@ local function hide()
   end
   if P.tipRow then Panel.hideRowTip(P.tipRow) end
   P.shown = false
+  if ns.Guild then ns.Guild.setWatched(false) end
   P.syncBarTicker()
   note = nil
   P.stopArrowTicker()
@@ -293,6 +299,7 @@ end
 local function settle(height)
   curHeight = height
   local now = minimized() and "mini" or "full"
+  if ns.Guild then ns.Guild.setWatched(now == "full") end -- the list is read often only while the panel is open
   if now == "full" then
     fullHeight = height
     if ns.db then ns.db.panelFullHeight = height end
@@ -314,13 +321,59 @@ local function settle(height)
   if now == "mini" then applyPosition() end
 end
 
+---------------------------------------------------------------------------------------------------------- who is shown
+local function pinsOf()
+  local g = ns.Guild
+  if g and g.active() and ns.db and type(ns.db.pins) == "table" then return ns.db.pins end
+  return nil
+end
+
+-- Keys (of these rows) that are in my party or raid. Only asked while grouped (or for a pretend friend), the game's
+-- group check is not free.
+local function partyOf(keys)
+  local set, any = {}, false
+  local grouped = ns.Where ~= nil and ns.Where.inGroup() or false
+  for key in pairs(keys) do
+    if ns.Where and (grouped or ns.isTestName(key)) and ns.Where.isGroupMember(key) then set[key] = true; any = true end
+  end
+  return set, grouped or any
+end
+
+-- The members to draw (roster rows, the guild's members without the addon, in the sort order) and what the rows need to
+-- know (Logic.rows ctx). Not in a usable guild: only the pretend friends (test tools), listed flat.
+local function crewOf(s, active)
+  local list, extra = {}, {}
+  for _, m in ipairs(ns.roster and ns.roster:members(true) or {}) do
+    if active or ns.isTestName(m.name) then list[#list + 1] = m end
+  end
+  if active then
+    local have = {}
+    for _, m in ipairs(list) do have[m.name] = true end
+    extra = Logic.noAddonMembers(ns.Guild.members(), have, ns.myKey())
+    for _, m in ipairs(extra) do list[#list + 1] = m end
+  end
+  ns.Roster.sortList(list, s.sort, relationOf)
+  local keys = {}
+  for _, m in ipairs(list) do if m.online then keys[m.name] = true end end
+  local party, grouped = partyOf(keys)
+  local ctx = { party = party, pins = pinsOf(), canPin = active, display = active and ns.Guild.display or nil,
+    get = active and ns.Guild.get or nil }
+  return list, extra, ctx, grouped
+end
+
+local function hideChrome()
+  offBar:Hide(); guildBar:Hide()
+  offBarShown, guildBarShown = false, false
+  for _, f in pairs(headFrames) do f:Hide() end
+end
+
 local function redraw()
   redraws = redraws + 1
   if not P.root or not P.enabled then return end
   if not statsOn() then tab = "crew" end
   local s = allSettings()
-  local online, total = 0, 0
-  if ns.roster then online, total = ns.roster:onlineCount() end
+  local online = 0
+  if ns.roster then online = ns.roster:onlineCount() end
   if not Logic.visible(s, { inCombat = P.inCombat, inInstance = inDungeon(), onlineCount = online }) then
     hide()
     return
@@ -332,44 +385,59 @@ local function redraw()
   local view = Logic.view({ minimized = minimized(), hover = P.hoverOpen and s.barHover == true,
     peek = peekMember ~= nil and P.bar ~= nil, inCombat = P.inCombat })
   P.curView = view
-  local members = ns.roster and ns.roster:sorted(s.sort, relationOf) or {}
-  if s.showSelf and ns.Self then
+  local active = ns.Guild ~= nil and ns.Guild.active()
+  local members, extra, ctx, grouped = crewOf(s, active)
+  if s.showSelf and ns.Self and active then
     table.insert(members, 1, Logic.selfMember(ns.myKey(), ns.Self.lastSent()))
   end
-  local rowSettings = s
+  local hidden
+  models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+    titleOf(), ns.maxLevel(), ctx)
+  -- the header: people in the main view, guild members online (the count follows the no-addon setting)
+  local here, onlineAll = 0, 0
+  for _, m in ipairs(models) do
+    if not m.offline and (not active or m.section == "party" or m.section == "pinned") then here = here + 1 end
+  end
+  if active then
+    onlineAll = Logic.guildOnline((ns.Guild.count()), extra, s.showNoAddon)
+    for _, m in ipairs(members) do if m.online and ns.isTestName(m.name) then onlineAll = onlineAll + 1 end end
+  else
+    onlineAll = online
+  end
   if view == "peek" then
-    members = { peekMember }
-    rowSettings = {}
+    local rowSettings = {}
     for k, v in pairs(s) do rowSettings[k] = v end
     rowSettings.showOffline = true
+    models = Logic.rows({ peekMember }, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+      titleOf(), ns.maxLevel(), ctx)
   end
-  local hidden
-  models, hidden = Logic.rows(members, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
-    titleOf(), ns.maxLevel())
   local now = ns.now()
   for _, m in ipairs(models) do
-    local at = dingAt[m.name]
-    if at and not m.offline and not cheered[m.name] and now - at < CHEER_FOR then m.dinged = true end
+    local at = dingAt[m.key]
+    if at and not m.offline and not cheered[m.key] and now - at < CHEER_FOR then m.dinged = true end
   end
   if ns.Trophies then
     for _, m in ipairs(models) do
-      local line = ns.Trophies.lineFor(m.name)
+      local line = ns.Trophies.lineFor(m.key)
       if line then
         m.tip = m.tip or {}
         m.tip[#m.tip + 1] = line
       end
     end
   end
-  entries = view == "peek" and models or Logic.entries(models, { flat = true, offlineOpen = s.showOffline ~= false, hiddenOffline = hidden })
-  P.header = Logic.headerText(online, total)
-  P.headerShort = (online or 0) .. "/" .. (total or 0)
+  entries = view == "peek" and models or Logic.entries(models, { inGroup = grouped, guildOpen = s.showGuildOnline == true,
+    offlineOpen = s.showOffline ~= false, hiddenOffline = hidden, flat = not active })
+  P.header = Logic.headerCount(here, onlineAll)
+  P.headerShort = Logic.headerCount(here, onlineAll, true)
   P.countText:SetText(P.header)
+  local stateLine = Logic.stateLine({ inGuild = ns.Guild ~= nil and ns.Guild.inGuild(), active = active,
+    needsReload = ns.Guild ~= nil and ns.Guild.needsReload(), guildName = ns.Guild and (ns.Guild.name() or ns.Guild.id()) })
 
   local top = P.drawHeader(s, view)
   if view == "mini" then
     for _, r in ipairs(rowFrames) do r:Hide() end
     if P.tipRow then Panel.hideRowTip(P.tipRow) end
-    offBar:Hide(); offBarShown = false
+    hideChrome()
     noteText:Hide(); note = nil
     if ns.Board then ns.Log.safe("board", ns.Board.hide) end
     if P.tabBar then P.tabBar:Hide() end
@@ -396,7 +464,7 @@ local function redraw()
 
   if tab == "shame" and view == "full" then
     for _, r in ipairs(rowFrames) do r:Hide() end
-    offBar:Hide(); offBarShown = false
+    hideChrome()
     if P.tipRow then Panel.hideRowTip(P.tipRow) end
     P.visibleRows = 0
     P.stopArrowTicker()
@@ -433,17 +501,25 @@ local function redraw()
   local alpha = clamp(s.bgAlpha, 0, 1, 0.8)
   local y = top + GAP
   local used = 0
-  offBarShown = false
+  hideChrome()
   for i = first, last do
     local e = entries[i]
-    if e.bar then
-      offBar:ClearAllPoints()
-      offBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -y)
-      offBar:SetSize(width, OFF_HEIGHT)
-      offBar.text:SetText(Logic.offlineBarText(e.count, e.open))
-      offBar.icon:SetTexture(e.open and "Interface\\Buttons\\UI-MinusButton-Up" or "Interface\\Buttons\\UI-PlusButton-Up")
-      offBar:Show()
-      offBarShown = true
+    if e.head then
+      local f = headFrames[e.head]
+      f:ClearAllPoints()
+      f:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -y)
+      f:SetSize(width, HEAD_HEIGHT)
+      f:Show()
+      y = y + HEAD_HEIGHT + 4
+    elseif e.bar then
+      local bar = e.bar == "guild" and guildBar or offBar
+      bar:ClearAllPoints()
+      bar:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -y)
+      bar:SetSize(width, OFF_HEIGHT)
+      bar.text:SetText(e.bar == "guild" and Logic.guildBarText(e.count, e.open) or Logic.offlineBarText(e.count, e.open))
+      bar.icon:SetTexture(e.open and "Interface\\Buttons\\UI-MinusButton-Up" or "Interface\\Buttons\\UI-PlusButton-Up")
+      bar:Show()
+      if e.bar == "guild" then guildBarShown = true else offBarShown = true end
       y = y + OFF_HEIGHT + GAP
     else
       used = used + 1
@@ -457,7 +533,6 @@ local function redraw()
       y = y + h + GAP
     end
   end
-  if not offBarShown then offBar:Hide() end
   for i = used + 1, #rowFrames do
     rowFrames[i]:Hide()
     if P.tipRow == rowFrames[i] then Panel.hideRowTip(P.tipRow) end
@@ -469,8 +544,9 @@ local function redraw()
   note = nil
   if view == "peek" then
     -- no note under a peeked row
-  elseif #entries == 0 then note = "No crew yet. Friends show up here when they play with TwizCrew."
-  elseif #entries == 1 and entries[1].bar then note = "Nobody else is online right now."
+  elseif stateLine then note = stateLine
+  elseif #entries == 0 then note = "Nobody else is in the guild yet."
+  elseif #entries == 1 and entries[1].bar == "offline" then note = "Nobody else is online right now."
   elseif #entries > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #entries .. ")" end
   if note then
     noteText:ClearAllPoints()
@@ -478,7 +554,7 @@ local function redraw()
     noteText:SetWidth(width)
     noteText:SetText(note)
     noteText:Show()
-    y = y - GAP + 4 + (#entries == 0 and 2 * LINE or LINE)
+    y = y - GAP + 4 + ((#entries == 0 or stateLine) and math.max(2, math.ceil(#note / 34)) * LINE or LINE)
   else
     noteText:Hide()
   end
@@ -521,21 +597,37 @@ local function build()
 
   P.buildHeader() -- the header bar, the update line and the What's new line (UI/PanelHeader.lua)
 
-  offBar = CreateFrame("Button", nil, P.root)
-  offBar:SetSize(ROW_WIDTH.full, OFF_HEIGHT)
-  T.paint(offBar, C.row, 0.6, C.rowBorder, 1)
-  offBar.icon = offBar:CreateTexture(nil, "ARTWORK")
-  offBar.icon:SetSize(T.icon(14), T.icon(14))
-  offBar.icon:SetPoint("LEFT", offBar, "LEFT", 4, 0)
-  offBar.text = T.readable(T.text(offBar, T.FONT.small, C.muted))
-  offBar.text:SetPoint("LEFT", offBar.icon, "RIGHT", 4, 0)
-  offBar.text:SetJustifyH("LEFT")
-  local offHl = offBar:CreateTexture(nil, "HIGHLIGHT")
-  offHl:SetAllPoints(offBar)
-  T.color(offHl, C.white, 0.08)
-  draggable(offBar)
-  script(offBar, "OnClick", function() Panel.toggleOffline() end)
-  offBar:Hide()
+  local function makeBar(onClick)
+    local bar = CreateFrame("Button", nil, P.root)
+    bar:SetSize(ROW_WIDTH.full, OFF_HEIGHT)
+    T.paint(bar, C.row, 0.6, C.rowBorder, 1)
+    bar.icon = bar:CreateTexture(nil, "ARTWORK")
+    bar.icon:SetSize(T.icon(14), T.icon(14))
+    bar.icon:SetPoint("LEFT", bar, "LEFT", 4, 0)
+    bar.text = T.readable(T.text(bar, T.FONT.small, C.muted))
+    bar.text:SetPoint("LEFT", bar.icon, "RIGHT", 4, 0)
+    bar.text:SetJustifyH("LEFT")
+    local hl = bar:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(bar)
+    T.color(hl, C.white, 0.08)
+    draggable(bar)
+    script(bar, "OnClick", onClick)
+    bar:Hide()
+    return bar
+  end
+  guildBar = makeBar(function() Panel.toggleGuildOnline() end)
+  offBar = makeBar(function() Panel.toggleOffline() end)
+  for _, words in ipairs({ "My party", "Pinned" }) do -- thin headings
+    local f = CreateFrame("Frame", nil, P.root)
+    f:SetSize(ROW_WIDTH.full, HEAD_HEIGHT)
+    f.text = T.readable(T.text(f, T.FONT.small, C.title))
+    f.text:SetPoint("LEFT", f, "LEFT", 2, 0)
+    f.text:SetJustifyH("LEFT")
+    f.text:SetText(words)
+    draggable(f)
+    f:Hide()
+    headFrames[words] = f
+  end
 
   noteText = T.text(P.root, T.FONT.small, C.muted)
   noteText:SetJustifyH("LEFT")
@@ -585,7 +677,39 @@ function Panel.toggleOffline()
   requestRedraw()
 end
 
+-- Opens or closes the Guild online list (the "Guild online (N)" bar; remembered).
+function Panel.toggleGuildOnline()
+  set("showGuildOnline", setting("showGuildOnline") ~= true)
+  requestRedraw()
+end
+
+-- Pins: members shown in the main view while they are online. Saved per guild (ns.db.pins[key] = true), written only
+-- while the guild's data is in use.
+function Panel.isPinned(key)
+  return type(key) == "string" and ns.db ~= nil and type(ns.db.pins) == "table" and ns.db.pins[key] == true
+end
+
+function Panel.pin(key)
+  if type(key) ~= "string" or not ns.db or not ns.Guild or not ns.Guild.active() or not ns.Guild.get(key) then
+    return false
+  end
+  if type(ns.db.pins) ~= "table" then ns.db.pins = {} end
+  ns.db.pins[key] = true
+  ns.Bus.fire("PINS_CHANGED", key, true)
+  return true
+end
+
+function Panel.unpin(key)
+  if type(key) ~= "string" or not ns.db or not ns.Guild or not ns.Guild.active() then return false end
+  if type(ns.db.pins) ~= "table" or ns.db.pins[key] == nil then return false end
+  ns.db.pins[key] = nil
+  ns.Bus.fire("PINS_CHANGED", key, false)
+  return true
+end
+
 function Panel.offlineBarForTest() return offBarShown and offBar or nil end
+function Panel.guildBarForTest() return guildBarShown and guildBar or nil end
+function Panel.headFrameForTest(words) local f = headFrames[words]; return f and f:IsShown() and f or nil end
 function Panel.entriesForTest() return entries end
 function Panel.refresh() requestRedraw() end
 
@@ -625,6 +749,7 @@ local function onEnable()
     ns.Bus.on(FEATURE, name, forgetTitles)
   end
   ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) if id == "stats" then forgetTitles() end end)
+  ns.Events.on(FEATURE, "GROUP_ROSTER_UPDATE", requestRedraw)
   for _, name in ipairs(REDRAW_ON) do ns.Bus.on(FEATURE, name, requestRedraw) end
   ns.Bus.on(FEATURE, "MEMBER_LEVELUP", function(name)
     if type(name) ~= "string" then return end
@@ -668,7 +793,8 @@ ns.Modules.register({
     showQuest = true, shareQuest = true, questRequests = true,
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
-    hideWhenAlone = false, showOffline = false, sort = "online", showSelf = false,
+    hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
+    showSelf = false,
     minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
@@ -739,10 +865,17 @@ ns.Modules.register({
       info = "Hides the panel while you are inside a dungeon or raid, and shows it again when you leave." },
     { key = "hideWhenAlone", label = "Hide when no crew is online", kind = "toggle",
       info = "Hides the panel while none of your friends are playing, and shows it when one logs in." },
+    { key = "showGuildOnline", label = "Show the guild online list", kind = "toggle",
+      info = "Opens the list of guild members who are online but not in your party or pinned. Off: only your party "
+        .. "and the members you pinned show, and a \"Guild online\" bar opens the rest. Clicking that bar does the "
+        .. "same as this switch. With nobody in your party and nobody pinned, the list is open anyway." },
+    { key = "showNoAddon", label = "Show guild members without the addon", kind = "toggle",
+      info = "Lists guild members who do not have TwizCrew, dimmed, with their name, class, level and zone from the "
+        .. "guild list. Turn it off to show only the members who run TwizCrew." },
     { key = "showOffline", label = "Show offline friends", kind = "toggle",
-      info = "Opens the list of friends who are not playing (greyed out, with when they were last seen) at the "
-        .. "bottom of the panel. Off: only friends who are online show, and an \"Offline\" bar opens the rest. "
-        .. "Clicking that bar does the same as this switch." },
+      info = "Opens the list of guild members who are not playing (greyed out, with when they were last seen) at "
+        .. "the bottom of the panel. Off: an \"Offline\" bar opens them. Clicking that bar does the same as this "
+        .. "switch." },
     { key = "sort", label = "Sort", kind = "choice",
       choices = { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
         { "layer", "Same layer first" } },

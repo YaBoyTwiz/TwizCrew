@@ -366,8 +366,8 @@ end
 
 local function lower(m) return string.lower(m.name) end
 
-function Roster:sorted(mode, relationOf)
-  local list = self:members(true)
+-- Sorts a list of members (anything with name, online, level) in place by the panel's sort mode; returns it.
+function Roster.sortList(list, mode, relationOf)
   local function byName(a, b)
     local la, lb = lower(a), lower(b)
     if la ~= lb then return la < lb end
@@ -389,6 +389,10 @@ function Roster:sorted(mode, relationOf)
     return byName(a, b)
   end)
   return list
+end
+
+function Roster:sorted(mode, relationOf)
+  return Roster.sortList(self:members(true), mode, relationOf)
 end
 
 return Roster

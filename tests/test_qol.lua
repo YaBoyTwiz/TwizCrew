@@ -10,6 +10,7 @@ local function start(ns, W, saved)
   ns.Self.start()
   ns.LayerSensor.start()
   ns.Modules.startAll()
+  ns.Modules.set("panel", "showNoAddon", false) -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
   return db
@@ -99,17 +100,17 @@ return {
     offline_friends_wait_behind_the_offline_bar = function(ns, A, W)
       start(ns, W)
       crew(ns, W)
-      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1]" },
+      A.eq(names(ns.Panel.entriesForTest()), { "[guild 2 open]", "Frostie", "Ginkan", "[Offline 1]" },
         "online friends, then the closed bar (my own row is off)")
       A.ok(ns.Panel.offlineBarForTest(), "the bar is drawn")
       ns.Panel.toggleOffline(); W:advance(1)
       A.eq(ns.Modules.setting("panel", "showOffline"), true, "remembered")
-      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1 open]", "Oldpal" })
+      A.eq(names(ns.Panel.entriesForTest()), { "[guild 2 open]", "Frostie", "Ginkan", "[Offline 1 open]", "Oldpal" })
       local bar = ns.Panel.offlineBarForTest()
       bar._scripts.OnClick(bar, "LeftButton"); W:advance(1)
-      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "[Offline 1]" }, "a click closes it")
+      A.eq(names(ns.Panel.entriesForTest()), { "[guild 2 open]", "Frostie", "Ginkan", "[Offline 1]" }, "a click closes it")
       receive(ns, W, "Oldpal", "STATE", { cl = "ROGUE", lv = "9" }); W:advance(1)
-      A.eq(names(ns.Panel.entriesForTest()), { "Frostie", "Ginkan", "Oldpal" }, "nobody offline: no bar")
+      A.eq(names(ns.Panel.entriesForTest()), { "[guild 3 open]", "Frostie", "Ginkan", "Oldpal" }, "nobody offline: no bar")
       A.eq(ns.Panel.offlineBarForTest(), nil)
       A.eq(ns.Log.errors(10), {})
     end,

@@ -409,10 +409,6 @@ function PanelLogic.titleVersion(style, version)
   return "v" .. ns.Util.safeText(version)
 end
 
-function PanelLogic.headerText(online, total)
-  return (online or 0) .. " of " .. (total or 0) .. " online"
-end
-
 -- The header count: "3 here · 14 online" (people in the main view, guild members online); the short form "3/14".
 function PanelLogic.headerCount(here, online, short)
   if short then return (here or 0) .. "/" .. (online or 0) end

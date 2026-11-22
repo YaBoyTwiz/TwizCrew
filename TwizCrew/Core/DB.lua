@@ -45,6 +45,7 @@ local function guildDefaults(db)
     guild = { keys = {}, mine = {}, spell = {}, byChar = {} },
     guilds = {},
     stats = { crew = {}, session = {} },
+    pins = {}, -- pins[key] = true: members pinned to the main view of the panel
     feed = {}, -- the activity feed: the newest FeedLogic.MAX events (kept by Reset everything)
   })
 end

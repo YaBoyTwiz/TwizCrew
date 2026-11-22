@@ -70,6 +70,17 @@ local function offsetAt(t)
 end
 function Diary.offset() return offsetAt(now()) end
 
+-- This computer's time zone at moment t (default: now): minutes to add to UTC, and whether its clocks are on summer
+-- time then. Summer time is the larger of the year's two offsets (mid January, mid July), north or south; a place
+-- whose clocks never change has none.
+function Diary.zoneAt(t)
+  t = tonumber(t) or now()
+  local off = offsetAt(t)
+  local y = L.civil(math.floor(t / L.DAY))
+  local jan, jul = offsetAt(L.daysFrom(y, 1, 15) * L.DAY), offsetAt(L.daysFrom(y, 7, 15) * L.DAY)
+  return math.floor(off / 60), jan ~= jul and off == math.max(jan, jul)
+end
+
 -- The local offset on local day `day` (a clock change moves it: a day after the change is shown with its own
 -- offset, not today's). Taken at the day's noon, so the evening of the day a clock changes (at night) is right.
 -- Cached by day; the cache starts over when this computer's current offset changes.

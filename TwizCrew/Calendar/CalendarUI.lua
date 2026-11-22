@@ -97,13 +97,9 @@ end
 
 Calendar.setArt = setArt
 
--- "UTC-5", "UTC+5:30" (off: an offset, default now's)
-local function zoneName(off)
-  off = tonumber(off) or ns.Diary.offset()
-  local sign = off < 0 and "-" or "+"
-  off = math.abs(off)
-  local h, m = math.floor(off / 3600), math.floor((off % 3600) / 60)
-  return "UTC" .. sign .. h .. (m > 0 and string.format(":%02d", m) or "")
+-- This computer's time zone at moment t (default: now): "CST", "EDT", or "UTC+5:30" when it has no name here.
+local function zoneName(t)
+  return L.zoneLabel(ns.Diary.zoneAt(t))
 end
 Calendar.zoneName = zoneName
 P.script, P.classHex, P.colored, P.people, P.altsText = script, classHex, colored, people, altsText

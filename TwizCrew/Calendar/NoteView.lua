@@ -239,7 +239,13 @@ function NoteView.refresh()
     whenText = L.WEEKDAYS[L.weekday(day) + 1] .. ", " .. L.MONTHS[m] .. " " .. d
   end
   local t = ns.Notes.timeText(n, off)
-  if t then whenText = whenText .. "  \194\183  " .. t .. " your time (" .. ns.Calendar.zoneName(off) .. ")" end
+  if t then
+    whenText = whenText .. "  \194\183  " .. t .. " " .. ns.Calendar.zoneName(n.at)
+    local theirs, zone = ns.Notes.authorTime(n, off) -- the author's own time, when their zone is not mine
+    if theirs then
+      whenText = whenText .. " your time  \194\183  " .. theirs .. " " .. zone .. " for " .. colored(n.b, n.c)
+    end
+  end
   meta:SetText(whenText .. "  \194\183  by " .. colored(n.b, n.c))
   -- answers
   local r = ns.Notes.repliesFor(shownKey)
@@ -299,3 +305,5 @@ function NoteView.commentForTest(text)
   reply()
 end
 function NoteView.boxForTest() return box end
+-- Test hook: the line under the title (when, in which time zones, by whom).
+function NoteView.metaForTest() return meta and meta:GetText() or nil end

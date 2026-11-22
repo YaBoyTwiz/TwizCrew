@@ -792,6 +792,21 @@ With a friend:
 8. **"new".** A friend adds a note for today or later. On the Events month that day has a gold `new`; in the day's
    list the note says `new`. Open the note: both are gone. Tell Claude if `new` is too easy to miss.
 
+## Calendar: time zones (2026-11-22)
+
+`/reload` is enough if the game was restarted since the Events / Play times change. Alone:
+
+1. **Your zone by name.** Open the calendar: the top right says `Your time zone: CST` (not `UTC-6`). No red error.
+2. **A new note.** Create a note with a time and open it: the line under the title says the time with `CST` after
+   it. `+ Create note` says `your time (CST)`.
+3. **The note from before.** The event you made earlier still shows its time, now with `CST`.
+
+With a friend in another time zone (both on this build):
+
+4. **Both times.** They add a note with a time. Your note window says your time and theirs, like
+   `7pm CST your time · 8pm EST for Frostie`; the day's list says `8pm EST their time` after their name. Tell Claude
+   if the line is cut off at the edge of the window.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

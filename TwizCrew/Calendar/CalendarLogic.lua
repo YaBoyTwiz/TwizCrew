@@ -133,6 +133,28 @@ function L.offsetFrom(loc, utc)
   return days * 86400 + ((loc.hour or 0) - (utc.hour or 0)) * 3600 + ((loc.min or 0) - (utc.min or 0)) * 60
 end
 
+-- Time zone names. minutes: what to add to UTC; summer: its clocks are on summer time (the same offset is CST in
+-- winter and MDT in summer). Only names friends would know; any other offset is written as "UTC+5:30".
+local ZONE_WINTER = { [-600] = "HST", [-540] = "AKST", [-480] = "PST", [-420] = "MST", [-360] = "CST", [-300] = "EST",
+  [-240] = "AST", [0] = "GMT", [60] = "CET", [120] = "EET" }
+local ZONE_SUMMER = { [-480] = "AKDT", [-420] = "PDT", [-360] = "MDT", [-300] = "CDT", [-240] = "EDT", [-180] = "ADT",
+  [60] = "BST", [120] = "CEST", [180] = "EEST" }
+
+-- "UTC-5", "UTC+5:30"
+function L.utcName(minutes)
+  minutes = math.floor(tonumber(minutes) or 0)
+  local sign = minutes < 0 and "-" or "+"
+  minutes = math.abs(minutes)
+  local h, m = math.floor(minutes / 60), minutes % 60
+  return "UTC" .. sign .. h .. (m > 0 and string.format(":%02d", m) or "")
+end
+
+-- "CST", "EDT", or "UTC+5:30" when the offset has no name here.
+function L.zoneLabel(minutes, summer)
+  minutes = math.floor(tonumber(minutes) or 0)
+  return (summer and ZONE_SUMMER or ZONE_WINTER)[minutes] or L.utcName(minutes)
+end
+
 -- "7pm", "12am", "7:15pm"
 function L.clock(minutes)
   minutes = math.floor(minutes) % 1440

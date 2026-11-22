@@ -291,7 +291,9 @@ local function drawEventDay()
       r.tcNew = isNew(n, P.shownDay, today)
       r.text:SetText(lineText(n, off) .. (r.tcNew and "  |cffffd100new|r" or ""))
       local counts, rp = countsText(n.key)
-      r.sub:SetText("by " .. colored(n.b, n.c) .. counts
+      local theirs, zone = ns.Notes.authorTime(n, off) -- the author's own time, when their zone is not mine
+      r.sub:SetText("by " .. colored(n.b, n.c)
+        .. (theirs and ("  |cff999999" .. theirs .. " " .. zone .. " their time|r") or "") .. counts
         .. (rp.mine and ("  |cff999999you: " .. (rp.mine == "yes" and "going" or rp.mine == "maybe" and "maybe" or "can't") .. "|r") or ""))
       if ns.Notes.isMine(n) then r.del:Show() else r.del:Hide() end
       r:Show()

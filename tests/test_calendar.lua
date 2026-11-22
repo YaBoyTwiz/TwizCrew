@@ -1064,6 +1064,70 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
     ------------------------------------------------------------------------------------------- something new
+    a_timed_note_shows_its_authors_time_zone = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      local L, N, D = ns.CalendarLogic, ns.Notes, ns.Diary
+      A.eq(L.zoneLabel(-360, false), "CST")
+      A.eq(L.zoneLabel(-360, true), "MDT", "the same offset in summer is another zone")
+      A.eq(L.zoneLabel(-300, true), "CDT")
+      A.eq(L.zoneLabel(330), "UTC+5:30", "no name here: the offset")
+      A.eq(L.zoneLabel(-210, false), "UTC-3:30")
+      -- this computer is on US Central time: UTC-6, UTC-5 from April to October
+      local function offAt(t)
+        local m = os.date("!*t", t).month
+        return (m >= 4 and m <= 10) and -5 * 3600 or -6 * 3600
+      end
+      W.env.date = function(fmt, t)
+        t = t or W.env.time()
+        if fmt:sub(1, 1) == "!" then return os.date(fmt, t) end
+        return os.date("!" .. fmt, t + offAt(t))
+      end
+      A.eq({ D.zoneAt() }, { -360, false }, "winter")
+      A.eq(ns.Calendar.zoneName(), "CST", "named, not UTC-6")
+      local july = L.daysFrom(2024, 7, 4) * 86400
+      A.eq({ D.zoneAt(july) }, { -300, true }, "summer")
+      A.eq(ns.Calendar.zoneName(july), "CDT")
+      -- my timed note says where I am: 7pm CST tomorrow
+      local today = math.floor(D.now() / 86400)
+      local date = N.dateKey(L.civil(today + 1))
+      local at = (today + 2) * 86400 + 3600
+      local mine = N.add(date, "Raid", 1, at)
+      A.eq(ns.db.calendar.notes[mine].z, -360, "my zone is kept with it")
+      local travelled = false
+      W:advance(5)
+      for _, m in ipairs(W.sent) do
+        if m.text:find("CALN", 1, true) and m.text:find("z=-360", 1, true) then travelled = true end
+      end
+      A.ok(travelled, "and travels with it")
+      A.eq(N.authorTime(ns.db.calendar.notes[mine], D.offset()), nil, "my own zone: one time is enough")
+      A.eq(N.add(date, "No time", 1) and ns.db.calendar.notes[mine].z, -360, "(a note without a time has none)")
+      -- a friend on Eastern time
+      local function from(key, u, z)
+        receive(ns, W, "Frostie", "CALN", { k = key, d = date, t = "Deadmines", i = "1", b = "Frostie", c = "MAGE",
+          u = u, a = tostring(at), z = z })
+        return ns.db.calendar.notes[key]
+      end
+      A.eq({ N.authorTime(from("frost123-900", "900", "-300"), D.offset()) }, { "8pm", "EST" })
+      A.eq({ N.authorTime(from("frost123-901", "901", "-240d"), D.offset()) }, { "9pm", "EDT" }, "summer time")
+      A.eq(N.authorTime(from("frost123-902", "902", "-360"), D.offset()), nil, "on my time: nothing to add")
+      A.eq(from("frost123-903", "903", "900").z, nil, "no such zone")
+      A.eq(from("frost123-904", "904", "abc").z, nil, "not a zone")
+      A.ok(from("frost123-904", "904", "abc").at, "(the note itself is kept)")
+      -- first heard through a copy too old to pass the zone on, then from a new one
+      A.eq(from("frost123-905", "905", nil).z, nil, "an old copy: no zone")
+      A.eq(from("frost123-905", "905", "-300").z, -300, "the same note again, with its zone")
+      A.eq(from("frost123-905", "905", "-480").z, -300, "only once")
+      -- the note's window and the day's list say both
+      ns.Calendar.open()
+      ns.NoteView.open("frost123-900")
+      A.contains(ns.NoteView.metaForTest(), "7pm CST your time")
+      A.contains(ns.NoteView.metaForTest(), "8pm EST for ")
+      ns.NoteView.open(mine)
+      A.contains(ns.NoteView.metaForTest(), "7pm CST")
+      A.no(ns.NoteView.metaForTest():find("your time", 1, true), "mine: one time")
+      ns.NoteView.close()
+    end,
     fresh_marks_notes_by_others_and_answers_on_mine = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
@@ -1373,7 +1437,7 @@ return {
       A.eq(ns.Calendar.makerForTest().minutes, 23 * 60 + 15, "round the clock: 11:15pm")
       ns.Calendar.setMakerForTest("kind", "dungeon")
       ns.Calendar.scrollList(5); ns.Calendar.scrollList(99); ns.Calendar.scrollList(-99)
-      A.contains(ns.Calendar.zoneName(), "UTC")
+      A.ok(#ns.Calendar.zoneName() >= 3, "a time zone name")
       A.eq(ns.Calendar.dayMenuItems(day)[1].label, "Create a note on this day")
       ns.Calendar.show("month")
       -- icons on the menus

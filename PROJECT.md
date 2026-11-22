@@ -13,6 +13,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Calendar time zones by name, and the author's time on a note (2026-11-22, owner asked: "it's showing my
+  timezone as UTC when I'm actually CST, make sure it uses the creator's real time zone"):** on the same branch
+  `feat/calendar-button`. **Not tested in game, not released.** Details in the section "Calendar: time zones" below;
+  checks in `docs/TESTING.md` under the same name.
 - **Calendar split into Events and Play times (2026-11-22, owner asked, design approved in chat: "do this"):** on
   the same branch `feat/calendar-button`. Tests outside the game pass. **Not tested in game, not released.** It adds
   a file (`Calendar/CalendarEvents.lua`), so the game needs a full restart. Details in the section "Calendar: Events
@@ -502,6 +506,23 @@ with the icons showing who has played recently." He picked one window with two t
   was on at event time), and right-click still adds a note at that time.
 - **Across:** "Who played this day" on a day's events, "This day's events (N)" on the timeline.
 - **Nothing about the data changed:** the same notes, replies and messages, so copies on v0.2.0 are not affected.
+
+## Calendar: time zones (2026-11-22)
+
+The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Central time; the offset was right).
+
+- **Zones have names (CalendarLogic.zoneLabel):** "CST", "CDT", "EST" ... for the US zones and GMT / BST / CET /
+  CEST / EET / EEST; any other offset is still written "UTC+5:30". The game gives no zone name, so it comes from the
+  computer's offset plus whether its clocks are on summer time then (Diary.zoneAt: summer time is the larger of the
+  year's January and July offsets). The same offset has two names (UTC-6 = CST in winter, MDT in summer).
+- **A timed note carries its author's zone:** kept as `z` (minutes to add to UTC) and `zd` (summer time), sent in
+  CALN as `z` ("-360", "-300d"). Readers still convert the shared time to their own computer's time as before; a
+  reader in another zone now also sees the author's: "7pm CST your time · 8pm EST for Frostie" in the note's window,
+  "8pm EST their time" in the day's list. On the same zone only one time shows. The month's small lines stay as
+  they were (the reader's time only).
+- **Older copies and notes:** v0.2.0 ignores `z` and drops it when it passes a note on; a copy that first heard a
+  note that way takes the zone when it later hears the same note (same `u`) with one. Notes made before this have no
+  zone: only the reader's time shows. The checksums do not change (they use key and `u`).
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

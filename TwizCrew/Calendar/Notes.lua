@@ -220,6 +220,16 @@ function Notes.timeText(n, off)
   return ns.CalendarLogic.clock(((n.at + (tonumber(off) or 0)) % 86400) / 60)
 end
 
+-- A timed note's time where its author is, and their zone ("8pm", "EST"), for a reader whose local time is
+-- UTC + off seconds. Nil when the reader is on the author's time, or the note does not say (made before v0.2.1,
+-- or passed on by a copy that old).
+function Notes.authorTime(n, off)
+  if type(n) ~= "table" or type(n.at) ~= "number" or type(n.z) ~= "number" then return nil end
+  if n.z * 60 == (tonumber(off) or 0) then return nil end
+  local L = ns.CalendarLogic
+  return L.clock(((n.at + n.z * 60) % 86400) / 60), L.zoneLabel(n.z, n.zd)
+end
+
 ------------------------------------------------------------------------------------------- what counts
 local function utcToday() return math.floor(ns.Diary.now() / ns.CalendarLogic.DAY) end
 
@@ -415,7 +425,17 @@ end
 local function fields(key, n)
   return { k = key, d = n.d, t = n.x and "" or (clean(n.t) or ""), i = tostring(n.i or 1), b = cleanName(n.b),
     c = cleanClass(n.c), u = tostring(n.u or 0), x = n.x and "1" or nil,
-    a = type(n.at) == "number" and tostring(n.at) or nil, g = DUNGEON[n.g] and n.g or nil }
+    a = type(n.at) == "number" and tostring(n.at) or nil, g = DUNGEON[n.g] and n.g or nil,
+    z = (type(n.at) == "number" and type(n.z) == "number") and (tostring(n.z) .. (n.zd and "d" or "")) or nil }
+end
+
+-- The author's time zone as it travels ("-360", or "-300d" on summer time): minutes to add to UTC, summer or nil.
+local function zoneOf(v)
+  if type(v) ~= "string" or #v > 5 then return nil end
+  local m, d = v:match("^(%-?%d+)(d?)$")
+  m = tonumber(m)
+  if not m or math.abs(m) > 14 * 60 then return nil end
+  return m, d == "d" or nil
 end
 
 local function send(key, to)
@@ -634,8 +654,11 @@ function Notes.add(dateKey, text, icon, at, dungeon)
   local key = me .. "-" .. now
   while s[key] do now = now + 1; key = me .. "-" .. now end
   local _, class = UnitClass("player")
+  at = tonumber(at)
+  local z, zd
+  if at then z, zd = ns.Diary.zoneAt(at) end -- my own zone at that time, so readers elsewhere see my time too
   s[key] = { d = dateKey, t = text, i = math.max(1, math.min(#Notes.ICONS, tonumber(icon) or 1)), b = ns.playerName(),
-    c = type(class) == "string" and class or nil, u = now, at = tonumber(at), g = dungeon }
+    c = type(class) == "string" and class or nil, u = now, at = at, g = dungeon, z = z, zd = zd or nil }
   send(key)
   ns.Bus.fire("CALENDAR_CHANGED")
   return key
@@ -663,6 +686,14 @@ function Notes.receive(sender, f)
   local s = store()
   if not s then return end
   local old = s[key]
+  local z, zd = zoneOf(f.z)
+  if old and (old.u or 0) == u and not old.x and type(old.at) == "number" and old.z == nil and z
+    and int10(f.a) == old.at then
+    -- the same note, first heard through a copy too old to pass its author's zone on: take the zone now
+    old.z, old.zd = z, zd
+    ns.Bus.fire("CALENDAR_CHANGED")
+    return
+  end
   if old and (old.u or 0) >= u then return end
   local deleted = f.x == "1"
   if not old and not deleted and not room(s, key, MAX_NOTES, noteCounts) then return end
@@ -673,7 +704,8 @@ function Notes.receive(sender, f)
   if at and math.abs(at - ns.Diary.now()) > 10 * 365 * 86400 then at = nil end -- nonsense times are dropped
   s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, math.floor(tonumber(f.i) or 1))),
     b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?", c = class, u = u,
-    x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil }
+    x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil,
+    z = (at and not deleted) and z or nil, zd = (at and not deleted and z) and zd or nil }
   if not old and not deleted and not Notes.isMine({ key = key }) then markFresh(f.d) end -- news for me
   ns.Bus.fire("CALENDAR_CHANGED")
 end

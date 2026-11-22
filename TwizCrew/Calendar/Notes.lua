@@ -233,6 +233,38 @@ end
 
 local function isComment(key) return key:find("|c|", 1, true) ~= nil end
 
+------------------------------------------------------------------------------------------- something new
+-- The panel's Calendar button pulses while the calendar holds something I have not looked at: a note by someone
+-- else, or a comment or an answer (going / maybe / can't) by someone else on a note of mine, on a date from
+-- yesterday on (UTC days, so no time zone calls today "past"). Saved with the guild's calendar as
+-- db.calendar.fresh = the latest such day: opening the calendar clears it, and it runs out by itself once that day
+-- is past. Nothing is marked while the calendar is open. CALENDAR_FRESH fires when the answer of fresh() changes.
+local function freshFrom() return utcToday() - 1 end
+
+function Notes.fresh()
+  local c = ns.db and ns.db.calendar
+  local day = type(c) == "table" and c.fresh or nil
+  return type(day) == "number" and day >= freshFrom()
+end
+
+local function markFresh(dateKey)
+  local day = dayOfKey(dateKey)
+  local c = ns.db and ns.db.calendar
+  if not day or day < freshFrom() or type(c) ~= "table" then return end
+  if ns.Calendar and ns.Calendar.isShown() then return end
+  local was = Notes.fresh()
+  if type(c.fresh) ~= "number" or c.fresh < day then c.fresh = day end
+  if not was then ns.Bus.fire("CALENDAR_FRESH") end
+end
+
+function Notes.clearFresh()
+  local c = ns.db and ns.db.calendar
+  if type(c) ~= "table" or c.fresh == nil then return end
+  local was = Notes.fresh()
+  c.fresh = nil
+  if was then ns.Bus.fire("CALENDAR_FRESH") end
+end
+
 -- Caps: only the oldest MAX_NOTES live notes count, and the oldest MAX_COMMENTS live comments of a note: ordered by
 -- the creation number in the key (the digits after its last "-"), then by the whole key, an order every copy shares
 -- (so every copy picks the same ones, whatever order things arrived in, and the newest are the ones refused).
@@ -569,8 +601,13 @@ function Notes.receiveReply(sender, f)
     if letter == "c" then v = clean(v); if not v then return end end
     if letter == "s" then v = "1" end
   end
+  -- news for me: someone else's answer or comment on a note of mine, new or changed
+  local who = f.r:match("^%w+%-%d+|%a|(%w+)")
+  local news = not deleted and letter ~= "s" and not note.x and Notes.isMine({ key = noteKey })
+    and who ~= ns.Diary.myId() and (not old or old.x or old.v ~= v)
   s[f.r] = { n = noteKey, v = v, b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?",
     c = cleanClass(f.c), u = u, x = deleted or nil }
+  if news then markFresh(note.d) end
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
@@ -629,11 +666,12 @@ function Notes.receive(sender, f)
   s[key] = { d = f.d, t = text, i = math.max(1, math.min(#Notes.ICONS, math.floor(tonumber(f.i) or 1))),
     b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?", c = class, u = u,
     x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil }
+  if not old and not deleted and not Notes.isMine({ key = key }) then markFresh(f.d) end -- news for me
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
 -- What no longer counts goes away: old notes and old deletion markers, notes and comments past the caps, replies
--- whose note is gone. At login and once a day while logged in.
+-- whose note is gone, and a "something new" mark whose day is past. At login and once a day while logged in.
 -- My own notes and comments inside the window are kept even past a cap (an older record that arrives late can push
 -- them out of the count): they don't count, so no checksum changes, and they count again once there is room.
 function Notes.prune()
@@ -650,4 +688,5 @@ function Notes.prune()
       and key:find("|c|" .. me .. "-", 1, true) ~= nil and inWindow(s[r.n].d)
     if not replies[key] and not own then rs[key] = nil end
   end
+  if not Notes.fresh() then ns.db.calendar.fresh = nil end -- news whose day is past
 end

@@ -741,6 +741,32 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
   members it hides and forgets nobody and does not decide about old data (the panel says `Waiting for the full guild
   list. If this stays, open the guild window and tick Show Offline Members.`).
 
+## Calendar button next to the tabs (2026-11-22)
+
+Restart the game first (the files changed). Alone:
+
+1. **The button is there.** Under the panel's title bar: `Crew`, `Hall of Shame`, `Calendar`. The small scroll icon
+   that used to sit in the title bar is gone. No red error.
+2. **It opens the calendar.** Click `Calendar`: the calendar window opens and the panel stays on its tab. Click it
+   again: the window closes. Hover it: the tooltip says "Crew calendar".
+3. **Narrow panel.** `/tc`, set the rows to tiny: the button says `Cal` and nothing overlaps or sticks out of the
+   panel. Back to full rows: `Calendar` again.
+4. **Stats off.** Turn "Stats & Hall of Shame" off in `/tc`: the bar stays with `Crew` and `Calendar`. Turn the
+   calendar off too: the bar is gone. Turn both back on.
+
+With a friend on this version (the pulse needs someone else's note or answer):
+
+5. **A new note pulses.** With your calendar closed, a friend adds a note for today or later. A soft gold glow
+   fades in and out behind `Calendar` about every second and a half, and the word is brighter. Tell Claude if it is
+   too faint, too strong or too fast.
+6. **Opening it stops the pulse.** Open the calendar any way (`/tc cal` too): the glow stops at once.
+7. **Answers on your note pulse.** You write a note; the friend clicks Going (or writes a comment) on it: it pulses.
+   The friend only opening your note does not.
+8. **Not for other people's chat.** Two friends commenting on a note that is not yours: no pulse.
+9. **It is remembered.** A friend adds a note, you `/reload` (or log out and in) without opening the calendar: it
+   still pulses.
+10. **Minimized.** While it pulses, minimize the panel: no bar, no glow. Restore it: it pulses again.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

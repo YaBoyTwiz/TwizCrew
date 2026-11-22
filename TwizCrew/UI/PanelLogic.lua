@@ -505,6 +505,14 @@ function PanelLogic.barText(noticeLine, count)
   return count
 end
 
+-- The glow behind the Calendar button while the calendar has something new: a slow wave, never dark and never
+-- solid. t: seconds (any clock that runs on). One wave takes PULSE_SECONDS.
+PanelLogic.PULSE_SECONDS = 1.5
+function PanelLogic.pulseAlpha(t)
+  local phase = ((tonumber(t) or 0) % PanelLogic.PULSE_SECONDS) / PanelLogic.PULSE_SECONDS
+  return 0.14 + 0.4 * (0.5 - 0.5 * math.cos(phase * 2 * math.pi))
+end
+
 -- The missed-counter badge text ("" when nothing was missed; "9+" past nine).
 function PanelLogic.missedText(n)
   n = tonumber(n) or 0

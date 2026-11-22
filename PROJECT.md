@@ -13,6 +13,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Calendar button next to the tabs built (2026-11-22, owner asked, design approved in chat: "do it"):** on the
+  branch `feat/calendar-button`, on top of v0.2.0. Tests outside the game pass. **Not tested in game, not released**
+  (no version bump or Changelog entry yet: they come with "release it"). Details in the section "Calendar button
+  next to the tabs" below; checks in `docs/TESTING.md` under the same name.
 - **v0.2.0 released (2026-11-22, owner: "release it"):** the guild conversion (section "Guild conversion
   (2026-11-21)"). Released after one clean session on the owner's main; two copies of the new version talking over
   the guild is still unproven. `RESTART_SINCE` is 0.2.0.
@@ -193,7 +197,7 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 - **Minimize (Panel, PanelLogic.view):** a minus / plus button at the far right of the title bar, `/tc mini` (also
   `/tc minimize`), the key binding "Minimize or restore the crew panel" (`TWIZCREW_MINI`), and a "Minimize the panel" /
   "Restore the panel" entry in the title bar's right-click menu. Minimized = just the header (24 px, same width,
-  same corner): title, the online count, the missed number and the button; the AFK, calendar, tools and settings
+  same corner): title, the online count, the missed number and the button; the AFK, tools and settings
   buttons and the update and What's new lines are hidden. Clicking the title restores it (when minimized the title no
   longer opens What's new, since that line is hidden then). Saved as the panel setting `minimized` (so **Reset to
   defaults brings the panel back**). For a panel that grows up, the saved y while minimized means "where the bar is",
@@ -438,6 +442,38 @@ the guild name is remembered for the session; no readable name after 10 s means 
 counts as complete after three identical reads, and as whole only when exact or listing an offline member; the fit rule (two and half) for old data and for the 60-day clean-up;
 old friends start pinned; pins are per guild; hiding instead of deleting; the `/tc guild` commands and the wording of
 their lines; `Crew/Guild.lua` not split.
+
+## Calendar button next to the tabs (2026-11-22)
+
+The owner: "make it so the crew calendar is a first class citizen and sits next to the crew and hall of shame
+buttons, so it's easy to access, maybe make it pulsate or flash or blink when updated."
+
+- **The button (UI/Panel.lua):** "Calendar" on the bar under the header, right of "Crew" and "Hall of Shame". It
+  opens and closes the calendar's own window (not a tab: the month view is far wider than the panel; the panel keeps
+  its tab). The bar now shows while the stats module **or** the calendar module is on (stats off: "Crew" and
+  "Calendar"; calendar off: as before). With tiny rows the three words do not fit, so the button says "Cal".
+- **The small scroll in the header is gone** (owner approved). The wrench menu, `/tc cal`, the key binding, the
+  minimap menu and the settings button still open the calendar.
+- **What counts as new (owner picked "new notes and replies to your notes"):** a note by someone else, or a comment
+  or an answer (going / maybe / can't, also a changed answer) by someone else on a note of mine. Not news: my own
+  notes and replies, deletions, an answer taken back, "seen" marks, comments on other people's notes, anything on a
+  date before yesterday (UTC days), and whatever arrives while the calendar window is open.
+- **The pulse:** a gold glow behind the button fades in and out about every 1.5 s (PanelLogic.pulseAlpha, a 0.1 s
+  ticker that runs only while the button is on screen and something is new), and the word turns bright. It stops
+  when the calendar is opened by any route. Minimized, the bar is hidden: nothing pulses, and it pulses again when
+  the panel is restored.
+- **How it is kept (Calendar/Notes.lua):** `db.calendar.fresh` = the latest day (a UTC day number) that has news,
+  saved with the guild's calendar, so it survives a logout and belongs to the guild. Set where notes and replies
+  arrive (Notes.receive, Notes.receiveReply), cleared by Calendar.open; it runs out by itself once that day is past
+  and the daily clean-up drops it. `CALENDAR_FRESH` fires when the answer of `Notes.fresh()` changes (the panel
+  redraws on it). A flag set on arrival was chosen over comparing times with "when I last looked": the crew's clocks
+  and the order messages arrive in cannot be trusted for that.
+- **Not done:** nothing on the minimized bar or the minimap button for calendar news; the button does not show which
+  note is new.
+- **The source folder on the Windows PC (2026-11-22):** `master` was moved to the released v0.2.0 (GitHub's history
+  had been rewritten by the release). The uncommitted work that was there (a quest list, feed and panel changes from
+  2026-11-15, never released, not in v0.2.0) is kept on the local branch `old/0.1.24-quest-list`. The owner: "let's
+  just use and keep the new stuff".
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

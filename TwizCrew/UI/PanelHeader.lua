@@ -16,7 +16,6 @@ local NEWS_HEIGHT = 18   -- the What's new line under it, always there (bright "
 
 local afkButton -- the "zzz" button in the header: go AFK / come back
 local toolsButton -- the wrench in the header: a menu of handy tools (spell ranks, ...)
-local calButton   -- the scroll in the header, left of the wrench: the crew calendar
 local titleText -- "TwizCrew" in the header
 local grip -- the move-arrows handle at the left of the header (dim while the panel is locked)
 local versionText, updateBar  -- the version after "TwizCrew"; the gold update line (a button: click = how to update)
@@ -56,15 +55,14 @@ local function headerWidth(fs, text)
 end
 
 -- What gives way, in order, when the full header is too narrow: the version, the long count ("2 of 3 online" ->
--- "2/3"), then the buttons whose actions are also in the right-click menu: AFK, calendar (the wrench menu), settings.
--- The minimize button, the wrench and the count always stay.
+-- "2/3"), then the buttons whose actions are also in the right-click menu: AFK, settings.
+-- The minimize button, the wrench and the count always stay. (The calendar has its own button next to the tabs.)
 local FIT_STEPS = {
-  { version = true, short = false, afk = true, cal = true, gear = true },
-  { version = false, short = false, afk = true, cal = true, gear = true },
-  { version = false, short = true, afk = true, cal = true, gear = true },
-  { version = false, short = true, afk = false, cal = true, gear = true },
-  { version = false, short = true, afk = false, cal = false, gear = true },
-  { version = false, short = true, afk = false, cal = false, gear = false },
+  { version = true, short = false, afk = true, gear = true },
+  { version = false, short = false, afk = true, gear = true },
+  { version = false, short = true, afk = true, gear = true },
+  { version = false, short = true, afk = false, gear = true },
+  { version = false, short = true, afk = false, gear = false },
 }
 local fitNow = {} -- what the last full header kept (test hook)
 
@@ -106,7 +104,7 @@ local function drawHeader(s, view)
   local step
   if mini then
     -- the bar alone keeps the title, the count (or the notice), the missed number, the "!" and the minimize button
-    for _, b in ipairs({ gearButton, toolsButton, calButton, afkButton }) do if b then b:Hide() end end
+    for _, b in ipairs({ gearButton, toolsButton, afkButton }) do if b then b:Hide() end end
     local right = (PAD - 2) + B + 6 + (hintShown and (B + 4) or 0) + (missedShown and (T.icon(18) + 4) or 0) + 6
     local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
     local function fitsMini(c, withVersion)
@@ -129,7 +127,7 @@ local function drawHeader(s, view)
   else
     -- the full header: take the first step that fits, measured with the buttons' real size
     local function used(st, c)
-      local right = (PAD - 2) + B + 4 + (st.gear and (B + 4) or 0) + B + (st.cal and (4 + B) or 0) + 6
+      local right = (PAD - 2) + B + 4 + (st.gear and (B + 4) or 0) + B + 6
         + headerWidth(P.countText, c) + (st.afk and (6 + B) or 0)
       local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
         + ((st.version and titleVersion ~= "") and (4 + headerWidth(versionText, titleVersion)) or 0)
@@ -145,15 +143,13 @@ local function drawHeader(s, view)
     count = step.short and P.headerShort or P.header
     if step.version and titleVersion ~= "" then versionText:Show() else versionText:Hide() end
     local function vis(b, on) if b then if on then b:Show() else b:Hide() end end end
-    vis(gearButton, step.gear); vis(calButton, step.cal); vis(afkButton, step.afk); vis(toolsButton, true)
-    fitNow.afk, fitNow.cal, fitNow.gear = step.afk, step.cal, step.gear
-    -- the chain from the right: minimize, settings, wrench, calendar, count, AFK (a hidden one is skipped)
+    vis(gearButton, step.gear); vis(afkButton, step.afk); vis(toolsButton, true)
+    fitNow.afk, fitNow.gear = step.afk, step.gear
+    -- the chain from the right: minimize, settings, wrench, count, AFK (a hidden one is skipped)
     toolsButton:ClearAllPoints()
     toolsButton:SetPoint("RIGHT", step.gear and gearButton or miniButton, "LEFT", -4, 0)
-    calButton:ClearAllPoints()
-    calButton:SetPoint("RIGHT", toolsButton, "LEFT", -4, 0)
     P.countText:ClearAllPoints()
-    P.countText:SetPoint("RIGHT", step.cal and calButton or toolsButton, "LEFT", -6, 0)
+    P.countText:SetPoint("RIGHT", toolsButton, "LEFT", -6, 0)
   end
   -- the title's click area ends where the title or its version ends, so it never reaches the notice or the count
   if versionButton then
@@ -387,27 +383,7 @@ function P.buildHeader()
     GameTooltip:Show()
   end)
   script(toolsButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  -- the calendar button: left of the wrench
-  calButton = CreateFrame("Button", nil, head)
-  calButton:SetSize(T.icon(16), T.icon(16))
-  calButton:SetPoint("RIGHT", toolsButton, "LEFT", -4, 0)
-  local calIcon = calButton:CreateTexture(nil, "ARTWORK")
-  calIcon:SetAllPoints(calButton)
-  calIcon:SetTexture("Interface\\Icons\\INV_Scroll_03")
-  calIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  local calHl = calButton:CreateTexture(nil, "HIGHLIGHT")
-  calHl:SetAllPoints(calButton)
-  T.color(calHl, C.white, 0.25)
-  script(calButton, "OnClick", function() if ns.Calendar then ns.Calendar.toggle() end end)
-  script(calButton, "OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("Crew calendar")
-    GameTooltip:AddLine("Who played when, and the best time for the crew to play together (or /tc cal).", 1, 1, 1, true)
-    GameTooltip:Show()
-  end)
-  script(calButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  P.countText:SetPoint("RIGHT", calButton, "LEFT", -6, 0)
+  P.countText:SetPoint("RIGHT", toolsButton, "LEFT", -6, 0)
   afkButton = CreateFrame("Button", nil, head)
   afkButton:SetSize(T.icon(16), T.icon(16))
   afkButton:SetPoint("RIGHT", P.countText, "LEFT", -6, 0)
@@ -508,7 +484,6 @@ end
 
 ---------------------------------------------------------------------------------------------------------- test hooks
 function Panel.toolsButtonForTest() return toolsButton end
-function Panel.calendarButtonForTest() return calButton end
 function Panel.newsLineForTest() return newsLine end
 function Panel.titleVersionForTest() return titleVersion end
 function Panel.updateLineForTest() return updateLine end
@@ -517,7 +492,7 @@ function Panel.barTextForTest() return barTextNow end
 function Panel.titleButtonForTest() return versionButton end
 function Panel.headerFitForTest() return fitNow end
 function Panel.headerButtonsForTest()
-  return { mini = miniButton, gear = gearButton, tools = toolsButton, cal = calButton, afk = afkButton,
+  return { mini = miniButton, gear = gearButton, tools = toolsButton, afk = afkButton,
     hint = updateHintButton, title = versionButton, notice = noticeButton, head = rootHead }
 end
 function Panel.miniButtonForTest() return miniButton end

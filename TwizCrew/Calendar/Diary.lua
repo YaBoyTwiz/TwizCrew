@@ -499,7 +499,7 @@ ns.Modules.register({
   id = FEATURE, name = "Crew calendar", tier = "module",
   info = "A calendar of who played when: each copy notes when you're online (in 15-minute steps) and swaps that "
     .. "with the crew, so you can see who was on each day and when most of you usually play. Open it with the "
-    .. "wrench button on the panel or /tc cal.",
+    .. "Calendar button on the panel or /tc cal.",
   defaults = { share = true },
   settings = {
     { key = "open", label = "Open the crew calendar", kind = "button",

@@ -1063,6 +1063,159 @@ return {
       A.eq(box:GetText(), string.rep("\195\169", 50))
       A.eq(ns.Log.errors(10), {})
     end,
+    ------------------------------------------------------------------------------------------- something new
+    fresh_marks_notes_by_others_and_answers_on_mine = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Ginkan", "STATE", { cl = "WARRIOR" })
+      local N, L = ns.Notes, ns.CalendarLogic
+      local today = math.floor(ns.Diary.now() / 86400)
+      local soon, past = N.dateKey(L.civil(today + 2)), N.dateKey(L.civil(today - 5))
+      local fired = 0
+      ns.Bus.on("calendar", "CALENDAR_FRESH", function() fired = fired + 1 end)
+      A.no(N.fresh(), "nothing new at first")
+      local mine = N.add(soon, "Raid night", 3)
+      A.ok(mine, "(my note)")
+      A.no(N.fresh(), "my own note is not news")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-900", d = past, t = "Old run", i = "1", b = "Frostie", u = "900" })
+      A.ok(ns.db.calendar.notes["frost123-900"], "(a past note is kept)")
+      A.no(N.fresh(), "a note on a past date is not news")
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-901", d = soon, t = "", i = "1", b = "Frostie", u = "901", x = "1" })
+      A.no(N.fresh(), "a deletion is not news")
+      -- answers on a note that is not mine
+      ns.db.calendar.notes["gink4567-1000"] = { d = soon, t = "Deadmines", i = 2, b = "Ginkan", u = 1000 }
+      receive(ns, W, "Frostie", "CALR", { r = "gink4567-1000|c|frost123-1500", n = "gink4567-1000", v = "I'm in",
+        b = "Frostie", u = "1500" })
+      A.ok(ns.db.calendar.replies["gink4567-1000|c|frost123-1500"], "(the comment is kept)")
+      A.no(N.fresh(), "a comment on someone else's note is not news")
+      -- "seen" on mine
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|s|frost123", n = mine, v = "1", b = "Frostie", u = "1600" })
+      A.no(N.fresh(), "someone opening my note is not news")
+      A.eq(fired, 0, "nothing was announced")
+      -- an answer on mine
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|r|frost123", n = mine, v = "yes", b = "Frostie", u = "1700" })
+      A.ok(N.fresh(), "Going on my note is news")
+      A.eq(fired, 1, "announced once")
+      N.clearFresh()
+      A.no(N.fresh(), "cleared")
+      A.eq(fired, 2, "the clearing is announced")
+      N.clearFresh()
+      A.eq(fired, 2, "clearing nothing announces nothing")
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|r|frost123", n = mine, v = "yes", b = "Frostie", u = "1700" })
+      A.no(N.fresh(), "the same answer again is not news")
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|r|frost123", n = mine, v = "maybe", b = "Frostie", u = "1800" })
+      A.ok(N.fresh(), "a changed answer is news")
+      N.clearFresh()
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|r|frost123", n = mine, v = "", b = "Frostie", u = "1900", x = "1" })
+      A.no(N.fresh(), "an answer taken back is not news")
+      -- a comment on mine
+      receive(ns, W, "Ginkan", "CALR", { r = mine .. "|c|gink4567-2000", n = mine, v = "Count me in", b = "Ginkan",
+        u = "2000" })
+      A.ok(N.fresh(), "a comment on my note is news")
+      N.clearFresh()
+      -- my own answer coming back to me
+      local me = ns.Diary.myId()
+      receive(ns, W, "Frostie", "CALR", { r = mine .. "|c|" .. me .. "-2100", n = mine, v = "me again", b = "Twiz",
+        u = "2100" })
+      A.no(N.fresh(), "my own comment is not news")
+      -- a note by someone else
+      fired = 0
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-3000", d = soon, t = "Stockade", i = "2", b = "Frostie", u = "3000" })
+      A.ok(N.fresh(), "a new note by someone else is news")
+      receive(ns, W, "Ginkan", "CALN", { k = "gink4567-3001", d = soon, t = "Gnomeregan", i = "2", b = "Ginkan", u = "3001" })
+      A.eq(fired, 1, "more news while something is new announces nothing more")
+      -- opening the calendar clears it; nothing is marked while it is open
+      ns.Calendar.open()
+      A.no(N.fresh(), "opening the calendar clears it")
+      receive(ns, W, "Ginkan", "CALN", { k = "gink4567-3002", d = soon, t = "Uldaman", i = "2", b = "Ginkan", u = "3002" })
+      A.ok(ns.db.calendar.notes["gink4567-3002"], "(kept)")
+      A.no(N.fresh(), "nothing is news while the calendar is open")
+      ns.Calendar.close()
+      -- it runs out when its day is past
+      ns.db.calendar.fresh = today - 3
+      A.no(N.fresh(), "old news is not news")
+      N.prune()
+      A.eq(ns.db.calendar.fresh, nil, "and the daily clean-up drops it")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    calendar_button_next_to_the_tabs = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(1)
+      local N, L, PL = ns.Notes, ns.CalendarLogic, ns.PanelLogic
+      -- the pulse: a slow wave that never goes dark or solid
+      for _, t in ipairs({ 0, 0.2, 0.75, 1.1, 7.3 }) do
+        local a = PL.pulseAlpha(t)
+        A.ok(a >= 0.1 and a <= 0.6, "alpha stays soft at " .. t)
+      end
+      A.ok(math.abs(PL.pulseAlpha(0.4) - PL.pulseAlpha(0.4 + PL.PULSE_SECONDS)) < 1e-9, "it repeats")
+      A.ok(PL.pulseAlpha(PL.PULSE_SECONDS / 2) > PL.pulseAlpha(0), "brightest half way")
+      local t = ns.Panel.tabButtonsForTest()
+      A.ok(t.bar and t.bar:IsShown(), "the tab bar shows")
+      A.ok(t.cal and t.cal:IsShown(), "with a Calendar button on it")
+      A.ok(t.shame:IsShown(), "next to the Hall of Shame")
+      A.eq(t.cal.label:GetText(), "Calendar")
+      A.eq(ns.Panel.headerButtonsForTest().cal, nil, "the small scroll in the header is gone")
+      t.cal._scripts.OnClick(t.cal, "LeftButton")
+      A.ok(ns.Calendar.isShown(), "it opens the calendar")
+      A.eq(ns.Panel.tab(), "crew", "and the panel keeps its tab")
+      t.cal._scripts.OnClick(t.cal, "LeftButton")
+      A.no(ns.Calendar.isShown(), "and closes it")
+      A.no(ns.Panel.calPulseForTest(), "no pulse while nothing is new")
+      A.eq(t.cal.glow:GetAlpha(), 0)
+      -- something new: it pulses until the calendar is opened
+      local today = math.floor(ns.Diary.now() / 86400)
+      local soon = N.dateKey(L.civil(today + 2))
+      receive(ns, W, "Frostie", "CALN", { k = "frost123-3000", d = soon, t = "Stockade", i = "2", b = "Frostie", u = "3000" })
+      W:advance(1)
+      A.ok(ns.Panel.calPulseForTest(), "it pulses")
+      A.ok(t.cal.glow:GetAlpha() > 0, "the glow is lit")
+      -- minimized: no bar, no pulse; back when restored
+      ns.Modules.set("panel", "minimized", true)
+      W:advance(1)
+      A.no(ns.Panel.calPulseForTest(), "no pulse on the minimized bar")
+      A.no(t.bar:IsShown())
+      ns.Modules.set("panel", "minimized", false)
+      W:advance(1)
+      A.ok(ns.Panel.calPulseForTest(), "it pulses again when the panel is back")
+      -- the panel hidden: nothing ticks
+      ns.Modules.setEnabled("panel", false)
+      W:advance(1)
+      A.no(ns.Panel.calPulseForTest(), "no pulse while the panel is off")
+      ns.Modules.setEnabled("panel", true)
+      W:advance(1)
+      A.ok(ns.Panel.calPulseForTest())
+      t.cal._scripts.OnClick(t.cal, "LeftButton")
+      W:advance(1)
+      A.no(N.fresh())
+      A.no(ns.Panel.calPulseForTest(), "opened: the pulse stops")
+      A.eq(t.cal.glow:GetAlpha(), 0)
+      ns.Calendar.close()
+      -- a narrow panel: the short word
+      ns.Modules.set("panel", "rowStyle", "tiny")
+      W:advance(1)
+      A.eq(t.cal.label:GetText(), "Cal", "tiny rows: the short word fits")
+      ns.Modules.set("panel", "rowStyle", "full")
+      W:advance(1)
+      A.eq(t.cal.label:GetText(), "Calendar")
+      -- the bar follows the two modules
+      ns.Modules.setEnabled("stats", false)
+      W:advance(1)
+      A.ok(t.bar:IsShown(), "stats off: the bar stays for the calendar")
+      A.no(t.shame:IsShown(), "without the Hall of Shame")
+      A.ok(t.cal:IsShown())
+      ns.Modules.setEnabled("calendar", false)
+      W:advance(1)
+      A.no(t.bar:IsShown(), "both off: no bar")
+      ns.Modules.setEnabled("stats", true)
+      W:advance(1)
+      A.ok(t.bar:IsShown() and t.shame:IsShown(), "stats alone: the bar as before")
+      A.no(t.cal:IsShown(), "calendar off: no Calendar button")
+      ns.Modules.setEnabled("calendar", true)
+      W:advance(1)
+      A.ok(t.cal:IsShown())
+      A.eq(ns.Log.errors(10), {})
+    end,
     ------------------------------------------------------------------------------------------------ the window
     calendar_window = function(ns, A, W)
       start(ns, W)
@@ -1086,8 +1239,8 @@ return {
       local found
       for _, l in ipairs(labels) do if l == "Crew calendar" then found = true end end
       A.ok(found, "in the wrench menu")
-      local b = ns.Panel.calendarButtonForTest()
-      A.ok(b, "a calendar button in the panel's header")
+      local b = ns.Panel.tabButtonsForTest().cal
+      A.ok(b, "a Calendar button next to the panel's tabs")
       b._scripts.OnClick(b, "LeftButton")
       A.ok(ns.Calendar.isShown(), "it opens the calendar")
       -- "Create a note": a plain one for today

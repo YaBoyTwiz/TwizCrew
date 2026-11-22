@@ -3,7 +3,9 @@
 -- members without the addon are rows too, dimmed. Pins are saved per guild (ns.db.pins). Registers the module "panel".
 -- Hiding the panel = turning the module off. Redraws are coalesced: many requests in one frame -> one redraw.
 -- While the stats module is on, two tabs sit under the header: "Crew" (the rows, with award titles under the
--- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved.
+-- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved. While the calendar module is on, a
+-- "Calendar" button sits next to them: it opens the crew calendar's own window (not a tab), and a gold glow pulses
+-- behind it while the calendar has something new (ns.Notes.fresh). Either module alone keeps the bar.
 -- This file: settings, the frame, look and position, the redraw, enable / disable. The rest, loaded right after it:
 -- UI/PanelRows.lua (rows, row arrows, row tooltips), UI/PanelHeader.lua (the header bar, the update and What's new
 -- lines), UI/PanelMenus.lua (the menus and the status box) and UI/PanelMini.lua (minimize, bar notices, peek).
@@ -32,7 +34,7 @@ local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = tru
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
   "MEMBER_REMOVED", "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED", "GUILD_LIST", "GUILD_STATE",
-  "PINS_CHANGED" }
+  "PINS_CHANGED", "CALENDAR_FRESH" }
 P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD, P.LINE = ROW_WIDTH, HEADER_HEIGHT, PAD, LINE
 
 -- Shared state (set and read by more than one of the panel's files)
@@ -41,7 +43,7 @@ P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD, P.LINE = ROW_WIDTH, HEADER_HEIGHT, PAD, LIN
 P.root = nil           -- the panel frame (made in build)
 P.countText = nil      -- the count in the header ("2 of 3 online"), or the notice while minimized
 P.header, P.headerShort = "", nil -- the count's text; the short count ("1/3") when room is tight
-P.tabBar = nil         -- the Crew / Hall of Shame tabs (only made when ns.Board exists)
+P.tabBar = nil         -- the Crew / Hall of Shame tabs and the Calendar button (only made when ns.Board exists)
 P.visibleRows = 0      -- rows drawn by the last redraw
 P.enabled, P.shown, P.inCombat = false, false, false
 P.tipRow = nil         -- the row whose tooltip is showing (redraws refresh it)
@@ -61,7 +63,9 @@ local headFrames = {}      -- "My party" / "Pinned" heading -> its frame
 local CHEER_FOR = 300 -- seconds the Congrats button stays on a friend's row after they level up
 local dingAt, cheered = {}, {} -- name -> when they leveled up; name -> true once we congratulated them
 P.cheered = cheered
-local crewTab, shameTab
+local crewTab, shameTab, calTab
+local calTicker        -- pulses the glow behind the Calendar button while the calendar has something new
+local CAL_PULSE_TICK = 0.1
 local tab = "crew"     -- "crew" | "shame" (session only)
 local rowFrames = {}   -- pool, created once and reused (at most PANEL_MAX_ROWS)
 P.rowFrames = rowFrames
@@ -114,6 +118,70 @@ end
 -- The Hall of Shame tab and titles exist only while the stats module is on.
 local function statsOn()
   return ns.Board ~= nil and P.tabBar ~= nil and ns.Modules.isEnabled("stats")
+end
+
+-- The Calendar button next to the tabs exists only while the calendar module is on.
+local function calOn()
+  return ns.Calendar ~= nil and calTab ~= nil and ns.Modules.isEnabled("calendar")
+end
+
+-- Something new in the calendar (asked inside ns.Log.safe("calendar", ...): never an error charged to the panel).
+local function calFresh()
+  if not ns.Notes then return false end
+  local ok, fresh = ns.Log.safe("calendar", ns.Notes.fresh)
+  return ok and fresh == true
+end
+
+local function stopCalPulse()
+  if calTicker then calTicker:Cancel(); calTicker = nil end
+  if calTab then calTab.glow:SetAlpha(0) end
+end
+
+local function pulseCal() calTab.glow:SetAlpha(Logic.pulseAlpha(ns.now())) end
+
+-- The glow pulses only while the button is on screen and something is new.
+local function syncCalPulse(on)
+  if not on then return stopCalPulse() end
+  pulseCal()
+  if not calTicker and C_Timer and C_Timer.NewTicker then
+    calTicker = C_Timer.NewTicker(CAL_PULSE_TICK, function() ns.Log.safe(FEATURE, pulseCal) end)
+  end
+end
+
+local function setCalWords(words)
+  if calTab.words == words then return end
+  calTab.words = words
+  calTab.label:SetText(words)
+  local w = calTab.label:GetStringWidth()
+  if type(w) ~= "number" or w <= 0 then w = #words * 6 end
+  calTab:SetWidth(w + 10)
+end
+
+-- The bar under the header: Crew, Hall of Shame (stats on), Calendar (calendar on). width: the panel's width now.
+local function drawTabs(width)
+  local stats, cal = statsOn(), calOn()
+  crewTab:SetActive(tab == "crew")
+  if stats then
+    shameTab:SetActive(tab == "shame")
+    shameTab:Show()
+  else
+    shameTab:Hide()
+  end
+  if cal then
+    local fresh = calFresh()
+    local before = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
+    setCalWords("Calendar")
+    if before + calTab:GetWidth() > width then setCalWords("Cal") end -- tiny rows: the short word
+    calTab:ClearAllPoints()
+    calTab:SetPoint("LEFT", stats and shameTab or crewTab, "RIGHT", 4, 0)
+    T.textColor(calTab.label, fresh and C.text or C.muted)
+    calTab:Show()
+    syncCalPulse(fresh)
+  else
+    calTab:Hide()
+    stopCalPulse()
+  end
+  P.tabBar:Show()
 end
 
 local function forgetTitles() titleCache = nil end
@@ -289,6 +357,7 @@ local function hide()
   P.syncBarTicker()
   note = nil
   P.stopArrowTicker()
+  stopCalPulse()
   Widgets.closeMenu()
 end
 
@@ -461,6 +530,7 @@ local function redraw()
     noteText:Hide(); note = nil
     if ns.Board then ns.Log.safe("board", ns.Board.hide) end
     if P.tabBar then P.tabBar:Hide() end
+    stopCalPulse()
     P.visibleRows = 0
     P.stopArrowTicker()
     P.root:SetSize(ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"] + 2 * PAD, HEADER_HEIGHT)
@@ -471,15 +541,13 @@ local function redraw()
     normalizeAnchor()
     return
   end
-  if view == "peek" then
-    if P.tabBar then P.tabBar:Hide() end
-  elseif statsOn() then
-    crewTab:SetActive(tab == "crew")
-    shameTab:SetActive(tab == "shame")
-    P.tabBar:Show()
+  if view ~= "peek" and (statsOn() or calOn()) then
+    local wide = tab == "shame" and view == "full"
+    drawTabs((wide and BOARD_WIDTH or ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"]) + 2 * PAD)
     top = top + TAB_HEIGHT
-  elseif P.tabBar then
-    P.tabBar:Hide()
+  else
+    if P.tabBar then P.tabBar:Hide() end
+    stopCalPulse()
   end
 
   if tab == "shame" and view == "full" then
@@ -653,7 +721,7 @@ local function build()
   noteText = T.text(P.root, T.FONT.small, C.muted)
   noteText:SetJustifyH("LEFT")
 
-  if ns.Board then -- tabs, shown only while the stats module is on
+  if ns.Board then -- tabs and the Calendar button, shown only while the stats or the calendar module is on
     P.tabBar = CreateFrame("Frame", nil, P.root)
     P.tabBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 0, -(HEADER_HEIGHT - 2))
     P.tabBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", 0, -(HEADER_HEIGHT - 2))
@@ -663,6 +731,25 @@ local function build()
     crewTab:SetPoint("LEFT", P.tabBar, "LEFT", PAD - 5, 0)
     shameTab = ns.Board.textButton(P.tabBar, "Hall of Shame", function() Panel.setTab("shame") end, FEATURE)
     shameTab:SetPoint("LEFT", crewTab, "RIGHT", 4, 0)
+    calTab = ns.Board.textButton(P.tabBar, "Calendar", function() if ns.Calendar then ns.Calendar.toggle() end end,
+      FEATURE)
+    calTab.words = "Calendar"
+    calTab:SetPoint("LEFT", shameTab, "RIGHT", 4, 0)
+    calTab.glow = calTab:CreateTexture(nil, "BACKGROUND")
+    calTab.glow:SetAllPoints(calTab)
+    T.color(calTab.glow, C.title, 1)
+    calTab.glow:SetAlpha(0)
+    script(calTab, "OnEnter", function(self)
+      if not GameTooltip then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText("Crew calendar")
+      if calFresh() then
+        GameTooltip:AddLine("Something new: a note from the crew, or an answer on one of yours.", T.rgb(C.title))
+      end
+      GameTooltip:AddLine("Who played when, and the best time for the crew to play together (or /tc cal).", 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    script(calTab, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     P.tabBar:Hide()
   end
   P.root:Hide()
@@ -735,6 +822,8 @@ function Panel.offlineBarForTest() return offBarShown and offBar or nil end
 function Panel.guildBarForTest() return guildBarShown and guildBar or nil end
 function Panel.headFrameForTest(words) local f = headFrames[words]; return f and f:IsShown() and f or nil end
 function Panel.entriesForTest() return entries end
+function Panel.tabButtonsForTest() return { bar = P.tabBar, crew = crewTab, shame = shameTab, cal = calTab } end
+function Panel.calPulseForTest() return calTicker ~= nil end
 function Panel.refresh() requestRedraw() end
 
 function Panel.isShown() return P.shown end

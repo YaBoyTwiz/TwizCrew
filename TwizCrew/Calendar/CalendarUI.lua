@@ -2,7 +2,7 @@
 -- icons; the tooltip has everyone's times), a day's timeline (one bar per friend, AFK lighter, their times written
 -- on it, hover for who was on at that moment) with that day's notes and a box to add one (with an
 -- icon), and Usual times (when the crew is usually on, the best time to play together, everyone's habits).
--- Opened by the calendar button on the panel, the wrench menu, /tc cal, or the button in the settings.
+-- Opened by the Calendar button next to the panel's tabs, the wrench menu, /tc cal, or the button in the settings.
 -- This file: the window, moving between the views and the helpers they share. Each view, loaded right after it:
 -- Calendar/CalendarMonth.lua, Calendar/CalendarDay.lua (the day timeline), Calendar/CalendarUsual.lua (usual times
 -- and the real-week grid) and Calendar/CalendarMaker.lua ("+ Create note" and the dungeon picker). What more than
@@ -248,6 +248,7 @@ function Calendar.open()
   P.view = "month"
   P.frame:Show()
   Calendar.shownFlag = true
+  if ns.Notes then ns.Notes.clearFresh() end -- looked at: the panel's Calendar button stops pulsing
   Calendar.refresh()
 end
 

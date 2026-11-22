@@ -55,6 +55,10 @@ local function fresh(entry) return entry and ns.now() - entry.at <= RAW_KEEP end
 -- Sends the probe. Returns facts.sendText: accepted / accepted without a code / the call failed / refused.
 local function sendProbe(text)
   local ok, result = pcall(C_ChatInfo.SendAddonMessage, ns.Config.PREFIX, text, "GUILD")
+  if ns.Util.isSecret(result) then -- never turned into text or compared
+    facts.accepted, facts.sendText, facts.sendResult = nil, ok and "hidden" or "the call failed (hidden)", nil
+    return
+  end
   local good = result == nil or result == true or result == 0
     or (Enum and Enum.SendAddonMessageResult and result == Enum.SendAddonMessageResult.Success)
   if not ok then
@@ -93,8 +97,12 @@ local function onRawMessage(text, chatType, raw)
   elseif msg.type == "GPONG" then
     -- a whisper from outside the guild is not an answer (Comm drops it too); before the list loads we cannot tell
     if chatType == "WHISPER" and ns.Guild.loaded() and not ns.Guild.isMember(raw) then return end
+    local now = ns.now()
+    for k, e in pairs(pongRaw) do -- an answer without a usable name that nobody claimed: gone after RAW_KEEP s
+      if k:sub(1, 1) == "?" and now - e.at > RAW_KEEP then pongRaw[k] = nil end
+    end
     local short = usable and ns.shortName(raw) or ("?" .. tostring(msg.fields.n))
-    pongRaw[short] = { form = rawText(raw), at = ns.now(), usable = usable }
+    pongRaw[short] = { form = rawText(raw), at = now, usable = usable }
   end
 end
 
@@ -163,12 +171,13 @@ function GuildTest.run()
   C_Timer.After(ANSWER_WAIT, function()
     if id ~= runId then return end
     if #facts.answers == 0 then
-      local line = "Nobody answered (nobody else online with TwizCrew, or guild messages are not delivered)."
-      if facts.echo and type(facts.echoForm) == "string" and facts.echoForm ~= "hidden" and singleWord(facts.echoForm)
-        then
-        line = line .. " Replies could not be tested: the game gave only a first name."
+      local form = facts.echo and facts.echoForm
+      if type(form) == "string" and form ~= "hidden" and form ~= "unknown" and singleWord(form) then
+        say("Nobody answered. If a friend with TwizCrew is online, replies may not be reaching you: the game gave"
+          .. " only a first name.")
+      else
+        say("Nobody answered (nobody else online with TwizCrew, or guild messages are not delivered).")
       end
-      say(line)
     else
       local parts = {}
       for i, a in ipairs(facts.answers) do
@@ -180,7 +189,8 @@ function GuildTest.run()
   end)
 end
 
-GuildTest.forTest = { pongRaw = function() return pongRaw end }
+GuildTest.forTest = { pongRaw = function() return pongRaw end, nonce = function() return nonce end,
+  raw = function(...) return onRawMessage(...) end }
 
 function GuildTest.facts()
   local copy = {}

@@ -121,8 +121,50 @@ return {
       a.printed = {}
       tc(a, "guildtest")
       H.advance(9)
-      A.ok(printed(a, "Nobody answered"))
-      A.ok(printed(a, "Replies could not be tested: the game gave only a first name."))
+      A.ok(printed(a, "Nobody answered. If a friend with TwizCrew is online, replies may not be reaching you: the"
+        .. " game gave only a first name."))
+    end,
+
+    -- Round 5 item 10: a hidden send result is never turned into text; the first-name line needs a readable echo.
+    a_hidden_send_result_shows_as_hidden = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      local send = a.env.C_ChatInfo.SendAddonMessage
+      a.env.C_ChatInfo.SendAddonMessage = function(...) send(...); return a.secret() end
+      a.printed = {}
+      tc(a, "guildtest")
+      H.advance(9)
+      A.ok(printed(a, "Guild send: hidden"), "the result shows as hidden")
+      A.eq(#nsA.Log.errors(5), 0)
+    end,
+
+    an_unknown_or_hidden_echo_never_claims_a_first_name = function(_, A, _, H)
+      for _, form in ipairs({ "unknown", "hidden" }) do
+        local a, nsA = H.client("Chaos Deathbringr") -- not linked: its own copy is not heard back by itself
+        H.guild("Test Guild", a)
+        boot(a)
+        a.printed = {}
+        tc(a, "guildtest")
+        local probe = nsA.Codec.encode("GPROBE", { n = nsA.GuildTest.forTest.nonce() })[1]
+        local raw = a.secret() -- not a string: "unknown"
+        if form == "hidden" then raw = "Chaos"; a.state.secret[raw] = true end -- a hidden one-word string
+        nsA.GuildTest.forTest.raw(probe, "GUILD", raw)
+        H.advance(9)
+        A.eq(nsA.GuildTest.facts().echoForm, form)
+        A.no(printed(a, "the game gave only a first name"), form)
+        A.ok(printed(a, "Nobody answered (nobody else online with TwizCrew, or guild messages are not delivered)."))
+      end
+    end,
+
+    unclaimed_unnamed_pongs_are_dropped_after_15_seconds = function(_, A, _, H)
+      local a, nsA = pair(H, "full")
+      nsA.Guild.loaded = function() return false end -- before the list loads a whisper cannot be checked
+      local pong = function(n) return nsA.Codec.encode("GPONG", { n = n })[1] end
+      nsA.GuildTest.forTest.raw(pong("77"), "WHISPER", a.secret())
+      A.ok(nsA.GuildTest.forTest.pongRaw()["?77"], "kept for its answer")
+      H.advance(16)
+      nsA.GuildTest.forTest.raw(pong("78"), "WHISPER", a.secret())
+      A.eq(nsA.GuildTest.forTest.pongRaw()["?77"], nil, "gone after 15 s")
+      A.ok(nsA.GuildTest.forTest.pongRaw()["?78"])
     end,
 
     a_strangers_pong_whisper_is_not_remembered = function(_, A, _, H)

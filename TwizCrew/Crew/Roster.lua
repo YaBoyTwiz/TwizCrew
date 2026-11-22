@@ -1,11 +1,11 @@
 -- Crew roster (pure, no WoW API): who is in the crew and what we last heard from them.
 -- `now` is the session clock, `wall` is the wallclock; both are passed in by the caller.
 --
--- Guild membership (setGuild, syncGuild): a real member a complete guild list of my TwizCrew guild does not have is
--- hidden (inGuild = false): members(), names(), sorted(), onlineCount() and get() leave them out, while row() and
--- allNames() still find them (Crew's bookkeeping, forgetting). Back in the list shows them again. Hiding never deletes
--- anything (only FORGET_AFTER_DAYS of silence does, at load). Nothing is marked before a complete list of the home
--- guild has been read (ns.Guild.active, complete). Fakes (test tools) are never marked. A new row from a message
+-- Guild membership (setGuild, syncGuild): a real member a complete list of the guild whose saved data is in use does
+-- not have is hidden (inGuild = false): members(), names(), sorted(), onlineCount() and get() leave them out, while
+-- row() and allNames() still find them (Crew's bookkeeping, forgetting). Back in the list shows them again. Hiding
+-- never deletes anything (only FORGET_AFTER_DAYS of silence does: pruneOld). Nothing is marked before such a complete
+-- list has been read (ns.Guild.active, complete). Fakes (test tools) are never marked. A new row from a message
 -- starts shown (a guild message comes from a member: the list may be behind) until the next sync.
 local _, ns = ...
 

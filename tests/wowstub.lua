@@ -377,11 +377,12 @@ local function build(W)
     end
     W:fire("GUILD_ROSTER_UPDATE", false)
   end }
+  -- st.guildNameHidden = true: the game never names the guild (nil); st.guild.realm: a guild of another realm (4th)
   env.GetGuildInfo = function(unit)
-    if unit ~= "player" or not st.guild then return nil end
+    if unit ~= "player" or not st.guild or st.guildNameHidden then return nil end
     local mine
     for _, m in ipairs(guildMembers()) do if m.name == st.player then mine = m end end
-    return st.guild.name, mine and mine.rank or "Member", mine and mine.rankIndex or 2
+    return st.guild.name, mine and mine.rank or "Member", mine and mine.rankIndex or 2, st.guild.realm
   end
   local layerGUID = env.UnitGUID
   env.UnitGUID = function(unit)

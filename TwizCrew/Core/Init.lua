@@ -27,7 +27,7 @@ end
 ns.Config = {
   PREFIX = "TwizCrew", PROTOCOL = 1,
   PING_INTERVAL = 60, OFFLINE_AFTER = 180, OFFLINE_TICK = 15,
-  FORGET_AFTER_DAYS = 60, -- a friend not seen for this long leaves the roster (and their saved numbers) at load
+  FORGET_AFTER_DAYS = 60, -- a friend not seen for this long leaves the roster and their saved numbers (Roster:pruneOld)
   LAYER_STALE_AFTER = 600, LAYER_CONFIRMATIONS = 2, LAYER_TICK = 30,
   -- layer compare: a friend this close (yards) whom the game hides for this long (s) is on another layer
   LAYER_NEAR = 40, LAYER_HIDDEN_FOR = 8, LAYER_LOOK_TICK = 2, LAYER_RECOMPUTE_GAP = 0.5,
@@ -71,6 +71,8 @@ ns.Config = {
   GUILD_REFRESH_MIN = 10, GUILD_REFRESH_SHOWN = 30, GUILD_REFRESH_HIDDEN = 120, GUILD_ABSENT_GRACE = 10,
   -- in a guild, sends (the login HELLO first) wait for the guild list at most GUILD_LIST_WAIT s
   GUILD_LIST_WAIT = 10,
+  -- in a guild the game does not name for this long (s), the guild list decides whose saved data is on top
+  GUILD_NAME_WAIT = 10,
   -- a big guild: about RESPONDERS copies (picked alike by every copy, Crew.isResponder) tell a friend who comes online
   -- our session and digests, each after a random 0 to RESPONDER_JITTER s. Asks for the same data of mine from several
   -- copies within ASK_COLLECT s (SREQ: SREQ_COLLECT s) get one guild answer. A digest mismatch waits a random 0 to

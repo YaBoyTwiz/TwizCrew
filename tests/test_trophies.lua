@@ -364,6 +364,7 @@ return {
     end,
     a_session_that_ended_while_i_was_away_is_recorded_late = function(ns, A, W)
       W:fire("ADDON_LOADED", "TwizCrew")
+      ns.db.guild.name = "Test Guild" -- the saved crew data is this guild's
       local wall = ns.wallclock()
       local old = "Twiz-" .. (wall - 9000)
       ns.db.stats = ns.db.stats or {}
@@ -507,6 +508,7 @@ return {
     end,
     a_late_record_is_as_fresh_as_my_last_moment_in_it = function(ns, A, W)
       W:fire("ADDON_LOADED", "TwizCrew")
+      ns.db.guild.name = "Test Guild" -- the saved crew data is this guild's
       local wall = ns.wallclock()
       local old = "Twiz-" .. (wall - 9000)
       local left = wall - ns.Config.SESSION_RESUME - 60 -- when I was last in it
@@ -525,6 +527,7 @@ return {
     end,
     a_friends_later_numbers_make_it_fresher = function(ns, A, W)
       W:fire("ADDON_LOADED", "TwizCrew")
+      ns.db.guild.name = "Test Guild" -- the saved crew data is this guild's
       local wall = ns.wallclock()
       local old = "Twiz-" .. (wall - 9000)
       local left = wall - ns.Config.SESSION_RESUME - 600

@@ -54,6 +54,23 @@ return {
       A.eq(sentOfType(nsB, b, "GPONG", "WHISPER"), 1, "one whisper back")
     end,
 
+    guildtest_tells_the_guild_name_and_the_row_counts = function(_, A, _, H)
+      local a = H.client("Chaos Deathbringr")
+      H.guild("Test Guild", a, { { name = "Ginkan Pebble" } })
+      H.link(a)
+      boot(a)
+      a.printed = {}
+      tc(a, "guildtest")
+      A.ok(printed(a, "The game names the guild \"Test Guild\"."))
+      A.ok(printed(a, "Guild list: 2 counted, 2 readable."))
+      local b = H.client("Ginkan Pebble", { guildNameHidden = true })
+      H.guild("Test Guild", b)
+      H.link(b)
+      boot(b)
+      b.printed = {}
+      tc(b, "guildtest")
+      A.ok(printed(b, "The game gives no guild name."))
+    end,
     probe_alone_says_nobody_answered = function(_, A, _, H)
       local a, nsA = H.client("Chaos Deathbringr")
       H.guild("Test Guild", a)

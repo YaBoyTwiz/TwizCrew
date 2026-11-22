@@ -429,6 +429,204 @@ return {
       A.eq(ns.myKey(), "Chaos Other", "not my first word")
     end,
 
+    -- Fit rule for unnamed (v0.1.24) data: at least 2 first-word matches (same class when both know one) and at least
+    -- half of the saved roster.
+    unnamed_data_needs_a_real_fit_before_a_guild_adopts_it = function(ns, A, W)
+      local function try(matching)
+        local Wn = W
+        local saved = { roster = {} }
+        for i = 1, 10 do
+          local name = "Friend" .. string.char(64 + i)
+          saved.roster[name] = { name = name, class = "MAGE", level = 10 }
+        end
+        local list = { member("Twiz") }
+        for i = 1, matching do list[#list + 1] = member("Friend" .. string.char(64 + i) .. " Surname", { class = "MAGE" }) end
+        for i = 1, 5 do list[#list + 1] = member("Other" .. i .. " Person") end
+        return saved, list, Wn
+      end
+      -- guild B: one coincidental match out of ten
+      local saved, list = try(1)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = list }
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), nil, "one match of ten: not adopted")
+      A.no(ns.Guild.active())
+      A.ok(ns.db.guild.notLegacy["Guild B"], "turned down for good")
+    end,
+
+    two_coincidental_matches_of_ten_do_not_adopt = function(ns, A, W)
+      local saved = { roster = {} }
+      for i = 1, 10 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, class = "MAGE", level = 10 }
+      end
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("FriendA Surname", { class = "MAGE" }),
+        member("FriendB Surname", { class = "MAGE" }), member("FriendC Surname", { class = "ROGUE" }) } }
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), nil, "two of ten (a third with another class): not adopted")
+    end,
+
+    six_of_ten_adopt = function(ns, A, W)
+      local saved = { roster = {} }
+      for i = 1, 10 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, class = (i % 2 == 0) and "MAGE" or nil, level = 10 }
+      end
+      local list = { member("Twiz") }
+      for i = 1, 6 do list[#list + 1] = member("Friend" .. string.char(64 + i) .. " Surname", { class = "MAGE" }) end
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = list }
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), "Guild A")
+      A.ok(ns.Guild.active())
+    end,
+
+    one_saved_friend_fits_only_with_a_known_equal_class = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz"), member("Frostie Snow", { class = "MAGE" }) } }
+      ns.db = ns.DB.init({ roster = { Frostie = { name = "Frostie" } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), nil, "one row, no class: not enough")
+    end,
+
+    an_empty_roster_with_other_crew_data_is_not_adopted_by_itself = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz"), member("Frostie Snow") } }
+      ns.db = ns.DB.init({ stats = { trophies = { s1 = { sid = "s1", people = {} } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), nil)
+      ns.db.guild.notLegacy = {}
+      ns.db.stats.trophies = {}
+      W:advance(2)
+      A.eq(ns.Guild.dataGuild(), "Guild A", "nothing else saved: an empty roster fits at once")
+    end,
+
+    adoption_never_takes_a_guild_that_has_parked_data = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz") } }
+      ns.db = ns.DB.init({ guilds = { ["Guild A"] = { roster = { Old = { name = "Old" } } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      A.eq(ns.Guild.dataGuild(), nil, "Guild A has parked data: the unnamed set is not it")
+      A.eq(ns.db.guilds["Guild A"].roster.Old.name, "Old")
+    end,
+
+    the_guild_identity_is_sticky_through_unreadable_answers = function(ns, A, W)
+      local seen = listen(ns)
+      boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") })
+      A.ok(ns.Guild.active()); A.eq(ns.Guild.id(), "Test Guild")
+      W.state.guildNameHidden = true -- a dungeon: no name for a while
+      W:advance(30)
+      A.ok(ns.Guild.active(), "still this guild")
+      A.eq(seen.states, { true }, "no flip")
+      W.state.guildNameHidden = nil
+      W.state.guild.name = "New Guild" -- a different readable name only counts after the grace time
+      W:advance(3)
+      A.eq(ns.Guild.id(), "Test Guild")
+      W:advance(ns.Config.GUILD_ABSENT_GRACE + 1)
+      A.eq(ns.Guild.id(), "New Guild")
+      A.no(ns.Guild.active())
+    end,
+
+    a_guild_of_another_realm_is_named_with_its_realm = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz") }, function(w) w.state.guild.realm = "Faraway" end)
+      A.eq(ns.Guild.id(), "Test Guild-Faraway")
+      A.eq(ns.Guild.dataGuild(), "Test Guild-Faraway")
+    end,
+
+    -- The game counts one row more than it gives: complete after three reads with one readable count, 5 s apart.
+    a_list_that_always_misses_a_row_becomes_complete_after_three_stable_reads = function(ns, A, W)
+      local db = boot(ns, W, "Twiz", { member("Twiz"), member("Ginkan Pebble") }, function(w)
+        local real = w.env.GetNumGuildMembers
+        w.env.GetNumGuildMembers = function() local n, o = real(); return n + 1, o, o end
+      end)
+      A.no(ns.Guild.complete()); A.no(ns.Guild.loaded(), "a partial first read: no new keys, so no list yet")
+      A.eq({ ns.Guild.readStats() }, { 3, 2 })
+      W:advance(3); W:fire("GUILD_ROSTER_UPDATE"); W:advance(2)
+      A.no(ns.Guild.complete(), "too soon after the first")
+      W:advance(2); W:fire("GUILD_ROSTER_UPDATE"); W:advance(2)
+      A.no(ns.Guild.complete(), "two stable reads")
+      W:advance(4); W:fire("GUILD_ROSTER_UPDATE"); W:advance(2)
+      A.ok(ns.Guild.complete(), "the third stable read")
+      A.ok(ns.Guild.loaded())
+      A.eq(db.guild.keys["ginkan pebble"], "Ginkan")
+    end,
+
+    -- The game never names the guild: the list decides after GUILD_NAME_WAIT s.
+    no_guild_name_main_with_old_data_becomes_active = function(ns, A, W)
+      local saved = { roster = {} }
+      local list = { member("Twiz") }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+        list[#list + 1] = member(name .. " Surname")
+      end
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = list }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      local seen = listen(ns)
+      ns.Guild.start()
+      W:advance(5)
+      A.no(ns.Guild.active(), "waits for the name first")
+      W:advance(ns.Config.GUILD_NAME_WAIT)
+      A.ok(ns.Guild.active(), "the list fits: taken as this guild's")
+      A.eq(ns.Guild.dataGuild(), "?")
+      A.eq(seen.states[#seen.states], true)
+      A.eq(next(ns.db.guild.byChar), nil, "the fallback never writes byChar")
+      W.state.guildNameHidden = nil -- later the game names it
+      W:advance(2)
+      A.eq(ns.Guild.dataGuild(), "Guild A", "the \"?\" data gets the real name")
+      A.ok(ns.Guild.active())
+    end,
+
+    no_guild_name_unrelated_guild_stays_quiet = function(ns, A, W)
+      local saved = { roster = {} }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+      end
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed"), member("Yan Yan") } }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 10)
+      A.no(ns.Guild.active())
+      A.eq(ns.Guild.dataGuild(), nil)
+      A.eq(ns.db.roster.FriendA.level, 10, "intact")
+    end,
+
+    no_guild_name_named_data_is_used_when_this_character_was_here = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      local saved = { guild = { name = "Guild A", byChar = {} } }
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.db.guild.byChar[ns.DB.charId()] = "Guild A"
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 2)
+      A.ok(ns.Guild.active(), "this character's last guild was the data guild")
+    end,
+
     the_module_is_registered = function(ns, A)
       local d = ns.Modules.get("guild")
       A.ok(d); A.eq(d.tier, "essential"); A.eq(d.name, "Guild list")

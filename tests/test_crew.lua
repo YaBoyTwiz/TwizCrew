@@ -824,6 +824,7 @@ return {
       db.roster.Frostie = { name = "Frostie", class = "MAGE", level = 20 }
       db.stats.crew.Oldpal = { sid = "s", s = { gn = 3 }, a = { gn = 3 } }
       db.stats.crew.Frostie = { sid = "s", s = { gn = 4 }, a = { gn = 4 } }
+      db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
       local updated = record(ns, "MEMBER_UPDATED")
@@ -851,6 +852,7 @@ return {
       db.stats.crew.Frostie = { sid = "s", s = { gn = 4 }, a = { gn = 4 } }
       db.stats.trophies = { s1 = { sid = "s1", people = { "Frostie", "Twiz" }, winners = { gn = "Frostie" } } }
       db.calendar = { notes = { n1 = { d = "2026-11-21", t = "raid", b = "Frostie" } } }
+      db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
       start(ns, W, db)
@@ -948,6 +950,23 @@ return {
       noErrors(ns, A)
     end,
     -- Friends not seen for 60 days go, once the data in use is known to be this guild's (never on another guild's).
+    -- A dungeon hides the guild name for a while: nothing flips, no new HELLO, friends are still heard.
+    an_unreadable_guild_name_mid_session_changes_nothing = function(ns, A, W)
+      local states = record(ns, "GUILD_STATE")
+      start(ns, W)
+      A.ok(ns.Guild.active())
+      local mark = #W.sent
+      W.state.guildNameHidden = true
+      W:advance(30)
+      receive(ns, W, "Frostie", "STATE", { lv = "20", zn = "Deadmines" })
+      A.eq(ns.roster:get("Frostie").zone, "Deadmines", "still accepted")
+      local hellos = 0
+      for _, m in ipairs(sentSince(ns, W, mark)) do if m.type == "HELLO" then hellos = hellos + 1 end end
+      A.eq(hellos, 0, "no new HELLO")
+      A.eq(#states, 1, "no GUILD_STATE flip")
+      W.state.guildNameHidden = nil
+      noErrors(ns, A)
+    end,
     prune_at_load_drops_old_friends_and_their_numbers = function(ns, A, W)
       local db = ns.DB.init(nil, ns.Modules.list())
       db.guild.name = "Test Guild"

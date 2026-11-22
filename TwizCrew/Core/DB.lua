@@ -26,13 +26,18 @@ end
 --   "?" data the guild has not taken it is cleared, so the next login moves nothing.
 -- * db.guild.request = { kind = "new" | "load", guild, char, from, key }: a one-shot /tc guild new or load, used up
 --   at the next start-up whoever logs in, carried out only for that character while it still fits (requestPlan).
+--   Its outcome, db.guild.requestResult = { char, kind, done, reason }, is said once at that character's next login
+--   (DB.notes, printed by Core/Boot.lua), and shown by /tc guild until then.
 -- * A set steps aside, never away: a set that would share a guild's name goes to "<name> (replaced)"; unnamed or
 --   "?" data that would land on a parked set of its kind, and values that are not usable sets, go to db.guilds_bad.
 --   Every parked or kept-aside set is listed by /tc guild and can be brought back with /tc guild load.
--- * Fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while it is in use. db.guild.named: a
---   readable guild name was seen on this account (Crew/Guild.lua).
+-- * Old friends are forgotten (Crew's 60-day rule) only while the saved friends fit the guild's complete list
+--   (Guild.listFits): a set used in a guild that is not its own forgets nothing.
+-- * guild.pinnedOld (per set): unnamed v0.1.24 data taken by a guild pinned its old crew once (Crew/Guild.lua).
+-- * Fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while it is in use. db.guild.named:
+--   this account has read a real guild name from the game (names of parked sets never count; markNamed).
 local GUILD_PATHS = { "roster", "feed", "calendar", "pins", "stats.crew", "stats.session", "stats.trophies",
-  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell" }
+  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell", "guild.pinnedOld" }
 DB.GUILD_PATHS = GUILD_PATHS
 local UNNAMED = ""      -- the parked slot of unnamed (v0.1.24) data
 local PLACEHOLDER = "?" -- data taken while the game named no guild (Crew/Guild.lua)
@@ -160,6 +165,7 @@ local function repairGuilds(db)
   end
   if g.name ~= nil and (type(g.name) ~= "string" or g.name == "") then g.name = nil end
   if g.request ~= nil and type(g.request) ~= "table" then g.request = nil end
+  if g.requestResult ~= nil and type(g.requestResult) ~= "table" then g.requestResult = nil end
   g.fresh = nil -- a test build's one-shot "fresh set" flag: now db.guild.request
   if db.guilds_bad ~= nil and type(db.guilds_bad) ~= "table" then db.guilds_bad = { guilds_bad = db.guilds_bad } end
   local odd = {}
@@ -221,21 +227,29 @@ end
 -- From a /tc guild request (one shot): only for the character that made it, while the game does not name another
 -- guild; "new" only while unnamed or "?" data is on top and that guild has no set; "load" while the chosen set is
 -- still there.
+local REASONS = {
+  char = "another character logged in first", guild = "your guild changed", gone = "that set is gone",
+  hasSet = "this guild already has a set", named = "another guild's data is in use",
+  odd = "it could not be read", error = "something went wrong",
+}
+
 local function requestPlan(db, req, charId)
-  if type(req) ~= "table" or req.char ~= charId or type(req.guild) ~= "string" or req.guild == "" then return nil end
+  if type(req.guild) ~= "string" or req.guild == "" then return nil, "odd" end
+  if req.char ~= charId then return nil, "char" end
   local g, want = db.guild, req.guild
   local now = ns.Util.plain(GetGuildInfo, "player")
-  if isReal(want) and type(now) == "string" and now ~= "" and now ~= want then return nil end
+  if isReal(want) and type(now) == "string" and now ~= "" and now ~= want then return nil, "guild" end
   if req.kind == "new" then
-    if g.name == want or db.guilds[want] ~= nil or isReal(g.name) then return nil end
+    if g.name == want or db.guilds[want] ~= nil then return nil, "hasSet" end
+    if isReal(g.name) then return nil, "named" end
     return { name = want, setChar = true }
   elseif req.kind == "load" then
     local tbl = (req.from == "bad" and db.guilds_bad) or (req.from == "guilds" and db.guilds) or nil
     local set = type(tbl) == "table" and type(req.key) == "string" and tbl[req.key] or nil
-    if type(set) ~= "table" then return nil end
+    if type(set) ~= "table" then return nil, "gone" end
     return { incoming = set, fromTbl = tbl, fromKey = req.key, name = want, setChar = true }
   end
-  return nil
+  return nil, "odd"
 end
 
 -- From byChar (this character's guild in its last session): that guild's parked set. A guild without a set gets
@@ -315,26 +329,88 @@ local function carryOut(db, plan, charId)
   return true
 end
 
--- At login, before any module reads per-guild data: carries out a /tc guild new or load request (always used up
--- here, carried out or not), else brings up this character's guild's set (see loginPlan, carryOut). Returns true
--- when it swapped; DB.loaded is true after a session start that carried out a load request.
+-- A set (parked or kept aside) other than the one in use that holds at least one real friend.
+local function otherFriends(db)
+  for _, tbl in ipairs({ db.guilds, db.guilds_bad }) do
+    for k, set in pairs(type(tbl) == "table" and tbl or {}) do
+      local roster = type(k) == "string" and type(set) == "table" and rawget(set, "roster")
+      for name in pairs(type(roster) == "table" and roster or {}) do
+        if type(name) == "string" and not ns.isTestName(name) then return true end
+      end
+    end
+  end
+  return false
+end
+
+-- The result of a /tc guild request for character `char`'s next login: said there once (DB.notes), then cleared.
+local function sayResult(db, charId)
+  local r = db.guild.requestResult
+  if type(r) ~= "table" or charId == nil or r.char ~= charId then return end
+  db.guild.requestResult = nil
+  DB.notes[#DB.notes + 1] = r.done and "TwizCrew: Your /tc guild request was carried out."
+    or ("TwizCrew: Your /tc guild request was not carried out: " .. tostring(r.reason) .. ". Type /tc guild.")
+end
+
+-- At login, before any module reads per-guild data: uses up a /tc guild new or load request (carried out or not; its
+-- result is kept in db.guild.requestResult for the character that made it, and said at that character's login),
+-- else brings up this character's guild's set (see loginPlan, carryOut). DB.notes: the chat lines for this login
+-- (Core/Boot.lua prints them): a request's result, and "<guild> starts with new TwizCrew data" when a guild got a
+-- fresh set by itself while other sets hold friends. Returns true when it swapped.
 function DB.useGuildOf(db, charId)
-  DB.loaded = false
+  DB.notes = {}
   if type(db) ~= "table" or type(db.guild) ~= "table" then return false end
   local g = db.guild
   local req = g.request
+  local result
+  local ok, plan, why = pcall(function()
+    g.request = nil -- one shot: used up here whatever happens next
+    if type(req) == "table" then result = { char = req.char, kind = req.kind, done = false } end
+    repairGuilds(db)
+    sayResult(db, charId) -- an earlier request's result for this character
+    if not result then return nil end
+    return requestPlan(db, req, charId)
+  end)
   g.request = nil
-  repairGuilds(db)
-  local plan = requestPlan(db, req, charId)
-  if type(req) == "table" and not plan then
-    ns.Log.add("info", "a /tc guild %s request was not carried out: it no longer fits", tostring(req.kind))
+  local failure
+  if not ok then failure, plan = plan, nil end
+  if result and not plan then
+    result.reason = REASONS[ok and why or "error"] or REASONS.odd
+    ns.Log.add("info", "a /tc guild %s request was not carried out: %s", tostring(result.kind), result.reason)
   end
-  local fromRequest = plan ~= nil
-  plan = plan or loginPlan(db, charId)
-  if not plan then return false end
-  local ok = carryOut(db, plan, charId)
-  if ok and fromRequest and req.kind == "load" then DB.loaded = true end
-  return ok
+  local swapped, fresh = false, false
+  if ok then
+    local fromRequest = plan ~= nil
+    if not plan then
+      local fine, p = pcall(loginPlan, db, charId)
+      plan = fine and p or nil
+    end
+    if plan then
+      swapped = carryOut(db, plan, charId)
+      fresh = swapped and not fromRequest and plan.incoming == nil
+    end
+    if result and fromRequest then
+      result.done = swapped
+      if not swapped then result.reason = REASONS.error end
+    end
+  else
+    ns.Log.add("error", "the login swap of saved data failed (%s): nothing changed", tostring(failure))
+  end
+  if result then
+    g.requestResult = result
+    sayResult(db, charId)
+  end
+  if fresh and otherFriends(db) then
+    DB.notes[#DB.notes + 1] = "TwizCrew: " .. ns.Util.safeText(tostring(g.name)) .. " starts with new TwizCrew data."
+      .. " You have other saved sets: type /tc guild."
+  end
+  return swapped
+end
+
+-- db.guild.named: this account has read a real guild name from the game (set by Crew/Guild.lua). Data saved before
+-- that flag existed counts when its set in use has a real guild name (never a "(replaced)" or kept-aside label).
+local function markNamed(g)
+  local n = g.name
+  if isReal(n) and not n:find(" %(replaced[ %d]*%)$") and not n:find("#%d+$") then g.named = true end
 end
 
 -- Accepts nil or any type; returns a repaired table.
@@ -343,6 +419,7 @@ function DB.init(saved, defs)
   if db.guilds ~= nil and type(db.guilds) ~= "table" then keepAside(db, "guilds", db.guilds); db.guilds = {} end
   guildDefaults(db)
   repairGuilds(db)
+  markNamed(db.guild)
   ns.Util.mergeDefaults(db, {
     schema = 1,
     modules = {},

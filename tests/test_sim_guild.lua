@@ -595,6 +595,8 @@ return {
       local alt2, alt2Ns = altIn(H, "Other Guild", saved)
       H.advance(30)
       A.eq(saved.guild.name, "Other Guild")
+      A.eq(countPrinted(alt2, "TwizCrew: Other Guild starts with new TwizCrew data. You have other saved sets: type"
+        .. " /tc guild."), 1)
       A.ok(online(alt2Ns, "Stranger"), "the alt meets its guild")
       A.eq(alt2Ns.roster:get("Frostie"), nil, "guild A's people are not here")
       A.eq(saved.guilds["Crew Guild"].roster.Frostie.class, "MAGE", "guild A's data is parked")
@@ -917,8 +919,14 @@ return {
       oldDataOnTop(A, saved, "adopted")
       A.eq(saved.roster.Oldpal, nil, "the usual 60-day rule")
       A.eq(next(saved.guilds), nil); A.eq(saved.guild.byChar[MAIN], "Crew Guild")
+      for k = 1, 10 do A.eq(saved.pins["Friend" .. string.char(64 + k)], true, "the old crew is pinned") end
+      A.eq(saved.guild.pinnedOld, true)
       noErrors(A, ns)
       retire(H, W)
+      saved.pins.FriendA = nil -- the player unpins someone: it stays that way
+      local _, ns2 = mainSession(H, saved, "Crew Guild", guildOf(8), 20)
+      A.eq(saved.pins.FriendA, nil, "pinned once only"); A.eq(saved.pins.FriendB, true)
+      noErrors(A, ns2)
     end,
 
     -- (b) 3 of 10 (and a friend unseen for 70 days): quiet, one line. /tc guild use says why it will not and how to
@@ -949,7 +957,8 @@ return {
       A.ok(groupless(tw.sent) > 0, "sends now")
       A.eq(#twNs.roster:allNames(), 11, "every old friend kept (8 of them hidden)")
       A.eq(twNs.roster:names(), { "FriendA", "FriendB", "FriendC" })
-      A.ok(saved.roster.Oldpal, "nothing old forgotten in the session of /tc guild use yes")
+      A.ok(saved.roster.Oldpal, "nothing old forgotten: the list does not fit the saved friends")
+      A.eq(saved.pins.FriendJ, true, "use yes pins the old crew too")
       A.eq(saved.stats.crew.Oldpal.a.dt, 5)
       oldDataOnTop(A, saved, "use yes")
       A.eq(next(saved.guilds), nil)
@@ -965,8 +974,12 @@ return {
       A.ok(printed(tw, "TwizCrew: Crew Guild gets its own fresh saved data. Type /reload to start it; nothing saved is"
         .. " deleted."))
       A.eq(saved.guild.request, { kind = "new", guild = "Crew Guild", char = MAIN })
+      tc(tw, "guild")
+      A.ok(printed(tw, "TwizCrew: waiting for your next login: a fresh set for Crew Guild."))
       retire(H, tw)
       local tw2, tw2Ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      A.eq(countPrinted(tw2, "TwizCrew: Your /tc guild request was carried out."), 1)
+      A.eq(countPrinted(tw2, "starts with new TwizCrew data"), 0, "(asked for: no extra line)")
       A.eq(saved.guild.name, "Crew Guild"); A.ok(tw2Ns.Guild.active())
       A.eq(next(saved.roster), nil, "a fresh set")
       A.eq(saved.guilds[""].roster.FriendJ.name, "FriendJ", "the old data, parked")
@@ -987,6 +1000,7 @@ return {
       A.eq(saved.guild.request, { kind = "load", guild = "Crew Guild", char = MAIN, from = "guilds", key = "" })
       retire(H, tw2)
       local tw3, tw3Ns = mainSession(H, saved, "Crew Guild", guildOf(3), 30, nil, true)
+      A.eq(countPrinted(tw3, "TwizCrew: Your /tc guild request was carried out."), 1)
       A.eq(saved.guild.name, "Crew Guild"); A.ok(tw3Ns.Guild.active())
       oldDataOnTop(A, saved, "loaded back")
       A.eq(saved.guilds[""], nil)
@@ -1039,7 +1053,12 @@ return {
       retire(H, alt)
       A.eq(saved2.guild.request, nil, "used up at the alt's login")
       A.eq(saved2.guild.name, nil); A.eq(next(saved2.guilds), nil)
-      mainSession(H, saved2, "Crew Guild", guildOf(3), 30)
+      A.eq(saved2.guild.requestResult, { char = MAIN, kind = "new", done = false,
+        reason = "another character logged in first" })
+      local tw4 = mainSession(H, saved2, "Crew Guild", guildOf(3), 30)
+      A.eq(countPrinted(tw4, "TwizCrew: Your /tc guild request was not carried out: another character logged in"
+        .. " first. Type /tc guild."), 1)
+      A.eq(saved2.guild.requestResult, nil)
       A.eq(saved2.guild.name, nil, "the main's next login: nothing made by an old request")
       oldDataOnTop(A, saved2, "after the alt")
       A.eq(next(saved2.guilds), nil)
@@ -1053,11 +1072,18 @@ return {
         saved.roster[name] = { name = name, level = 9, lastSeen = 1700000000 - 70 * 86400 }
         saved.stats.crew[name] = { sid = "x", s = {}, a = { dt = 7 } }
       end
+      local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return n end
+      local rows, stats = count(saved.roster), count(saved.stats.crew)
       local function everything(when)
         oldDataOnTop(A, saved, when)
         A.ok(saved.roster.Oldpal and saved.roster.Oldbuddy, when .. ": friends unseen for 70 days")
         A.eq(saved.stats.crew.Oldbuddy.a.dt, 7, when)
+        A.ok(count(saved.roster) >= rows and count(saved.stats.crew) >= stats, when .. ": no row or number deleted")
       end
+      -- the main's guild: eight of the old friends, and the two not seen for 70 days are still members (offline)
+      local mainGuild = guildOf(8)
+      mainGuild[#mainGuild + 1] = { name = "Oldpal Person" }
+      mainGuild[#mainGuild + 1] = { name = "Oldbuddy Person" }
       local alt, altNs = altIn(H, "Other Guild", saved)
       H.advance(30)
       tc(alt, "guild use")
@@ -1069,26 +1095,106 @@ return {
       everything("the alt's session")
       noErrors(A, altNs)
       retire(H, alt)
-      local main = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      for n = 1, 2 do -- the alt logs in twice more before the main notices: the list does not fit, nothing is pruned
+        local a, aNs = altIn(H, "Other Guild", saved)
+        H.advance(30)
+        A.ok(aNs.Guild.active(), "alt login " .. n)
+        A.no(aNs.Guild.listFits(), "alt login " .. n .. ": the list does not fit the friends")
+        everything("alt login " .. n)
+        noErrors(A, aNs)
+        retire(H, a)
+      end
+      local main = mainSession(H, saved, "Crew Guild", mainGuild, 30, nil, true)
       A.ok(printed(main, "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew Guild."))
       retire(H, main)
-      local main2, main2Ns = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      local main2, main2Ns = mainSession(H, saved, "Crew Guild", mainGuild, 30, nil, true)
       A.eq(saved.guild.name, "Crew Guild"); A.eq(next(saved.roster), nil, "a set of its own, empty")
+      A.eq(countPrinted(main2, "TwizCrew: Crew Guild starts with new TwizCrew data. You have other saved sets: type"
+        .. " /tc guild."), 1)
       A.ok(saved.guilds["Other Guild"].roster.Oldpal, "the old data, parked as Other Guild's")
       tc(main2, "guild")
       A.eq(countPrinted(main2, "1: Other Guild, 13 friends, last seen "), 1, "(the alt met Stranger)")
+      tc(main2, "guild load 1")
       tc(main2, "guild load 1 yes")
       A.ok(printed(main2, "TwizCrew: Type /reload."))
       noErrors(A, main2Ns)
       retire(H, main2)
-      local main3, main3Ns = mainSession(H, saved, "Crew Guild", guildOf(8), 30, nil, true)
+      local main3, main3Ns = mainSession(H, saved, "Crew Guild", mainGuild, 30, nil, true)
+      A.eq(countPrinted(main3, "TwizCrew: Your /tc guild request was carried out."), 1)
       A.eq(saved.guild.name, "Crew Guild"); A.ok(main3Ns.Guild.active())
+      A.ok(main3Ns.Guild.listFits(), "the main's list fits: the usual rule runs, and keeps its members")
       everything("recovered")
       A.eq(saved.guilds["Other Guild"], nil)
       A.ok(saved.guilds["Crew Guild (replaced)"], "the empty set, parked")
       A.eq(saved.guild.byChar[MAIN], "Crew Guild"); A.eq(saved.guild.byChar[ALT], "Other Guild")
+      A.eq(saved.guild.requestResult, nil, "told once, then cleared")
       noErrors(A, main3Ns)
       retire(H, main3)
+    end,
+
+    -- Round 5 (1b): on a game that never names guilds, an alt in another guild is active on the shared "?" set and
+    -- forgets nothing of the main's (its list does not fit them).
+    no_name_alt_on_the_shared_set_prunes_nothing = function(_, A, _, H)
+      local saved = oldSave()
+      saved.guild = { name = "?" }
+      saved.roster.Oldpal = { name = "Oldpal", level = 9, lastSeen = 1700000000 - 70 * 86400 }
+      saved.stats.crew.Oldpal = { sid = "x", s = {}, a = { dt = 7 } }
+      local W, ns = H.client("Altie", { guildNameHidden = true })
+      W.state.guids.player = ALT
+      H.guild("Other Guild", W, { { name = "Zed Zed" } })
+      W.env.TwizCrewDB = saved
+      H.link(W)
+      login(W)
+      H.advance(ns.Config.GUILD_NAME_WAIT + 30)
+      A.ok(ns.Guild.active(), "the shared set"); A.ok(ns.Guild.complete()); A.no(ns.Guild.listFits())
+      A.ok(saved.roster.Oldpal, "nothing pruned"); A.eq(saved.stats.crew.Oldpal.a.dt, 7)
+      oldDataOnTop(A, saved, "after the alt")
+      noErrors(A, ns)
+    end,
+
+    -- Round 5 (1c): a character that changed guild while offline is active on its old guild's set during a nameless
+    -- gap (byChar): its new guild's list does not fit, nothing is pruned.
+    a_character_in_a_new_guild_during_a_nameless_gap_prunes_nothing = function(_, A, _, H)
+      local saved = oldSave()
+      saved.guild = { name = "Crew Guild", named = true, byChar = { [MAIN] = "Crew Guild" } }
+      saved.roster.Oldpal = { name = "Oldpal", level = 9, lastSeen = 1700000000 - 70 * 86400 }
+      local W, ns = mainSession(H, saved, "New Guild", { { name = "Zed Zed" } }, 40, { guildNameHidden = true }, true)
+      A.ok(ns.Guild.active(), "active by byChar while nameless"); A.no(ns.Guild.listFits())
+      A.ok(saved.roster.Oldpal, "nothing pruned")
+      oldDataOnTop(A, saved, "nameless gap")
+      noErrors(A, ns)
+      retire(H, W)
+    end,
+
+    -- Round 5 (2): on a game that never names guilds, load parks the shared set as "? (replaced)" and every command
+    -- still works afterwards: the set can be loaded back.
+    no_name_load_and_load_back = function(_, A, _, H)
+      local saved = { guild = { name = "?" }, roster = { Qone = { name = "Qone", lastSeen = 1700000000 } },
+        guilds = { [""] = { roster = { Lone = { name = "Lone" }, Ltwo = { name = "Ltwo" } } } } }
+      local hidden = { guildNameHidden = true }
+      local W, ns = mainSession(H, saved, "Crew Guild", guildOf(2), 25, hidden, true)
+      A.ok(ns.Guild.active())
+      tc(W, "guild load 1"); tc(W, "guild load 1 yes")
+      A.ok(printed(W, "TwizCrew: Type /reload."))
+      retire(H, W)
+      W, ns = mainSession(H, saved, "Crew Guild", guildOf(2), 25, hidden, true)
+      A.eq(saved.guild.name, "?"); A.ok(saved.roster.Lone); A.ok(ns.Guild.active())
+      A.eq(saved.guilds["? (replaced)"].roster.Qone.name, "Qone")
+      A.no(saved.guild.named, "no real guild name was ever read")
+      tc(W, "guild")
+      A.eq(countPrinted(W, "1: ? (replaced), 1 friend"), 1)
+      tc(W, "guild load 1")
+      A.eq(countPrinted(W, "This will make set 1 (? (replaced), 1 friend) the data for this guild."), 1)
+      tc(W, "guild load 1 yes")
+      A.ok(printed(W, "TwizCrew: Type /reload."))
+      noErrors(A, ns)
+      retire(H, W)
+      W, ns = mainSession(H, saved, "Crew Guild", guildOf(2), 25, hidden, true)
+      A.eq(saved.guild.name, "?"); A.ok(saved.roster.Qone, "back")
+      A.ok(saved.guilds["? (replaced)"].roster.Lone, "and the other set parked")
+      A.eq(saved.guilds[""], nil)
+      noErrors(A, ns)
+      retire(H, W)
     end,
 
     -- (f) A main in guild A and an alt in guild B, both with sets, alternating five times: each login is on its own
@@ -1134,6 +1240,8 @@ return {
       local W, ns = mainSession(H, saved, "Crew Guild", guildOf(2), 20, nil, true)
       A.eq(saved.guild.name, "Crew Guild"); A.ok(ns.Guild.active())
       A.eq(saved.guild.byChar[MAIN], "Crew Guild"); A.eq(next(saved.guilds), nil)
+      A.eq(next(saved.pins), nil, "nobody pinned on a fresh install")
+      A.eq(countPrinted(W, "starts with new TwizCrew data"), 0)
       noErrors(A, ns)
       retire(H, W)
     end,

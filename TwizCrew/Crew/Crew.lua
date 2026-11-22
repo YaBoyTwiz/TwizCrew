@@ -317,8 +317,9 @@ end
 local tidied = false -- the saved rows were tidied this session (only once they are known to be this guild's)
 
 -- Once a session, when the guild says the data in use is its own: old "Name-Realm" keys and my own ghost go
--- (tidyNames), and friends not seen for FORGET_AFTER_DAYS go, unless they are on the guild list now (not in a session
--- whose data the player gave this guild without the list's say: Guild.keepOld).
+-- (tidyNames), and friends not seen for FORGET_AFTER_DAYS go, unless they are on the guild list now; that last step
+-- only while the saved friends fit the guild's complete list (Guild.listFits), so a set used in a guild that is not
+-- its own forgets nothing.
 local function tidy()
   tidied = true
   local before = ns.Util.copy(ns.roster:allNames())
@@ -328,7 +329,7 @@ local function tidy()
   for _, name in ipairs(before) do
     if not ns.roster:row(name) then ns.Bus.fire("MEMBER_REMOVED", name) end
   end
-  if ns.Guild.keepOld() then return end
+  if not ns.Guild.listFits() then return end
   local onList = function(name) return ns.Guild.get(name) ~= nil end
   for _, name in ipairs(ns.roster:pruneOld(ns.wallclock(), onList)) do
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end

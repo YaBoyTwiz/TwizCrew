@@ -121,9 +121,24 @@ local function listSets(G)
     end
     print("  " .. entry.number .. ": " .. label .. ", " .. friends(n) .. (day and (", last seen " .. day) or ""))
   end
+  local g = ns.db.guild
+  local req, res = g.request, g.requestResult
+  if type(req) == "table" then
+    local whose = req.guild == G.PLACEHOLDER and "the shared set" or ns.Util.safeText(tostring(req.guild))
+    say("waiting for " .. (req.char == ns.DB.charId() and "your" or "this character's") .. " next login: "
+      .. (req.kind == "new" and "a fresh set" or ("the set " .. nameOf(tostring(req.key)))) .. " for " .. whose .. ".")
+  end
+  if type(res) == "table" then
+    say("the last /tc guild request " .. (res.done and "was carried out." or ("was not carried out: "
+      .. ns.Util.safeText(tostring(res.reason)) .. ".")))
+  end
   if not G.inGuild() then return end
   if G.settling() then say(REFUSED.changing); return end
-  if not here then say(REFUSED.noname); return end
+  if not here and G.deciding() then say(REFUSED.noname); return end
+  if not here then
+    say("the game does not name your guild right now. /tc guild load <number> uses a set here.")
+    return
+  end
   local shown = here == G.PLACEHOLDER and "this guild" or ns.Util.safeText(here)
   if G.needsReload() then
     say("type /reload to switch to " .. shown .. "'s own saved data.")
@@ -140,7 +155,7 @@ local function guildCommand(rest)
   local what, arg = rest:lower():match("^(%S*)%s*(.-)$")
   if what == "" then listSets(G); return end
   local here = G.here()
-  local shown = here == G.PLACEHOLDER and "this guild" or safe(tostring(here))
+  local shown = (here == nil or here == G.PLACEHOLDER) and "this guild" or safe(here)
   local ok, why, a, b
   if what == "use" and (arg == "" or arg == "yes") then
     ok, why, a, b = G.useHere(arg == "yes")
@@ -148,10 +163,17 @@ local function guildCommand(rest)
     elseif why == "nofit" then
       say("Only " .. a .. " of " .. b .. " saved friends are in " .. shown .. ". If this really is your crew's guild,"
         .. " type /tc guild use yes.")
+    elseif why == "noroster" then
+      say("The saved data has no friend list to check against " .. shown .. ". If this is your crew's guild, type /tc"
+        .. " guild use yes.")
     elseif why == "nolist" then say("the guild list has not come in yet. Try again in a few seconds.") end
-  elseif what == "new" and arg == "" then
-    ok, why = G.newHere()
-    if ok then say(shown .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.") end
+  elseif what == "new" and (arg == "" or arg == "yes") then
+    ok, why = G.newHere(arg == "yes")
+    if ok then say(shown .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.")
+    elseif why == "shared" then
+      say("This game gives no guild names, so all your characters share one set. /tc guild new would start that shared"
+        .. " set fresh. Type /tc guild new yes.")
+    end
   elseif what == "load" then
     local n, yes = arg:match("^(%d+)%s*(%a*)$")
     n = tonumber(n)
@@ -165,6 +187,7 @@ local function guildCommand(rest)
       say("This will make set " .. n .. " (" .. setText(why) .. ") the data for " .. shown .. ". The data in use now is"
         .. " kept as a parked set. Type /tc guild load " .. n .. " yes.")
     elseif why == "nonumber" then say("there is no set " .. n .. ". Type /tc guild to see the numbers.")
+    elseif why == "nopreview" then say("Type /tc guild load " .. n .. " first.")
     elseif why == "inuse" then say("set 0 is the data in use already.") end
   else
     say("type /tc guild, /tc guild use, /tc guild new or /tc guild load <number>.")

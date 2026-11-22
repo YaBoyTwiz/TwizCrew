@@ -373,6 +373,28 @@ return {
       A.no(ns.DB.useGuildOf(db, "c1")); A.eq(db.guild.request, nil)
     end,
 
+    -- Round 5 (5): an error before the swap still uses the request up, with a result that says it was not done.
+    a_request_that_errors_is_recorded_not_lost_silently = function(ns, A, W)
+      W.state.guild = nil
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A" } }, {})
+      db.guilds_bad = setmetatable({}, { __index = function() error("boom") end })
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "x" }
+      A.no(ns.DB.useGuildOf(db, "c1"), "no raise")
+      A.eq(db.guild.request, nil, "used up")
+      A.eq(ns.DB.notes, { "TwizCrew: Your /tc guild request was not carried out: something went wrong. Type /tc"
+        .. " guild." })
+      A.eq(db.roster.A1.name, "A1", "nothing moved")
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "x" }
+      A.no(ns.DB.useGuildOf(db, "c2"), "another character logs in")
+      A.eq(db.guild.requestResult, { char = "c1", kind = "load", done = false,
+        reason = "another character logged in first" }, "kept for c1's next login")
+      db.guilds_bad, db.guild.requestResult = {}, nil
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "gone" }
+      A.no(ns.DB.useGuildOf(db, "c1"))
+      A.eq(ns.DB.notes, { "TwizCrew: Your /tc guild request was not carried out: that set is gone. Type /tc guild." })
+      A.eq(db.guild.requestResult, nil, "said at that character's login, then cleared")
+    end,
+
     sets_are_numbered_in_a_stable_order = function(ns, A)
       local db = ns.DB.init({ roster = { T1 = {} }, guild = { name = "Guild A" },
         guilds = { zed = { roster = {} }, ["?"] = { roster = {} }, [""] = { roster = {} }, Alpha = { roster = {} } },

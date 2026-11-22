@@ -18,12 +18,16 @@
 -- * Unnamed or "?" data on top and this guild has no set: the one safe guess. It becomes this guild's at once when
 --   nothing is saved, else when a complete list fits it (rosterFits). Otherwise TwizCrew is quiet this session, says
 --   once how to choose, reads the list again at most once a minute (and on a roster update), and byChar is cleared so
---   the next login moves nothing. The player chooses: /tc guild use (only when the list fits; "use yes" insists and
---   nothing old is forgotten that session), /tc guild new (a fresh set at the next login), /tc guild load <number>
---   (any listed set at the next login). use, new and load wait while the guild is changing.
--- * The game never names the guild (no name after GUILD_NAME_WAIT, and none ever seen on this account): unnamed data
---   that fits becomes "?", and "?" data is used in any guild (one shared set); use and load name the chosen set "?".
---   A readable name later renames "?" data only when the list fits (like unnamed data).
+--   the next login moves nothing. The player chooses: /tc guild use (only when the list fits, or "use yes"), /tc guild
+--   new (a fresh set at the next login), /tc guild load <number> (a set shown this session, at the next login). use,
+--   new and load wait while the guild is changing. Unnamed data taken by a guild pins its old crew once (pinOldCrew).
+-- * Old friends are forgotten only while the saved friends fit the complete list (listFits, Crew's tidy).
+-- * The game never names the guild (no name after GUILD_NAME_WAIT, and this account never read a real guild name,
+--   db.guild.named): unnamed data that fits becomes "?", and "?" data is used in any guild (one shared set); use,
+--   new (with yes: the set is shared) and load work and name the chosen set "?". A readable name later renames "?"
+--   data only when the list fits (like unnamed data).
+-- * A gap in the names (none now, but this account has read one): nothing is adopted; only load works, and the
+--   chosen set becomes the shared "?" set.
 -- My own key is saved per character GUID (ns.db.guild.mine) so myKey() can answer before the list loads.
 local _, ns = ...
 
@@ -60,7 +64,7 @@ local ticker
 local signature = ""
 local heldBy = {}            -- lower(key) -> lower(full name) of whoever was ever given that key (saved keys)
 local quietAt                -- ns.now() of the last complete read that unnamed or "?" data did not fit (nil: none)
-local keepOld = false        -- this session's data was taken by /tc guild use yes: nothing old is forgotten
+local previewed = {}         -- /tc guild load <n> shown this session: n -> the set it showed (from .. key)
 local fallback = { keys = {}, mine = {}, spell = {} } -- used while saved data is not attached (tests, very early)
 
 local function saved()
@@ -278,7 +282,7 @@ local function dataEmpty()
     local parent, key = path:match("^(%w+)%.(%w+)$")
     local from = parent and db[parent] or db
     local v = type(from) == "table" and from[key or path] or nil
-    if not hollow(v, path == "calendar" and "me" or nil) then return false end
+    if path ~= "guild.pinnedOld" and not hollow(v, path == "calendar" and "me" or nil) then return false end
   end
   return true
 end
@@ -330,12 +334,23 @@ local function tell(id, text)
   print(text)
 end
 
+-- Unnamed (v0.1.24) data taken by a guild: every saved friend is pinned to the panel's main view, once per set
+-- (guild.pinnedOld): the old crew were people the player chose, so they stay in view with their notices.
+local function pinOldCrew()
+  local db = ns.db
+  if type(db.guild) ~= "table" or db.guild.pinnedOld then return end
+  db.guild.pinnedOld = true
+  if type(db.pins) ~= "table" then db.pins = {} end
+  for _, r in ipairs(savedRows()) do db.pins[r.name] = true end
+end
+
 -- Unnamed data on top becomes guild `name`'s (a real name, or "?" without one), unless that guild has a parked set.
 -- Returns true when it did.
 local function nameData(name)
   local g = ns.db and ns.db.guild
   if type(g) ~= "table" or dataGuild() ~= nil and dataGuild() ~= PLACEHOLDER then return false end
   if hasSet(name) then return false end
+  if dataGuild() == nil then pinOldCrew() end
   g.name = name
   rememberGuild(name)
   ns.Log.add("info", "saved data now belongs to %s", name == PLACEHOLDER and "a guild the game does not name"
@@ -371,14 +386,11 @@ local function nameless()
   return curId == nil and inSince ~= nil and ns.now() - inSince >= ns.Config.GUILD_NAME_WAIT
 end
 
--- A readable guild name was ever seen on this account (then a missing name is a passing gap, not a game that never
--- names guilds).
+-- This account has read a real guild name from the game (db.guild.named; then a missing name is a passing gap, not a
+-- game that never names guilds). Names of parked sets never count.
 local function namesSeen()
   local g = ns.db and ns.db.guild
-  if type(g) ~= "table" then return false end
-  if g.named or isReal(g.name) then return true end
-  for name in pairs(type(ns.db.guilds) == "table" and ns.db.guilds or {}) do if isReal(name) then return true end end
-  return false
+  return type(g) == "table" and g.named == true
 end
 
 -- The name this character's guild's data goes under: its readable name; on a game that never names guilds (no name
@@ -395,8 +407,8 @@ end
 local function readMode()
   if not Guild.inGuild() or settling() or not ns.db then return nil end
   if Guild.active() then return "active" end
-  local dg = dataGuild()
-  if dg == nil and (curId or nameless()) and not hasSet(curId or PLACEHOLDER) then return "adopt" end
+  local dg, id = dataGuild(), here()
+  if dg == nil and id and not hasSet(id) then return "adopt" end
   if dg == PLACEHOLDER and curId and not hasSet(curId) then return "adopt" end
   return nil
 end
@@ -412,11 +424,9 @@ local function tellChoice()
       or "TwizCrew has saved data from before it used guilds."
     tell("legacy", what .. " If " .. safe(curId) .. " is your crew's guild, type /tc guild use. To start fresh for "
       .. safe(curId) .. ", type /tc guild new.")
-  elseif here() == PLACEHOLDER then
+  else
     tell("legacy", NO_NAMES .. " The friends saved in it are not in this guild. If it is your crew's data, type /tc"
       .. " guild use.")
-  else
-    tell("legacy", "TwizCrew cannot read this guild's name right now, so it waits.")
   end
 end
 
@@ -460,7 +470,7 @@ local function read()
   local isComplete = readable == count or stableN >= STABLE_READS
   if mode == "adopt" then
     if not isComplete then return end -- whose data it is waits for a complete list
-    if not (rosterFits(entries) and nameData(curId or PLACEHOLDER)) then
+    if not (rosterFits(entries) and nameData(here())) then
       quietAt = now -- read again at most every ADOPT_RETRY s (and on a roster update)
       tellChoice()
       return
@@ -599,10 +609,12 @@ local function checkState()
       otherId = nil
     end
     if changed then onIdentity(curId) end
-    if nameless() and dataGuild() == nil and dataEmpty() then nameData(PLACEHOLDER) end
-    if nameless() and isReal(dataGuild()) and not Guild.active() then
-      tell("nameless", "TwizCrew cannot read this guild's name right now, and the saved data in use is "
-        .. ns.Util.safeText(dataGuild()) .. "'s, so it waits.")
+    if here() == PLACEHOLDER and dataGuild() == nil and dataEmpty() then nameData(PLACEHOLDER) end
+    if nameless() and not here() and not Guild.active() then -- a gap in the names: only load works here (loadHere)
+      local dg = dataGuild()
+      tell("nameless", "TwizCrew cannot read this guild's name right now, " .. (isReal(dg) and ("and the saved data in"
+        .. " use is " .. ns.Util.safeText(dg) .. "'s, ") or "") .. "so it waits. Type /tc guild to see your saved"
+        .. " sets; /tc guild load <number> uses one here.")
     end
   else
     if not absentSince then -- any "no guild" answer: nothing counts until the game settles
@@ -689,20 +701,23 @@ end
 -- A guild switch or "no guild" is pending (the game has not settled yet).
 Guild.settling = settling
 
--- Nothing old is forgotten this session (Crew's tidy): the data was taken by /tc guild use yes, or came up by a
--- /tc guild load request, without the list's say.
-function Guild.keepOld() return keepOld or ns.DB.loaded == true end
+-- The guild list is complete and the saved friends on top fit it (rosterFits). Only then does Crew's tidy forget
+-- friends not seen for 60 days: a set used in a guild it does not fit (use yes, load, a nameless gap, "?" on an alt)
+-- forgets nothing.
+function Guild.listFits() return loaded and complete and (rosterFits(members)) end
 
 -- May this character write to the per-guild saved data (my session, my calendar marks)? Only while active: a
 -- character in no guild or in another guild leaves the data on top as it is.
 function Guild.writable() return Guild.active() end
 
 -- The checks use, new and load share: in a guild, nothing pending, this guild's name known (here). Returns the name,
--- or nil and why: "noguild", "changing", "noname".
-local function commandGuild()
+-- or nil and why: "noguild", "changing", "noname". forLoad: in a gap in the names (an account that has read guild
+-- names, none now) load still works, and the chosen set becomes the shared "?" set.
+local function commandGuild(forLoad)
   if not Guild.inGuild() then return nil, "noguild" end
   if settling() then return nil, "changing" end
   local id = here()
+  if not id and forLoad and nameless() then id = PLACEHOLDER end
   if not id then return nil, "noname" end
   return id
 end
@@ -715,12 +730,20 @@ local function parked(id)
   return "parked"
 end
 
+-- Records a one-shot request for DB.useGuildOf; an older result for this character is not said any more.
+local function request(r)
+  local g = ns.db.guild
+  r.char = ns.DB.charId()
+  g.request = r
+  if type(g.requestResult) == "table" and g.requestResult.char == r.char then g.requestResult = nil end
+end
+
 -- /tc guild use [yes]: the data on top (unnamed or "?") becomes this guild's, at once, when the saved friends fit
--- this guild's list (rosterFits) or nothing is saved; with yes also when they do not (then nothing old is forgotten
--- this session, so a mistake can be undone with /tc guild load). Cancels a /tc guild new or load request. Returns
--- true, or false and why: commandGuild's, "inuse" (it is already), "parked" / "parkedShared" (see parked),
--- "named" (another guild's data is on top: /reload), "nolist" (the list is not in yet), "nofit" (with the number of
--- saved friends in this guild, and of saved friends).
+-- this guild's list (rosterFits) or nothing is saved; with yes also when they do not. Unnamed data taken this way
+-- pins the old crew (pinOldCrew). Cancels a /tc guild new or load request. Returns true, or false and why:
+-- commandGuild's, "inuse" (it is already), "parked" / "parkedShared" (see parked), "named" (another guild's data is
+-- on top: /reload), "noroster" (no friend list to check), "nolist" (the list is not in yet), "nofit" (with the number
+-- of saved friends in this guild, and of saved friends).
 function Guild.useHere(yes)
   local id, why = commandGuild()
   if not id then return false, why end
@@ -728,55 +751,60 @@ function Guild.useHere(yes)
   if dg == id then return false, "inuse" end
   if hasSet(id) then return false, parked(id) end
   if isReal(dg) then return false, "named" end
-  local fits, matches, rows = dataEmpty(), 0, 0
-  if not fits then
+  if not dataEmpty() and not yes then
+    if #savedRows() == 0 then return false, "noroster" end
     local entries = readList()
-    if #entries > 0 then fits, matches, rows = rosterFits(entries) end
-    if not fits and not yes then
-      if #entries == 0 then return false, "nolist" end
-      return false, "nofit", matches, rows
-    end
+    if #entries == 0 then return false, "nolist" end
+    local fits, matches, rows = rosterFits(entries)
+    if not fits then return false, "nofit", matches, rows end
   end
   local g = ns.db.guild
+  if dg == nil then pinOldCrew() end
   g.name = id
   g.request = nil
   rememberGuild(id)
-  if not fits then keepOld = true end
   quietAt = nil
-  ns.Log.add("info", "/tc guild use%s: the saved data is %s's", fits and "" or " yes", ns.Util.safeText(id))
+  ns.Log.add("info", "/tc guild use%s: the saved data is %s's", yes and " yes" or "", ns.Util.safeText(id))
   updateActive()
   return true
 end
 
--- /tc guild new: this guild gets a fresh set of its own at the next login (a one-shot request DB.useGuildOf carries
--- out; the unnamed or "?" data on top is parked, nothing is deleted). Returns true, or false and why: commandGuild's,
--- "inuse", "parked" / "parkedShared" (this guild has a set: never a second one), "named" (another guild's
--- data is on top: /reload first).
-function Guild.newHere()
+-- /tc guild new [yes]: this guild gets a fresh set of its own at the next login (a one-shot request DB.useGuildOf
+-- carries out; the unnamed or "?" data on top is parked, nothing is deleted). On a game that never names guilds the
+-- set is shared by every character, so it needs yes. Returns true, or false and why: commandGuild's, "inuse",
+-- "parked" / "parkedShared" (this guild has a set: never a second one), "named" (another guild's data is on top:
+-- /reload first), "shared" (yes needed).
+function Guild.newHere(yes)
   local id, why = commandGuild()
   if not id then return false, why end
   local dg = dataGuild()
   if dg == id then return false, "inuse" end
   if hasSet(id) then return false, parked(id) end
   if isReal(dg) then return false, "named" end
-  ns.db.guild.request = { kind = "new", guild = id, char = ns.DB.charId() }
+  if id == PLACEHOLDER and not yes then return false, "shared" end
+  request({ kind = "new", guild = id })
   ns.Log.add("info", "/tc guild new: %s gets fresh saved data at the next login", ns.Util.safeText(id))
   return true
 end
 
--- /tc guild load <number> [yes]: set <number> of ns.DB.sets becomes this guild's data at the next login (with yes: a
--- one-shot request DB.useGuildOf carries out; the set in use is parked, nothing is deleted or merged). Returns true
--- and the set, or false and why: commandGuild's, "nonumber" (no such set), "inuse" (set 0).
+-- /tc guild load <number> [yes]: set <number> of ns.DB.sets becomes this guild's data at the next login. Without yes
+-- it only remembers which set <number> showed; yes records a one-shot request DB.useGuildOf carries out (the set in
+-- use is parked, nothing is deleted or merged), and only for the set shown this session under that number. Returns
+-- true and the set, or false and why: commandGuild(true)'s, "nonumber" (no such set), "inuse" (set 0), "nopreview".
 function Guild.loadHere(number, yes)
-  local id, why = commandGuild()
+  local id, why = commandGuild(true)
   if not id then return false, why end
   local entry = type(number) == "number" and ns.DB.sets(ns.db)[number + 1] or nil
   if not entry then return false, "nonumber" end
   if entry.from == "top" then return false, "inuse", entry end
-  if yes then
-    ns.db.guild.request = { kind = "load", guild = id, char = ns.DB.charId(), from = entry.from, key = entry.key }
-    ns.Log.add("info", "/tc guild load: set %s becomes %s's at the next login", tostring(number), ns.Util.safeText(id))
+  local shown = entry.from .. ":" .. entry.key
+  if not yes then
+    previewed[number] = shown
+    return true, entry
   end
+  if previewed[number] ~= shown then return false, "nopreview", entry end
+  request({ kind = "load", guild = id, from = entry.from, key = entry.key })
+  ns.Log.add("info", "/tc guild load: set %s becomes %s's at the next login", tostring(number), ns.Util.safeText(id))
   return true, entry
 end
 

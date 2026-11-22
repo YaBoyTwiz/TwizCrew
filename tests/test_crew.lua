@@ -878,6 +878,9 @@ return {
       local now = ns.wallclock()
       db.roster.Gone = { name = "Gone", level = 5, lastSeen = now - 31 * day, outSince = now - 40 * day }
       db.stats.crew.Gone = { sid = "s", s = {}, a = { gn = 1 } }
+      for _, name in ipairs({ "Frostie", "Ginkan" }) do -- friends in the guild: the saved data fits its list
+        db.roster[name] = { name = name, level = 5, lastSeen = now }
+      end
       db.guild.name = "Test Guild" -- this data is the guild's already
       ns.db = db
       ns.Modules.attach(db)
@@ -980,6 +983,7 @@ return {
       db.guild.name = "Test Guild"
       db.roster.Frostie = { name = "Frostie", level = 5, lastSeen = ns.wallclock() - 61 * day }
       db.roster.Oldpal = { name = "Oldpal", level = 5, lastSeen = ns.wallclock() - 61 * day }
+      db.roster.Ginkan = { name = "Ginkan", level = 5, lastSeen = ns.wallclock() } -- (so the friends fit the list)
       ns.db = db
       ns.Modules.attach(db)
       start(ns, W, db)
@@ -1011,13 +1015,16 @@ return {
       db.roster = { Old = { name = "Old", level = 5, lastSeen = now - 61 * day },
         Recent = { name = "Recent", level = 5, lastSeen = now - 59 * day },
         Undated = { name = "Undated", level = 5 } }
+      for _, name in ipairs({ "Frostie", "Ginkan", "Lurabe" }) do -- friends in the guild: the saved data fits its list
+        db.roster[name] = { name = name, level = 5, lastSeen = now }
+      end
       db.stats.crew.Old = { sid = "s", s = {}, a = {} }
       db.stats.crew.Recent = { sid = "s", s = {}, a = {} }
       ns.Comm.start()
       ns.Crew.start()
       A.ok(db.roster.Old, "not before the guild says the data is its own")
       ns.Guild.start()
-      A.eq(ns.roster:allNames(), { "Recent", "Undated" })
+      A.eq(ns.roster:allNames(), { "Frostie", "Ginkan", "Lurabe", "Recent", "Undated" })
       A.eq(db.roster.Old, nil)
       A.eq(db.stats.crew.Old, nil)
       A.ok(db.stats.crew.Recent)

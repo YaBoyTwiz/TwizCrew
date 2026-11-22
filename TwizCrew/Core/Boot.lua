@@ -27,6 +27,7 @@ function Boot.login()
   if not loaded then ns.Log.safe(FEATURE, Boot.load) end
   loggedIn = true
   ns.Log.safe(FEATURE, ns.DB.useGuildOf, ns.db, ns.DB.charId()) -- this character's guild's data, before anyone reads it
+  for _, line in ipairs(ns.DB.notes or {}) do print(line) end -- what that swap did, when the player should know
   ns.Log.safe("comm", ns.Comm.start)
   ns.Log.safe("crew", ns.Crew.start)
   ns.Log.safe("self", ns.Self.start)

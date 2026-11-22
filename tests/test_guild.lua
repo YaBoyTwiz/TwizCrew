@@ -812,6 +812,110 @@ return {
       A.eq(ns.db.guild.request, nil); A.eq(next(ns.db.guild.byChar), nil)
     end,
 
+    -- Round 5 (3): an account that has read guild names before: a nameless gap never adopts unnamed data as "?".
+    a_nameless_gap_never_adopts_unnamed_data_as_question_mark = function(ns, A, W)
+      local list = { member("Twiz") }
+      local saved = { guild = { named = true }, roster = {} }
+      for i = 1, 4 do
+        local name = "Friend" .. string.char(64 + i)
+        saved.roster[name] = { name = name, level = 10 }
+        list[#list + 1] = member(name .. " Surname")
+      end
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = list }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init(saved, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 20)
+      A.eq(ns.Guild.dataGuild(), nil, "waits for the name")
+      local n = 0
+      for _, line in ipairs(W.printed) do
+        if line == "TwizCrew cannot read this guild's name right now, so it waits. Type /tc guild to see your saved"
+          .. " sets; /tc guild load <number> uses one here." then n = n + 1 end
+      end
+      A.eq(n, 1)
+    end,
+
+    -- Round 5 (4): on a game that never names guilds, new replaces the one shared set: it asks first.
+    no_name_new_asks_first_because_the_set_is_shared = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init({ roster = { FriendA = { name = "FriendA" }, FriendB = { name = "FriendB" } } },
+        ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 5)
+      W.env.SlashCmdList.TWIZCREW("guild new")
+      A.eq(W.printed[#W.printed], "TwizCrew: This game gives no guild names, so all your characters share one set."
+        .. " /tc guild new would start that shared set fresh. Type /tc guild new yes.")
+      A.eq(ns.db.guild.request, nil)
+      W.env.SlashCmdList.TWIZCREW("guild new yes")
+      A.eq(ns.db.guild.request, { kind = "new", guild = "?", char = ns.DB.charId() })
+    end,
+
+    -- Round 5 (4): a nameless character quiet because the data on top is a guild's it cannot match: load works there
+    -- (the chosen set becomes the shared "?" set; the guild's set is parked under its own name).
+    a_nameless_character_can_load_a_set = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild B", members = { member("Twiz"), member("Zed Zed") } }
+      W.state.guildNameHidden = true
+      ns.db = ns.DB.init({ guild = { name = "Guild A" }, roster = { Aone = { name = "Aone" } },
+        guilds = { Other = { roster = { Oone = { name = "Oone" } } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(ns.Config.GUILD_NAME_WAIT + 5)
+      A.no(ns.Guild.active())
+      local want = "TwizCrew cannot read this guild's name right now, and the saved data in use is Guild A's, so it"
+        .. " waits. Type /tc guild to see your saved sets; /tc guild load <number> uses one here."
+      local n = 0
+      for _, line in ipairs(W.printed) do if line == want then n = n + 1 end end
+      A.eq(n, 1)
+      W.env.SlashCmdList.TWIZCREW("guild load 1")
+      W.env.SlashCmdList.TWIZCREW("guild load 1 yes")
+      A.eq(W.printed[#W.printed], "TwizCrew: Type /reload.")
+      A.ok(ns.DB.useGuildOf(ns.db, ns.DB.charId()))
+      A.eq(ns.db.guild.name, "?"); A.ok(ns.db.roster.Oone)
+      A.eq(ns.db.guilds["Guild A"].roster.Aone.name, "Aone", "parked under its own name")
+    end,
+
+    -- Round 5 (6): load ... yes acts only on the set that was shown first.
+    load_yes_needs_the_preview_of_that_same_set = function(ns, A, W)
+      boot(ns, W, "Twiz", { member("Twiz") })
+      ns.db.guilds.Bravo = { roster = { B1 = { name = "B1" } } }
+      ns.db.guilds.Delta = { roster = { D1 = { name = "D1" } } }
+      W.env.SlashCmdList.TWIZCREW("guild load 1 yes")
+      A.eq(W.printed[#W.printed], "TwizCrew: Type /tc guild load 1 first.")
+      A.eq(ns.db.guild.request, nil)
+      W.env.SlashCmdList.TWIZCREW("guild load 1")
+      ns.db.guilds.Alpha = { roster = {} } -- now set 1 is another one
+      W.env.SlashCmdList.TWIZCREW("guild load 1 yes")
+      A.eq(W.printed[#W.printed], "TwizCrew: Type /tc guild load 1 first.")
+      A.eq(ns.db.guild.request, nil)
+      W.env.SlashCmdList.TWIZCREW("guild load 1")
+      W.env.SlashCmdList.TWIZCREW("guild load 1 yes")
+      A.eq(W.printed[#W.printed], "TwizCrew: Type /reload.")
+      A.eq(ns.db.guild.request.key, "Alpha")
+    end,
+
+    -- Round 5 (8): use on data with no friend list says so (never "Only 0 of 0").
+    use_on_data_without_a_friend_list_says_so = function(ns, A, W)
+      W.state.player = "Twiz"
+      W.state.guild = { name = "Guild A", members = { member("Twiz"), member("Frostie Snow") } }
+      ns.db = ns.DB.init({ stats = { trophies = { s1 = { sid = "s1", people = {} } } } }, ns.Modules.list())
+      ns.Modules.attach(ns.db)
+      ns.Guild.start()
+      W:advance(3)
+      W.env.SlashCmdList.TWIZCREW("guild use")
+      A.eq(W.printed[#W.printed], "TwizCrew: The saved data has no friend list to check against Guild A. If this is"
+        .. " your crew's guild, type /tc guild use yes.")
+      A.eq(ns.Guild.dataGuild(), nil)
+      W.env.SlashCmdList.TWIZCREW("guild use yes")
+      A.eq(ns.Guild.dataGuild(), "Guild A")
+      A.eq(next(ns.db.pins), nil, "no friends: nobody pinned")
+    end,
+
     -- Item 10: /tc report tells "still deciding" from "not this guild's".
     report_tells_still_deciding_from_not_this_guilds = function(ns, A, W)
       W.state.player = "Twiz"

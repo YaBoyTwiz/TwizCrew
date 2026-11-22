@@ -222,5 +222,50 @@ return {
       ns.db = db; ns.Modules.attach(db); ns.Modules.resetAll()
       A.eq(db.stats.chars.Twiz.a.dt, 4)
     end,
+    -- The login swap (DB.useGuildOf): checked first, broken parked values kept aside, an error puts everything back.
+    swap_brings_a_parked_guild_up_and_parks_the_top_one = function(ns, A)
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["Guild B"] = { roster = { B1 = { name = "B1" } }, stats = { crew = { B1 = {} }, other = 7 },
+          future = { x = 1 } } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "Guild B")
+      A.eq(db.roster.B1.name, "B1"); A.ok(db.stats.crew.B1)
+      A.eq(db.guilds["Guild A"].roster.A1.name, "A1")
+      A.eq(db.guilds["Guild B"], nil)
+      A.eq(db.guild.extra, { future = { x = 1 }, stats = { other = 7 } }, "unknown fields ride along, not lost")
+      db.guild.byChar.c2 = "Guild A"
+      A.ok(ns.DB.useGuildOf(db, "c2"))
+      A.eq(db.guilds["Guild B"].future, { x = 1 }, "and are parked again with their guild")
+      A.eq(db.guilds["Guild B"].stats.other, 7)
+      A.eq(db.roster.A1.name, "A1")
+    end,
+
+    swap_keeps_a_broken_parked_value_aside = function(ns, A)
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["Guild B"] = true } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guilds_bad["Guild B"], true, "kept aside, not thrown away")
+      A.eq(db.guild.name, "Guild B"); A.eq(db.roster, {}, "a fresh set")
+      A.eq(db.guilds["Guild A"].roster.A1.name, "A1")
+    end,
+
+    swap_error_halfway_puts_everything_back = function(ns, A)
+      local broken = setmetatable({}, { __index = function() error("boom") end })
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["Guild B"] = broken } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "Guild A")
+      A.eq(db.roster.A1.name, "A1", "the top data is where it was")
+      A.eq(db.guilds["Guild A"], nil)
+      A.eq(db.guilds["Guild B"], broken, "the parked set is where it was")
+    end,
+
+    swap_repairs_a_guild_parked_twice = function(ns, A)
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
+        guilds = { ["Guild A"] = { roster = { Old = { name = "Old" } } } } }, {})
+      A.ok(ns.DB.useGuildOf(db, "c1"), "no longer refuses forever")
+      A.eq(db.guilds_bad["Guild A#1"].roster.Old.name, "Old", "the older parked copy is kept aside")
+      A.eq(db.guilds["Guild A"].roster.A1.name, "A1", "the top one is parked")
+    end,
   },
 }

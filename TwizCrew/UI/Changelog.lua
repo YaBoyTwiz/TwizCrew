@@ -14,6 +14,19 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.2.0", date = "2026-11-22", lines = {
+    "TwizCrew now runs through the guild. Be in the guild and it connects: no channel, no code, nothing to set up.",
+    "  Only guild members are heard. Anyone outside the guild is ignored.",
+    "The panel has sections: you, My party, Pinned, and two bars to open: Guild online and Offline.",
+    "  Click + on a guild member to pin them to the main view, the gold star to unpin.",
+    "  Your friends from the old panel start pinned. Members without the addon show dimmed.",
+    "Online, level-up and death notices are only for your party and pinned people. Settings can widen it to the guild.",
+    "Saved data is kept per guild, so characters in another guild (or in none) don't mix into it.",
+    "  If your old data does not attach by itself, /tc guild shows the choices. Nothing is ever deleted by it.",
+    "/tc guildtest checks that guild messages work. /tc report has a Guild line.",
+    "Friends still on the old version are only partly visible to you until they update.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.1.24", date = "2026-11-12", lines = {
     "Minimize the panel: the minus button on the title bar, or /tc mini. Only the title bar stays.",
     "  While minimized, the bar shows who came online, died or levelled up, and the panel peeks open for a moment.",

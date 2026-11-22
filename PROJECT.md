@@ -13,6 +13,9 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.2.0 released (2026-11-22, owner: "release it"):** the guild conversion (section "Guild conversion
+  (2026-11-21)"). Released after one clean session on the owner's main; two copies of the new version talking over
+  the guild is still unproven. `RESTART_SINCE` is 0.2.0.
 - **First run in the game (owner's main, 2026-11-22, read from the saved log and `/tc report`):** the final guild
   code loaded with no errors or problems. The game gives the guild's name; old data attached by itself and the old
   friends were pinned; the guild list came with offline members (8 members, 3 online) and names with first and last
@@ -21,10 +24,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   heard normally (positions, stats, state) and showed online, so old and new copies still reach each other at least
   for a guild member in the party. Still unproven: two copies of the new version talking over the guild. The one
   error in the log (`Crew.lua:331`, 20:02 on 2026-11-21) came from the game loading files in the middle of the build.
-- **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released.**
+- **Guild conversion built on the branch `guild-conversion` (2026-11-21).**
   The copies now talk through the guild, trust only guild members, keep the crew's data per guild, and the panel has
   sections and pins. The whole-branch review and its fix wave are done. Everything is in the section "Guild
-  conversion (2026-11-21)" below, including what is still open. The version is still 0.1.24 until the owner says "release it"; the first thing to do in the game is
+  conversion (2026-11-21)" below, including what is still open. Released as v0.2.0. The first thing to do in the game is
   `/tc guildtest` (`docs/TESTING.md`, "Guild conversion").
 - **v1 design approved by the owner** (2026-11-05): `docs/superpowers/specs/2026-11-05-crew-panel-design.md`.
 - **Build plan:** `docs/superpowers/plans/2026-11-05-crew-panel.md`. The build was handed to a background agent at
@@ -300,7 +303,7 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Guild conversion (2026-11-21)
 
-Built on the branch `guild-conversion` (tasks 1 to 7), **not released, nothing has run in the game**. Design:
+Built on the branch `guild-conversion` (tasks 1 to 7), released as v0.2.0 on 2026-11-22 (first in-game run: "Where we are"). Design:
 `docs/superpowers/specs/2026-11-21-guild-conversion-design.md` (its top section lists what changed while building).
 What to check in the game: `docs/TESTING.md`, "Guild conversion".
 

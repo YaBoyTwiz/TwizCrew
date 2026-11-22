@@ -339,6 +339,20 @@ local function partyOf(keys)
   return set, grouped or any
 end
 
+-- Is this member close to me: in my party or raid, or pinned? (Test tools' fakes always count.) The same group check
+-- as the party section (Where.isGroupMember).
+function Panel.isClose(key)
+  if type(key) ~= "string" then return false end
+  if ns.isTestName(key) or Panel.isPinned(key) then return true end
+  return ns.Where ~= nil and ns.Where.isGroupMember(key) == true
+end
+
+-- Should a notice of this kind (feed or pop-up kind name) about this member be shown now? The "Tell me about" setting.
+function Panel.noticeInScope(kind, key)
+  local scope = ns.Modules.setting(FEATURE, "noticeScope")
+  return ns.FeedLogic.inScope(kind, scope, scope ~= "guild" and Panel.isClose(key))
+end
+
 -- The members to draw (roster rows, the guild's members without the addon, in the sort order) and what the rows need to
 -- know (Logic.rows ctx). Not in a usable guild: only the pretend friends (test tools), listed flat.
 local function crewOf(s, active)
@@ -796,12 +810,18 @@ ns.Modules.register({
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
-    showSelf = false,
+    showSelf = false, noticeScope = "close",
     minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = false,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
   settings = {
+    { key = "noticeScope", label = "Tell me about", kind = "choice",
+      choices = { { "close", "My party and pinned" }, { "guild", "Everyone in the guild" } },
+      info = "Who gets a pop-up, a bar notice or a chat line when they come online, go offline, die or level up. "
+        .. "My party and pinned: only people in your party or raid and the ones you pinned. Everyone in the guild: "
+        .. "every guild member. The Recent list keeps everyone either way, and mocks and congrats aimed at you "
+        .. "always show." },
     { key = "minimized", label = "Minimize the panel", kind = "toggle",
       info = "Shrinks the panel to just its title bar, so it takes almost no room on your screen. News from your "
         .. "crew (someone comes online, dies, levels up, congratulates or mocks you) shows on the bar for a few "

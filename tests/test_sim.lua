@@ -7,6 +7,7 @@ local function login(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.panel.settings.noticeScope = "guild" -- these tests are about the pop-ups, not who they are for
   W:fire("PLAYER_ENTERING_WORLD")
 end
 

@@ -321,6 +321,8 @@ end
 local function push(kind, name, extra)
   local ok, force = gate(kind, name)
   if not ok then return end
+  -- online, death and level-up pop-ups are only for people who are close, unless "Tell me about" says everyone
+  if ns.Panel and ns.Panel.noticeInScope and not ns.Panel.noticeInScope(kind, name) then return end
   -- A minimized panel shows online, died and level-up on its bar instead (when that setting is on): no pop-up then.
   if ns.Panel and ns.Panel.suppressesPopup and ns.Panel.suppressesPopup(kind, name) then return end
   logic:push(kind, name, ns.now(), extra, force)

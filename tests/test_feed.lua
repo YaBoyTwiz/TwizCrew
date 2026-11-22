@@ -7,6 +7,7 @@ local function boot(W, before, wait)
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.panel.settings.noticeScope = "guild" -- these tests are about the feed, not who it is for
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(wait or 6)
 end
@@ -309,6 +310,24 @@ return {
     end,
 
     -------------------------------------------------------------------------------------------------- chat
+    chat_lines_for_guildmates_who_are_not_close_are_skipped_but_recorded = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "noticeScope", "close")
+      friend(W, ns, "Ginkan")
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "13" })
+      A.no(printedLike(W, "reached level 13"), "not close: no chat line")
+      A.eq(ns.Feed.entries()[1].kind, "levelup", "but recorded")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "Grats!", k = "g" })
+      A.ok(printedLike(W, 'congratulated you: "Grats!"'), "a congrats at me from a non-pinned member still shows")
+      ns.db.pins = { Ginkan = true }
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "14" })
+      A.ok(printedLike(W, "reached level 14"), "pinned: the line is written")
+      ns.Modules.set("panel", "noticeScope", "guild")
+      friend(W, ns, "Pewpew")
+      W.printed = {}
+      receive(W, ns, "Pewpew", "UPDATE", { lv = "13" })
+      A.ok(printedLike(W, "reached level 13"), "everyone in the guild")
+    end,
     chat_lines_follow_the_switches = function(ns, A, W)
       ready(W)
       friend(W, ns, "Frostie")

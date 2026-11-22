@@ -30,6 +30,7 @@ local function ready(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
   if before then before() end
   W:fire("PLAYER_LOGIN")
+  W.env.TwizCrewDB.modules.panel.settings.noticeScope = "guild" -- these tests are about the bar, not who it is for
   W.env.TwizCrewDB.modules.panel.settings.showNoAddon = false -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(40)
@@ -285,6 +286,25 @@ return {
       A.no(ns.Panel.missedButtonForTest().tcVis)
       tc(W, "mini"); W:advance(1)
       A.eq(ns.Panel.barForTest().missed, 0)
+    end,
+
+    out_of_scope_events_do_not_reach_the_bar_or_the_missed_number = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      ns.Modules.set("panel", "noticeScope", "close")
+      ns.Panel.toggleMinimized(); W:advance(1)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 0, "a guildmate who is not close dings: not counted")
+      A.eq(ns.Panel.peekForTest(), nil, "no peek")
+      A.eq(ns.Feed.entries()[1].kind, "levelup", "but it is in the Recent list")
+      ns.db.pins = { Frostie = true }
+      receive(W, ns, "Frostie", "UPDATE", { lv = "14" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 1, "pinned: counted")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "Grats", k = "g" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 2, "a mock at me always counts")
     end,
 
     clicking_the_missed_number_opens_the_recent_list = function(ns, A, W)

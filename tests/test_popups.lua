@@ -9,6 +9,7 @@ local function start(ns, W)
   ns.Self.start()
   ns.LayerSensor.start()
   ns.Modules.startAll()
+  ns.Modules.set("panel", "noticeScope", "guild") -- these tests are about the pop-ups, not who they are for
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
   return db
@@ -41,6 +42,7 @@ local function ready(ns, W)
   start(ns, W)
   nearby(ns, W, "Frostie", true)
   receive(ns, W, "Frostie", "STATE", { cl = "MAGE", zn = "Elwynn Forest" })
+  W.state.inGroup = true
   W:advance(31)
 end
 
@@ -247,6 +249,51 @@ return {
       local d = pl:due(40)
       A.eq(#d, 2, "one pop-up each, right away")
       A.eq(d[1].kind, "levelup"); A.eq(d[1].names, { "Frostie" }); A.eq(d[1].extra.level, 14)
+    end,
+    -- who the online, level-up and death pop-ups are for ("Tell me about")
+    guildmate_level_up_is_recorded_but_not_popped = function(ns, A, W)
+      ready(ns, W)
+      ns.Modules.set("panel", "noticeScope", "close")
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(ns.Popups.textsForTest(), {}, "a guildmate who is not close: no pop-up")
+      A.eq(ns.Feed.entries()[1].kind, "levelup", "but the Recent list has it")
+      A.eq(ns.Feed.entries()[1].who, "Ginkan")
+    end,
+    pinned_level_up_pops = function(ns, A, W)
+      ready(ns, W)
+      ns.Modules.set("panel", "noticeScope", "close")
+      ns.db.pins = { Ginkan = true }
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(#ns.Popups.textsForTest(), 1)
+      A.eq(ns.Popups.textsForTest()[1].text, "Ginkan reached level 13!")
+    end,
+    party_death_pops = function(ns, A, W)
+      ready(ns, W)
+      ns.Modules.set("panel", "noticeScope", "close")
+      ns.Bus.fire("MEMBER_DIED", "Frostie", "Westfall", ""); W:advance(1)
+      A.eq(#ns.Popups.textsForTest(), 1, "Frostie is in my party")
+      ns.Bus.fire("MEMBER_DIED", "Ginkan", "Westfall", ""); W:advance(1)
+      A.eq(#ns.Popups.textsForTest(), 1, "Ginkan is not: no second pop-up")
+      A.ok(ns.Popups.textsForTest()[1].text:find("Frostie", 1, true))
+    end,
+    scope_guild_pops_everyone = function(ns, A, W)
+      ready(ns, W)
+      A.eq(ns.Modules.setting("panel", "noticeScope"), "guild")
+      receive(ns, W, "Ginkan", "STATE", { cl = "MAGE", lv = "12" }); W:advance(1)
+      receive(ns, W, "Ginkan", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(#ns.Popups.textsForTest(), 1)
+      A.eq(ns.Modules.get("panel").defaults.noticeScope, "close", "and the default is the narrow one")
+    end,
+    fake_friend_events_still_show = function(ns, A, W)
+      ready(ns, W)
+      ns.Modules.set("panel", "noticeScope", "close")
+      A.ok(ns.Panel.isClose("Frostie (test)"), "a test-tool fake always counts as close")
+      A.ok(ns.Panel.noticeInScope("levelup", "Frostie (test)"))
+      A.ok(ns.Panel.isClose("Frostie"), "party")
+      A.no(ns.Panel.isClose("Ginkan"))
+      A.ok(ns.Panel.noticeInScope("mock", "Ginkan"), "other kinds are never scoped")
     end,
     ding_pop_up_for_a_friend = function(ns, A, W)
       ready(ns, W)

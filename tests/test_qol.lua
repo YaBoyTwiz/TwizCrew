@@ -10,6 +10,7 @@ local function start(ns, W, saved)
   ns.Self.start()
   ns.LayerSensor.start()
   ns.Modules.startAll()
+  ns.Modules.set("panel", "noticeScope", "guild") -- these tests are about the pop-ups, not who they are for
   ns.Modules.set("panel", "showNoAddon", false) -- these tests are about friends who talk, not "no addon" rows
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)

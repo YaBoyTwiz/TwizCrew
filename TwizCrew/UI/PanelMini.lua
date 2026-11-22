@@ -125,6 +125,8 @@ function Panel.onFeed(e)
   -- was shown, so the bar neither shows it nor counts it as missed
   if not P.shown or P.curView == "full" then return end
   if not FL.isNoticeKind(e) or not noticeWanted(e) then return end
+  -- out of scope (a guildmate who is not in my party or pinned): no notice, no peek, not counted as missed
+  if not Panel.noticeInScope(e.kind, (tostring(e.who or ""):gsub("||", "|"))) then return end
   P.bar:addMissed()
   local started, promoted = P.bar:push(e, ns.now())
   if promoted then startPeek(promoted) elseif started then startPeek(e) end

@@ -207,6 +207,16 @@ function FeedLogic.chatText(e, colorName, prefixHex)
   return prefix .. FeedLogic.coloredLine(e, colorName)
 end
 
+---------------------------------------------------------------------------------------------------------- scope
+-- Notices about other people coming online, going offline, dying and leveling up (kind names of the feed and of the
+-- pop-ups) are only for people who are close (my party, pinned) unless the player chose "everyone in the guild".
+-- Mocks, congrats, roasts and the other pop-ups are not scoped.
+local SCOPED = { online = true, offline = true, died = true, death = true, levelup = true }
+function FeedLogic.inScope(kind, scope, close)
+  if not SCOPED[kind] then return true end
+  return scope == "guild" or close == true
+end
+
 ---------------------------------------------------------------------------------------------------------- bar notices
 -- The events a minimized panel's bar shows: online, died, level-up, and congrats / mocks that came to ME.
 function FeedLogic.isNoticeKind(e)

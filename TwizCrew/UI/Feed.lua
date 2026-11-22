@@ -67,6 +67,8 @@ end
 
 local function toChat(e)
   if not FL.chatWanted(settings(), e.kind) then return end
+  local raw = (tostring(e.who or ""):gsub("||", "|"))
+  if ns.Panel and ns.Panel.noticeInScope and not ns.Panel.noticeInScope(e.kind, raw) then return end -- (still in Recent)
   local hex = T.COLOR and T.COLOR.title
   say(FL.chatText(e, function(name) return colorWrap(name, name == e.who and e.class or nil) end,
     type(hex) == "string" and hex:match("^%x%x%x%x%x%x$") and hex or nil))

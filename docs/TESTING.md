@@ -754,7 +754,8 @@ Restart the game first (the files changed). Alone:
 4. **Stats off.** Turn "Stats & Hall of Shame" off in `/tc`: the bar stays with `Crew` and `Calendar`. Turn the
    calendar off too: the bar is gone. Turn both back on.
 
-With a friend on this version (the pulse needs someone else's note or answer):
+With a friend (any version with the calendar; only your copy needs this build, the pulse needs someone else's
+note or answer):
 
 5. **A new note pulses.** With your calendar closed, a friend adds a note for today or later. A soft gold glow
    fades in and out behind `Calendar` about every second and a half, and the word is brighter. Tell Claude if it is

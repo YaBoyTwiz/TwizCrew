@@ -806,7 +806,7 @@ function Guild.listFits() return loaded and complete and (rosterFits(members)) e
 -- (listFits) or this set has fitted this very guild before (guild.fitIn, written in read: over half the friends may
 -- have left since, and the friends who left are the very rows the 60-day rule removes). A set taken by a wrong guild
 -- (use yes, load) carries another guild's fitIn or none, and a "?" or nameless session has no real guild id: those
--- forget nothing.
+-- forget only while their own list fits (listFits), never through fitIn.
 function Guild.mayForget()
   if not Guild.active() or not Guild.whole() then return false end
   if Guild.listFits() then return true end

@@ -673,7 +673,7 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
    - A last line about chat lockdown (whether the game's lockdown check exists). Just report it.
 2. **After `/reload`, a member with the addon appears.** Open the panel (`/tc show`). Your guildmate shows up within a
    minute, in the Guild online list (the bar "Guild online (N)": click it to open) or under your party if grouped.
-   A friend from your old (v0.1.24) panel is pinned by itself and shows under the heading "Pinned".
+   A friend from your old (v0.1.24) panel is pinned by itself: it has a gold star and sits in the main view (under the heading "Pinned" when a party or other rows are shown too).
 3. **The first login after the update: does the old data attach by itself?** Look for your friends, stats, trophies
    and calendar notes from v0.1.24 (the Hall of Shame, `/tc cal`). Two outcomes are fine:
    - It attaches quietly (most of your saved friends are in the guild): everything is there, and **all the old
@@ -720,7 +720,7 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
     "which one?" and wants the full name.
 12. **`/tc report`.** Under **Connection** it says "through the guild <name>" (or why nothing is sent); under **Guild**
     one line with your guild, member count and the result of the test (or "guild test not run").
-13. **`/tc guild` right after login.** Type it within about 10 seconds of logging in on your main: the first line is
+13. **`/tc guild` right after login.** Type it about 10 seconds after logging in on your main (sooner, it may still say it has no guild name yet): the first line is
     `TwizCrew: this character's guild: <your guild>` and set 0 reads `0: <your guild> (in use), N friends ...`.
 14. **A dungeon, with a guildmate outside.** Go into a dungeon alone or with a party while a guildmate with the addon
     stays outside. After 4 minutes inside: they still see you online on their panel; your `/tc report` (typed inside)

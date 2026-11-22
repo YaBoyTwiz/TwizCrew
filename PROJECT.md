@@ -360,8 +360,8 @@ trusted.
   and comes back with their data. The only automatic forgetting is the old 60 days not seen, and it runs only on a
   whole guild list that fits the saved friends (at least two and at least half match), or when this set fitted this
   same guild before (`guild.fitIn`, per set: written with the guild's real name whenever the list fits; otherwise a
-  set where over half the friends left would never be cleaned again); data loaded in a guild it does not fit, and
-  "?" or nameless sessions, are never cleaned.
+  set where over half the friends left would never be cleaned again); data loaded in a guild it does not fit is never
+  cleaned (a "?" or nameless session is cleaned only while its list fits the saved friends).
   (The design's 30-day forgetting was an idea dropped before release.) Reason: saved data is per
   account and a partial list read or an alt in another guild must never delete a real member's data. `/tc forget
   <name>` (also `/tc remove`, and "Forget this friend" on an offline row) deletes an offline member's saved data.
@@ -397,12 +397,18 @@ we have not seen it), the name forms on guild and whisper messages, and how the 
   above; whether the game gives the guild's name and GUIDs; whether the pin button overlaps the Mock / Congrats
   buttons on the right edge of Compact and Tiny rows (and how the star texture and the state lines look); whether a
   one-word namesake from another realm can whisper (and so be trusted as a member).
+  Also from the last re-check (2026-11-21): a member whose whole name is ONE word ("Twiz") cannot be told apart from a
+  stranger named "Twiz <realm name>" on a whisper or party message (whispers carry no id); `/tc guildtest` shows the
+  name forms, and if one-word names never appear with the realm added, that strip can be removed for them.
 - *Known small limits:* v0.1.24 copies read only part of a long trophy name list and cut names at 24 letters (a
   bounded resend until they update); a newcomer with an empty calendar gets about 50 diaries from one copy in the slow
   lane (about 100 s); a few places still write while the addon is quiet (the local mock echo, `/tc session new`,
   typed notes); a stale remembered guild costs one extra `/reload` and may leave an empty set; after a downgrade to
   v0.1.24 and back, its writes are counted into the set on top; in a gap in the game's guild names a set loaded
   there becomes the shared "?" set and the named character brings its own back later (no data lost, may repeat).
+  On a game that gives no guild names, a v0.1.24 user with no saved friends still gets the "choose" line and needs
+  `/tc guild use yes` once (with names it attaches by itself); in `/tc guildtest`, a sender the guild list does not
+  have yet, whose first word is someone else's key, gets no answer.
 - *What only the game can tell (whole-branch review):* whether `GUILD` addon messages arrive at all and how fast;
   the sender name forms on guild messages and whispers; whether the guild list gives GUIDs and offline members (the
   Show Offline Members box); whether `GetChannelName` and `LeaveChannelByName` drop the old channel; whether

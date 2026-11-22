@@ -540,7 +540,8 @@ local function checkState()
       if char and type(g.byChar) == "table" then g.byChar[char] = nil end
     end
   end
-  if readMode() == "probe" then read() end
+  -- the game names no guild: look at the list now and then (every STABLE_GAP s) until it decides
+  if readMode() == "probe" and (not lastRead or ns.now() - lastRead >= STABLE_GAP) then read() end
   updateActive()
 end
 

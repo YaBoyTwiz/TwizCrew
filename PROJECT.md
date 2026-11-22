@@ -15,8 +15,8 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 - **Guild conversion built on the branch `guild-conversion` (2026-11-21), not released, never run in the game.**
   The copies now talk through the guild, trust only guild members, keep the crew's data per guild, and the panel has
-  sections and pins. Everything is in the section "Guild conversion (2026-11-21)" below, including what is still
-  open. The version is still 0.1.24 until the owner says "release it"; the first thing to do in the game is
+  sections and pins. The whole-branch review and its fix wave are done. Everything is in the section "Guild
+  conversion (2026-11-21)" below, including what is still open. The version is still 0.1.24 until the owner says "release it"; the first thing to do in the game is
   `/tc guildtest` (`docs/TESTING.md`, "Guild conversion").
 - **v1 design approved by the owner** (2026-11-05): `docs/superpowers/specs/2026-11-05-crew-panel-design.md`.
 - **Build plan:** `docs/superpowers/plans/2026-11-05-crew-panel.md`. The build was handed to a background agent at
@@ -321,8 +321,11 @@ trusted.
   the test with 50 online and 1 newcomer in the first minute: 47 copies send 2 messages, 2 responders 7, the one copy
   that answers calendar diaries about 57 (50 of them diaries, slow lane), the newcomer about 10.
 - **Trust.** A `GUILD` message is from a member by definition. A whisper or group message counts only when the sender
-  is in the guild list; until the list has loaded (up to 10 s) the transport waits. Everyone else is dropped and
-  counted, not logged one by one. A same-named character from another realm is not told apart (the "-Realm" suffix
+  is in the guild list; until the list has loaded (up to 10 s) the transport waits. Nothing at all is accepted while
+  TwizCrew is not using this guild's data (`Guild.active()`), including the first seconds before the game has said
+  whether the character is in a guild. Everyone else is dropped and counted, not logged one by one. A name ending in
+  " <realm>" (the space form the game also uses) is read as a member only when the part before it is a listed
+  member's full name: a stranger called "<a member's first word> <realm>" is not that member (final review fix). A same-named character from another realm is not told apart (the "-Realm" suffix
   is cut; Claude's call, revisit after `/tc guildtest` shows the name forms).
 - **Members.** Who is in the guild comes from the game's guild list (`Crew/Guild.lua` and helpers). Member identity,
   Claude's call: the **first word** of the name is the key (it is the same however the game writes a name); a later
@@ -333,19 +336,32 @@ trusted.
   status and mock lines, own characters' stats, the log. The first login of a character in a different guild than
   the loaded data needs one `/reload` (the addon is quiet and says so). If the game never gives the guild's name the
   addon runs with one shared set named "?" and no per-guild separation (accepted limit).
-- **Data from v0.1.24** is attached to a guild by itself only when at least two and at least half of the saved
-  friends are in its member list (first word and class). Otherwise the addon stays quiet and prints one line, and the
+- **Data from v0.1.24** is attached to a guild by itself at once when nothing in it is about anyone else (no saved
+  friends, crew stats, trophies or calendar notes by others: a user whose old panel was always empty), else only
+  when at least two and at least half of the saved friends are in its member list (first word and class). Only a
+  whole list (below) can refuse it; a list that may lack the offline members keeps the addon waiting quietly. Otherwise the addon stays quiet and prints one line, and the
   player decides: `/tc guild` (this character's guild, the data in use, and every kept set with a number),
   `/tc guild use` (`use yes` to insist when few friends match), `/tc guild new` (a fresh set for this guild after
   `/reload`; `new yes` when the game gives no guild names), `/tc guild load <number>` previews and `load <number>
   yes` (same session) brings a kept set back for this guild at the next `/reload`; the replaced set is kept as
   "<name> (replaced)". A request that could not be carried out is explained in one chat line at that character's
-  next login. Nothing is ever deleted by these. When the old data is adopted, every saved friend starts pinned (once).
+  next login (results are kept per character). Nothing is ever deleted by these. When the old data is adopted (also
+  through `load`), every saved friend starts pinned (once). With "?" in use, `/tc guild new yes` starts the shared
+  set fresh (the old one is parked).
   A character's guild is remembered only once the data on top is that guild's, so a quick `/reload` or disconnect
   before the guild list loads cannot swap data away.
+- **Whole list (final review fix).** If the guild window's "Show Offline Members" box is unticked the game may list
+  only the online members. A read is *complete* when it is exact or the same counts came back three times (enough for
+  keys, the member list and adopting old data that fits); it is *whole* when it is exact, or complete and lists at
+  least one offline member. Only a whole list hides saved friends missing from it, lets the 60-day rule run, and
+  refuses old data that does not fit. **To check in the game:** `/tc guildtest` says "offline members included: yes /
+  no / cannot tell"; with "no" the panel says to tick Show Offline Members.
 - **Forgetting (Claude's call, replaces the design's 30 days).** A member missing from the guild list is only hidden
-  and comes back with their data. The only automatic forgetting is the old 60 days not seen, and it runs only when the complete guild list fits the
-  saved friends (at least two and at least half match); data loaded in a guild it does not fit is never cleaned.
+  and comes back with their data. The only automatic forgetting is the old 60 days not seen, and it runs only on a
+  whole guild list that fits the saved friends (at least two and at least half match), or when this set fitted this
+  same guild before (`guild.fitIn`, per set: written with the guild's real name whenever the list fits; otherwise a
+  set where over half the friends left would never be cleaned again); data loaded in a guild it does not fit, and
+  "?" or nameless sessions, are never cleaned.
   (The design's 30-day forgetting was an idea dropped before release.) Reason: saved data is per
   account and a partial list read or an alt in another guild must never delete a real member's data. `/tc forget
   <name>` (also `/tc remove`, and "Forget this friend" on an offline row) deletes an offline member's saved data.
@@ -353,7 +369,9 @@ trusted.
   no pin), an "Offline (N)" bar. My own row (when shown) sits at the top with no heading and is not a pin. The header
   reads "N here · M online" ("here" counts me). A green "+" pins, the raid-target star unpins (also in the row menu).
   Members without the addon are shown dimmed from the guild list ("Show guild members without the addon", on).
-  Three body lines say: not in a guild, needs `/reload`, waiting for the guild list.
+  Body lines say: not in a guild (only after the game said so for 10 s), needs `/reload`, older data waits for
+  `/tc guild`, waiting for the full guild list (tick Show Offline Members), the guild's name cannot be read, waiting
+  for the guild list. While TwizCrew is quiet nobody counts as pinned and no online / offline notices go out.
 - **Notices.** Online, level-up and death notices (pop-ups, bar, chat) fire only for my party and pinned members by
   default ("Tell me about"); the Recent list records everyone. With the panel module off everyone is in scope. The
   Congrats button on a row stays for everyone. Mocks and congrats aimed at me always show.
@@ -364,7 +382,8 @@ trusted.
   Connection setting, the crew code, `/tc add`, the stored crew channel data (`db.crew`).
 
 **`/tc guildtest`** (needs one other member online with the addon; takes about 8 s; a second run within 10 s only asks to wait) prints: the
-guild name (or that the game gives none); "N counted, M readable" (guild list rows); whether the guild send was
+guild name (or that the game gives none), first why TwizCrew is quiet when it is; "N counted, M readable, offline
+members included: yes / no / cannot tell" (guild list rows); whether the guild send was
 accepted and whether my own copy heard it back, with the sender name form; who answered by whisper and that name
 form; and whether the chat-lockdown functions exist. `/tc report` has a "Guild" line and a "Connection" line.
 
@@ -384,7 +403,13 @@ we have not seen it), the name forms on guild and whisper messages, and how the 
   typed notes); a stale remembered guild costs one extra `/reload` and may leave an empty set; after a downgrade to
   v0.1.24 and back, its writes are counted into the set on top; in a gap in the game's guild names a set loaded
   there becomes the shared "?" set and the named character brings its own back later (no data lost, may repeat).
-- *Follow-up work:* the whole-branch review; splitting `Crew/Guild.lua` (about 1090 lines; it cannot be a pure
+- *What only the game can tell (whole-branch review):* whether `GUILD` addon messages arrive at all and how fast;
+  the sender name forms on guild messages and whispers; whether the guild list gives GUIDs and offline members (the
+  Show Offline Members box); whether `GetChannelName` and `LeaveChannelByName` drop the old channel; whether
+  `IsInGuild`, `UnitName` / `UnitGUID("player")` and `GetGuildInfo` turn unreadable inside dungeons (the addon keeps
+  sending and keeps knowing itself then); whether the guild's name comes within 10 s of login; the new panel lines
+  and textures.
+- *Follow-up work:* splitting `Crew/Guild.lua` (about 1240 lines; it cannot be a pure
   move, parked); **part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news**, designed only in
   outline (the design's "three parts"; research on the game calendar and other addons in "What an addon can and
   cannot do"). No version bump and no Changelog entry yet.
@@ -393,7 +418,7 @@ we have not seen it), the name forms on guild and whisper messages, and how the 
 section; the list: first word as the key; stripping "-Realm"; sending and whispers wait for the guild list up to
 10 s; about 3 responders; guild identity is the name only (no realm, so same-named guilds on two realms share data);
 the guild name is remembered for the session; no readable name after 10 s means one shared "?" set; the guild list
-counts as complete after three identical reads; the fit rule (two and half) for old data and for the 60-day clean-up;
+counts as complete after three identical reads, and as whole only when exact or listing an offline member; the fit rule (two and half) for old data and for the 60-day clean-up;
 old friends start pinned; pins are per guild; hiding instead of deleting; the `/tc guild` commands and the wording of
 their lines; `Crew/Guild.lua` not split.
 
@@ -635,7 +660,7 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   Spell helpers were never committed, so releases (built with `git archive`) lacked them. Fixed 2026-11-08 to
   `/tools/` (only the top-level Lua folder). On Windows the tests run with `tools/lua51/lua5.1.exe tests/run.lua`.
 - **The owner's Windows PC (2026-11-08):** the game is at `C:\Program Files (x86)\World of Warcraft\_forever_`, account
-  folder `WTF/Account/*`. There `Interface/AddOns/TwizCrew` is a plain copy (not a link to the working
+  folder `WTF/Account/*/`. There `Interface/AddOns/TwizCrew` is a plain copy (not a link to the working
   copy), so changes reach the game only when copied there (or through a release).
 - **Where the game is on this PC:** Lutris (Flatpak) → Battle.net (on GE-Proton11-12) → WoW Forever.
   AddOns folder:

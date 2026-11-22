@@ -46,8 +46,28 @@ The reasons and the owner's quotes are in PROJECT.md, section "Guild conversion 
   the same fit check as old data); the guild list counts as complete after three identical reads; sending and
   whispers wait for the guild list up to 10 s; a same-named character from another realm is not told apart ("-Realm"
   is cut).
+- **Whole list (final review fix).** A read is *complete* when exact or the same counts came back three times (keys,
+  the member list, adopting old data that fits); it is *whole* (`Guild.whole()`) when exact, or complete and listing
+  at least one offline member (the game may leave offline members out when "Show Offline Members" is unticked). Only
+  a whole list hides saved friends missing from it, lets the 60-day clean-up run, and refuses old data that does not
+  fit (the quiet state and the choice line); a complete but not whole list that does not fit keeps waiting quietly
+  and the panel says to tick Show Offline Members. `/tc guildtest` adds "offline members included: yes / no / cannot
+  tell".
+- **`guild.fitIn` (final review fix).** Per set: the real name of the guild whose list the saved friends last fitted.
+  The 60-day clean-up runs on a whole list when the friends fit it, or when `fitIn` is this guild (over half the
+  friends may have left since: they are the very rows the clean-up removes). A wrong-guild `use yes` / `load` and
+  "?" or nameless sessions never clean.
+- **Old data about nobody else (final review fix).** Unnamed (v0.1.24) data with no real roster rows, no crew stats,
+  no trophies and no calendar notes by other people (only the player's own session, feed, diary and notes) is taken
+  by the first guild whose name is read, like empty data, and pins nobody. With crew stats, trophies or others'
+  notes but no roster it still asks (`use yes`).
+- **Smaller final rulings:** a name ending in " <realm>" is read as a member only when the rest is a listed full name;
+  nothing is accepted while TwizCrew is not using this guild's data; sends follow `Guild.active()` (an unreadable
+  `IsInGuild` does not stop them); a `/tc guild load` of the unnamed set pins its old crew once; with "?" in use
+  `/tc guild new yes` starts the shared set fresh (parked, never deleted); request results are kept per character.
 - **`Crew/Guild.lua` is not split** (parked follow-up; it cannot be a pure move).
-- **Not built:** the whole-branch review; parts 2 and 3 are designed only in outline (see "The three parts").
+- **Not built:** parts 2 and 3 are designed only in outline (see "The three parts"). The whole-branch review and its
+  fix wave are done.
 
 Date: 2026-11-21. Owner approved the direction in conversation; everything marked **(Claude's call)** was decided by
 Claude and can be changed.

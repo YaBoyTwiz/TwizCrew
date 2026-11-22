@@ -31,15 +31,8 @@ stop there and tell Claude.
 2. **No red error pop-ups** while you log in, play for a few minutes, fight something and `/reload`.
    Also no "action blocked" or "interface action failed" message during a fight.
 
-3. **The hidden crew channel stays hidden.**
-   - About 5 seconds after you log in, TwizCrew joins its own chat channel. You should **not** see a
-     "Joined Channel: TwizCrewHQ" line in chat, and nothing from that channel should ever show up in chat.
-   - General should still be channel 1 and Trade channel 2 (type `/chatlist` if you're not sure).
-   - Type `/tc report`. The second line should say `Connection: auto (channel TwizCrewHQ joined)`.
-     If it says `failed: sends to the channel were refused`, wait for the "next try in" time it shows and type
-     `/tc report` again: it should say `joined` by then. If it still fails after a few tries, tell Claude.
-   - Log out to the character screen and log back in. Check the same things again (the game may join the channel
-     on its own at login, before TwizCrew does).
+3. **The hidden crew channel.** No longer applies since the guild conversion (there is no channel; see "Guild
+   conversion" below, step 8).
 
 4. **The crew panel** (the TwizCrew window on the left side of the screen).
    - It shows up with a dark background, a gold border and the title "TwizCrew". With no friends online it says
@@ -86,7 +79,7 @@ stop there and tell Claude.
 Your friend needs TwizCrew too. That means putting it on GitHub for WowUp, which only happens when you say
 "publish", and once you've picked the final name (the folder name becomes the addon's name).
 
-Do these **without being in a group** first: that proves the hidden channel works. Pop-ups stay quiet for the
+Do these **without being in a group** first: that proves guild messages work. Pop-ups stay quiet for the
 first 30 seconds after you log in (so logging in doesn't flood you); after that they work normally.
 
 1. **You see each other.** Within about 10 seconds of both being online, each of you is on the other's panel with
@@ -105,9 +98,9 @@ first 30 seconds after you log in (so logging in doesn't flood you); after that 
      NPCs on both sides of the border. **OTHER LAYER** should not appear for a friend standing next to you.
    - Have your friend log out and back in while you stay: no "on a different layer" pop-up should come from that.
 4. **Death pop-up.** When your friend dies, a pop-up says "<friend> died" with the place.
-5. **Offline friend, no chat spam.** In the settings, set **Connection** to **Whispers**, then have your friend log
-   off. For the next two or three minutes you should **not** see "No player named … is currently playing" in chat.
-   Set **Connection** back to **Automatic** afterwards.
+5. **Offline friend, no chat spam.** Have your friend log off. For the next two or three minutes you should **not**
+   see "No player named … is currently playing" in chat. (The **Connection** setting no longer exists since the
+   guild conversion.)
 6. **A boss fight.** Do a dungeon boss together. Nothing should break. Messages pause during the fight and are sent
    right after, so the panel may lag a little during the fight.
 7. **Typed status.** Your friend types `/tc status 50% ^_^ a|b`. You should see exactly that on their row, in quotes
@@ -654,10 +647,17 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
 
 1. **`/tc guildtest`, with one other member online.** Type it once; it takes about 8 seconds. Typing it again within
    10 seconds only says "Wait N seconds before testing again." Lines, in this order:
+   - Only while TwizCrew is not using this guild's data, a first line says why, for example `TwizCrew is not using
+     this guild's data yet: it waits for the full guild list. If this stays, open the guild window and tick Show
+     Offline Members.` or `... it has older saved data. Type /tc guild to choose what to do with it.` Normally there
+     is no such line; if there is one, write it down.
    - `The game names the guild "<your guild>".` Bad: `The game gives no guild name.` **Tell Claude** (the addon then
      keeps one shared set of data for all your characters).
-   - `Guild list: N counted, M readable.` N is how many members the game counted, M how many the addon could read.
-     Good: M equals N (or is close). Bad: M much smaller, or `?`.
+   - `Guild list: N counted, M readable, offline members included: yes.` N is how many members the game counted, M
+     how many the addon could read. Good: M equals N (or is close) and `yes`. If it says `offline members included:
+     no` (M is about the number online): open the guild window, tick **Show Offline Members**, run `/tc guildtest`
+     again, and **tell Claude** what it said before and after (TwizCrew hides or forgets nobody, and does not decide
+     about old data, until the list holds the offline members). `cannot tell`, or `?`: tell Claude.
    - `You are in the guild <name>: X members, Y online.` Good: plausible numbers. If instead you see
      `You are in the guild <name>, but the guild list has not loaded yet.` followed by `The guild list has not loaded
      yet, so there is no name to show.`, wait a minute and run it again (the addon asked the game for the list).
@@ -668,10 +668,12 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
    - `These answered: <Name> in 0.4 s (whisper sender shown as "<name>").` Good: your guildmate's name and a short
      time. Bad: `Nobody answered (nobody else online with TwizCrew, or guild messages are not delivered).`, or
      `Nobody answered. If a friend with TwizCrew is online, replies may not be reaching you: the game gave only a first
-     name.` while they are online with this version: **tell Claude.**
+     name.` while they are online with this version: **tell Claude.** (While TwizCrew is not using this guild's data
+     this line reads `Answers cannot be counted while TwizCrew is not using this guild's data. See /tc guild.`)
    - A last line about chat lockdown (whether the game's lockdown check exists). Just report it.
 2. **After `/reload`, a member with the addon appears.** Open the panel (`/tc show`). Your guildmate shows up within a
    minute, in the Guild online list (the bar "Guild online (N)": click it to open) or under your party if grouped.
+   A friend from your old (v0.1.24) panel is pinned by itself and shows under the heading "Pinned".
 3. **The first login after the update: does the old data attach by itself?** Look for your friends, stats, trophies
    and calendar notes from v0.1.24 (the Hall of Shame, `/tc cal`). Two outcomes are fine:
    - It attaches quietly (most of your saved friends are in the guild): everything is there, and **all the old
@@ -690,8 +692,8 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
    moves up; click the star to unpin (the row menu also has Pin to main view / Unpin). Members without the addon are
    dimmed with "no addon". With no party and no pins the Guild online list starts open. Right-click the title bar:
    "Row style" there switches Full, Compact, Tiny, one step on each click; check all three: the **+** and the star
-   must not sit on the Mock or Congrats buttons and must not look cut off. The header reads "N here . M online"
-   ("here" counts you). The star should be the raid-target star.
+   must not sit on the Mock or Congrats buttons and must not look cut off. The header reads "N here · M online"
+   (with a middle dot; "here" counts you). The star should be the raid-target star.
 6. **Notices.** A guildmate who is not pinned and not in your party levels up: no pop-up, but the line is in the
    Recent list (`/tc recent`). Pin them, level up again: the pop-up shows. In `/tc`, the panel setting "Tell me
    about" has two choices, "My party and pinned" (default) and "Everyone in the guild". The Congrats button on a row
@@ -699,11 +701,13 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
 7. **A dungeon run with a guild party.** Go in, fight, come out. No red errors, and after `/reload` `/tc report` shows
    nothing under **Problems**.
 8. **The old hidden channel is gone.** The addon leaves it on the first login (about 5 seconds after login); after
-   that `/chatlist` (or the chat window's channel list) no longer shows the old TwizCrew channel.
+   that `/chatlist` (or the chat window's channel list) no longer shows the old TwizCrew channel, and after a
+   `/reload`, `/tc report` shows no line with "comm" under **Problems**.
 9. **An alt in another guild, or in no guild.**
    - Another guild: chat says `TwizCrew keeps separate data for each guild. Type /reload to switch to <that guild>.`
      (or `TwizCrew: <guild> has its own saved data. Type /reload to switch to it.`). Type `/reload` once; after it the
-     alt has its own data.
+     alt has its own data, and the first time chat says `TwizCrew: <guild> starts with new TwizCrew data. You have
+     other saved sets: type /tc guild.`
    - No guild: **no chat line**; the panel says `TwizCrew works inside a guild. Join one and it starts by itself.`
    - No red errors either way. Then log the main back in: friends and stats are untouched, and `/tc guild` on the main
      lists the alt's guild as a kept set.
@@ -716,12 +720,26 @@ and, for most checks, one guildmate online who also runs this version. Turn on `
     "which one?" and wants the full name.
 12. **`/tc report`.** Under **Connection** it says "through the guild <name>" (or why nothing is sent); under **Guild**
     one line with your guild, member count and the result of the test (or "guild test not run").
+13. **`/tc guild` right after login.** Type it within about 10 seconds of logging in on your main: the first line is
+    `TwizCrew: this character's guild: <your guild>` and set 0 reads `0: <your guild> (in use), N friends ...`.
+14. **A dungeon, with a guildmate outside.** Go into a dungeon alone or with a party while a guildmate with the addon
+    stays outside. After 4 minutes inside: they still see you online on their panel; your `/tc report` (typed inside)
+    says `Connection: through the guild <name>`; and you never appear as a row on your own panel.
+15. **A friend who never had anyone on their old panel.** Ask one friend whose v0.1.24 panel was always empty what they
+    see at their first login with this version. Good: no chat line about old data, and TwizCrew just works in the
+    guild. Bad: `TwizCrew has saved data from before it used guilds...`: tell Claude.
+16. **A guild change is noticed at login.** On an alt, leave its guild (or join another) and log out; log back in.
+    Within about 10 seconds TwizCrew notices: the `Type /reload to switch to <guild>` line for another guild, or, for
+    no guild, the panel line `TwizCrew works inside a guild. Join one and it starts by itself.` (the panel says
+    `Waiting for the guild list…` for the first 10 seconds).
 
 **Three things only the game can tell**; please write down what you see (`/tc guildtest` and `/tc report` help):
 - What `UnitName` gives for a party member: one word ("Chaos") or two ("Chaos Deathbringr").
 - Whether the guild list gives GUIDs (the addon works without, but identifies people more safely with).
-- Whether offline members are in the guild list when the game's "show offline members" box is unticked (if not, the
-  Offline bar is short until it is ticked).
+- Whether offline members are in the guild list when the game's "Show Offline Members" box is unticked: `/tc
+  guildtest` says `offline members included: no` then. TwizCrew depends on it: until the list holds the offline
+  members it hides and forgets nobody and does not decide about old data (the panel says `Waiting for the full guild
+  list. If this stays, open the guild window and tick Show Offline Members.`).
 
 ## What to send back
 

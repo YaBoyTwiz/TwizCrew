@@ -19,9 +19,10 @@ local runId = 0
 local nonce
 local sentAt
 local lastRunAt
-local rawBySender = {}   -- short name -> { raw, at } of their latest GUILD probe (to whisper back)
-local pongRaw = {}       -- short name -> { form, at } of their GPONG whisper
-local lastPong = {}      -- short name -> when I last answered them
+-- Keyed like the handlers' sender (whoKey): the member key, else the short name.
+local rawBySender = {}   -- sender -> { raw, at } of their latest GUILD probe (to whisper back)
+local pongRaw = {}       -- sender -> { form, at } of their GPONG whisper
+local lastPong = {}      -- sender -> when I last answered them
 
 local function say(text) print("TwizCrew: " .. ns.Util.safeText(text)) end
 
@@ -52,6 +53,10 @@ end
 
 local function fresh(entry) return entry and ns.now() - entry.at <= RAW_KEEP end
 
+-- The name the Comm handlers get for a raw sender: a member's key (their full name, or "Name (2)", when a namesake
+-- holds the first word), else the short name.
+local function whoKey(raw) return ns.Guild.keyOf(raw) or ns.shortName(raw) end
+
 -- Sends the probe. Returns facts.sendText: accepted / accepted without a code / the call failed / refused.
 local function sendProbe(text)
   local ok, result = pcall(C_ChatInfo.SendAddonMessage, ns.Config.PREFIX, text, "GUILD")
@@ -75,6 +80,28 @@ end
 
 local function singleWord(raw) return not raw:find("[%s%-]") end
 
+-- Why TwizCrew is not using this guild's data (ns.Guild.quietReason), as the probe's first line.
+local QUIET = "TwizCrew is not using this guild's data yet: "
+local WHY_QUIET = {
+  reload = "TwizCrew is not using this guild's data: the saved data in use is another guild's. Type /reload to switch.",
+  choose = QUIET .. "it has older saved data. Type /tc guild to choose what to do with it.",
+  partial = QUIET .. "it waits for the full guild list. If this stays, open the guild window and tick Show Offline"
+    .. " Members.",
+  noname = QUIET .. "the game does not give the guild's name right now. Type /tc guild.",
+  loading = QUIET .. "it is still loading. Try again in a few seconds.",
+}
+
+-- Does the game's list include offline members? "yes" (an offline row, or every counted row readable), "no" (fewer
+-- readable rows than counted, none offline, and no more than the game's online count), else "cannot tell".
+local function offlineIncluded(peek)
+  local offline = false
+  for _, e in ipairs(peek.entries) do if not e.online then offline = true end end
+  local counted, readable = peek.counted, peek.readable
+  if offline or (counted and counted > 0 and readable == counted) then return "yes" end
+  if counted and readable > 0 and readable < counted and peek.online and readable <= peek.online then return "no" end
+  return "cannot tell"
+end
+
 -- My own probe heard back (any GUILD message carrying my nonce); other probes and pongs remembered by raw name.
 local function onRawMessage(text, chatType, raw)
   if type(text) ~= "string" then return end
@@ -92,7 +119,7 @@ local function onRawMessage(text, chatType, raw)
         facts.echoAfter = ns.now() - (sentAt or ns.now())
       end
     elseif usable then
-      rawBySender[ns.shortName(raw)] = { raw = raw, at = ns.now() }
+      rawBySender[whoKey(raw)] = { raw = raw, at = ns.now() }
     end
   elseif msg.type == "GPONG" then
     -- a whisper from outside the guild is not an answer (Comm drops it too); before the list loads we cannot tell
@@ -101,8 +128,8 @@ local function onRawMessage(text, chatType, raw)
     for k, e in pairs(pongRaw) do -- an answer without a usable name that nobody claimed: gone after RAW_KEEP s
       if k:sub(1, 1) == "?" and now - e.at > RAW_KEEP then pongRaw[k] = nil end
     end
-    local short = usable and ns.shortName(raw) or ("?" .. tostring(msg.fields.n))
-    pongRaw[short] = { form = rawText(raw), at = now, usable = usable }
+    local who = usable and whoKey(raw) or ("?" .. tostring(msg.fields.n))
+    pongRaw[who] = { form = rawText(raw), at = now, usable = usable }
   end
 end
 
@@ -126,21 +153,33 @@ function GuildTest.run()
     say(lockdownText())
     return
   end
-  -- what the game gives: the guild's name, and how many list rows it counts and gives readably (counted now)
-  local countedRows, readable = ns.Guild.countRows()
-  facts.counted, facts.readable = countedRows, readable
+  -- TwizCrew not using this guild's data: why, first (answers are not taken in then: Comm drops them)
+  local reason = ns.Guild.quietReason()
+  if reason == "noguild" then reason = "loading" end -- (the game says guild now: it is changing)
+  facts.quiet = reason
+  if reason then say(WHY_QUIET[reason]) end
+  -- what the game gives: the guild's name, and how many list rows it counts and gives readably (read now)
+  local peek = ns.Guild.peek()
+  facts.counted, facts.readable = peek.counted, peek.readable
+  facts.offlineIncluded = offlineIncluded(peek)
   say(facts.guildName and ("The game names the guild \"" .. ns.Util.safeText(facts.guildName) .. "\".")
     or "The game gives no guild name.")
-  say("Guild list: " .. tostring(countedRows or "?") .. " counted, " .. tostring(readable or "?") .. " readable.")
+  say("Guild list: " .. tostring(peek.counted or "?") .. " counted, " .. tostring(peek.readable) .. " readable, offline"
+    .. " members included: " .. facts.offlineIncluded .. ".")
   local loaded = ns.Guild.loaded()
   facts.listLoaded = loaded
   local online, total = ns.Guild.count()
+  local list = ns.Guild.members()
+  if not loaded and reason and #peek.entries > 0 then -- quiet: the list is not being read, so count it now
+    loaded, list, online, total = true, peek.entries, 0, #peek.entries
+    for _, e in ipairs(list) do if e.online then online = online + 1 end end
+  end
   facts.total, facts.online = total, online
   local sample
   if loaded then
     say("You are in the guild " .. tostring(facts.guildName or "(name unknown)") .. ": " .. total .. " members, "
       .. online .. " online.")
-    for _, e in ipairs(ns.Guild.members()) do
+    for _, e in ipairs(list) do
       if not ns.Guild.isMe(e.full) then sample = e; break end
     end
     facts.sample = sample and sample.full or nil
@@ -170,7 +209,9 @@ function GuildTest.run()
 
   C_Timer.After(ANSWER_WAIT, function()
     if id ~= runId then return end
-    if #facts.answers == 0 then
+    if #facts.answers == 0 and facts.quiet then
+      say("Answers cannot be counted while TwizCrew is not using this guild's data. See /tc guild.")
+    elseif #facts.answers == 0 then
       local form = facts.echo and facts.echoForm
       if type(form) == "string" and form ~= "hidden" and form ~= "unknown" and singleWord(form) then
         say("Nobody answered. If a friend with TwizCrew is online, replies may not be reaching you: the game gave"

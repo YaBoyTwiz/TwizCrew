@@ -373,6 +373,49 @@ return {
       A.no(ns.DB.useGuildOf(db, "c1")); A.eq(db.guild.request, nil)
     end,
 
+    -- The unnamed (v0.1.24) set loaded by a request (from guilds[""] or kept aside as "#n") pins its old crew once,
+    -- as when a guild takes it in the game; a named set, or one that pinned before, pins nothing.
+    a_load_request_of_the_unnamed_set_pins_its_old_crew_once = function(ns, A, W)
+      W.state.guild = nil
+      local function load(key, from, set)
+        local tbl = from == "bad" and "guilds_bad" or "guilds"
+        local saved = { roster = {}, guild = { name = "Guild A",
+          request = { kind = "load", guild = "Guild A", char = "c1", from = from, key = key } },
+          [tbl] = { [key] = set } }
+        local db = ns.DB.init(saved, {})
+        A.ok(ns.DB.useGuildOf(db, "c1"), key)
+        return db
+      end
+      local db = load("", "guilds", { roster = { L1 = { name = "L1" }, ["Fake (test)"] = { name = "Fake (test)" } } })
+      A.eq(db.pins, { L1 = true }, "the real rows are pinned"); A.eq(db.guild.pinnedOld, true)
+      db = load("#1", "bad", { roster = { K1 = { name = "K1" } } })
+      A.eq(db.pins, { K1 = true }, "kept aside unnamed set"); A.eq(db.guild.pinnedOld, true)
+      db = load("", "guilds", { roster = { L1 = { name = "L1" } }, pins = {}, guild = { pinnedOld = true } })
+      A.eq(db.pins, {}, "pinned once only: the player's unpins stay")
+      db = load("Old Guild", "guilds", { roster = { O1 = { name = "O1" } } })
+      A.eq(db.pins, {}, "a named set pins nothing"); A.eq(db.guild.pinnedOld, nil)
+    end,
+
+    -- Each character's request result is its own: another character's request never overwrites it, and it is said
+    -- only at its own character's login.
+    request_results_are_kept_per_character = function(ns, A, W)
+      W.state.guild = nil
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A" } }, {})
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "guilds", key = "Gone1" }
+      ns.DB.useGuildOf(db, "c2") -- c2 logs in first: c1's request is used up
+      db.guild.request = { kind = "load", guild = "Guild A", char = "c2", from = "guilds", key = "Gone2" }
+      ns.DB.useGuildOf(db, "c3") -- and c3 before c2
+      A.eq(db.guild.requestResults.c1.reason, "another character logged in first", "c1's result kept")
+      A.eq(db.guild.requestResults.c2.reason, "another character logged in first")
+      ns.DB.useGuildOf(db, "c1")
+      A.eq(ns.DB.notes, { "TwizCrew: Your /tc guild request was not carried out: another character logged in first."
+        .. " Type /tc guild." })
+      A.eq(db.guild.requestResults.c1, nil, "said once")
+      A.ok(db.guild.requestResults.c2, "c2's waits for c2")
+      ns.DB.useGuildOf(db, "c3")
+      A.eq(ns.DB.notes, {}, "nothing for c3")
+    end,
+
     -- Round 5 (5): an error before the swap still uses the request up, with a result that says it was not done.
     a_request_that_errors_is_recorded_not_lost_silently = function(ns, A, W)
       W.state.guild = nil
@@ -386,13 +429,13 @@ return {
       A.eq(db.roster.A1.name, "A1", "nothing moved")
       db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "x" }
       A.no(ns.DB.useGuildOf(db, "c2"), "another character logs in")
-      A.eq(db.guild.requestResult, { char = "c1", kind = "load", done = false,
-        reason = "another character logged in first" }, "kept for c1's next login")
-      db.guilds_bad, db.guild.requestResult = {}, nil
+      A.eq(db.guild.requestResults, { c1 = { kind = "load", done = false,
+        reason = "another character logged in first" } }, "kept for c1's next login")
+      db.guilds_bad, db.guild.requestResults = {}, {}
       db.guild.request = { kind = "load", guild = "Guild A", char = "c1", from = "bad", key = "gone" }
       A.no(ns.DB.useGuildOf(db, "c1"))
       A.eq(ns.DB.notes, { "TwizCrew: Your /tc guild request was not carried out: that set is gone. Type /tc guild." })
-      A.eq(db.guild.requestResult, nil, "said at that character's login, then cleared")
+      A.eq(db.guild.requestResults, {}, "said at that character's login, then cleared")
     end,
 
     sets_are_numbered_in_a_stable_order = function(ns, A)
@@ -403,11 +446,6 @@ return {
       for _, s in ipairs(ns.DB.sets(db)) do list[#list + 1] = s.number .. ":" .. s.from .. ":" .. tostring(s.key) end
       A.eq(list, { "0:top:nil", "1:guilds:", "2:guilds:?", "3:guilds:Alpha", "4:guilds:zed", "5:bad:Guild A#1" })
       A.eq(ns.DB.sets(db)[1].set.roster.T1, db.roster.T1, "set 0 is the data in use")
-    end,
-
-    not_legacy_from_a_test_build_is_dropped = function(ns, A)
-      local db = ns.DB.init({ guild = { notLegacy = { ["Guild B"] = true } } }, {})
-      A.eq(db.guild.notLegacy, nil)
     end,
   },
 }

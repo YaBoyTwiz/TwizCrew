@@ -955,6 +955,151 @@ return {
       noErrors(A, ns2)
     end,
 
+    -- The guild window's "Show Offline Members" box is not ticked: the game counts every member but lists only the
+    -- online ones. Such a list is complete after three stable reads (keys, online members) but not whole: nobody is
+    -- hidden or forgotten for missing from it.
+    a_list_of_online_members_only_hides_and_forgets_nobody = function(_, A, _, H)
+      local old = 1700000000 - 70 * 86400
+      local saved = { guild = { name = "Crew Guild" }, roster = {
+        FriendA = { name = "FriendA", level = 11, lastSeen = 1700000000 },
+        FriendB = { name = "FriendB", level = 12, lastSeen = 1700000000 },
+        FriendC = { name = "FriendC", level = 13, lastSeen = 1700000000 },
+        FriendD = { name = "FriendD", level = 14, lastSeen = 1700000000 },
+        Offpal = { name = "Offpal", level = 15, lastSeen = old },  -- in the guild, offline, not seen for 70 days
+        Oldpal = { name = "Oldpal", level = 9, lastSeen = old },   -- left the guild 70 days ago
+      } }
+      local members = { { name = "FriendA Surname", online = true }, { name = "FriendB Surname", online = true },
+        { name = "FriendC Surname", online = true }, { name = "FriendD Surname", online = true },
+        { name = "Offpal Surname" }, { name = "Other1 Person" }, { name = "Other2 Person" } }
+      local W, ns = mainSession(H, saved, "Crew Guild", members, 30, { guildOnlineOnly = true }, true)
+      A.ok(ns.Guild.active())
+      for _ = 1, 3 do W:fire("GUILD_ROSTER_UPDATE", false); H.advance(6) end -- (the game sends these often)
+      A.eq({ ns.Guild.readStats() }, { 8, 5 })
+      A.ok(ns.Guild.complete(), "three stable reads")
+      A.ok(ns.Guild.get("FriendA"), "online members have keys")
+      A.ok(saved.roster.Offpal and saved.roster.Oldpal, "nothing forgotten")
+      A.ok(ns.roster:get("Offpal"), "the offline friend is not hidden")
+      A.ok(ns.roster:get("Oldpal"), "nor the one who left: the list cannot tell")
+      A.no(ns.Guild.whole(), "no offline member listed: offline members are left out")
+      W.state.guildOnlineOnly = false -- the player ticks the box
+      W:fire("GUILD_ROSTER_UPDATE", false)
+      H.advance(3)
+      A.ok(ns.Guild.whole())
+      A.ok(saved.roster.Offpal, "on the whole list: kept")
+      A.eq(saved.roster.Oldpal, nil, "the whole list: the 60-day rule")
+      A.eq(ns.roster:get("Oldpal"), nil)
+      noErrors(A, ns)
+      retire(H, W)
+    end,
+
+    -- A v0.1.24 user who never had anyone on the panel: only their own session, feed, diary and notes. Nothing in
+    -- it is about anyone else, so the first guild takes it at once, like empty data, and pins nobody.
+    old_data_about_nobody_else_is_taken_at_once = function(_, A, _, H)
+      local function ownOnly()
+        return { roster = {}, feed = { { kind = "zone", at = 1, text = "You entered Westfall" } },
+          stats = { session = { sid = "s1", s = { dt = 5 } }, chars = { Twiz = { sid = "x", s = {}, a = { dt = 1 } } } },
+          calendar = { me = "abc12345", people = { abc12345 = { days = { [20400] = { on = "10" } }, alts = {} } },
+            notes = { ["abc12345-100"] = { d = "2026-11-01", t = "my own note", b = "Twiz" } } } }
+      end
+      local saved = ownOnly()
+      local W, ns = mainSession(H, saved, "Crew Guild", guildOf(3), 5, nil, true)
+      A.eq(saved.guild.name, "Crew Guild", "taken at once"); A.ok(ns.Guild.active())
+      A.eq(countPrinted(W, "/tc guild"), 0, "no choice line")
+      A.eq(next(saved.pins), nil, "nobody pinned")
+      A.eq(saved.calendar.notes["abc12345-100"].t, "my own note", "kept")
+      noErrors(A, ns)
+      retire(H, W)
+      -- with crew numbers, a trophy or someone else's note (but no roster) it still asks
+      local extras = {
+        function(s) s.stats.crew = { FriendA = { sid = "x", s = {}, a = { dt = 3 } } } end,
+        function(s) s.stats.trophies = { old = { sid = "old", people = { "FriendA", "Twiz" } } } end,
+        function(s) s.calendar.notes["zzz99999-200"] = { d = "2026-11-02", t = "their note", b = "FriendA" } end,
+      }
+      for i, add in ipairs(extras) do
+        local other = ownOnly()
+        add(other)
+        local W2, ns2 = mainSession(H, other, "Crew Guild", guildOf(3), 30, nil, true)
+        A.eq(other.guild.name, nil, "case " .. i .. ": not taken")
+        A.eq(countPrinted(W2, "If Crew Guild is your crew's guild, type /tc guild use."), 1, "case " .. i .. ": asks")
+        tc(W2, "guild use yes")
+        A.eq(other.guild.name, "Crew Guild", "case " .. i .. ": use yes")
+        noErrors(A, ns2)
+        retire(H, W2)
+      end
+    end,
+
+    -- Over half the saved friends left the guild: the list no longer fits, but this set fitted this guild before
+    -- (guild.fitIn), so the 60-day rule still forgets the ones who left. A set that never fitted it forgets nothing.
+    friends_who_left_are_forgotten_once_the_set_fitted_this_guild = function(_, A, _, H)
+      local function crewSave()
+        return { guild = { name = "Crew Guild" }, roster = {
+          FriendA = { name = "FriendA", level = 11, lastSeen = 1700000000 },
+          FriendB = { name = "FriendB", level = 12, lastSeen = 1700000000 },
+          FriendC = { name = "FriendC", level = 13, lastSeen = 1700000000 } } }
+      end
+      local all = { { name = "FriendA Surname" }, { name = "FriendB Surname" }, { name = "FriendC Surname" },
+        { name = "Other1 Person" } }
+      local left = { { name = "FriendA Surname" }, { name = "Other1 Person" }, { name = "Other2 Person" } }
+      local saved = crewSave()
+      mainSession(H, saved, "Crew Guild", all, 20)
+      A.eq(saved.guild.fitIn, "Crew Guild", "the friends fitted this guild")
+      saved.roster.FriendB.lastSeen = 1700000000 - 70 * 86400 -- B and C left the guild 70 days ago
+      saved.roster.FriendC.lastSeen = 1700000000 - 70 * 86400
+      local W, ns = mainSession(H, saved, "Crew Guild", left, 20, nil, true)
+      A.no(ns.Guild.listFits(), "1 of 3: the list does not fit any more")
+      A.eq(saved.roster.FriendB, nil, "forgotten"); A.eq(saved.roster.FriendC, nil, "forgotten")
+      A.ok(saved.roster.FriendA, "still in the guild")
+      noErrors(A, ns)
+      retire(H, W)
+      -- the same set that never fitted this guild: nothing goes
+      local never = crewSave()
+      never.roster.FriendB.lastSeen = 1700000000 - 70 * 86400
+      never.roster.FriendC.lastSeen = 1700000000 - 70 * 86400
+      local W2, ns2 = mainSession(H, never, "Crew Guild", left, 20, nil, true)
+      A.eq(never.guild.fitIn, nil)
+      A.ok(never.roster.FriendB and never.roster.FriendC, "never fitted: nothing forgotten")
+      noErrors(A, ns2)
+      retire(H, W2)
+    end,
+
+    -- v0.1.24 data, 8 of 10 friends in the guild, but the list gives only the 3 online ones: it waits quietly (no
+    -- choice line) and is adopted when a whole list arrives.
+    old_data_and_a_list_of_online_members_only_waits = function(_, A, _, H)
+      local saved = oldSave()
+      local members = guildOf(8)
+      for k = 1, 3 do members[k].online = true end
+      local W, ns = mainSession(H, saved, "Crew Guild", members, 30, { guildOnlineOnly = true }, true)
+      A.eq({ ns.Guild.readStats() }, { 13, 4 }, "the 3 online friends and me, of 13")
+      A.no(ns.Guild.active()); A.eq(saved.guild.name, nil, "not decided yet")
+      A.eq(countPrinted(W, "/tc guild use"), 0, "no choice line")
+      A.eq(ns.Guild.quietReason(), "partial")
+      A.ok(ns.Guild.deciding())
+      H.advance(90)
+      A.eq(countPrinted(W, "/tc guild use"), 0, "still no choice line")
+      W.state.guildOnlineOnly = false
+      W:fire("GUILD_ROSTER_UPDATE", false)
+      H.advance(3)
+      A.eq(saved.guild.name, "Crew Guild", "adopted"); A.ok(ns.Guild.active())
+      oldDataOnTop(A, saved, "adopted")
+      noErrors(A, ns)
+      retire(H, W)
+    end,
+
+    -- The same, and enough friends come online for the online list alone to fit: adopted then.
+    old_data_is_adopted_when_enough_friends_are_online = function(_, A, _, H)
+      local saved = oldSave()
+      local members = guildOf(8)
+      for k = 1, 3 do members[k].online = true end
+      local W, ns = mainSession(H, saved, "Crew Guild", members, 30, { guildOnlineOnly = true }, true)
+      A.eq(saved.guild.name, nil)
+      for k = 4, 5 do W.state.guild.members[k + 1].online = true end -- (index 1 is Twiz)
+      H.advance(70)
+      A.eq(saved.guild.name, "Crew Guild", "5 of 10 online: fits")
+      A.eq(countPrinted(W, "/tc guild use"), 0)
+      noErrors(A, ns)
+      retire(H, W)
+    end,
+
     -- (b) 3 of 10 (and a friend unseen for 70 days): quiet, one line. /tc guild use says why it will not and how to
     -- insist; /tc guild use yes adopts, and nothing old is forgotten in that session.
     old_data_with_three_of_ten_and_tc_guild_use_yes = function(_, A, _, H)
@@ -1029,6 +1174,8 @@ return {
       A.eq(countPrinted(tw3, "TwizCrew: Your /tc guild request was carried out."), 1)
       A.eq(saved.guild.name, "Crew Guild"); A.ok(tw3Ns.Guild.active())
       oldDataOnTop(A, saved, "loaded back")
+      for k = 1, 10 do A.eq(saved.pins["Friend" .. string.char(64 + k)], true, "the old crew is pinned") end
+      A.eq(saved.guild.pinnedOld, true)
       A.eq(saved.guilds[""], nil)
       A.eq(next(saved.guilds["Crew Guild (replaced)"].roster), nil, "the fresh set, parked")
       A.eq(saved.guild.request, nil)
@@ -1079,12 +1226,12 @@ return {
       retire(H, alt)
       A.eq(saved2.guild.request, nil, "used up at the alt's login")
       A.eq(saved2.guild.name, nil); A.eq(next(saved2.guilds), nil)
-      A.eq(saved2.guild.requestResult, { char = MAIN, kind = "new", done = false,
-        reason = "another character logged in first" })
+      A.eq(saved2.guild.requestResults, { [MAIN] = { kind = "new", done = false,
+        reason = "another character logged in first" } }, "kept for the main only")
       local tw4 = mainSession(H, saved2, "Crew Guild", guildOf(3), 30)
       A.eq(countPrinted(tw4, "TwizCrew: Your /tc guild request was not carried out: another character logged in"
         .. " first. Type /tc guild."), 1)
-      A.eq(saved2.guild.requestResult, nil)
+      A.eq(saved2.guild.requestResults, {})
       A.eq(saved2.guild.name, nil, "the main's next login: nothing made by an old request")
       oldDataOnTop(A, saved2, "after the alt")
       A.eq(next(saved2.guilds), nil)
@@ -1153,7 +1300,7 @@ return {
       A.eq(saved.guilds["Other Guild"], nil)
       A.ok(saved.guilds["Crew Guild (replaced)"], "the empty set, parked")
       A.eq(saved.guild.byChar[MAIN], "Crew Guild"); A.eq(saved.guild.byChar[ALT], "Other Guild")
-      A.eq(saved.guild.requestResult, nil, "told once, then cleared")
+      A.eq(saved.guild.requestResults[MAIN], nil, "told once, then cleared")
       noErrors(A, main3Ns)
       retire(H, main3)
     end,
@@ -1335,6 +1482,40 @@ return {
       A.eq(#ns.roster:allNames(), 10)
       A.eq(next(saved.guilds), nil); A.eq(saved.guild.byChar[ns.DB.charId()], "Crew Guild")
       noErrors(A, ns)
+    end,
+
+    -- A game that never names guilds, "?" in use: /tc guild new says what it would do; new yes starts the shared set
+    -- fresh at the next login, the old one parked (never deleted), through the one-shot request.
+    no_name_tc_guild_new_starts_the_shared_set_fresh = function(_, A, _, H)
+      local saved = oldSave()
+      local function session()
+        local W, ns = H.client("Twiz", { guildNameHidden = true })
+        W.state.guids.player = MAIN
+        H.guild("Crew Guild", W, guildOf(8))
+        W.env.TwizCrewDB = saved
+        H.link(W)
+        login(W)
+        H.advance(ns.Config.GUILD_NAME_WAIT + 20)
+        return W, ns
+      end
+      local w, ns = session()
+      A.eq(saved.guild.name, "?"); A.ok(ns.Guild.active())
+      tc(w, "guild new")
+      A.ok(printed(w, "TwizCrew: All your characters share this one saved set. /tc guild new yes starts it fresh; the"
+        .. " current one is kept as a parked set."))
+      A.eq(saved.guild.request, nil, "asked first")
+      tc(w, "guild new yes")
+      A.eq(saved.guild.request, { kind = "new", guild = "?", char = MAIN })
+      A.ok(printed(w, "TwizCrew: The shared set starts fresh at your next login. Type /reload; nothing saved is deleted."))
+      retire(H, w)
+      w, ns = session()
+      A.eq(countPrinted(w, "TwizCrew: Your /tc guild request was carried out."), 1)
+      A.eq(saved.guild.name, "?"); A.ok(ns.Guild.active())
+      A.eq(next(saved.roster), nil, "fresh")
+      A.eq(saved.guilds["? (replaced)"].roster.FriendJ.name, "FriendJ", "the old shared set, parked")
+      A.eq(saved.guilds["? (replaced)"].stats.trophies.old.sid, "old")
+      noErrors(A, ns)
+      retire(H, w)
     end,
 
     -- (5) A switch from guild A to guild B mid-session: no key written into A's data, nothing sent, the /reload line.

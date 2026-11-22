@@ -544,6 +544,22 @@ return {
       A.eq(got, { "Ginkan" })
       A.eq(ns.Log.counts()["recv not in guild"], 1, "Holybøi is not in the guild")
     end,
+    -- In a dungeon UnitName / UnitGUID("player") may turn secret after login: my own guild echo is still mine.
+    my_own_echo_stays_mine_when_my_name_turns_secret = function(ns, A, W)
+      boot(ns, W)
+      W:advance(2)
+      A.eq(ns.Guild.myKey(), "Twiz")
+      local got = pingSenders(ns)
+      W.env.UnitName = function() return W.secret() end
+      W.env.UnitGUID = function() return W.secret() end
+      addon(W, "1^PING^", "GUILD", "Twiz")
+      addon(W, "1^PING^a", "GUILD", "Twiz-Realm")
+      A.eq(got, {}, "my own echo is never someone else's message")
+      A.ok(ns.Guild.isMe("Twiz")); A.eq(ns.Guild.myKey(), "Twiz")
+      addon(W, "1^PING^b", "GUILD", "Ginkan Pebble")
+      A.eq(got, { "Ginkan" })
+      noErrors(ns, A)
+    end,
     raw_hook_sees_everything_first = function(ns, A, W)
       boot(ns, W)
       local raw = {}

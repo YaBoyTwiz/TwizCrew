@@ -607,6 +607,35 @@ return {
       A.eq(#off, 1); A.eq(off[1][1], "Frostie")
       A.no(ns.roster:get("Frostie").online)
     end,
+    -- Leaving the guild (or going quiet): friends still time out, but no "went offline" notices, and nobody counts
+    -- as pinned or close meanwhile.
+    no_offline_notices_while_not_using_the_guild = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      ns.db.pins.Frostie = true
+      A.ok(ns.Panel.isPinned("Frostie")); A.ok(ns.Panel.isClose("Frostie"))
+      local off = record(ns, "MEMBER_OFFLINE")
+      W.state.guild = nil -- kicked
+      W:advance(240)
+      A.no(ns.Guild.active())
+      A.no(ns.roster:row("Frostie").online, "timed out")
+      A.eq(#off, 0, "no notice")
+      A.no(ns.Panel.isPinned("Frostie")); A.no(ns.Panel.isClose("Frostie"))
+      A.ok(ns.Panel.isClose("Testbuddy (test)"), "fakes from the test tools stay close")
+      A.eq(ns.db.pins.Frostie, true, "the pin itself is kept")
+    end,
+    -- Session.reshare asks isResponder at every MEMBER_ONLINE: "is this row me" is worked out once per call, not once
+    -- per online friend.
+    responder_check_asks_who_i_am_once = function(ns, A, W)
+      start(ns, W)
+      for _, name in ipairs({ "Frostie", "Ginkan", "Lurabe", "Pewpew" }) do receive(ns, W, name, "STATE", {}) end
+      local real, asked = ns.isMe, 0
+      ns.isMe = function(...) asked = asked + 1; return real(...) end
+      ns.Crew.isResponder("Chaos", 3)
+      ns.isMe = real
+      A.ok(asked <= 1, "asked " .. asked .. " times")
+      A.eq(ns.Crew.isResponder("Chaos", 8), true, "fewer than k others: answers")
+    end,
     bye_marks_offline_now = function(ns, A, W)
       start(ns, W)
       local off = record(ns, "MEMBER_OFFLINE")
@@ -876,7 +905,7 @@ return {
       local day = 86400
       local db = ns.DB.init(nil, ns.Modules.list())
       local now = ns.wallclock()
-      db.roster.Gone = { name = "Gone", level = 5, lastSeen = now - 31 * day, outSince = now - 40 * day }
+      db.roster.Gone = { name = "Gone", level = 5, lastSeen = now - 31 * day }
       db.stats.crew.Gone = { sid = "s", s = {}, a = { gn = 1 } }
       for _, name in ipairs({ "Frostie", "Ginkan" }) do -- friends in the guild: the saved data fits its list
         db.roster[name] = { name = name, level = 5, lastSeen = now }
@@ -887,7 +916,6 @@ return {
       local removed = record(ns, "MEMBER_REMOVED")
       start(ns, W, db)
       A.ok(ns.roster:isHidden("Gone"))
-      A.eq(db.roster.Gone.outSince, nil, "a test build's outSince is removed")
       W.wall = W.wall + 25 * day -- still under the 60 days of silence
       W:advance(ns.Config.OFFLINE_TICK * 3)
       A.eq(db.roster.Gone.level, 5, "kept")

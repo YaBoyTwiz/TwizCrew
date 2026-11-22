@@ -122,7 +122,8 @@ local function listSets(G)
     print("  " .. entry.number .. ": " .. label .. ", " .. friends(n) .. (day and (", last seen " .. day) or ""))
   end
   local g = ns.db.guild
-  local req, res = g.request, g.requestResult
+  local results, me = g.requestResults, ns.DB.charId()
+  local req, res = g.request, type(results) == "table" and me and results[me] or nil
   if type(req) == "table" then
     local whose = req.guild == G.PLACEHOLDER and "the shared set" or ns.Util.safeText(tostring(req.guild))
     say("waiting for " .. (req.char == ns.DB.charId() and "your" or "this character's") .. " next login: "
@@ -169,7 +170,12 @@ local function guildCommand(rest)
     elseif why == "nolist" then say("the guild list has not come in yet. Try again in a few seconds.") end
   elseif what == "new" and (arg == "" or arg == "yes") then
     ok, why = G.newHere(arg == "yes")
-    if ok then say(shown .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.")
+    if ok and here == G.PLACEHOLDER and G.dataGuild() == G.PLACEHOLDER then
+      say("The shared set starts fresh at your next login. Type /reload; nothing saved is deleted.")
+    elseif ok then say(shown .. " gets its own fresh saved data. Type /reload to start it; nothing saved is deleted.")
+    elseif why == "sharedInUse" then
+      say("All your characters share this one saved set. /tc guild new yes starts it fresh; the current one is kept"
+        .. " as a parked set.")
     elseif why == "shared" then
       say("This game gives no guild names, so all your characters share one set. /tc guild new would start that shared"
         .. " set fresh. Type /tc guild new yes.")

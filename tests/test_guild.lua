@@ -175,11 +175,21 @@ return {
 
     isMe_never_takes_my_first_word_and_the_realm = function(ns, A, W)
       W.state.guids.player = "Player-1-ME"
-      boot(ns, W, "Chaos Deathbringr", { member("Chaos Deathbringr", { guid = "Player-1-ME" }), member("Ginkan Pebble") })
+      boot(ns, W, "Chaos Deathbringr", { member("Chaos Deathbringr", { guid = "Player-1-ME" }),
+        member("Ginkan Pebble") })
       A.no(ns.Guild.isMe("Chaos Realm"))
       A.ok(ns.Guild.isMe("Chaos Deathbringr Realm"))
       A.ok(ns.Guild.isMe("chaos deathbringr realm"))
       A.ok(ns.Guild.isMe("Chaos"))
+    end,
+
+    -- A set's own bookkeeping (pinnedOld, fitIn) is not saved data about anyone.
+    a_set_with_only_its_markers_is_empty = function(ns, A)
+      ns.db = ns.DB.init({ guild = { pinnedOld = true, fitIn = "Crew Guild" } }, ns.Modules.list())
+      A.ok(ns.Guild.dataEmpty())
+      ns.db.roster.Friend = { name = "Friend" }
+      A.no(ns.Guild.dataEmpty())
+      A.eq(ns.DB.init({ guild = { fitIn = 5 } }, ns.Modules.list()).guild.fitIn, nil, "repaired")
     end,
 
     names_in_the_list_may_carry_the_realm = function(ns, A, W)
@@ -1003,12 +1013,12 @@ return {
     odd_saved_guild_data_is_repaired_and_listed = function(ns, A, W)
       W.state.player = "Twiz"
       W.state.guild = { name = "Test Guild", members = { member("Twiz") } }
-      ns.db = ns.DB.init({ guild = { name = 7, byChar = 5, request = "x", fresh = { A = true } },
+      ns.db = ns.DB.init({ guild = { name = 7, byChar = 5, request = "x" },
         guilds = { [1] = { roster = {} }, Good = { roster = { X = { name = "X", lastSeen = 1700000000 } } }, Bad = true,
           Half = { roster = {}, stats = 3 } },
         guilds_bad = { [2] = { roster = { Y = { name = "Y" } } } } }, ns.Modules.list())
       local g = ns.db.guild
-      A.eq(g.byChar, {}); A.eq(g.name, nil); A.eq(g.request, nil); A.eq(g.fresh, nil)
+      A.eq(g.byChar, {}); A.eq(g.name, nil); A.eq(g.request, nil)
       local keys = {}
       for k in pairs(ns.db.guilds) do keys[#keys + 1] = k end
       A.eq(keys, { "Good" }, "only usable sets under string names stay parked")

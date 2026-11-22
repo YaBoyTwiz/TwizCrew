@@ -1,11 +1,11 @@
 -- Crew roster (pure, no WoW API): who is in the crew and what we last heard from them.
 -- `now` is the session clock, `wall` is the wallclock; both are passed in by the caller.
 --
--- Guild membership (setGuild, syncGuild): a real member a complete list of the guild whose saved data is in use does
+-- Guild membership (setGuild, syncGuild): a real member a whole list of the guild whose saved data is in use does
 -- not have is hidden (inGuild = false): members(), names(), sorted(), onlineCount() and get() leave them out, while
 -- row() and allNames() still find them (Crew's bookkeeping, forgetting). Back in the list shows them again. Hiding
--- never deletes anything (only FORGET_AFTER_DAYS of silence does: pruneOld). Nothing is marked before such a complete
--- list has been read (ns.Guild.active, complete). Fakes (test tools) are never marked. A new row from a message
+-- never deletes anything (only FORGET_AFTER_DAYS of silence does: pruneOld). Nothing is marked before such a whole
+-- list has been read (ns.Guild.active, whole). Fakes (test tools) are never marked. A new row from a message
 -- starts shown (a guild message comes from a member: the list may be behind) until the next sync.
 local _, ns = ...
 
@@ -109,7 +109,6 @@ end
 
 local function shown(m) return m ~= nil and m.inGuild ~= false end
 
--- A member who is shown (in the guild, or not known to be out of it yet); nil for a hidden one.
 -- Tidies the saved rows (once a session, when they are this character's guild's: Crew): a row without a saved
 -- time gets today (nobody vanishes on the update), a row not seen for FORGET_AFTER_DAYS goes (from saved and from
 -- the roster) unless keep(name) says so (they are on the guild list). Returns the names that went, A-Z.
@@ -117,7 +116,6 @@ function Roster:pruneOld(wall, keep)
   local limit = ns.Config.FORGET_AFTER_DAYS * 86400
   local old = {}
   for name, row in pairs(self.saved) do
-    if type(row) == "table" then row.outSince = nil end -- a test build of the guild conversion saved it: unused
     if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then
       if num(row.lastSeen) == nil then
         row.lastSeen = wall
@@ -141,6 +139,7 @@ function Roster:reload()
   self.byName = fresh.byName
 end
 
+-- A member who is shown (in the guild, or not known to be out of it yet); nil for a hidden one.
 function Roster:get(name)
   local m = self.byName[name]
   if shown(m) then return m end
@@ -158,14 +157,15 @@ end
 
 function Roster:setGuild(guild) self.guild = guild end
 
--- The guild list when it may decide who is hidden: my TwizCrew guild, loaded, and read completely.
+-- The guild list when it may decide who is hidden: my TwizCrew guild, loaded, and whole (it surely holds the
+-- offline members too: ns.Guild.whole).
 local function usableGuild(self)
   local g = self.guild
-  if g and g.active() and g.loaded() and g.complete() then return g end
+  if g and g.active() and g.loaded() and g.whole() then return g end
   return nil
 end
 
--- Marks every row against the guild list (only a complete read of my TwizCrew guild). Returns the names shown /
+-- Marks every row against the guild list (only a whole read of my TwizCrew guild). Returns the names shown /
 -- hidden differently than before, A-Z.
 function Roster:syncGuild()
   local changed = {}

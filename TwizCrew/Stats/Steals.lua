@@ -79,7 +79,7 @@ function Steals.check()
   if wait then
     if not recheck then
       recheck = true
-      C_Timer.After(wait, function()
+      C_Timer.After(math.max(wait, 0.1), function() -- (at least 0.1 s: a rounding-error wait would never end)
         ns.Log.safe(FEATURE, function()
           recheck = false
           Steals.check()

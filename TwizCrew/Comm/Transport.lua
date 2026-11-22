@@ -178,7 +178,7 @@ local function sending()
   return gameInGuild()
 end
 
--- Everyone: one GUILD message (nothing outside a guild). msgType is not needed any more; kept for the callers.
+-- Everyone: one GUILD message (nothing outside a guild). The message type Comm passes does not change the answer.
 function Transport.destinations(_msgType)
   if sending() then return { { chatType = "GUILD" } } end
   return {}

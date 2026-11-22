@@ -341,9 +341,12 @@ end
 
 -- Is this member close to me: in my party or raid, or pinned? (Test tools' fakes always count.) The same group check
 -- as the party section (Where.isGroupMember).
+-- (Like isPinned, false for real friends while TwizCrew is not using this guild's data; fakes always close.)
 function Panel.isClose(key)
   if type(key) ~= "string" then return false end
-  if ns.isTestName(key) or Panel.isPinned(key) then return true end
+  if ns.isTestName(key) then return true end
+  if ns.Guild and not ns.Guild.active() then return false end
+  if Panel.isPinned(key) then return true end
   return ns.Where ~= nil and ns.Where.isGroupMember(key) == true
 end
 
@@ -445,8 +448,10 @@ local function redraw()
   P.header = Logic.headerCount(here, onlineAll)
   P.headerShort = Logic.headerCount(here, onlineAll, true)
   P.countText:SetText(P.header)
-  local stateLine = Logic.stateLine({ inGuild = ns.Guild ~= nil and ns.Guild.inGuild(), active = active,
-    needsReload = ns.Guild ~= nil and ns.Guild.needsReload(), guildName = ns.Guild and (ns.Guild.name() or ns.Guild.id()) })
+  local G = ns.Guild
+  local stateLine = Logic.stateLine({ inGuild = G ~= nil and G.inGuild(), known = G ~= nil and G.known(),
+    active = active, needsReload = G ~= nil and G.needsReload(), guildName = G and (G.name() or G.id()),
+    reason = G and G.quietReason() })
 
   local top = P.drawHeader(s, view)
   if view == "mini" then
@@ -701,7 +706,10 @@ end
 
 -- Pins: members shown in the main view while they are online. Saved per guild (ns.db.pins[key] = true), written only
 -- while the guild's data is in use.
+-- Pinned to the main view (false while TwizCrew is not using this guild's data: the pins are another guild's, or
+-- nobody's news; the pins themselves are kept).
 function Panel.isPinned(key)
+  if ns.Guild and not ns.Guild.active() then return false end
   return type(key) == "string" and ns.db ~= nil and type(ns.db.pins) == "table" and ns.db.pins[key] == true
 end
 

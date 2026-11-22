@@ -62,7 +62,7 @@ return {
       a.printed = {}
       tc(a, "guildtest")
       A.ok(printed(a, "The game names the guild \"Test Guild\"."))
-      A.ok(printed(a, "Guild list: 2 counted, 2 readable."))
+      A.ok(printed(a, "Guild list: 2 counted, 2 readable, offline members included: yes."))
       local b = H.client("Ginkan Pebble", { guildNameHidden = true })
       H.guild("Test Guild", b)
       H.link(b)
@@ -71,6 +71,104 @@ return {
       tc(b, "guildtest")
       A.ok(printed(b, "The game gives no guild name."))
     end,
+    -- The guild list line says whether the game includes offline members: yes / no / cannot tell.
+    guildtest_tells_whether_offline_members_are_included = function(_, A, _, H)
+      local a = H.client("Chaos Deathbringr")
+      H.guild("Test Guild", a, { { name = "Ginkan Pebble" }, { name = "Frostie Snow" } })
+      H.link(a)
+      boot(a)
+      a.printed = {}
+      tc(a, "guildtest")
+      A.ok(printed(a, "Guild list: 3 counted, 3 readable, offline members included: yes."))
+      H.advance(11)
+      a.state.guildOnlineOnly = true -- the box in the guild window is not ticked
+      a.printed = {}
+      tc(a, "guildtest")
+      A.ok(printed(a, "Guild list: 3 counted, 1 readable, offline members included: no."))
+      H.advance(11)
+      a.env.GetGuildRosterInfo = function() return a.secret() end
+      a.printed = {}
+      tc(a, "guildtest")
+      A.ok(printed(a, "Guild list: 3 counted, 0 readable, offline members included: cannot tell."))
+    end,
+
+    -- While TwizCrew is not using this guild's data the probe says why first, still sends, and never claims that
+    -- nobody answered (answers are not taken in then); the member count is read live, never "not loaded yet".
+    guildtest_says_why_while_quiet = function(_, A, _, H)
+      local a, nsA = H.client("Chaos Deathbringr")
+      local b = H.client("Ginkan Pebble")
+      H.guild("Test Guild", a, b)
+      a.env.TwizCrewDB = { guild = { name = "Other Guild" } }
+      H.link(a, b)
+      boot(a); boot(b)
+      A.eq(nsA.Guild.quietReason(), "reload")
+      a.printed = {}
+      tc(a, "guildtest")
+      A.eq(a.printed[1], "TwizCrew: TwizCrew is not using this guild's data: the saved data in use is another"
+        .. " guild's. Type /reload to switch.", "the reason comes first")
+      A.ok(printed(a, "You are in the guild Test Guild: 2 members, 2 online"), "counted live")
+      A.no(printed(a, "not loaded yet"))
+      H.advance(9)
+      A.ok(printed(a, "Guild send: accepted"), "the send test still ran")
+      A.ok(printed(a, "Answers cannot be counted while TwizCrew is not using this guild's data. See /tc guild."))
+      A.no(printed(a, "Nobody answered"))
+    end,
+
+    guildtest_reason_lines_by_state = function(_, A, _, H)
+      -- older data that a whole list does not fit
+      local a, nsA = H.client("Chaos Deathbringr")
+      H.guild("Test Guild", a, { { name = "Ginkan Pebble" } })
+      a.env.TwizCrewDB = { roster = { Zed = { name = "Zed" }, Yan = { name = "Yan" } } }
+      H.link(a)
+      boot(a); H.advance(20)
+      A.eq(nsA.Guild.quietReason(), "choose")
+      a.printed = {}
+      tc(a, "guildtest")
+      A.eq(a.printed[1], "TwizCrew: TwizCrew is not using this guild's data yet: it has older saved data. Type"
+        .. " /tc guild to choose what to do with it.")
+      -- the same, and a list that may lack the offline members
+      local b, nsB = H.client("Frostie Snow", { guildOnlineOnly = true })
+      H.guild("Test Guild", b, { { name = "Ginkan Pebble" }, { name = "Zed Zed" } })
+      b.env.TwizCrewDB = { roster = { Zed = { name = "Zed" }, Yan = { name = "Yan" }, Ginkan = { name = "Ginkan" } } }
+      H.link(b)
+      boot(b); H.advance(20)
+      A.eq(nsB.Guild.quietReason(), "partial")
+      b.printed = {}
+      tc(b, "guildtest")
+      A.eq(b.printed[1], "TwizCrew: TwizCrew is not using this guild's data yet: it waits for the full guild list."
+        .. " If this stays, open the guild window and tick Show Offline Members.")
+      -- still finding out (the game has not named the guild yet)
+      local c, nsC = H.client("Lurabe Moon", { guildNameHidden = true })
+      H.guild("Test Guild", c)
+      c.env.TwizCrewDB = { guild = { name = "Test Guild", named = true } }
+      H.link(c)
+      boot(c)
+      A.eq(nsC.Guild.quietReason(), "loading")
+      c.printed = {}
+      tc(c, "guildtest")
+      A.eq(c.printed[1], "TwizCrew: TwizCrew is not using this guild's data yet: it is still loading. Try again in"
+        .. " a few seconds.")
+    end,
+
+    -- A member whose key is their full name (a namesake holds the first word) still gets a pong and is counted.
+    a_namesake_with_a_full_name_key_answers_and_is_answered = function(_, A, _, H)
+      local a, nsA = H.client("Ginkan Pebble")
+      local b, nsB = H.client("Chaos Other")
+      H.guild("Test Guild", a, b, { { name = "Chaos Abel" } })
+      H.link(a, b)
+      boot(a); boot(b)
+      A.eq(nsA.Guild.keyOf("Chaos Other"), "Chaos Other", "Abel holds \"Chaos\"")
+      tc(a, "guildtest")
+      H.advance(9)
+      A.ok(printed(a, "These answered: Chaos Other in "), "counted under the full-name key")
+      A.eq(nsA.GuildTest.facts().answers[1].key, "Chaos Other")
+      H.advance(11)
+      tc(b, "guildtest")
+      H.advance(9)
+      A.ok(printed(b, "These answered: Ginkan in "), "and answered when it asks")
+      A.eq(sentOfType(nsA, a, "GPONG", "WHISPER"), 1)
+    end,
+
     probe_alone_says_nobody_answered = function(_, A, _, H)
       local a, nsA = H.client("Chaos Deathbringr")
       H.guild("Test Guild", a)

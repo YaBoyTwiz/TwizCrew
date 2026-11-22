@@ -147,8 +147,8 @@ function Util.plain(fn, ...)
   return scrubIfOk(pcall(fn, ...))
 end
 
--- Opens a whisper to a crew member: the full "Name Realm" when the transport knows one, through whichever chat
--- function this game version has. Returns true when one existed.
+-- Opens a whisper to a crew member: the full name from the guild list ("Chaos Deathbringr") when the transport knows
+-- one, through whichever chat function this game version has. Returns true when one existed.
 function Util.whisper(name)
   if type(name) ~= "string" or name == "" then return false end
   local full = (ns.Transport and ns.Transport.fullName and ns.Transport.fullName(name)) or name

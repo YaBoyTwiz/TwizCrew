@@ -349,10 +349,18 @@ local function build(W)
   -- st.guids.player is set.
   -- st.guildListDelay = s: a slow server. The list reads as empty until that long after the first
   -- C_GuildInfo.GuildRoster() call, then GUILD_ROSTER_UPDATE fires.
+  -- st.guildOnlineOnly = true: the guild window's "Show Offline Members" box is not ticked: the game still counts
+  -- every member, but its rows are the online members only.
   W.guildRosterCalls = 0
   local function guildMembers()
     if st.guildListDelay and not (W.guildListAt and W.clock >= W.guildListAt) then return {} end
     return st.guild and st.guild.members or {}
+  end
+  local function guildRows()
+    if not st.guildOnlineOnly then return guildMembers() end
+    local rows = {}
+    for _, m in ipairs(guildMembers()) do if m.online then rows[#rows + 1] = m end end
+    return rows
   end
   env.GetNumGuildMembers = function()
     local online = 0
@@ -360,7 +368,7 @@ local function build(W)
     return #guildMembers(), online, online
   end
   env.GetGuildRosterInfo = function(i)
-    local m = guildMembers()[i]
+    local m = guildRows()[i]
     if not m then return nil end
     local class = m.class or "WARRIOR"
     local name = m.name .. (st.rosterRealm and ("-" .. st.realm) or "")
@@ -368,7 +376,7 @@ local function build(W)
       m.zone or "", "", "", m.online and true or false, 0, class, 0, 0, false, false, 0, m.guid
   end
   env.GetGuildRosterLastOnline = function(i)
-    local m = guildMembers()[i]
+    local m = guildRows()[i]
     if not m or m.online or type(m.lastOnline) ~= "table" then return nil end
     return unpack(m.lastOnline, 1, 4)
   end

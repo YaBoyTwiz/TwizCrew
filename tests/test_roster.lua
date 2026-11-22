@@ -244,12 +244,12 @@ return {
       A.eq(r:get("Ginkan"), nil); A.eq(saved.Ginkan, nil)
       A.no(r:forget("Ginkan"))
     end,
-    -- Guild membership: a fake ns.Guild with a fixed key list (active = my TwizCrew guild, complete = a full read).
+    -- Guild membership: a fake ns.Guild with a fixed key list (active = my TwizCrew guild, whole = a whole read).
     roster_hides_members_the_loaded_list_lacks = function(ns, A)
       local saved = { Gone = { name = "Gone", level = 3 }, Ginkan = { name = "Ginkan", level = 5 } }
       local r = ns.Roster.new(saved)
       local isLoaded, keys = false, { Ginkan = true }
-      r:setGuild({ active = function() return true end, complete = function() return true end,
+      r:setGuild({ active = function() return true end, whole = function() return true end,
         loaded = function() return isLoaded end, get = function(k) return keys[k] and {} or nil end })
       A.eq(r:syncGuild(), {}, "the list never loaded: nothing happens")
       A.eq(r:names(), { "Ginkan", "Gone" })
@@ -271,12 +271,10 @@ return {
       A.eq(r:names(), { "Ginkan", "Gone" })
     end,
     roster_hides_nobody_on_a_partial_read_or_in_another_guild = function(ns, A)
-      local saved = { Gone = { name = "Gone", level = 3, outSince = 5 } }
+      local saved = { Gone = { name = "Gone", level = 3 } }
       local r = ns.Roster.new(saved)
-      r:pruneOld(ns.wallclock())
-      A.eq(saved.Gone.outSince, nil, "a test build's outSince is removed")
       local active, whole = true, false
-      r:setGuild({ active = function() return active end, complete = function() return whole end,
+      r:setGuild({ active = function() return active end, whole = function() return whole end,
         loaded = function() return true end, get = function() return nil end })
       A.eq(r:syncGuild(), {}, "a partial read hides nobody")
       active, whole = false, true
@@ -286,7 +284,7 @@ return {
     roster_new_row_from_a_message_waits_for_the_next_sync = function(ns, A)
       local saved = {}
       local r = ns.Roster.new(saved)
-      r:setGuild({ active = function() return true end, complete = function() return true end,
+      r:setGuild({ active = function() return true end, whole = function() return true end,
         loaded = function() return true end, get = function(k) return k == "Ginkan" and {} or nil end })
       r:apply("Ginkan", { lv = "5" }, 1, 100)
       r:apply("Stranger", { lv = "5" }, 1, 100)

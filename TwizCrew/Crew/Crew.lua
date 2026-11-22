@@ -33,9 +33,10 @@ function Crew.isResponder(name, k)
   name = tostring(name)
   local me = ns.myKey()
   local mine = mixed(me .. "|" .. name)
+  local myRow = me:lower() -- my key, once per call (this runs at every MEMBER_ONLINE: Session.reshare)
   local rank, others = 1, 0
   for _, m in ipairs(ns.roster and ns.roster:members() or {}) do
-    if m.online and m.name ~= name and not ns.isMe(m.name) then
+    if m.online and m.name ~= name and m.name:lower() ~= myRow then
       others = others + 1
       local h = mixed(m.name .. "|" .. name)
       if h < mine or (h == mine and m.name < me) then rank = rank + 1 end
@@ -50,13 +51,20 @@ end
 
 local function hello() return { ver = ns.VERSION, rs = ns.RESTART_SINCE } end
 
+-- Online / offline notices about `name` may go out: not hidden, and TwizCrew uses this guild's data (after leaving
+-- the guild or going quiet every friend times out: that is no news). Fakes (test tools) always.
+local function noticeable(name)
+  if ns.roster:isHidden(name) then return false end
+  return ns.isTestName(name) or not ns.Guild or ns.Guild.active()
+end
+
 -- A hidden member (out of the guild: the guild list is behind) tells the rest of the addon nothing.
 local function announce(name, m, changes, events)
   if ns.roster:isHidden(name) then return end
   ns.Bus.fire("MEMBER_UPDATED", name, changes)
   for _, e in ipairs(events) do
     if e == "online" then
-      ns.Bus.fire("MEMBER_ONLINE", name)
+      if noticeable(name) then ns.Bus.fire("MEMBER_ONLINE", name) end
     elseif e == "died" then
       ns.Bus.fire("MEMBER_DIED", name, m.zone, m.subzone)
     elseif e == "levelup" then
@@ -139,7 +147,7 @@ local function onPing(sender, fields)
     return
   end
   for _, e in ipairs(ns.roster:heard(sender, ns.now(), ns.wallclock())) do
-    if e == "online" and not ns.roster:isHidden(sender) then ns.Bus.fire("MEMBER_ONLINE", sender) end
+    if e == "online" and noticeable(sender) then ns.Bus.fire("MEMBER_ONLINE", sender) end
   end
   -- The digest shows a lost message: two PINGs in a row that disagree (one may just have passed an update in
   -- flight) make us ask for their whole state, at most once per ping interval. No "h" = an old copy: never a mismatch.
@@ -182,7 +190,7 @@ local function onBye(sender)
   if not m then return end
   local wasOnline = m.online
   ns.roster:gone(sender)
-  if wasOnline and not ns.roster:isHidden(sender) then ns.Bus.fire("MEMBER_OFFLINE", sender) end
+  if wasOnline and noticeable(sender) then ns.Bus.fire("MEMBER_OFFLINE", sender) end
 end
 
 local function sayGoodbye()
@@ -240,7 +248,7 @@ local function tidyNames(list)
   end
 end
 
--- Takes the roster row `key` (exactly: the row menu, the 30-day rule) out of the roster and the saved numbers when
+-- Takes the roster row `key` (exactly: the row menu, the 60-day rule) out of the roster and the saved numbers when
 -- that friend is offline. Returns true, or false and a short reason.
 function Crew.forgetRow(key)
   local m = ns.roster and type(key) == "string" and ns.roster:row(key)
@@ -315,11 +323,10 @@ function Crew.forget(name)
 end
 
 local tidied = false -- the saved rows were tidied this session (only once they are known to be this guild's)
+local pruned = false -- old friends were forgotten this session (see forgetOld)
 
--- Once a session, when the guild says the data in use is its own: old "Name-Realm" keys and my own ghost go
--- (tidyNames), and friends not seen for FORGET_AFTER_DAYS go, unless they are on the guild list now; that last step
--- only while the saved friends fit the guild's complete list (Guild.listFits), so a set used in a guild that is not
--- its own forgets nothing.
+-- Once a session, when the guild says the data in use is its own and its list is complete: old "Name-Realm" keys and
+-- my own ghost go (tidyNames).
 local function tidy()
   tidied = true
   local before = ns.Util.copy(ns.roster:allNames())
@@ -329,7 +336,13 @@ local function tidy()
   for _, name in ipairs(before) do
     if not ns.roster:row(name) then ns.Bus.fire("MEMBER_REMOVED", name) end
   end
-  if not ns.Guild.listFits() then return end
+end
+
+-- Once a session: friends not seen for FORGET_AFTER_DAYS go, unless they are on the guild list now; only while
+-- Guild.mayForget (a whole list, and the saved friends fit it or this set fitted this guild before), so a set used
+-- in a guild that is not its own, or a list that may lack the offline members, forgets nothing.
+local function forgetOld()
+  pruned = true
   local onList = function(name) return ns.Guild.get(name) ~= nil end
   for _, name in ipairs(ns.roster:pruneOld(ns.wallclock(), onList)) do
     if ns.StatsStore then ns.StatsStore.forgetCrew(name) end
@@ -338,9 +351,10 @@ local function tidy()
 end
 
 -- The guild list loaded or changed: who is hidden (out of the guild) and who is shown again. Nothing is deleted for
--- that (see tidy).
+-- that (see forgetOld).
 local function followGuild()
   if not tidied and ns.Guild and ns.Guild.writable() and ns.Guild.complete() then tidy() end
+  if tidied and not pruned and ns.Guild.writable() and ns.Guild.mayForget() then forgetOld() end
   for _, name in ipairs(ns.roster:syncGuild()) do
     local m = ns.roster:row(name)
     ns.Bus.fire("MEMBER_UPDATED", name, { inGuild = m and m.inGuild or false })
@@ -385,7 +399,7 @@ function Crew.start()
   C_Timer.NewTicker(ns.Config.OFFLINE_TICK, function()
     ns.Log.safe(FEATURE, function()
       for _, name in ipairs(ns.roster:tick(ns.now())) do
-        if not ns.roster:isHidden(name) then ns.Bus.fire("MEMBER_OFFLINE", name) end
+        if noticeable(name) then ns.Bus.fire("MEMBER_OFFLINE", name) end
       end
     end)
   end)

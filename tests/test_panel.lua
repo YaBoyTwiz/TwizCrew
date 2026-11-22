@@ -408,10 +408,19 @@ return {
     end,
     state_lines_when_the_addon_cannot_work = function(ns, A)
       local L = ns.PanelLogic
-      A.eq(L.stateLine({ inGuild = false }), "TwizCrew works inside a guild. Join one and it starts by itself.")
+      A.eq(L.stateLine({ inGuild = false, known = true }),
+        "TwizCrew works inside a guild. Join one and it starts by itself.")
+      A.eq(L.stateLine({ inGuild = false, known = false }), "Waiting for the guild list\226\128\166",
+        "before the game has said \"no guild\" for the grace time")
       A.eq(L.stateLine({ inGuild = true, needsReload = true, guildName = "Crew X" }),
         "TwizCrew keeps separate data for each guild. Type /reload to switch to Crew X.")
       A.eq(L.stateLine({ inGuild = true, active = false }), "Waiting for the guild list\226\128\166")
+      A.eq(L.stateLine({ inGuild = true, active = false, reason = "choose" }),
+        "TwizCrew has older saved data. Type /tc guild to choose what to do with it.")
+      A.eq(L.stateLine({ inGuild = true, active = false, reason = "partial" }),
+        "Waiting for the full guild list. If this stays, open the guild window and tick Show Offline Members.")
+      A.eq(L.stateLine({ inGuild = true, active = false, reason = "noname" }),
+        "TwizCrew cannot read this guild's name right now. Type /tc guild.")
       A.eq(L.stateLine({ inGuild = true, active = true }), nil)
     end,
     offline_last_seen_falls_back_to_guild_list = function(ns, A)
@@ -530,6 +539,8 @@ return {
       start(ns, W)
       W:advance(1)
       A.eq(ns.Panel.isShown(), true)
+      A.eq(ns.Panel.noteForTest(), "Waiting for the guild list\226\128\166", "the game may still say otherwise")
+      W:advance(ns.Config.GUILD_ABSENT_GRACE)
       A.eq(ns.Panel.noteForTest(), "TwizCrew works inside a guild. Join one and it starts by itself.")
       A.eq(#ns.Panel.entriesForTest(), 0)
       A.eq(ns.Panel.rowCountForTest(), 0)
@@ -539,7 +550,7 @@ return {
       W.state.guild = nil
       start(ns, W)
       W.env.SlashCmdList.TWIZCREW("test fake")
-      W:advance(1)
+      W:advance(ns.Config.GUILD_ABSENT_GRACE + 1)
       local seen = {}
       for _, m in ipairs(ns.Panel.models()) do seen[#seen + 1] = m.key end
       A.ok(#seen >= 1, "the fake is a row")

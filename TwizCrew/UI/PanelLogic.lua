@@ -400,15 +400,26 @@ function PanelLogic.guildBarText(count, open)
   return "Guild online (" .. (tonumber(count) or 0) .. ")" .. (open and "  -  click to hide" or "  -  click to show")
 end
 
--- The words in the body while the addon cannot work (nil when it can). state: { inGuild, needsReload, guildName }.
+local WAITING = "Waiting for the guild list\226\128\166"
+local QUIET_LINES = { -- by ns.Guild.quietReason()
+  choose = "TwizCrew has older saved data. Type /tc guild to choose what to do with it.",
+  partial = "Waiting for the full guild list. If this stays, open the guild window and tick Show Offline Members.",
+  noname = "TwizCrew cannot read this guild's name right now. Type /tc guild.",
+}
+
+-- The words in the body while the addon cannot work (nil when it can). state: { inGuild, known (the game has said
+-- "no guild" for the grace time, or "guild"), active, needsReload, guildName, reason (ns.Guild.quietReason) }.
 function PanelLogic.stateLine(state)
   state = state or {}
-  if not state.inGuild then return "TwizCrew works inside a guild. Join one and it starts by itself." end
+  if not state.inGuild then
+    if state.known then return "TwizCrew works inside a guild. Join one and it starts by itself." end
+    return WAITING
+  end
   if state.needsReload then
     return "TwizCrew keeps separate data for each guild. Type /reload to switch to "
       .. text(state.guildName or "your guild") .. "."
   end
-  if not state.active then return "Waiting for the guild list\226\128\166" end
+  if not state.active then return QUIET_LINES[state.reason] or WAITING end
   return nil
 end
 

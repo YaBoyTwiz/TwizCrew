@@ -26,18 +26,23 @@ end
 --   "?" data the guild has not taken it is cleared, so the next login moves nothing.
 -- * db.guild.request = { kind = "new" | "load", guild, char, from, key }: a one-shot /tc guild new or load, used up
 --   at the next start-up whoever logs in, carried out only for that character while it still fits (requestPlan).
---   Its outcome, db.guild.requestResult = { char, kind, done, reason }, is said once at that character's next login
---   (DB.notes, printed by Core/Boot.lua), and shown by /tc guild until then.
+--   Its outcome, db.guild.requestResults[character] = { kind, done, reason } (one per character, so one character's
+--   result never overwrites or lingers for another's), is said once at that character's next login (DB.notes,
+--   printed by Core/Boot.lua), and shown by that character's /tc guild until then.
 -- * A set steps aside, never away: a set that would share a guild's name goes to "<name> (replaced)"; unnamed or
 --   "?" data that would land on a parked set of its kind, and values that are not usable sets, go to db.guilds_bad.
 --   Every parked or kept-aside set is listed by /tc guild and can be brought back with /tc guild load.
--- * Old friends are forgotten (Crew's 60-day rule) only while the saved friends fit the guild's complete list
---   (Guild.listFits): a set used in a guild that is not its own forgets nothing.
--- * guild.pinnedOld (per set): unnamed v0.1.24 data taken by a guild pinned its old crew once (Crew/Guild.lua).
+-- * Old friends are forgotten (Crew's 60-day rule) only on a whole guild list, while the saved friends fit it or the
+--   set fitted this guild before (Guild.mayForget, guild.fitIn): a set used in a guild that is not its own forgets
+--   nothing.
+-- * guild.pinnedOld (per set): unnamed v0.1.24 data taken by a guild pinned its old crew once (Crew/Guild.lua, or a
+--   /tc guild load of that set: carryOut).
+-- * guild.fitIn (per set): the real name of the last guild whose list the saved friends fitted (Guild.mayForget:
+--   the 60-day rule keeps running there after over half the friends left). nil until then.
 -- * Fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while it is in use. db.guild.named:
 --   this account has read a real guild name from the game (names of parked sets never count; markNamed).
 local GUILD_PATHS = { "roster", "feed", "calendar", "pins", "stats.crew", "stats.session", "stats.trophies",
-  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell", "guild.pinnedOld" }
+  "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell", "guild.pinnedOld", "guild.fitIn" }
 DB.GUILD_PATHS = GUILD_PATHS
 local UNNAMED = ""      -- the parked slot of unnamed (v0.1.24) data
 local PLACEHOLDER = "?" -- data taken while the game named no guild (Crew/Guild.lua)
@@ -54,8 +59,8 @@ local function guildDefaults(db)
     roster = {},
     -- keys[lower(full name)] = the key a guild member was given the first time (never changed), mine[GUID] = my key
     -- on that character, spell[lower(full name)] = the full name as the game spells it (see Crew/Guild.lua); name,
-    -- byChar, request, named, extra: see above
-    guild = { keys = {}, mine = {}, spell = {}, byChar = {} },
+    -- byChar, request, requestResults, named, extra, pinnedOld, fitIn (nil by default): see above
+    guild = { keys = {}, mine = {}, spell = {}, byChar = {}, requestResults = {} },
     guilds = {},
     stats = { crew = {}, session = {} },
     pins = {}, -- pins[key] = true: members pinned to the main view of the panel
@@ -165,8 +170,11 @@ local function repairGuilds(db)
   end
   if g.name ~= nil and (type(g.name) ~= "string" or g.name == "") then g.name = nil end
   if g.request ~= nil and type(g.request) ~= "table" then g.request = nil end
-  if g.requestResult ~= nil and type(g.requestResult) ~= "table" then g.requestResult = nil end
-  g.fresh = nil -- a test build's one-shot "fresh set" flag: now db.guild.request
+  if type(g.requestResults) ~= "table" then g.requestResults = {} end
+  for k, v in pairs(g.requestResults) do
+    if type(k) ~= "string" or type(v) ~= "table" then g.requestResults[k] = nil end
+  end
+  if g.fitIn ~= nil and (type(g.fitIn) ~= "string" or g.fitIn == "") then g.fitIn = nil end
   if db.guilds_bad ~= nil and type(db.guilds_bad) ~= "table" then db.guilds_bad = { guilds_bad = db.guilds_bad } end
   local odd = {}
   for k in pairs(type(db.guilds_bad) == "table" and db.guilds_bad or {}) do
@@ -222,17 +230,19 @@ local function replacedName(db, name)
   return key
 end
 
--- What the login swap does, as a plan: incoming = the set that comes up (nil: a fresh one), taken from
--- fromTbl[fromKey]; name = the name it has on top (nil: unnamed); setChar: byChar[character] becomes that name.
--- From a /tc guild request (one shot): only for the character that made it, while the game does not name another
--- guild; "new" only while unnamed or "?" data is on top and that guild has no set; "load" while the chosen set is
--- still there.
+-- Why a /tc guild request was not carried out, as said to the player.
 local REASONS = {
   char = "another character logged in first", guild = "your guild changed", gone = "that set is gone",
   hasSet = "this guild already has a set", named = "another guild's data is in use",
   odd = "it could not be read", error = "something went wrong",
 }
 
+-- What the login swap does, as a plan: incoming = the set that comes up (nil: a fresh one), taken from
+-- fromTbl[fromKey]; name = the name it has on top (nil: unnamed); setChar: byChar[character] becomes that name.
+-- From a /tc guild request (one shot): only for the character that made it, while the game does not name another
+-- guild; "new" only while unnamed or "?" data is on top and that guild has no set (or, on a game that names no
+-- guild, to start the shared "?" set in use fresh: it is parked as "? (replaced)"); "load" while the chosen set is
+-- still there.
 local function requestPlan(db, req, charId)
   if type(req.guild) ~= "string" or req.guild == "" then return nil, "odd" end
   if req.char ~= charId then return nil, "char" end
@@ -240,14 +250,18 @@ local function requestPlan(db, req, charId)
   local now = ns.Util.plain(GetGuildInfo, "player")
   if isReal(want) and type(now) == "string" and now ~= "" and now ~= want then return nil, "guild" end
   if req.kind == "new" then
-    if g.name == want or db.guilds[want] ~= nil then return nil, "hasSet" end
+    local restart = want == PLACEHOLDER and g.name == PLACEHOLDER -- the shared set starts fresh (carryOut parks it)
+    if not restart and (g.name == want or db.guilds[want] ~= nil) then return nil, "hasSet" end
     if isReal(g.name) then return nil, "named" end
     return { name = want, setChar = true }
   elseif req.kind == "load" then
     local tbl = (req.from == "bad" and db.guilds_bad) or (req.from == "guilds" and db.guilds) or nil
     local set = type(tbl) == "table" and type(req.key) == "string" and tbl[req.key] or nil
     if type(set) ~= "table" then return nil, "gone" end
-    return { incoming = set, fromTbl = tbl, fromKey = req.key, name = want, setChar = true }
+    -- the unnamed (v0.1.24) set: parked as "", or kept aside as "#1", "#2" ... (keepAside of "")
+    local unnamed = (req.from == "guilds" and req.key == UNNAMED)
+      or (req.from == "bad" and req.key:find("^#%d+$") ~= nil)
+    return { incoming = set, fromTbl = tbl, fromKey = req.key, name = want, setChar = true, pinOld = unnamed }
   end
   return nil, "odd"
 end
@@ -280,6 +294,16 @@ end
 local function refill(t, from)
   for k in pairs(t) do t[k] = nil end
   for k, v in pairs(from) do t[k] = v end
+end
+
+-- The unnamed (v0.1.24) set brought up by a request is taken by a guild without its list deciding: like a guild
+-- that takes it in the game (Crew/Guild.lua), it pins its old crew to the panel once (guild.pinnedOld).
+local function pinOldCrew(db)
+  if db.guild.pinnedOld then return end
+  db.guild.pinnedOld = true
+  for name, row in pairs(db.roster) do
+    if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then db.pins[name] = true end
+  end
 end
 
 -- Carries a plan out. The set on top is parked under its own name ("" unnamed, "?"); when the incoming set takes
@@ -315,6 +339,7 @@ local function carryOut(db, plan, charId)
     g.extra = extra
     g.name = plan.name
     if plan.setChar and charId then g.byChar[charId] = isReal(plan.name) and plan.name or nil end
+    if plan.pinOld then pinOldCrew(db) end
   end)
   if not ok then -- everything back as it was
     putSet(db, outgoing)
@@ -344,15 +369,16 @@ end
 
 -- The result of a /tc guild request for character `char`'s next login: said there once (DB.notes), then cleared.
 local function sayResult(db, charId)
-  local r = db.guild.requestResult
-  if type(r) ~= "table" or charId == nil or r.char ~= charId then return end
-  db.guild.requestResult = nil
+  local results = db.guild.requestResults
+  local r = charId ~= nil and type(results) == "table" and results[charId] or nil
+  if type(r) ~= "table" then return end
+  results[charId] = nil
   DB.notes[#DB.notes + 1] = r.done and "TwizCrew: Your /tc guild request was carried out."
     or ("TwizCrew: Your /tc guild request was not carried out: " .. tostring(r.reason) .. ". Type /tc guild.")
 end
 
 -- At login, before any module reads per-guild data: uses up a /tc guild new or load request (carried out or not; its
--- result is kept in db.guild.requestResult for the character that made it, and said at that character's login),
+-- result is kept in db.guild.requestResults for the character that made it, and said at that character's login),
 -- else brings up this character's guild's set (see loginPlan, carryOut). DB.notes: the chat lines for this login
 -- (Core/Boot.lua prints them): a request's result, and "<guild> starts with new TwizCrew data" when a guild got a
 -- fresh set by itself while other sets hold friends. Returns true when it swapped.
@@ -364,7 +390,7 @@ function DB.useGuildOf(db, charId)
   local result
   local ok, plan, why = pcall(function()
     g.request = nil -- one shot: used up here whatever happens next
-    if type(req) == "table" then result = { char = req.char, kind = req.kind, done = false } end
+    if type(req) == "table" then result = { kind = req.kind, done = false } end
     repairGuilds(db)
     sayResult(db, charId) -- an earlier request's result for this character
     if not result then return nil end
@@ -395,8 +421,9 @@ function DB.useGuildOf(db, charId)
   else
     ns.Log.add("error", "the login swap of saved data failed (%s): nothing changed", tostring(failure))
   end
-  if result then
-    g.requestResult = result
+  if result and type(req.char) == "string" then
+    if type(g.requestResults) ~= "table" then g.requestResults = {} end
+    g.requestResults[req.char] = result
     sayResult(db, charId)
   end
   if fresh and otherFriends(db) then
@@ -437,7 +464,6 @@ function DB.init(saved, defs)
     ns.Util.mergeDefaults(e, moduleDefaults(def))
   end
   for id in pairs(REMOVED) do db.modules[id] = nil end
-  db.guild.notLegacy = nil -- a test build's "this guild turned the old data down": nothing a guess decides is kept
   return db
 end
 

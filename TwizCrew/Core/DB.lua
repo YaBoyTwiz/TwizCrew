@@ -134,8 +134,9 @@ end
 -- At login, before any module reads per-guild data: when this character's guild (byChar, from its last session)
 -- is not the one whose data is on top, the top set is parked under its name and that guild's set comes up: its
 -- parked set; else (unless /tc guild new asked for a fresh one) the unnamed set, else the "?" set; else a fresh one.
--- A character with no known guild leaves everything as it is. Everything is checked first: a parked value that is
--- not a usable set (not a table, or its stats / guild part not a table) is kept aside in db.guilds_bad and counts as
+-- Unnamed or "?" data on top is never moved for a guild without a set (unless /tc guild new asked): that guild's
+-- list decides in the game. A character with no known guild leaves everything as it is. Everything is checked
+-- first: a parked value that is not a usable set (not a table, or its stats / guild part not a table) is kept aside in db.guilds_bad and counts as
 -- absent; a guild parked twice keeps the top set (the parked copy goes aside); unnamed top data never overwrites a
 -- parked unnamed set (it goes aside instead); an error halfway puts everything back. Returns true when it swapped.
 function DB.useGuildOf(db, charId)
@@ -156,6 +157,9 @@ function DB.useGuildOf(db, charId)
       db.guilds[name] = nil
     end
   end
+  local fresh = type(g.fresh) == "table" and g.fresh[want]
+  -- unnamed or "?" data on top and no set for this guild: nothing moves (the guild's list decides in the game)
+  if not fresh and db.guilds[want] == nil and (here == UNNAMED or here == PLACEHOLDER) then return false end
   local topAside = false -- unnamed top data and a parked unnamed set: the top set goes aside
   if db.guilds[here] ~= nil then
     if here == UNNAMED then
@@ -165,7 +169,6 @@ function DB.useGuildOf(db, charId)
       db.guilds[here] = nil
     end
   end
-  local fresh = type(g.fresh) == "table" and g.fresh[want]
   local incoming, from = nil, want
   if not fresh then
     incoming = db.guilds[want]

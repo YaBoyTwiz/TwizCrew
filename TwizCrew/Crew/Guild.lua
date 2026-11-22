@@ -229,6 +229,26 @@ local function dataGuild()
   return type(name) == "string" and name ~= "" and name or nil
 end
 
+local function isReal(name) return type(name) == "string" and name ~= "" and name ~= PLACEHOLDER end
+
+-- Guild `name` has a parked set (db.guilds[name]).
+local function hasSet(name)
+  local guilds = ns.db and ns.db.guilds
+  return type(guilds) == "table" and guilds[name] ~= nil
+end
+
+-- db.guild.byChar[this character] decides which set the next login puts on top (DB.useGuildOf). It names this
+-- character's guild `id` only when that guild has a set (on top, or parked), or when another guild's named set is on
+-- top (the next login parks that one under its own name). Never for unnamed or "?" data the guild has not taken:
+-- then it is cleared, and the next login changes nothing.
+local function rememberGuild(id)
+  local g = ns.db and ns.db.guild
+  local char = ns.DB.charId()
+  if type(g) ~= "table" or type(g.byChar) ~= "table" or not char or not isReal(id) then return end
+  local dg = dataGuild()
+  if dg == id or hasSet(id) or isReal(dg) then g.byChar[char] = id else g.byChar[char] = nil end
+end
+
 local function nonEmpty(t) return type(t) == "table" and next(t) ~= nil end
 
 -- Is v empty: nil, or a table holding only empty tables (skip: a field to leave out, e.g. the calendar's own id)?
@@ -305,8 +325,9 @@ end
 local function nameData(name)
   local g = ns.db and ns.db.guild
   if type(g) ~= "table" or dataGuild() ~= nil and dataGuild() ~= PLACEHOLDER then return false end
-  if type(ns.db.guilds) == "table" and ns.db.guilds[name] ~= nil then return false end
+  if hasSet(name) then return false end
   g.name = name
+  rememberGuild(name)
   ns.Log.add("info", "saved data now belongs to %s", name == PLACEHOLDER and "a guild the game does not name"
     or ns.Util.safeText(name))
   return true
@@ -490,8 +511,7 @@ local function onIdentity(id)
     end
   end
   if dataGuild() == nil and dataEmpty() then nameData(id) end -- nothing saved yet: this guild's at once
-  local char = ns.DB.charId()
-  if char and type(g.byChar) == "table" then g.byChar[char] = id end
+  rememberGuild(id)
   if otherGuild(id) then
     tell("reload:" .. id, "TwizCrew keeps separate data for each guild. Type /reload to switch to "
       .. ns.Util.safeText(id) .. ".")

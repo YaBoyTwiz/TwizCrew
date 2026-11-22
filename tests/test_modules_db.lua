@@ -276,17 +276,32 @@ return {
     end,
 
     swap_never_strands_unnamed_or_question_mark_data = function(ns, A)
-      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c1 = "Guild B" } },
-        guilds = { ["?"] = { roster = { Q1 = { name = "Q1" } } } } }, {})
+      local db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A",
+        byChar = { c1 = "Guild B", c2 = "Guild C" } }, guilds = { ["?"] = { roster = { Q1 = { name = "Q1" } } } } }, {})
       A.ok(ns.DB.useGuildOf(db, "c1"))
       A.eq(db.guild.name, "?", "no set of its own: the \"?\" set comes up (its name is decided in the game)")
       A.eq(db.roster.Q1.name, "Q1")
-      db.guilds[""] = { roster = { L1 = { name = "L1" } } }
-      db.guild.byChar.c2 = "Guild C"
+      A.eq(db.guilds["Guild A"].roster.A1.name, "A1")
+      A.no(ns.DB.useGuildOf(db, "c2"), "\"?\" data on top, Guild C has no set: left as it is (its list decides)")
+      A.eq(db.guild.name, "?"); A.eq(db.roster.Q1.name, "Q1")
+      db = ns.DB.init({ roster = { A1 = { name = "A1" } }, guild = { name = "Guild A", byChar = { c2 = "Guild C" } },
+        guilds = { [""] = { roster = { L1 = { name = "L1" } } }, ["?"] = { roster = { Q1 = { name = "Q1" } } } } }, {})
       A.ok(ns.DB.useGuildOf(db, "c2"))
       A.eq(db.guild.name, nil, "the unnamed set first")
       A.eq(db.roster.L1.name, "L1")
-      A.eq(db.guilds["?"].roster.Q1.name, "Q1", "the \"?\" set parked again")
+      A.eq(db.guilds["?"].roster.Q1.name, "Q1", "the \"?\" set stays parked")
+      A.eq(db.guilds["Guild A"].roster.A1.name, "A1")
+    end,
+
+    swap_leaves_unnamed_data_on_top_for_a_guild_without_a_set = function(ns, A)
+      local db = ns.DB.init({ roster = { L1 = { name = "L1" } }, guild = { byChar = { c1 = "Guild A" } } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"), "nothing to swap: Guild A's list decides whether the data is its own")
+      A.eq(db.guild.name, nil)
+      A.eq(db.roster.L1.name, "L1")
+      A.eq(next(db.guilds), nil, "nothing parked")
+      db = ns.DB.init({ roster = { Q1 = { name = "Q1" } }, guild = { name = "?", byChar = { c1 = "Guild A" } } }, {})
+      A.no(ns.DB.useGuildOf(db, "c1"))
+      A.eq(db.guild.name, "?"); A.eq(db.roster.Q1.name, "Q1"); A.eq(next(db.guilds), nil)
     end,
 
     swap_with_a_fresh_request_parks_unnamed_data_and_never_overwrites = function(ns, A)

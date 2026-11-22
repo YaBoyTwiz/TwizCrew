@@ -216,6 +216,9 @@ end
 
 function Calendar.refresh()
   if not P.frame or not Calendar.shownFlag then return end
+  local size = tonumber(ns.Modules.setting(FEATURE, "size")) or 1.25 -- "Calendar size" in the settings
+  size = math.max(0.7, math.min(1.8, size))
+  if P.frame.SetScale and P.size ~= size then P.frame:SetScale(size); P.size = size end
   P.eventsPane:Hide(); P.eventDayPane:Hide(); P.monthPane:Hide(); P.dayPane:Hide(); P.usualPane:Hide()
   drawTabs()
   zoneText:SetText("Your time zone: " .. zoneName())

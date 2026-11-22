@@ -1128,6 +1128,15 @@ return {
       A.no(ns.NoteView.metaForTest():find("your time", 1, true), "mine: one time")
       ns.NoteView.close()
     end,
+    the_calendar_is_bigger_and_its_size_is_a_setting = function(ns, A, W)
+      start(ns, W)
+      ns.Calendar.open()
+      A.eq(ns.Calendar._.size, 1.25, "bigger than its design size unless told otherwise")
+      ns.Modules.set("calendar", "size", 1.5)
+      A.eq(ns.Calendar._.size, 1.5, "the slider works at once")
+      ns.Modules.set("calendar", "size", 9)
+      A.eq(ns.Calendar._.size, 1.8, "never off the screen")
+    end,
     my_notes_can_be_edited_and_removed_from_a_days_menu = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

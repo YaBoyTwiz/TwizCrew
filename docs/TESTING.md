@@ -824,6 +824,15 @@ With a friend:
 
 6. **They see the edit.** Edit a note they can see: their copy changes to the new words and time.
 
+## Calendar size (2026-11-22)
+
+`/reload` is enough if the game was restarted since the Events / Play times change.
+
+1. **Bigger.** Open the calendar: it is clearly bigger than before and all of it is on the screen. Tell Claude if it
+   is too big or still too small for a default.
+2. **The slider.** Settings, the calendar's part, `Calendar size`: drag it with the calendar open. The window
+   changes at once; the words stay sharp.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

@@ -482,6 +482,9 @@ local function onEnable()
   end
   ns.Bus.on(FEATURE, "TRANSPORT_READY", askWaiting)
   ns.Bus.on(FEATURE, "GUILD_LIST", askWaiting)
+  ns.Bus.on(FEATURE, "SETTING_CHANGED", function(id) -- the size slider: at once
+    if id == FEATURE and ns.Calendar and ns.Calendar.isShown() then ns.Calendar.refresh() end
+  end)
   ns.Bus.on(FEATURE, "CALENDAR_CHANGED", function()
     if ns.Calendar and ns.Calendar.isShown() then ns.Calendar.refresh() end
     if ns.NoteView and ns.NoteView.isShown() then ns.NoteView.refresh() end
@@ -511,12 +514,15 @@ ns.Modules.register({
   info = "A calendar of who played when: each copy notes when you're online (in 15-minute steps) and swaps that "
     .. "with the crew, so you can see who was on each day and when most of you usually play. Open it with the "
     .. "Calendar button on the panel or /tc cal.",
-  defaults = { share = true },
+  defaults = { share = true, size = 1.25 },
   settings = {
     { key = "open", label = "Open the crew calendar", kind = "button",
       onClick = function() if ns.Calendar then ns.Calendar.open() end end,
       info = "The crew's events and notes, and on its second tab who played on each day, a day's timeline, and "
         .. "the times most of the crew usually plays." },
+    { key = "size", label = "Calendar size", kind = "slider", min = 0.7, max = 1.8, step = 0.05,
+      fmt = ns.Widgets and ns.Widgets.percent or nil,
+      info = "How big the calendar window is on your screen. 125% is the usual size." },
     { key = "share", label = "Share my play times", kind = "toggle",
       info = "Lets the crew see when you were online (only the times, never where you were). Off: your copy still "
         .. "keeps your own diary, and you still see your friends'." },

@@ -5,9 +5,10 @@
 -- Switch: Today's recap, "Show what changed while I was away" (needs that module on).
 --
 -- The snapshot (db.away.snap, per guild: Core/DB.lua GUILD_PATHS) is written at PLAYER_LOGOUT (also before a
--- /reload), only once this session's card was worked out (so a quick /reload right after login keeps the old one),
--- only while TwizCrew uses this guild's data and the list is complete: a whole list replaces it, a list that may lack
--- the offline members only updates the members it has (AwayLogic.merge). The card waits for a whole list (GUILD_LIST)
+-- /reload), only once this session's card was worked out and shown (so a quick /reload right after login, or a logout
+-- while the card still waits for the end of a dungeon, keeps the old one), only while TwizCrew uses this guild's data
+-- and the list is complete: a whole list with at least 80% of the snapshot's members replaces it, any other list only
+-- updates the members it has (AwayLogic.merge). The card waits for a whole list (GUILD_LIST)
 -- up to CAP s after login; past that it goes on without "left" lines. Never during a fight or in an instance (it
 -- waits for the end, whenFree). Also the card frame both cards use (AwayCard.newCard; UI/Welcome.lua).
 local _, ns = ...
@@ -26,7 +27,8 @@ local WIDTH, ROW, TOP, PAD = 420, 30, 48, 14
 local baseline   -- the snapshot saved at the last logout (taken at start, before anything writes)
 local startedAt
 local started = false
-local decided = false -- this session's card was worked out: from now on a logout saves a new snapshot
+local decided = false -- this session's card was decided on (it may still wait for the end of a fight or a dungeon)
+local done = false    -- ...and worked out and shown (or nothing to show): from now on a logout saves a new snapshot
 local card
 local last       -- { sub, lines } of the card shown this session (the wrench menu shows it again)
 
@@ -153,17 +155,25 @@ function AwayCard.memberList()
   return out
 end
 
--- My own characters: their keys in this guild (guild.mine), the names of every character of mine with TwizCrew
--- (stats.chars) and my key now. A brand-new alt that never ran TwizCrew cannot be told apart.
+-- My own characters in this guild: the GUIDs and keys saved by this guild's list (guild.mine[GUID] = key; keys are
+-- never given to anyone else in this guild), the full names of the listed members they match, my key and GUID now.
+-- Not stats.chars: those are the first words of my characters in any guild, and a new member here may share one. A
+-- brand-new alt that never ran TwizCrew in this guild cannot be told apart.
 function AwayCard.myCharacters()
   local set = {}
   local db = ns.db or {}
   local g = type(db.guild) == "table" and db.guild or {}
-  for _, key in pairs(type(g.mine) == "table" and g.mine or {}) do if type(key) == "string" then set[key] = true end end
-  local chars = type(db.stats) == "table" and db.stats.chars or nil
-  for name in pairs(type(chars) == "table" and chars or {}) do if type(name) == "string" then set[name] = true end end
+  local mine = type(g.mine) == "table" and g.mine or {}
+  for guid, key in pairs(mine) do
+    if type(guid) == "string" and type(key) == "string" then set[guid], set[key] = true, true end
+  end
   local me = ns.Guild.myKey()
   if me then set[me] = true end
+  local guid = ns.Util.plain(UnitGUID, "player")
+  if type(guid) == "string" then set[guid] = true end
+  for _, e in ipairs(ns.Guild.members()) do
+    if type(e.full) == "string" and ((e.guid and set[e.guid]) or (me and e.key == me)) then set[e.full:lower()] = true end
+  end
   return set
 end
 
@@ -224,9 +234,10 @@ local function show(sub, lines)
 end
 
 local function showNow()
-  if not wanted() then return end
+  if not wanted() then done = true return end
   local sub, lines = work()
   if sub then show(sub, lines) end
+  done = true
 end
 
 -- Works out this session's card once: WAIT s after login, with a whole list (or, at the CAP, with a complete one).
@@ -235,26 +246,34 @@ local function decide(final)
   local G = ns.Guild
   local ready = G.active() and G.complete()
   if not ready or (not G.whole() and not final) then
-    if final then decided = true end -- (no card this session; a later logout may still save the list)
+    if final then decided, done = true, true end -- (no card this session; a later logout may still save the list)
     return
   end
   decided = true
-  if wanted() and baseline then AwayCard.whenFree(showNow) end
+  if wanted() and baseline then AwayCard.whenFree(showNow) else done = true end
 end
 
--- At logout (and before a /reload): this guild's list and crowns for the next login.
+-- At logout (and before a /reload): this guild's list and crowns for the next login. A whole list replaces the
+-- snapshot only when it has at least KEEP of its members (a list of only the online members can look whole); else it
+-- is merged in like a list that may lack the offline members.
+local KEEP = 0.8
 local function save()
-  if not decided or not ns.db then return end
+  if not done or not ns.db then return end
   local G = ns.Guild
   if not G.active() or not G.complete() then return end
   local guild, at = G.here(), ns.wallclock()
   local old = store().snap
   local snap
-  if G.whole() then
-    snap = Logic.snapshot(AwayCard.memberList(), at, guild)
+  local list = AwayCard.memberList()
+  local had = 0
+  if type(old) == "table" and old.guild == guild and type(old.members) == "table" then
+    for _ in pairs(old.members) do had = had + 1 end
+  end
+  if G.whole() and #list >= had * KEEP then
+    snap = Logic.snapshot(list, at, guild)
     if type(old) == "table" and old.guild == guild then snap.crowns = old.crowns end
   else
-    snap = Logic.merge(old, AwayCard.memberList(), at, guild)
+    snap = Logic.merge(old, list, at, guild)
   end
   if not snap then return end
   local crowns = crownsNow()

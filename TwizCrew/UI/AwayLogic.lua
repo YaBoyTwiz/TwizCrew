@@ -13,6 +13,8 @@ ns.AwayLogic = AwayLogic
 
 AwayLogic.MIN_AWAY = 12 * 3600 -- s: gone at least this long (since the last logout) before the card shows
 AwayLogic.MAX_LINES = 12       -- the card's lines at most, "...and N more" included
+AwayLogic.CROWD = 3            -- more joins (or leaves) than this and than CROWD_SHARE of the members: none are listed
+AwayLogic.CROWD_SHARE = 0.1
 
 local function num(v) v = tonumber(v); if v and v == v then return v end end
 
@@ -58,8 +60,10 @@ local function byName(a, b) return tostring(a.name):lower() < tostring(b.name):l
 
 -- What changed between a snapshot and the guild list now. opts: now (wall time), guild (this guild's name; a
 -- snapshot of another guild is never used), whole (the list surely holds the offline members: only then are
--- "left" lines made), mine (a set of my own characters' keys and lower-case full names: never listed), minAway
--- (default MIN_AWAY). Returns nil when there is nothing to compare (no snapshot, another guild's, a bad time, gone
+-- "left" lines made), mine (a set of my own characters' GUIDs, keys and lower-case full names: never listed), minAway
+-- (default MIN_AWAY). Real joins and leaves come a few at a time: more "left" lines than CROWD and than CROWD_SHARE
+-- of the snapshot's members (a list that only looked whole: the offline members unlisted) drop them all; the same
+-- for "joined" against the list now (a snapshot of only the online members). Returns nil when there is nothing to compare (no snapshot, another guild's, a bad time, gone
 -- for less than minAway), else { gone = seconds, levels = { { key, name, from, to } }, joined = { { key, name,
 -- level, class } }, left = { { key, name } } }.
 function AwayLogic.diff(snap, members, opts)
@@ -71,7 +75,9 @@ function AwayLogic.diff(snap, members, opts)
   local gone = now - at
   if gone < (opts.minAway or AwayLogic.MIN_AWAY) then return nil end
   local mine = opts.mine or {}
-  local function isMine(key, full) return mine[key] or (type(full) == "string" and mine[full:lower()]) end
+  local function isMine(key, full, guid)
+    return mine[key] or (type(full) == "string" and mine[full:lower()]) or (type(guid) == "string" and mine[guid])
+  end
   local byGuid, byFull, byKey = {}, {}, {}
   for _, e in ipairs(members or {}) do
     if type(e.key) == "string" then
@@ -81,27 +87,31 @@ function AwayLogic.diff(snap, members, opts)
     end
   end
   local out = { gone = gone, levels = {}, joined = {}, left = {} }
-  local matched = {}
+  local matched, before = {}, 0
   for key, s in pairs(snap.members) do
     if type(key) == "string" and type(s) == "table" then
+      before = before + 1
       local e = (type(s.guid) == "string" and byGuid[s.guid]) or (type(s.full) == "string" and byFull[s.full:lower()])
         or (type(s.full) ~= "string" and byKey[key]) or nil
       if e and not matched[e] then
         matched[e] = true
         local from, to = num(s.level), num(e.level)
-        if from and to and to > from and not isMine(e.key, e.full) then
+        if from and to and to > from and not isMine(e.key, e.full, e.guid) then
           out.levels[#out.levels + 1] = { key = e.key, name = e.name or e.key, from = from, to = to }
         end
-      elseif opts.whole and not isMine(key, s.full) then
+      elseif opts.whole and not isMine(key, s.full, s.guid) then
         out.left[#out.left + 1] = { key = key, name = type(s.name) == "string" and s.name or key }
       end
     end
   end
   for _, e in ipairs(members or {}) do
-    if type(e.key) == "string" and not matched[e] and not isMine(e.key, e.full) then
+    if type(e.key) == "string" and not matched[e] and not isMine(e.key, e.full, e.guid) then
       out.joined[#out.joined + 1] = { key = e.key, name = e.name or e.key, level = num(e.level), class = e.class }
     end
   end
+  local function crowd(n, of) return n > math.max(AwayLogic.CROWD, of * AwayLogic.CROWD_SHARE) end
+  if crowd(#out.left, before) then out.left = {} end
+  if crowd(#out.joined, #(members or {})) then out.joined = {} end
   table.sort(out.levels, function(a, b)
     if a.to - a.from ~= b.to - b.from then return a.to - a.from > b.to - b.from end
     return byName(a, b)
@@ -112,7 +122,7 @@ function AwayLogic.diff(snap, members, opts)
 end
 
 -- Who holds each all-time crown, from StatsLogic.awards: { [award id] = { winner keys, A-Z } }. Awards whose lead
--- changes without anyone doing anything (rates: `noSteal`) and empty ones are left out.
+-- changes without anyone doing anything (rates: `noSteal`), empty ones and test fakes (ns.isTestName) are left out.
 function AwayLogic.crowns(awards)
   local out = {}
   for _, item in ipairs(awards or {}) do
@@ -120,23 +130,31 @@ function AwayLogic.crowns(awards)
     if type(def) == "table" and type(def.id) == "string" and not def.noSteal and not item.empty
       and type(item.winners) == "table" and #item.winners > 0 then
       local list = {}
-      for i, n in ipairs(item.winners) do list[i] = n end
+      for _, n in ipairs(item.winners) do if not ns.isTestName(n) then list[#list + 1] = n end end
       table.sort(list)
-      out[def.id] = list
+      if #list > 0 then out[def.id] = list end
     end
   end
   return out
 end
 
 -- Crowns that changed hands: held before and now, by nobody who held it before. defs: the awards in board order
--- ({ id, name, tab }: StatsDefs.AWARDS). Returns { { id, name, tab, to = { keys }, from = { keys } } }.
+-- ({ id, name, tab }: StatsDefs.AWARDS). Test fakes count as nobody (also in an older snapshot). Returns { { id,
+-- name, tab, to = { keys }, from = { keys } } }.
+local function real(list)
+  if type(list) ~= "table" then return nil end
+  local out = {}
+  for _, n in ipairs(list) do if not ns.isTestName(n) then out[#out + 1] = n end end
+  return out
+end
+
 function AwayLogic.crownChanges(before, now, defs)
   local out = {}
   if type(before) ~= "table" or type(now) ~= "table" then return out end
   for _, def in ipairs(defs or {}) do
     local id = def.id
-    local was, is = before[id], now[id]
-    if type(was) == "table" and type(is) == "table" and #was > 0 and #is > 0 then
+    local was, is = real(before[id]), real(now[id])
+    if was and is and #was > 0 and #is > 0 then
       local held = {}
       for _, n in ipairs(was) do held[n] = true end
       local kept = false

@@ -55,12 +55,35 @@ return {
       local L = ns.WelcomeLogic
       local s = L.new()
       L.joins(s, BASE, { whole = true, now = 0 })
-      local got = L.joins(s, plus(m("A One"), m("B Two"), m("C Three"), m("D Four")), { whole = true, now = 10 })
-      A.eq(names(got), { "A One", "B Two", "C Three" }, "at most 3 a minute; the rest are dropped")
+      local got = L.joins(s, plus(m("A One"), m("B Two")), { whole = true, now = 10 })
+      A.eq(names(got), { "A One", "B Two" })
+      got = L.joins(s, plus(m("A One"), m("B Two"), m("C Three"), m("D Four")), { whole = true, now = 20 })
+      A.eq(names(got), { "C Three" }, "at most 3 a minute; the rest are dropped")
       A.eq(L.joins(s, plus(m("A One"), m("B Two"), m("C Three"), m("D Four"), m("E Five")), { whole = true, now = 30 }),
         {}, "still inside the minute")
       A.eq(names(L.joins(s, plus(m("A One"), m("B Two"), m("C Three"), m("D Four"), m("E Five"), m("F Six")),
         { whole = true, now = 71 })), { "F Six" }, "a minute later")
+    end,
+    a_crowd_at_once_is_a_resync = function(ns, A)
+      local L = ns.WelcomeLogic
+      local s = L.new()
+      L.joins(s, BASE, { whole = true, now = 0 }) -- (say, a list of the online members that looked whole)
+      local all = plus(m("A One"), m("B Two"), m("C Three"), m("D Four"))
+      A.eq(L.joins(s, all, { whole = true, now = 10 }), {}, "4 new names in one list: the offline members, not joins")
+      A.eq(names(L.joins(s, plus(m("A One"), m("B Two"), m("C Three"), m("D Four"), m("Real New")),
+        { whole = true, now = 20 })), { "Real New" }, "that list is the new baseline")
+      local t = L.new()
+      L.joins(t, BASE, { whole = true, now = 0 })
+      A.eq(L.joins(t, all, { whole = false, now = 10 }), {}, "the same with a list that may lack the offline members")
+      A.eq(L.joins(t, all, { whole = false, now = 20 }), {}, "and they stay known")
+    end,
+    my_characters_by_guid = function(ns, A)
+      local L = ns.WelcomeLogic
+      local s = L.new()
+      L.joins(s, BASE, { whole = true, now = 0 })
+      local got = L.joins(s, plus(m("Altie Mine", { guid = "G-ALT" }), m("Fresh Face", { guid = "G-NEW" })),
+        { whole = true, now = 1, mine = { ["G-ALT"] = true } })
+      A.eq(names(got), { "Fresh Face" })
     end,
     start_card_once_only = function(ns, A)
       local L = ns.WelcomeLogic

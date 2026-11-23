@@ -6,7 +6,7 @@ local _, ns = ...
 local WelcomeLogic = {}
 ns.WelcomeLogic = WelcomeLogic
 
-WelcomeLogic.MAX_PER_MINUTE = 3 -- "Say hi" pop-ups at most this many a minute (more at once are dropped)
+WelcomeLogic.MAX_PER_MINUTE = 3 -- "Say hi" pop-ups at most this many a minute (more in one list: none, see joins)
 WelcomeLogic.NEAR_LEVELS = 5    -- "near your level": this many levels up or down
 WelcomeLogic.NEAR_MAX = 5       -- names on the start card at most
 
@@ -18,12 +18,14 @@ local function lower(e) return type(e.full) == "string" and e.full:lower() or ni
 
 -- New guild members to welcome in a guild list that just loaded (members: { key, full, level, class, name, online }).
 -- opts: whole (the list surely holds the offline members), now (seconds), baseline (lower-case full names in the
--- snapshot saved at the last logout, or nil), mine (my own characters: keys and lower-case full names), welcomed
+-- snapshot saved at the last logout, or nil), mine (my own characters: GUIDs, keys and lower-case full names), welcomed
 -- (lower-case full names already welcomed on this account, ever). Someone is new when the last whole list of this
 -- session did not have them: so never on the first list of a session, never before a whole list was seen, never for
 -- someone in the saved snapshot (members who joined while I was offline are on the "While you were away" card), my
 -- own characters or anyone welcomed before. At most MAX_PER_MINUTE are returned a minute (the rest are dropped). A
--- whole list becomes the new `prev`. Returns the entries, A-Z.
+-- whole list becomes the new `prev`. More than MAX_PER_MINUTE such new names in one list is a resync, not joins (say,
+-- the offline members after a list of only the online ones that looked whole): nobody is returned and the names join
+-- `prev`. Returns the entries, A-Z.
 function WelcomeLogic.joins(state, members, opts)
   opts = opts or {}
   local cur = {}
@@ -43,9 +45,14 @@ function WelcomeLogic.joins(state, members, opts)
   for _, e in ipairs(members or {}) do
     local l = lower(e)
     if l and not prev[l] and not (baseline and baseline[l]) and not mine[l] and not (e.key and mine[e.key])
+      and not (e.guid and mine[e.guid])
       and not welcomed[l] and not ns.isTestName(e.full) then
       found[#found + 1] = e
     end
+  end
+  if #found > WelcomeLogic.MAX_PER_MINUTE then
+    if not opts.whole then for l in pairs(cur) do prev[l] = true end end -- (a whole list is `prev` already)
+    return {}
   end
   table.sort(found, function(a, b) return a.full:lower() < b.full:lower() end)
   local out = {}

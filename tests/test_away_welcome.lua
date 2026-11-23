@@ -152,6 +152,55 @@ return {
       A.eq(saved.away.snap.members.Frostie.level, 20, "merged: the unlisted members stay in the snapshot")
       A.eq(saved.away.snap.members.Irek.level, 30)
     end,
+    a_list_of_only_the_online_members_that_looks_whole = function(ns, A, W, H)
+      -- If the game counts only the online members (Show Offline Members unticked), the list looks exact.
+      local all = {}
+      for i = 1, 20 do
+        all[i] = { name = string.format("Member%02d Name", i), level = 20, guid = string.format("Player-1-02%02d", i) }
+      end
+      local saved = firstSession(H, A, nil, all)
+      local online = { { name = "Member01 Name", level = 22, online = true, guid = "Player-1-0201" },
+        { name = "Member02 Name", level = 20, online = true, guid = "Player-1-0202" } }
+      local W2, ns2 = session(H, saved, online, 3)
+      H.advance(15)
+      A.ok(ns2.AwayCard.isShown())
+      A.eq(texts(ns2.AwayCard.shownForTest().lines), { "Member01 20 -> 22" }, "not 18 members who left")
+      retire(H, W2)
+      A.eq(saved.away.snap.members.Member05.level, 20, "the snapshot keeps the unlisted members")
+      A.eq(saved.away.snap.members.Member01.level, 22, "and updates the listed ones")
+      all[3].level = 25
+      local W3, ns3 = session(H, saved, all, 6)
+      H.advance(15)
+      A.eq(texts(ns3.AwayCard.shownForTest().lines), { "Member03 20 -> 25" }, "nobody 'joined' at the next login")
+      noErrors(A, ns2, ns3)
+      retire(H, W3)
+    end,
+    a_logout_before_the_card_could_show_keeps_the_last_logout = function(ns, A, W, H)
+      local saved = firstSession(H, A)
+      local at = saved.away.snap.at
+      local W2, ns2 = session(H, saved, AFTER, 3)
+      W2.state.inInstance, W2.state.instanceType = true, "party"
+      H.advance(30)
+      A.no(ns2.AwayCard.isShown(), "waits for the end of the dungeon")
+      retire(H, W2) -- logged out (or /reload) still inside
+      A.eq(saved.away.snap.at, at, "the old snapshot stays")
+      local _, ns3 = session(H, saved, AFTER, 3)
+      H.advance(15)
+      A.ok(ns3.AwayCard.isShown(), "so the card comes at the next login")
+      A.eq(texts(ns3.AwayCard.shownForTest().lines), { "Sneakz joined the guild", "Frostie left the guild",
+        "Irek 27 -> 30" })
+    end,
+    my_characters_are_matched_in_this_guild_only = function(ns, A, W, H)
+      local saved = firstSession(H, A, nil, { BEFORE[1], BEFORE[2], BEFORE[3],
+        { name = "Altie Alt", level = 5, guid = "Player-1-0109" } })
+      saved.guild.mine["Player-1-0109"] = "Altie" -- (my alt here ran TwizCrew in this guild)
+      saved.stats.chars.Sneakz = { sid = "", s = {}, a = {} } -- my character "Sneakz" in another guild
+      local after = { AFTER[1], AFTER[2], AFTER[3], { name = "Altie Alt", level = 9, guid = "Player-1-0109" } }
+      local _, ns2 = session(H, saved, after, 3)
+      H.advance(15)
+      A.eq(texts(ns2.AwayCard.shownForTest().lines), { "Sneakz joined the guild", "Frostie left the guild",
+        "Irek 27 -> 30" }, "a new member who shares a first word with my character elsewhere; never my alt here")
+    end,
     new_calendar_notes = function(ns, A, W, H)
       local saved = firstSession(H, A, nil, AFTER)
       local t = saved.away.snap.at + 2 * DAY

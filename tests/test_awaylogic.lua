@@ -88,6 +88,56 @@ return {
         { now = NOW, guild = "Crew", whole = true, mine = { Altie = true, ["newalt surname"] = true } })
       A.eq(L.lines(d, 0, {}), {})
     end,
+    my_characters_by_guid = function(ns, A)
+      local L = ns.AwayLogic
+      local snap = L.snapshot({ m("Twiz", 20), m("Altie", 5, { guid = "G-ALT" }) }, NOW - 3 * H12, "Crew")
+      local d = L.diff(snap, { m("Twiz", 20), m("Altie", 9, { guid = "G-ALT" }), m("Newalt", 1, { guid = "G-NEW" }) },
+        { now = NOW, guild = "Crew", whole = true, mine = { ["G-ALT"] = true, ["G-NEW"] = true } })
+      A.eq(L.lines(d, 0, {}), {}, "matched by GUID")
+      local gone = L.diff(snap, { m("Twiz", 20) }, { now = NOW, guild = "Crew", whole = true, mine = { ["G-ALT"] = true } })
+      A.eq(gone.left, {}, "my alt leaving is not listed either")
+    end,
+    crowds_of_joins_or_leaves_are_dropped = function(ns, A)
+      local L = ns.AwayLogic
+      local all, online = {}, {}
+      for i = 1, 30 do
+        all[i] = m("M" .. string.format("%02d", i), 10)
+        if i <= 5 then online[i] = m("M" .. string.format("%02d", i), i == 1 and 12 or 10) end
+      end
+      -- an online-only list that looked whole: 25 "left" would be a lie
+      local d = L.diff(L.snapshot(all, NOW - 3 * H12, "Crew"), online, { now = NOW, guild = "Crew", whole = true })
+      A.eq(d.left, {}, "a crowd of leaves: none listed")
+      A.eq(#d.levels, 1, "level-ups stay")
+      -- and the other way round: a snapshot of only the online members, then the whole list
+      d = L.diff(L.snapshot(online, NOW - 3 * H12, "Crew"), all, { now = NOW, guild = "Crew", whole = true })
+      A.eq(d.joined, {}, "a crowd of joins: none listed")
+      -- a few at a time are real: 3 of 30 left, 3 joined
+      local now = {}
+      for i = 4, 30 do now[#now + 1] = all[i] end
+      for i = 1, 3 do now[#now + 1] = m("New" .. i, 1) end
+      d = L.diff(L.snapshot(all, NOW - 3 * H12, "Crew"), now, { now = NOW, guild = "Crew", whole = true })
+      A.eq(#d.left, 3, "three left")
+      A.eq(#d.joined, 3, "three joined")
+      -- in a bigger guild the limit is 10%: 5 of 50
+      local big, fewer = {}, {}
+      for i = 1, 50 do big[i] = m("B" .. string.format("%02d", i), 10) end
+      for i = 6, 50 do fewer[#fewer + 1] = big[i] end
+      d = L.diff(L.snapshot(big, NOW - 3 * H12, "Crew"), fewer, { now = NOW, guild = "Crew", whole = true })
+      A.eq(#d.left, 5, "5 of 50 is not a crowd")
+      table.remove(fewer, 1)
+      d = L.diff(L.snapshot(big, NOW - 3 * H12, "Crew"), fewer, { now = NOW, guild = "Crew", whole = true })
+      A.eq(d.left, {}, "6 of 50 is")
+    end,
+    test_fakes_never_hold_a_crown = function(ns, A)
+      local L = ns.AwayLogic
+      local defs = { { id = "moneypit", name = "Money Pit", tab = "loot" }, { id = "corpse", name = "Professional Corpse",
+        tab = "deaths" } }
+      local now = L.crowns({ { def = defs[1], winners = { "Bob (test)" } }, { def = defs[2], winners = { "Chaos", "Al (test)" } } })
+      A.eq(now, { corpse = { "Chaos" } }, "fakes are left out")
+      A.eq(L.crownChanges({ corpse = { "Bob (test)" } }, now, defs), {}, "a fake as the old holder: no line")
+      A.eq(L.crownChanges({ moneypit = { "Chaos" } }, { moneypit = { "Bob (test)" } }, defs), {},
+        "a fake as the new holder: no line")
+    end,
     max_lines_and_more = function(ns, A)
       local L = ns.AwayLogic
       local before, now = {}, {}

@@ -113,6 +113,7 @@ local function build()
   meta:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -168)
   meta:SetWidth(W - 2 * PAD)
   meta:SetJustifyH("LEFT")
+  if meta.SetWordWrap then meta:SetWordWrap(false) end -- one line: with both times shown it would run into the next
   dungeonLine = T.text(frame, T.FONT.small, C.title)
   dungeonLine:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -186)
 
@@ -312,4 +313,4 @@ function NoteView.commentForTest(text)
 end
 function NoteView.boxForTest() return box end
 -- Test hook: the line under the title (when, in which time zones, by whom).
-function NoteView.metaForTest() return meta and meta:GetText() or nil end
+function NoteView.metaForTest() return meta and meta:GetText() or nil, meta end

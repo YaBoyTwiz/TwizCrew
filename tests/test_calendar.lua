@@ -1123,6 +1123,8 @@ return {
       ns.NoteView.open("frost123-900")
       A.contains(ns.NoteView.metaForTest(), "7pm CST your time")
       A.contains(ns.NoteView.metaForTest(), "8pm EST for ")
+      local _, metaLine = ns.NoteView.metaForTest()
+      A.no(metaLine:CanWordWrap(), "one line: a long one never runs into the line under it")
       ns.NoteView.open(mine)
       A.contains(ns.NoteView.metaForTest(), "7pm CST")
       A.no(ns.NoteView.metaForTest():find("your time", 1, true), "mine: one time")
@@ -1157,6 +1159,28 @@ return {
       A.eq(ns.Calendar._.size, 1.5, "the slider works at once")
       ns.Modules.set("calendar", "size", 9)
       A.eq(ns.Calendar._.size, 1.8, "never off the screen")
+      -- a short screen: the window is kept to its height
+      local f = ns.Calendar._.frame
+      rawset(W.env.UIParent, "GetHeight", function() return 768 end)
+      ns.Modules.set("calendar", "size", 1.7)
+      A.ok(ns.Calendar._.size * ns.Calendar._.HEIGHT <= 768, "fits the screen: " .. ns.Calendar._.size)
+      A.ok(ns.Calendar._.size > 1.2, "but as big as fits")
+      -- dragged somewhere, then made smaller: its middle stays where it was
+      local old = ns.Calendar._.size
+      rawset(f, "GetCenter", function() return 400, 300 end)
+      ns.Modules.set("calendar", "size", 1)
+      local point, rel, relPoint, x, y = f:GetPoint(1)
+      A.eq({ point, rel, relPoint }, { "CENTER", W.env.UIParent, "BOTTOMLEFT" })
+      A.ok(math.abs(x - 400 * old) < 0.01 and math.abs(y - 300 * old) < 0.01, "the same place on the screen")
+      A.eq(f:GetNumPoints(), 1)
+    end,
+    after_only_a_reload_the_calendar_asks_for_a_restart = function(ns, A, W)
+      start(ns, W)
+      ns.Calendar._.buildEvents = nil -- a file the game has not loaded (added by the update)
+      ns.Calendar.open()
+      A.contains(W.printed[#W.printed], "restart the game")
+      A.no(ns.Calendar.isShown())
+      A.eq(ns.Log.errors(10), {})
     end,
     my_notes_can_be_edited_and_removed_from_a_days_menu = function(ns, A, W)
       start(ns, W)
@@ -1206,13 +1230,29 @@ return {
       -- remove
       A.ok(pick(ns.Calendar.dayMenuItems(day + 1), "Remove: "))
       A.eq(#N.forDate(N.dateKey(L.civil(day + 1))), 0, "removed")
-      -- a note I made on my other computer (another diary id, my character's name) is mine too
+      -- a note I made on my other computer (another diary id, my character's name and class) is mine too
       receive(ns, W, "Frostie", "CALN", { k = "other999-950", d = date, t = "From my desktop", i = "1",
-        b = ns.playerName(), u = "950" })
+        b = ns.playerName(), c = W.state.class, u = "950" })
       A.ok(N.isMine({ key = "other999-950" }), "my character wrote it")
       A.no(N.fresh(), "so it is not news")
+      A.no(N.isNew("other999-950"), "and never 'new' (I don't mark my own notes seen)")
       A.contains(labels(ns.Calendar.dayMenuItems(day)), "Remove: From my desktop")
       A.ok(N.remove("other999-950"), "and I can remove it")
+      -- someone else with my first name but another class is not me
+      receive(ns, W, "Frostie", "CALN", { k = "other888-960", d = date, t = "My namesake's", i = "1",
+        b = ns.playerName(), c = "MAGE", u = "960" })
+      A.no(N.isMine({ key = "other888-960" }), "my name, not my class")
+      A.no(labels(ns.Calendar.dayMenuItems(day)):find("Remove: My namesake", 1, true), "no Remove on theirs")
+      A.no(N.remove("other888-960"), "and it can't be removed")
+      A.ok(N.isNew("other888-960"), "theirs is new to me")
+      -- one of my alts: its saved class decides
+      ns.Diary.people()[ns.Diary.myId()].alts["Altimus"] = "PRIEST"
+      receive(ns, W, "Frostie", "CALN", { k = "other999-970", d = date, t = "Alt note", i = "1", b = "Altimus",
+        c = "PRIEST", u = "970" })
+      receive(ns, W, "Frostie", "CALN", { k = "other777-980", d = date, t = "Other Altimus", i = "1", b = "Altimus",
+        c = "ROGUE", u = "980" })
+      A.ok(N.isMine({ key = "other999-970" }), "my alt, its class")
+      A.no(N.isMine({ key = "other777-980" }), "my alt's name, another class")
     end,
     fresh_marks_notes_by_others_and_answers_on_mine = function(ns, A, W)
       start(ns, W)

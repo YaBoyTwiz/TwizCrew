@@ -177,17 +177,23 @@ function Notes.iconTexture(i)
 end
 
 -- Mine: made by this copy (its key starts with my diary id), or by one of my own characters on another computer
--- (a second install has its own diary id, so its notes carry that one; the author's name is then one of mine).
+-- (a second install has its own diary id, so its notes carry that one; the author's name and class are then one of
+-- mine: two guild members can share a first name, so the name alone is not enough).
 function Notes.isMine(note)
   local me = ns.Diary and ns.Diary.myId()
   if type(note) ~= "table" or type(note.key) ~= "string" or me == nil then return false end
   if note.key:sub(1, #me + 1) == me .. "-" then return true end
   local n = (store() or {})[note.key]
-  local by = type(n) == "table" and n.b or nil
-  if type(by) ~= "string" or by == "" then return false end
-  if by == ns.playerName() then return true end
+  local by, class = type(n) == "table" and n.b or nil, type(n) == "table" and n.c or nil
+  if type(by) ~= "string" or by == "" or type(class) ~= "string" then return false end
   local p = ns.Diary.people()[me]
-  return type(p) == "table" and type(p.alts) == "table" and p.alts[by] ~= nil
+  local alts = type(p) == "table" and type(p.alts) == "table" and p.alts or {}
+  local mine = alts[by]
+  if by == ns.playerName() then
+    local _, myClass = ns.Util.plain(UnitClass, "player")
+    if type(myClass) == "string" then mine = myClass end
+  end
+  return mine == class
 end
 
 -- One note by its key (a copy, with its key), or nil when there is none or it was deleted.
@@ -552,7 +558,7 @@ end
 -- Someone else's note that I have not opened yet (the Events tab marks it "new").
 function Notes.isNew(noteKey)
   local me = ns.Diary and ns.Diary.myId()
-  if type(noteKey) ~= "string" or not me or noteKey:sub(1, #me + 1) == me .. "-" then return false end
+  if type(noteKey) ~= "string" or not me or Notes.isMine({ key = noteKey }) then return false end
   local r = (Notes.replyStore() or {})[noteKey .. "|s|" .. me]
   return not (type(r) == "table" and not r.x)
 end

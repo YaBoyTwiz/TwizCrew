@@ -156,6 +156,12 @@ local function tabButton(label, icon, id, x)
 end
 
 local function build()
+  -- the views live in files of their own; a file an update added is missing until the game restarts (a /reload is
+  -- not enough)
+  if not (P.buildEvents and P.buildEventDay and P.buildMonth and P.buildDay and P.buildUsual) then
+    print("TwizCrew: restart the game to use the calendar after this update (a /reload is not enough).")
+    return false
+  end
   P.frame = T.frame("Frame", "TwizCrewCalendar", UIParent)
   P.frame:SetSize(WIDTH, HEIGHT)
   P.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
@@ -198,6 +204,7 @@ local function build()
   P.buildMonth()
   P.buildDay()
   P.buildUsual()
+  return true
 end
 
 -------------------------------------------------------------------------------------------------------- draw
@@ -218,7 +225,20 @@ function Calendar.refresh()
   if not P.frame or not Calendar.shownFlag then return end
   local size = tonumber(ns.Modules.setting(FEATURE, "size")) or 1.25 -- "Calendar size" in the settings
   size = math.max(0.7, math.min(1.8, size))
-  if P.frame.SetScale and P.size ~= size then P.frame:SetScale(size); P.size = size end
+  -- never taller than the screen
+  local screen = UIParent and UIParent.GetHeight and ns.Util.plain(UIParent.GetHeight, UIParent)
+  if type(screen) == "number" and screen > 0 then size = math.max(0.5, math.min(size, (screen - 20) / HEIGHT)) end
+  if P.frame.SetScale and P.size ~= size then
+    -- a new size keeps the window's middle where it is (it may have been dragged)
+    local x, y
+    if P.size and P.frame.GetCenter then x, y = ns.Util.plain(P.frame.GetCenter, P.frame) end
+    P.frame:SetScale(size)
+    if type(x) == "number" and type(y) == "number" then
+      P.frame:ClearAllPoints()
+      P.frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * P.size / size, y * P.size / size)
+    end
+    P.size = size
+  end
   P.eventsPane:Hide(); P.eventDayPane:Hide(); P.monthPane:Hide(); P.dayPane:Hide(); P.usualPane:Hide()
   drawTabs()
   zoneText:SetText("Your time zone: " .. zoneName())
@@ -246,6 +266,7 @@ end
 -- A day's notes and events (the Events tab).
 function Calendar.openEvents(day)
   if not P.frame then Calendar.open() end
+  if not P.frame then return end -- (a file is missing: restart the game)
   if day ~= P.shownDay or P.view ~= "eventDay" then P.eventScroll = 0 end
   P.shownDay = day
   local y, m = L.civil(day)
@@ -257,6 +278,7 @@ end
 -- A day's timeline of who played (the Play times tab).
 function Calendar.openDay(day)
   if not P.frame then Calendar.open() end
+  if not P.frame then return end -- (a file is missing: restart the game)
   if day ~= P.shownDay then P.dayScroll = 0 end
   P.shownDay = day
   local y, m = L.civil(day)
@@ -315,7 +337,7 @@ function Calendar.dayMenuItems(day)
 end
 
 function Calendar.open()
-  if not P.frame then build() end
+  if not P.frame and not build() then return end
   local today = ns.Diary.localToday()
   local y, m = L.civil(today)
   P.shownYear, P.shownMonth, P.shownDay = y, m, today

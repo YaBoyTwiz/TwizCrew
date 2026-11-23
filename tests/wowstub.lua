@@ -167,6 +167,8 @@ local IMPL = {
   SetScrollChild = function(self, c) self._scrollChild = c end,
   GetScrollChild = function(self) return self._scrollChild end,
   GetEffectiveScale = function(self) return self._scale or 1 end,
+  SetWordWrap = function(self, on) self._wordWrap = on and true or false end,
+  CanWordWrap = function(self) return self._wordWrap ~= false end,
 }
 
 local function typeMethods(typ, template)

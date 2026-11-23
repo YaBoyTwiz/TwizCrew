@@ -87,6 +87,8 @@ UI\Extras.lua
 UI\Recap.lua
 UI\AwayLogic.lua
 UI\AwayCard.lua
+UI\WelcomeLogic.lua
+UI\Welcome.lua
 UI\Settings.lua
 UI\Report.lua
 UI\GuildTest.lua

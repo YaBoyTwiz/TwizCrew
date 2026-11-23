@@ -349,7 +349,9 @@ return {
       local d = ns.Modules.get("popups")
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "online", "layerDiff", "layerSame", "death", "levelUp", "levelUpSound", "sound", "seconds" })
+      A.eq(keys, { "online", "layerDiff", "layerSame", "death", "levelUp", "levelUpSound", "newMember", "sound",
+        "seconds" })
+      A.eq(d.defaults.newMember, true, "new guild members: on")
       A.eq(d.defaults.levelUp, true); A.eq(d.defaults.levelUpSound, false)
       for _, s in ipairs(d.settings) do if s.key == "levelUpSound" then A.eq(s.parent, "levelUp") end end
     end,

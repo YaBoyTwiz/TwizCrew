@@ -42,9 +42,11 @@ end
 -- * Fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while it is in use. db.guild.named:
 --   this account has read a real guild name from the game (names of parked sets never count; markNamed).
 -- * away (per set, made when first used: UI/AwayCard.lua): { snap = the guild list and crowns at the last logout }.
+--   welcome (per set: UI/Welcome.lua): { start = the newcomer's start card "due" / "shown" / "no", welcomed[lower(full
+--   name)] = when a "Say hi" pop-up was shown for them }.
 local GUILD_PATHS = { "roster", "feed", "calendar", "pins", "stats.crew", "stats.session", "stats.trophies",
   "stats.clown", "stats.clownBySid", "guild.keys", "guild.mine", "guild.spell", "guild.pinnedOld", "guild.fitIn",
-  "away" }
+  "away", "welcome" }
 DB.GUILD_PATHS = GUILD_PATHS
 local UNNAMED = ""      -- the parked slot of unnamed (v0.1.24) data
 local PLACEHOLDER = "?" -- data taken while the game named no guild (Crew/Guild.lua)

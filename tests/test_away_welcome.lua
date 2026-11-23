@@ -1,4 +1,5 @@
--- "While you were away" (UI/AwayCard.lua), with whole copies logging in and out on a saved table (H.client).
+-- "While you were away" (UI/AwayCard.lua) and the welcome card (UI/Welcome.lua), with whole copies logging in and out
+-- on a saved table (H.client).
 
 local DAY = 86400
 
@@ -54,6 +55,10 @@ local function firstSession(H, A, saved, members)
   A.no(ns.AwayCard.isShown(), "nothing to compare on a first run")
   retire(H, W)
   return saved
+end
+
+local function popupIndex(ns, text)
+  for i, t in ipairs(ns.Popups.textsForTest()) do if t.text == text then return i, t end end
 end
 
 return {
@@ -180,11 +185,140 @@ return {
     end,
     the_snapshot_is_kept_per_guild = function(ns, A)
       local saved = { guild = { name = "Crew", byChar = { me = "Other" } }, away = { snap = { guild = "Crew" } },
-        guilds = { Other = { away = { snap = { guild = "Other" } } } } }
+        welcome = { start = "shown" }, guilds = { Other = { away = { snap = { guild = "Other" } } } } }
       local db = ns.DB.init(saved, ns.Modules.list())
       A.ok(ns.DB.useGuildOf(db, "me"))
       A.eq(db.away.snap.guild, "Other", "the other guild's snapshot comes up")
+      A.eq(db.welcome, nil, "and its own (no) welcome data")
       A.eq(db.guilds.Crew.away.snap.guild, "Crew", "Crew's is parked with its set")
+      A.eq(db.guilds.Crew.welcome.start, "shown")
+    end,
+    ------------------------------------------------------------------------------------------- welcome card
+    say_hi_to_a_new_member = function(ns, A, W, H)
+      local T, tns = H.client("Twiz Main")
+      T.env.TwizCrewDB = {}
+      H.link(T)
+      login(T)
+      H.advance(20)
+      local said = {}
+      T.env.SendChatMessage = function(msg, chan) said[#said + 1] = { msg, chan } end
+      local S, sns = H.client("Sneakz Rogue", { class = "MAGE", level = 8 })
+      S.env.TwizCrewDB = {}
+      H.link(S)
+      login(S)
+      H.advance(3)
+      local i, p = popupIndex(tns, "Say hi to Sneakz")
+      A.ok(i, "a pop-up for the newcomer")
+      A.eq(p.subtext, "Level 8 Mage just joined the guild - click to say hello")
+      tns.Popups.clickForTest(i)
+      A.eq(#said, 1, "one line in guild chat")
+      A.eq(said[1][2], "GUILD")
+      A.ok(said[1][1]:find("Sneakz", 1, true), said[1][1])
+      A.no(popupIndex(tns, "Say hi to Sneakz"), "the pop-up goes")
+      A.ok(T.env.TwizCrewDB.welcome.welcomed["sneakz rogue"], "remembered")
+      T:fire("GUILD_ROSTER_UPDATE", false)
+      H.advance(3)
+      local again = 0
+      for _, t in ipairs(tns.Popups.shownForTest()) do if t == "Say hi to Sneakz" then again = again + 1 end end
+      A.eq(again, 1, "once per member")
+      -- the newcomer's start card
+      A.no(sns.Welcome.isStartShown(), "not at once")
+      H.advance(30)
+      A.ok(sns.Welcome.isStartShown(), "the newcomer's start card")
+      local card = sns.Welcome.startCardForTest()
+      A.eq(card.title:GetText(), "Welcome to Crew Guild")
+      A.eq(card.rows[1].text:GetText(), "Online near your level: Twiz (10)")
+      A.no(card.rows[2] and card.rows[2]:IsShown(), "no best play time from a brand-new copy")
+      A.eq(card.buttons[1].text:GetText(), "Close", "no About page in this build: no button for it")
+      noErrors(A, tns, sns)
+    end,
+    no_pop_up_for_the_first_list_or_with_the_setting_off = function(ns, A, W, H)
+      local T, tns = H.client("Twiz Main")
+      T.env.TwizCrewDB = {}
+      H.link(T)
+      login(T)
+      H.advance(20)
+      A.no(popupIndex(tns, "Say hi to Twiz"), "never for myself")
+      tns.Modules.set("popups", "newMember", false)
+      local S = H.client("Sneakz Rogue", { class = "MAGE", level = 8 })
+      S.env.TwizCrewDB = {}
+      H.link(S)
+      login(S)
+      H.advance(3)
+      A.no(popupIndex(tns, "Say hi to Sneakz"), "switched off")
+      A.eq(next(T.env.TwizCrewDB.welcome.welcomed), nil, "and not marked as welcomed")
+    end,
+    the_game_refuses_guild_chat = function(ns, A, W, H)
+      local T, tns = H.client("Twiz Main")
+      T.env.TwizCrewDB = {}
+      H.link(T)
+      login(T)
+      H.advance(20)
+      T.env.SendChatMessage = function() error("blocked") end
+      local opened
+      T.env.ChatFrame_OpenChat = function(text) opened = text end
+      local S = H.client("Sneakz Rogue", { class = "MAGE", level = 8 })
+      S.env.TwizCrewDB = {}
+      H.link(S)
+      login(S)
+      H.advance(3)
+      tns.Popups.clickForTest((popupIndex(tns, "Say hi to Sneakz")))
+      A.ok(opened and opened:find("^/g .*Sneakz"), "the chat box opens with the line typed: " .. tostring(opened))
+      T.env.ChatFrame_OpenChat = nil -- (a second newcomer, and no way to open the chat box either)
+      local X = H.client("Xena Warrior", { class = "WARRIOR", level = 40 })
+      X.env.TwizCrewDB = {}
+      H.link(X)
+      login(X)
+      H.advance(3)
+      local i = popupIndex(tns, "Say hi to Xena")
+      A.ok(i)
+      tns.Popups.clickForTest(i)
+      A.contains(T.printed[#T.printed], "Type: /g ")
+    end,
+    an_existing_user_gets_no_start_card = function(ns, A, W, H)
+      local saved = {}
+      local W1, ns1 = session(H, saved, BEFORE, 0)
+      H.advance(35)
+      A.ok(ns1.Welcome.isStartShown(), "first run in this guild: owed and shown")
+      A.eq(saved.welcome.start, "shown")
+      retire(H, W1)
+      local W3, ns3 = session(H, saved, BEFORE, 3)
+      H.advance(60)
+      A.no(ns3.Welcome.isStartShown(), "never twice")
+      retire(H, W3)
+      local old = { roster = { Frostie = { name = "Frostie", class = "MAGE" } }, guild = { name = "Crew",
+        keys = { ["frostie snow"] = "Frostie" } } }
+      local W2, ns2 = session(H, old, BEFORE, 0)
+      H.advance(60)
+      A.no(ns2.Welcome.isStartShown(), "saved crew data for this guild: not new")
+      A.eq(old.welcome.start, "no")
+      retire(H, W2)
+      -- data from before guilds (v0.1.24) that this guild's list fits: adopted, not new either
+      local legacy = { roster = { Frostie = { name = "Frostie", class = "WARRIOR" },
+        Chaos = { name = "Chaos", class = "WARRIOR" } } }
+      local W4, ns4 = session(H, legacy, BEFORE, 0)
+      H.advance(60)
+      A.eq(legacy.guild.name, "Crew", "adopted")
+      A.no(ns4.Welcome.isStartShown(), "an old user whose data was just adopted")
+      A.eq(legacy.welcome.start, "no")
+      retire(H, W4)
+    end,
+    the_start_card_waits_for_the_fight_and_has_the_about_button = function(ns, A, W, H)
+      local W1, ns1 = session(H, {}, BEFORE, 0, { level = 25 })
+      local opened
+      ns1.About = { open = function() opened = true end }
+      W1.state.combat = true
+      H.advance(60)
+      A.no(ns1.Welcome.isStartShown(), "not in a fight")
+      W1.state.combat = false
+      H.advance(4)
+      A.ok(ns1.Welcome.isStartShown())
+      local card = ns1.Welcome.startCardForTest()
+      A.eq(card.rows[1].text:GetText(), "Nobody near your level is on right now")
+      A.eq(card.buttons[1].text:GetText(), "How to use TwizCrew")
+      card.buttons[1]._scripts.OnClick(card.buttons[1], "LeftButton")
+      A.ok(opened, "opens the About page")
+      A.no(ns1.Welcome.isStartShown(), "and closes")
     end,
   },
 }

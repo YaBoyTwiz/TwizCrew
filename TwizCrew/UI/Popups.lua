@@ -396,7 +396,7 @@ ns.Modules.register({
   info = "Small messages near the top of the screen when a friend comes online, changes layer, dies or reaches a "
     .. "new level. They are short and never pile up.",
   defaults = { online = true, layerDiff = true, layerSame = true, death = true, levelUp = true, levelUpSound = false,
-    sound = false, seconds = 5 },
+    sound = false, seconds = 5, newMember = true },
   settings = {
     { key = "online", label = "Friends coming online", kind = "toggle",
       info = "Shows a pop-up like \"Frostie is online: Level 12 Mage in Elwynn Forest\" when a friend starts "
@@ -415,6 +415,11 @@ ns.Modules.register({
     { key = "levelUpSound", label = "Level-up sound", kind = "toggle", parent = "levelUp",
       info = "Plays the game's level-up sound with a friend's level-up pop-up. Off by default so streams stay "
         .. "quiet." },
+    { key = "newMember", label = "New guild members", kind = "toggle",
+      info = "Shows a pop-up like \"Say hi to Sneakz\" when someone new joins the guild while you are online. Click "
+        .. "it to say hello in guild chat. It shows even when \"Tell me about\" is set to your party and pinned "
+        .. "friends, because someone brand new is in nobody's party or pins yet. Members who joined while you were "
+        .. "offline are on the \"While you were away\" card instead (Today's recap)." },
     { key = "sound", label = "Play a sound", kind = "toggle",
       info = "Plays a short sound when pop-ups appear. Off by default so streams stay quiet." },
     { key = "seconds", label = "How long they stay", kind = "slider", min = 2, max = 15, step = 1,

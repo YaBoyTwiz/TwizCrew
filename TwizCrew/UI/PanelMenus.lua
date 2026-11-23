@@ -109,6 +109,8 @@ function Panel.toolItems()
       icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", onClick = function() ns.AwayCard.reshow() end } or nil,
     ns.Changelog and { label = "What's new", icon = "Interface\\Icons\\INV_Misc_Book_09",
       onClick = function() ns.Changelog.open() end } or nil,
+    ns.About and { label = "How to use TwizCrew", icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+      onClick = function() ns.About.open() end } or nil,
     { label = "Health check (to copy to Discord)", icon = "Interface\\Icons\\INV_Misc_Note_01",
       onClick = function() if ns.Report then ns.Report.show() end end },
   }
@@ -180,6 +182,7 @@ local function buildStatusBox()
   local e = T.frame("EditBox", nil, f)
   e:SetSize(276, 22)
   e:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -30)
+  Widgets.helpTip(e, "status", FEATURE)
   T.paint(e, C.row, 1, C.buttonBorder, 1)
   e:SetAutoFocus(false)
   if e.SetFontObject then e:SetFontObject(T.FONT.small) end
@@ -194,7 +197,7 @@ local function buildStatusBox()
   presets:SetText("Quick:")
   local x, y = 0, 0
   for i, p in ipairs(Panel.STATUS_PRESETS) do
-    local b = Widgets.button(f, p, function() Panel.setStatusPreset(p) end, nil, FEATURE)
+    local b = Widgets.button(f, p, function() Panel.setStatusPreset(p) end, nil, FEATURE, "status")
     b:SetHeight(20)
     local w = b:GetWidth()
     if type(w) ~= "number" or w <= 0 then w = 70 end

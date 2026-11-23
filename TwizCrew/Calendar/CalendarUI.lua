@@ -117,8 +117,8 @@ local function iconTexture(parent, path, size, layer)
 end
 P.iconTexture = iconTexture
 
--- A button that is only a picture (the month arrows).
-local function arrowButton(parent, tex, onClick)
+-- A button that is only a picture (the month arrows). tip (optional): a ns.Help.TIPS key or { title, text }.
+local function arrowButton(parent, tex, onClick, tip)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(24, 24)
   local t = b:CreateTexture(nil, "ARTWORK")
@@ -128,12 +128,13 @@ local function arrowButton(parent, tex, onClick)
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.15)
   script(b, "OnClick", onClick)
+  if tip then Widgets.helpTip(b, tip, FEATURE) end
   return b
 end
 P.arrowButton = arrowButton
 
--- A tab: an icon and a word, a gold line under the active one.
-local function tabButton(label, icon, id, x)
+-- A tab: an icon and a word, a gold line under the active one. tip: a ns.Help.TIPS key (optional).
+local function tabButton(label, icon, id, x, tip)
   local b = CreateFrame("Button", nil, P.frame)
   b:SetSize(140, 26)
   b:SetPoint("TOPLEFT", P.frame, "TOPLEFT", x, -44)
@@ -152,6 +153,7 @@ local function tabButton(label, icon, id, x)
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
   script(b, "OnClick", function() Calendar.show(id) end)
+  if tip then Widgets.helpTip(b, tip, FEATURE, "ANCHOR_TOP") end
   return b
 end
 
@@ -186,18 +188,21 @@ local function build()
   sub:SetText("events and notes for the crew, and who played when")
   local close = Widgets.button(P.frame, "Close", function() Calendar.close() end, nil, FEATURE)
   close:SetPoint("TOPRIGHT", P.frame, "TOPRIGHT", -PAD, -10)
-  local create = Widgets.button(P.frame, "+ Create note", function() Calendar.openMaker({}) end, nil, FEATURE)
+  local create = Widgets.button(P.frame, "+ Create note", function() Calendar.openMaker({}) end, nil, FEATURE,
+    "calCreate")
   create:SetSize(120, 24)
   create:SetPoint("RIGHT", close, "LEFT", -8, 0)
   zoneText = T.text(P.frame, T.FONT.small, C.muted)
   zoneText:SetPoint("TOPRIGHT", P.frame, "TOPRIGHT", -PAD, -52)
-  tabs = { events = tabButton("Events", ICON_NOTES, "events", PAD),
-    play = tabButton("Play times", ICON_USUAL, "month", PAD + 146) }
+  P.zoneHover = Widgets.helpTip(CreateFrame("Frame", nil, P.frame), "calZone", FEATURE) -- a tip over "Your time zone"
+  P.zoneHover:SetAllPoints(zoneText)
+  tabs = { events = tabButton("Events", ICON_NOTES, "events", PAD, "calEvents"),
+    play = tabButton("Play times", ICON_USUAL, "month", PAD + 146, "calPlay") }
   -- inside Play times: the month of who played, or the usual times
   subs = {}
-  subs.month = Widgets.button(P.frame, "Month", function() Calendar.show("month") end, nil, FEATURE)
+  subs.month = Widgets.button(P.frame, "Month", function() Calendar.show("month") end, nil, FEATURE, "calMonth")
   subs.month:SetPoint("TOPLEFT", P.frame, "TOPLEFT", PAD + 300, -46)
-  subs.usual = Widgets.button(P.frame, "Usual times", function() Calendar.show("usual") end, nil, FEATURE)
+  subs.usual = Widgets.button(P.frame, "Usual times", function() Calendar.show("usual") end, nil, FEATURE, "calUsual")
   subs.usual:SetPoint("LEFT", subs.month, "RIGHT", 4, 0)
   P.buildEvents()
   P.buildEventDay()
@@ -359,5 +364,6 @@ end
 
 function Calendar.isShown() return Calendar.shownFlag and true or false end
 function Calendar.viewForTest() return P.view, P.shownYear, P.shownMonth, P.shownDay end
+function Calendar.tipFramesForTest() return { tabs = tabs, subs = subs, zone = P.zoneHover } end
 
 -- (Diary's onEnable listens for CALENDAR_CHANGED and calls Calendar.refresh.)

@@ -60,6 +60,7 @@ local function hourTip(self, w, h)
   else
     GameTooltip:AddLine(string.format("About %.1f of the crew online", self.tcValue), 1, 1, 1)
   end
+  if self.mark:IsShown() then GameTooltip:AddLine(ns.Help.LINES.calBest, T.rgb(C.title)) end
   GameTooltip:Show()
 end
 
@@ -79,9 +80,11 @@ local function buildUsual()
   P.usualPane.note:SetJustifyH("LEFT")
   if P.usualPane.note.SetWordWrap then P.usualPane.note:SetWordWrap(false) end
   -- usual times or a real week (arrows step through the weeks)
-  P.usualPane.weekBtn = Widgets.button(P.usualPane, "See real weeks", function() Calendar.showWeek(ns.Diary.localToday()) end, nil, FEATURE)
+  P.usualPane.weekBtn = Widgets.button(P.usualPane, "See real weeks", function() Calendar.showWeek(ns.Diary.localToday()) end,
+    nil, FEATURE, "calRealWeeks")
   P.usualPane.weekBtn:SetPoint("TOPRIGHT", P.usualPane, "TOPRIGHT", 0, -22)
-  P.usualPane.usualBtn = Widgets.button(P.usualPane, "Usual times", function() Calendar.showWeek(nil) end, nil, FEATURE)
+  P.usualPane.usualBtn = Widgets.button(P.usualPane, "Usual times", function() Calendar.showWeek(nil) end, nil, FEATURE,
+    "calBackUsual")
   P.usualPane.usualBtn:SetPoint("TOPRIGHT", P.usualPane, "TOPRIGHT", 0, -22)
   P.usualPane.nextWeek = arrowButton(P.usualPane, NEXT_TEX, function() Calendar.moveWeek(1) end)
   P.usualPane.nextWeek:SetPoint("RIGHT", P.usualPane.usualBtn, "LEFT", -8, 0)
@@ -127,7 +130,8 @@ local function buildUsual()
   local hint = T.text(P.usualPane, T.FONT.small, C.muted)
   hint:SetPoint("LEFT", who, "RIGHT", 10, 0)
   hint:SetText("click people to see only them above (click again to take them off)")
-  P.usualPane.everyone = Widgets.button(P.usualPane, "Show everyone", function() Calendar.showUsualFor(nil) end, nil, FEATURE)
+  P.usualPane.everyone = Widgets.button(P.usualPane, "Show everyone", function() Calendar.showUsualFor(nil) end, nil,
+    FEATURE, "calEveryone")
   P.usualPane.everyone:SetPoint("TOPRIGHT", P.usualPane, "TOPRIGHT", 0, -(whoTop - 4))
   for i = 1, 10 do
     local r = CreateFrame("Button", nil, P.usualPane)
@@ -152,6 +156,8 @@ local function buildUsual()
       if not self.tcId then return end
       Calendar.toggleUsual(self.tcId)
     end)
+    Widgets.addTip(r, function(self) return self.tcId and (ns.Help.tip("calHabit")) or nil end,
+      select(2, ns.Help.tip("calHabit")), FEATURE)
     habitLines[i] = r
   end
 end
@@ -289,6 +295,8 @@ function Calendar.moveWeek(delta)
 end
 
 -- Add a person to the Usual times grid, or take them off if they are on it.
+function Calendar.usualFramesForTest() return { habits = habitLines, cells = heatCells } end
+
 function Calendar.toggleUsual(id)
   local out, found = {}, false
   for _, v in ipairs(usualPick) do if v == id then found = true else out[#out + 1] = v end end

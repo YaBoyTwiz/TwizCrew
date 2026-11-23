@@ -168,6 +168,13 @@ local function buildEvents()
     script(c, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     cells[i] = c
   end
+  -- the colour key under the month (words: ns.Help.LINES.calLegend)
+  P.eventsPane.legend = T.text(P.eventsPane, T.FONT.small, C.muted)
+  P.eventsPane.legend:SetPoint("TOPLEFT", P.eventsPane, "TOPLEFT", 2, -(44 + 6 * CELL_H + 2))
+  P.eventsPane.legend:SetWidth(7 * CELL_W - 4)
+  P.eventsPane.legend:SetJustifyH("LEFT")
+  if P.eventsPane.legend.SetWordWrap then P.eventsPane.legend:SetWordWrap(false) end
+  P.eventsPane.legend:SetText(ns.Help.LINES.calLegend)
 end
 P.buildEvents = buildEvents
 
@@ -233,6 +240,8 @@ local function drawEvents()
 end
 P.drawEvents = drawEvents
 
+function Calendar.legendForTest() return P.eventsPane and P.eventsPane.legend:GetText() end
+
 -- Test hook: what the Events month shows for a local day ({ lines, new, art, notes }), or nil when it is not on it.
 function Calendar.eventCellForTest(day)
   for _, c in ipairs(cells) do
@@ -248,7 +257,8 @@ local function buildEventDay()
   P.eventDayPane = CreateFrame("Frame", nil, P.frame)
   P.eventDayPane:SetPoint("TOPLEFT", P.frame, "TOPLEFT", PAD, -TOP)
   P.eventDayPane:SetSize(WIDTH - 2 * PAD, HEIGHT - TOP - PAD)
-  local back = Widgets.button(P.eventDayPane, "Back to the month", function() Calendar.show("events") end, nil, FEATURE)
+  local back = Widgets.button(P.eventDayPane, "Back to the month", function() Calendar.show("events") end, nil, FEATURE,
+    "calBack")
   back:SetPoint("TOPLEFT", P.eventDayPane, "TOPLEFT", 0, 0)
   local prev = arrowButton(P.eventDayPane, PREV_TEX, function() Calendar.openEvents(P.shownDay - 1) end)
   prev:SetPoint("LEFT", back, "RIGHT", 8, 0)
@@ -281,11 +291,12 @@ local function buildEventDay()
     r.sub:SetWidth(WIDTH - 2 * PAD - 180)
     r.sub:SetJustifyH("LEFT")
     if r.sub.SetWordWrap then r.sub:SetWordWrap(false) end
-    r.del = Widgets.button(r, "Remove", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE)
+    r.del = Widgets.button(r, "Remove", function() if r.tcKey then ns.Notes.remove(r.tcKey) end end, "danger", FEATURE,
+      "calRemove")
     r.del:SetSize(64, 20)
     r.del:SetPoint("RIGHT", r, "RIGHT", -6, 0)
     r.edit = Widgets.button(r, "Edit", function() if r.tcKey then Calendar.openMaker({ edit = r.tcKey }) end end, nil,
-      FEATURE)
+      FEATURE, "calEdit")
     r.edit:SetSize(48, 20)
     r.edit:SetPoint("RIGHT", r.del, "LEFT", -4, 0)
     r.hl = r:CreateTexture(nil, "HIGHLIGHT")
@@ -303,6 +314,8 @@ local function buildEventDay()
       if ns.Notes.isMine({ key = self.tcKey }) then
         GameTooltip:AddLine("Right-click to edit or remove it.", 0.7, 0.7, 0.7)
       end
+      -- what the small ticks in the line under it mean
+      GameTooltip:AddLine(string.format(ns.Help.LINES.calAnswers, READY, WAITING), 0.7, 0.7, 0.7)
       GameTooltip:Show()
     end)
     script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)

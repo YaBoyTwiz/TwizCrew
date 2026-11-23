@@ -139,9 +139,8 @@ local function createRow()
   script(r.pin, "OnEnter", function(self)
     local m = self:GetParent().tcModel
     if not GameTooltip or not m then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText(m.pinAction == "unpin" and "Unpin" or "Pin to main view")
-    GameTooltip:Show()
+    local title, text = ns.Help.tip(m.pinAction == "unpin" and "unpin" or "pin")
+    Widgets.tip(self, title, text, "ANCHOR_TOP")
   end)
   script(r.pin, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   r.pin:Hide()
@@ -501,15 +500,38 @@ P.layoutRow = layoutRow
 
 ---------------------------------------------------------------------------------------------------------- row tooltip
 
--- Name in class colour, then the row model's tip lines (level, XP to level, rested, time to level).
+-- The short lines that say what the row's own marks mean (what this row shows now): its award title, why it is
+-- dimmed, the zzz, the XP bar, the quest's ! or ?, a flashing or dim arrow. The words are in ns.Help.LINES.
+local function explainLines(r, m)
+  local H = ns.Help.LINES
+  local out = {}
+  if m.noAddon then out[#out + 1] = H.noAddon end
+  if m.offline and m.offlineText then out[#out + 1] = m.offlineText end -- (why the row is dimmed, and since when)
+  if m.title and not m.offline then out[#out + 1] = string.format(H.title, m.title) end
+  if not m.offline and r.afk:IsShown() then out[#out + 1] = H.dimAway end
+  if r.xpBack:IsShown() then out[#out + 1] = H.xpBar end
+  if r.questIcon:IsShown() then out[#out + 1] = m.questDone and H.questDone or H.questOn end
+  local a = rawget(r, "tcArrow")
+  if a and r.arrow:IsShown() then
+    if rawget(r, "tcAlarm") then out[#out + 1] = H.arrowRun
+    elseif a.still then out[#out + 1] = H.arrowOtherZone end
+  end
+  return out
+end
+Panel.explainLinesForTest = explainLines
+
+-- Name in class colour, then the row model's tip lines (level, XP to level, rested, time to level), where they are and
+-- the lines that explain the row's marks. Every row has a tooltip, also a guild member without the addon.
 function Panel.showRowTip(r)
   local m = r and r.tcModel
-  if not GameTooltip or type(m) ~= "table" or (type(m.tip) ~= "table" and type(m.info) ~= "table") then return end
+  if not GameTooltip or type(m) ~= "table" then return end
   GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
   GameTooltip:SetText(m.name, T.classColor(m.class))
   local cr, cg, cb = T.rgb(C.text)
   for _, line in ipairs(m.tip or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
   for _, line in ipairs(m.info or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
+  local mr, mg, mb = T.rgb(C.muted)
+  for _, line in ipairs(explainLines(r, m)) do GameTooltip:AddLine(line, mr, mg, mb, true) end
   -- live: how far they are (group members, Find the crew)
   if ns.Find and ns.Find.arrowFor and not m.offline then
     local ok, a = pcall(ns.Find.arrowFor, m.key or m.name)
@@ -530,8 +552,7 @@ function Panel.showRowTip(r)
         .. "Their quests", 0.3, 1, 0.4)
     end
   end
-  local mr, mg, mb = T.rgb(C.muted)
-  GameTooltip:AddLine("Right-click for options", mr, mg, mb)
+  GameTooltip:AddLine(ns.Help.LINES.rightClick, mr, mg, mb)
   GameTooltip:Show()
   P.tipRow = r
 end
@@ -548,7 +569,7 @@ local function refreshRowTip()
   if not r then return end
   if GameTooltip and GameTooltip.IsOwned and not GameTooltip:IsOwned(r) then P.tipRow = nil; return end
   local m = r.tcModel -- hidden rows already closed their tooltip (redraw)
-  if type(m) ~= "table" or type(m.tip) ~= "table" then Panel.hideRowTip(r); return end
+  if type(m) ~= "table" then Panel.hideRowTip(r); return end
   Panel.showRowTip(r)
 end
 P.refreshRowTip = refreshRowTip

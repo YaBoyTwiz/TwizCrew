@@ -5,7 +5,8 @@
 -- While the stats module is on, two tabs sit under the header: "Crew" (the rows, with award titles under the
 -- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved. While the calendar module is on, a
 -- "Calendar" button sits next to them: it opens the crew calendar's own window (not a tab), and a gold glow pulses
--- behind it while the calendar has something new (ns.Notes.fresh). Either module alone keeps the bar.
+-- behind it while the calendar has something new (ns.Notes.fresh). Either module alone keeps the bar. A gold "?" at
+-- the end (when it fits) opens "How to use TwizCrew" (UI/About.lua; the wrench menu has it too).
 -- This file: settings, the frame, look and position, the redraw, enable / disable. The rest, loaded right after it:
 -- UI/PanelRows.lua (rows, row arrows, row tooltips), UI/PanelHeader.lua (the header bar, the update and What's new
 -- lines), UI/PanelMenus.lua (the menus and the status box) and UI/PanelMini.lua (minimize, bar notices, peek).
@@ -64,7 +65,7 @@ local headFrames = {}      -- "My party" / "Pinned" heading -> its frame
 local CHEER_FOR = 300 -- seconds the Congrats button stays on a friend's row after they level up
 local dingAt, cheered = {}, {} -- name -> when they leveled up; name -> true once we congratulated them
 P.cheered = cheered
-local crewTab, shameTab, calTab
+local crewTab, shameTab, calTab, helpTab
 local calTicker        -- pulses the glow behind the Calendar button while the calendar has something new
 local CAL_PULSE_TICK = 0.1
 local tab = "crew"     -- "crew" | "shame" (session only)
@@ -158,9 +159,11 @@ local function setCalWords(words)
   calTab:SetWidth(w + 10)
 end
 
--- The bar under the header: Crew, Hall of Shame (stats on), Calendar (calendar on). width: the panel's width now.
+-- The bar under the header: Crew, Hall of Shame (stats on), Calendar (calendar on), then "?" (the About page) when it
+-- fits (the wrench menu has it too). width: the panel's width now.
 local function drawTabs(width)
   local stats, cal = statsOn(), calOn()
+  local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
   crewTab:SetActive(tab == "crew")
   if stats then
     shameTab:SetActive(tab == "shame")
@@ -172,16 +175,21 @@ local function drawTabs(width)
     local fresh = calFresh()
     local before = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
     setCalWords("Calendar")
-    if before + calTab:GetWidth() > width then setCalWords("Cal") end -- tiny rows: the short word
+    -- tiny rows: the short word (room kept for the "?" after it)
+    if before + calTab:GetWidth() + 4 + helpTab:GetWidth() > width then setCalWords("Cal") end
     calTab:ClearAllPoints()
     calTab:SetPoint("LEFT", stats and shameTab or crewTab, "RIGHT", 4, 0)
     T.textColor(calTab.label, fresh and C.text or C.muted)
     calTab:Show()
     syncCalPulse(fresh)
+    used = used + calTab:GetWidth() + 4
   else
     calTab:Hide()
     stopCalPulse()
   end
+  helpTab:ClearAllPoints()
+  helpTab:SetPoint("LEFT", cal and calTab or (stats and shameTab or crewTab), "RIGHT", 4, 0)
+  if used + helpTab:GetWidth() <= width then helpTab:Show() else helpTab:Hide() end
   P.tabBar:Show()
 end
 
@@ -687,7 +695,7 @@ local function build()
 
   P.buildHeader() -- the header bar, the update line and the What's new line (UI/PanelHeader.lua)
 
-  local function makeBar(onClick)
+  local function makeBar(onClick, tip)
     local bar = CreateFrame("Button", nil, P.root)
     bar:SetSize(ROW_WIDTH.full, OFF_HEIGHT)
     T.paint(bar, C.row, 0.6, C.rowBorder, 1)
@@ -702,11 +710,13 @@ local function build()
     T.color(hl, C.white, 0.08)
     draggable(bar)
     script(bar, "OnClick", onClick)
+    Widgets.helpTip(bar, tip, FEATURE)
     bar:Hide()
     return bar
   end
-  guildBar = makeBar(function() Panel.toggleGuildOnline() end)
-  offBar = makeBar(function() Panel.toggleOffline() end)
+  guildBar = makeBar(function() Panel.toggleGuildOnline() end, "barGuild")
+  offBar = makeBar(function() Panel.toggleOffline() end, "barOffline")
+  local HEAD_TIPS = { ["My party"] = "headParty", Pinned = "headPinned" }
   for _, words in ipairs({ "My party", "Pinned" }) do -- thin headings
     local f = CreateFrame("Frame", nil, P.root)
     f:SetSize(ROW_WIDTH.full, HEAD_HEIGHT)
@@ -715,6 +725,7 @@ local function build()
     f.text:SetJustifyH("LEFT")
     f.text:SetText(words)
     draggable(f)
+    Widgets.helpTip(f, HEAD_TIPS[words], FEATURE)
     f:Hide()
     headFrames[words] = f
   end
@@ -728,9 +739,10 @@ local function build()
     P.tabBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", 0, -(HEADER_HEIGHT - 2))
     P.tabBar:SetHeight(TAB_HEIGHT)
     draggable(P.tabBar)
-    crewTab = ns.Board.textButton(P.tabBar, "Crew", function() Panel.setTab("crew") end, FEATURE)
+    crewTab = ns.Board.textButton(P.tabBar, "Crew", function() Panel.setTab("crew") end, FEATURE, "tabCrew")
     crewTab:SetPoint("LEFT", P.tabBar, "LEFT", PAD - 5, 0)
-    shameTab = ns.Board.textButton(P.tabBar, "Hall of Shame", function() Panel.setTab("shame") end, FEATURE)
+    shameTab = ns.Board.textButton(P.tabBar, "Hall of Shame", function() Panel.setTab("shame") end, FEATURE,
+      "tabShame")
     shameTab:SetPoint("LEFT", crewTab, "RIGHT", 4, 0)
     calTab = ns.Board.textButton(P.tabBar, "Calendar", function() if ns.Calendar then ns.Calendar.toggle() end end,
       FEATURE)
@@ -751,6 +763,10 @@ local function build()
       GameTooltip:Show()
     end)
     script(calTab, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    -- "?": the About window (How to use TwizCrew), after the Calendar button (or the last tab shown)
+    helpTab = ns.Board.textButton(P.tabBar, "?", function() if ns.About then ns.About.toggle() end end, FEATURE,
+      "about")
+    T.textColor(helpTab.label, C.title)
     P.tabBar:Hide()
   end
   P.root:Hide()
@@ -823,7 +839,7 @@ function Panel.offlineBarForTest() return offBarShown and offBar or nil end
 function Panel.guildBarForTest() return guildBarShown and guildBar or nil end
 function Panel.headFrameForTest(words) local f = headFrames[words]; return f and f:IsShown() and f or nil end
 function Panel.entriesForTest() return entries end
-function Panel.tabButtonsForTest() return { bar = P.tabBar, crew = crewTab, shame = shameTab, cal = calTab } end
+function Panel.tabButtonsForTest() return { bar = P.tabBar, crew = crewTab, shame = shameTab, cal = calTab, help = helpTab } end
 function Panel.calPulseForTest() return calTicker ~= nil end
 function Panel.refresh() requestRedraw() end
 
@@ -1012,6 +1028,10 @@ ns.Modules.register({
     { key = "whatsNew", label = "What's new", kind = "button",
       onClick = function() if ns.Changelog then ns.Changelog.open() end end,
       info = "Shows every TwizCrew version and what changed. Also: click the panel's title, or /tc new." },
+    { key = "about", label = "How to use TwizCrew", kind = "button",
+      onClick = function() if ns.About then ns.About.open() end end,
+      info = "A short page about what TwizCrew does and how to use it. Also: the \"?\" next to the panel's tabs, "
+        .. "the wrench menu, or /tc about." },
     tagSetting("DEAD", "Shows DEAD on a friend who is dead or a ghost."),
     tagSetting("LAYER", "Shows OTHER LAYER on a friend who is on a different copy of the world, "
       .. "so you cannot see each other."),

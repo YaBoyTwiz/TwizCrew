@@ -96,6 +96,12 @@ local function build()
   end, FEATURE)
   ns.Widgets.script(close, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end, FEATURE)
   frame.closeButton = close
+  -- hover: what it is and that it moves; the gold N (no facing known: it points like the map) explained when shown
+  ns.Widgets.addTip(frame, function() return (ns.Help.tip("bigArrow")) end, function(self)
+    local text = select(2, ns.Help.tip("bigArrow"))
+    if self.north:IsShown() then text = text .. " " .. ns.Help.LINES.bigArrowNorth .. "." end
+    return text
+  end, FEATURE)
   frame:Hide()
   BigArrow.applyLook()
 end

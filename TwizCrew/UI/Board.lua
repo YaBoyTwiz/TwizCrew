@@ -28,7 +28,8 @@ local lastModel, lastLayout
 local function script(f, name, fn, featureId) Widgets.script(f, name, fn, featureId or FEATURE) end
 
 -- A small text button: gold while active, muted otherwise. Also used by the panel for its tabs (featureId "panel").
-function Board.textButton(parent, label, onClick, featureId)
+-- tip (optional): a ns.Help.TIPS key or { title, text } for a mouse-over tip.
+function Board.textButton(parent, label, onClick, featureId, tip)
   local b = CreateFrame("Button", nil, parent)
   b.label = T.text(b, T.FONT.small, C.muted)
   b.label:SetPoint("CENTER", b, "CENTER", 0, 0)
@@ -41,6 +42,7 @@ function Board.textButton(parent, label, onClick, featureId)
   T.color(hl, C.white, 0.08)
   script(b, "OnClick", function() onClick() end, featureId)
   function b.SetActive(self, on) T.textColor(self.label, on and C.title or C.muted) end
+  if tip then Widgets.helpTip(b, tip, featureId or FEATURE, "ANCHOR_TOP") end
   return b
 end
 
@@ -132,9 +134,9 @@ end
 
 local function build(parent)
   frame = CreateFrame("Frame", nil, parent)
-  sessionButton = Board.textButton(frame, "This session", function() Board.setView("session") end)
+  sessionButton = Board.textButton(frame, "This session", function() Board.setView("session") end, nil, "viewSession")
   sessionButton:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, 0)
-  allButton = Board.textButton(frame, "All time", function() Board.setView("all") end)
+  allButton = Board.textButton(frame, "All time", function() Board.setView("all") end, nil, "viewAll")
   allButton:SetPoint("LEFT", sessionButton, "RIGHT", 4, 0)
   tabButtons = {}
   local prev
@@ -143,7 +145,7 @@ local function build(parent)
   tabList[#tabList + 1] = ns.BoardLogic.TROPHY_TAB
   for _, t in ipairs(tabList) do
     local id = t.id
-    local b = Board.textButton(frame, t.label, function() Board.setTab(id) end)
+    local b = Board.textButton(frame, t.label, function() Board.setTab(id) end, nil, "tab_" .. id)
     if prev then b:SetPoint("LEFT", prev, "RIGHT", 2, 0) else b:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, -(SWITCH_HEIGHT + 2)) end
     tabButtons[#tabButtons + 1] = b
     prev = b
@@ -152,6 +154,9 @@ local function build(parent)
   noWrap(subtitle, "LEFT")
   footer = T.text(frame, T.FONT.small, C.muted)
   noWrap(footer, "LEFT")
+  footer.hover = Widgets.helpTip(CreateFrame("Frame", nil, frame), "wipe", FEATURE) -- the Wipe Squad line's tip
+  footer.hover:SetAllPoints(footer)
+  footer.hover:Hide()
 end
 
 local function placeLine(fs, text, y, width)
@@ -208,9 +213,11 @@ function Board.draw(parent, top, width)
   for i = #m.rows + 1, #rows do rows[i]:Hide() end
   if m.footer then
     placeLine(footer, m.footer, y + 4, width)
+    footer.hover:Show()
     y = y + 4 + LINE
   else
     footer:Hide()
+    footer.hover:Hide()
   end
   frame:SetHeight(y)
   frame:Show()
@@ -251,4 +258,6 @@ function Board.setView(v)
 end
 
 function Board.modelForTest() return lastModel end
+function Board.buttonsForTest() return { session = sessionButton, all = allButton, tabs = tabButtons,
+  footer = footer and footer.hover } end
 function Board.layoutForTest() return lastLayout end

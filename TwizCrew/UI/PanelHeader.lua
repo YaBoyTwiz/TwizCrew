@@ -23,6 +23,7 @@ local newsBar, versionButton -- "New in vX" line; click the title for What's new
 local newsLine
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
 local gearButton, miniButton, missedButton, noticeButton, updateHintButton
+local countButton -- a hover area over the count ("2 here · 9 online"): what the two numbers mean
 local rootHead
 local barTextNow = ""  -- the text on the bar's count spot now (test hook)
 ---------------------------------------------------------------------------------------------------------- update
@@ -171,6 +172,16 @@ local function drawHeader(s, view)
       noticeButton:Show()
     else
       noticeButton:Hide()
+    end
+  end
+  if countButton then
+    if noticeLine then
+      countButton:Hide()
+    else
+      countButton:ClearAllPoints()
+      countButton:SetPoint("TOPLEFT", P.countText, "TOPLEFT", -2, 3)
+      countButton:SetPoint("BOTTOMRIGHT", P.countText, "BOTTOMRIGHT", 2, -3)
+      countButton:Show()
     end
   end
   local top = HEADER_HEIGHT
@@ -426,6 +437,13 @@ function P.buildHeader()
   end)
   script(noticeButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   noticeButton:Hide()
+  -- the count: dragging it still moves the panel, right-click is the bar's menu, hovering explains the numbers
+  countButton = CreateFrame("Frame", nil, head)
+  draggable(countButton)
+  script(countButton, "OnMouseUp", function(_, button)
+    if button == "RightButton" then openMenu(head, Panel.menuItems()) end
+  end)
+  ns.Widgets.helpTip(countButton, "count", "panel", "ANCHOR_BOTTOM")
 
   updateBar = CreateFrame("Button", nil, P.root)
   if updateBar.SetIgnoreParentAlpha then updateBar:SetIgnoreParentAlpha(true) end -- important: never faded
@@ -498,3 +516,4 @@ end
 function Panel.miniButtonForTest() return miniButton end
 function Panel.missedButtonForTest() return missedButton end
 function Panel.noticeButtonForTest() return noticeButton end
+function Panel.countButtonForTest() return countButton end

@@ -278,7 +278,7 @@ return {
       for i, s in ipairs(d.settings) do keys[i] = s.key end
       A.eq(keys, { "noticeScope", "minimized", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "questHeadsUp", "showXP",
         "xpText", "xpTooltip",
-        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "tag_DEAD",
+        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "about", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
@@ -710,7 +710,8 @@ return {
       A.ok(tip.shown)
       A.eq({ tip.lines[1], tip.lines[2], tip.lines[3], tip.lines[4] },
         { "Ginkan", "Level 12 \194\183 63%", "1,234 XP to level 13", "Rested: 2,000 XP" })
-      A.eq(tip.lines[#tip.lines - 1], "Where: Elwynn Forest", "then where they are")
+      A.eq(tip.lines[#tip.lines - 2], "Where: Elwynn Forest", "then where they are")
+      A.eq(tip.lines[#tip.lines - 1], "Gold bar: how close they are to their next level", "what the row's bar is")
       A.eq(tip.lines[#tip.lines], "Right-click for options")
       -- new numbers while the mouse is on the row: the tooltip follows
       receive(ns, W, "Ginkan", "UPDATE", { xc = "871", xp = "46" })
@@ -812,7 +813,7 @@ return {
         { xpTooltip = false }, nil, true, 0, 0)
       A.eq(rows[1].tip, { "TwizCrew v0.0.1 (older than yours)" }, "shown even with XP details off")
       rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50 } }, { xpTooltip = false }, nil, true, 0, 0)
-      A.eq(rows[1].tip, nil, "no version, no tooltip")
+      A.eq(rows[1].tip, nil, "no version: no tip lines (the row still has a tooltip: its name and what its marks mean)")
     end,
     away_after_idle_minutes = function(ns, A, W)
       start(ns, W)

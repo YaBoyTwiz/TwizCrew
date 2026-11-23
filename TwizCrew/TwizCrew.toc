@@ -34,6 +34,7 @@ Crew\QuestList.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua
 Layer\Layer.lua
+UI\Help.lua
 UI\Theme.lua
 UI\Widgets.lua
 UI\ClassIcon.lua

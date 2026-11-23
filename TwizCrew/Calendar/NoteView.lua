@@ -17,9 +17,9 @@ local READY = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local WAITING = "Interface\\RaidFrame\\ReadyCheck-Waiting"
 local NOT_READY = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 local STATUS = {
-  { id = "yes", label = "I'm going", list = "Going", tex = READY },
-  { id = "maybe", label = "Maybe", list = "Maybe", tex = WAITING },
-  { id = "no", label = "Can't make it", list = "Can't", tex = NOT_READY },
+  { id = "yes", label = "I'm going", list = "Going", tex = READY, tip = "noteYes" },
+  { id = "maybe", label = "Maybe", list = "Maybe", tex = WAITING, tip = "noteMaybe" },
+  { id = "no", label = "Can't make it", list = "Can't", tex = NOT_READY, tip = "noteNo" },
 }
 
 local frame, shownKey
@@ -137,6 +137,7 @@ local function build()
     hl:SetAllPoints(b)
     T.color(hl, C.white, 0.1)
     script(b, "OnClick", function() NoteView.answer(st.id) end)
+    Widgets.helpTip(b, st.tip, FEATURE, "ANCHOR_TOP")
     statusButtons[st.id] = b
   end
   for i, st in ipairs(STATUS) do
@@ -152,6 +153,9 @@ local function build()
   seenLine:SetWidth(W - 2 * PAD)
   seenLine:SetJustifyH("LEFT")
   if seenLine.SetWordWrap then seenLine:SetWordWrap(false) end
+  seenLine.hover = Widgets.helpTip(CreateFrame("Frame", nil, frame), "noteSeen", FEATURE) -- a tip over "Seen by"
+  seenLine.hover:SetPoint("TOPLEFT", seenLine, "TOPLEFT", 0, 2)
+  seenLine.hover:SetSize(80, 16)
 
   -- comments
   local sep = frame:CreateTexture(nil, "ARTWORK")
@@ -170,7 +174,8 @@ local function build()
     r.text:SetWidth(W - 2 * PAD - 30)
     r.text:SetJustifyH("LEFT")
     if r.text.SetWordWrap then r.text:SetWordWrap(false) end
-    r.del = Widgets.button(r, "X", function() if r.tcKey then ns.Notes.deleteComment(r.tcKey) end end, "danger", FEATURE)
+    r.del = Widgets.button(r, "X", function() if r.tcKey then ns.Notes.deleteComment(r.tcKey) end end, "danger", FEATURE,
+      "noteDelComment")
     r.del:SetSize(22, 18)
     r.del:SetPoint("RIGHT", r, "RIGHT", 0, 0)
     r:EnableMouse(true)
@@ -202,12 +207,12 @@ local function build()
   send:SetPoint("LEFT", box, "RIGHT", 6, 0)
   deleteButton = Widgets.button(frame, "Delete my note", function()
     if shownKey and ns.Notes.remove(shownKey) then frame:Hide() end
-  end, "danger", FEATURE)
+  end, "danger", FEATURE, "noteDelete")
   deleteButton:SetSize(130, 24)
   deleteButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 12)
   deleteButton.edit = Widgets.button(frame, "Edit my note", function()
     if shownKey then ns.Calendar.openMaker({ edit = shownKey }) end
-  end, nil, FEATURE)
+  end, nil, FEATURE, "noteEdit")
   deleteButton.edit:SetSize(110, 24)
   deleteButton.edit:SetPoint("LEFT", deleteButton, "RIGHT", 6, 0)
   frame:Hide()
@@ -312,5 +317,6 @@ function NoteView.commentForTest(text)
   reply()
 end
 function NoteView.boxForTest() return box end
+function NoteView.tipFramesForTest() return { status = statusButtons, seen = seenLine and seenLine.hover } end
 -- Test hook: the line under the title (when, in which time zones, by whom).
 function NoteView.metaForTest() return meta and meta:GetText() or nil, meta end

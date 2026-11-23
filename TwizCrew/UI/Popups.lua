@@ -142,6 +142,16 @@ local function newFrame()
   f.sub:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.sub:SetJustifyH("LEFT")
   Widgets.script(f, "OnClick", function(self) click(self) end, FEATURE)
+  -- a click that does something the words don't say (congratulate, whisper): a tip says so (words: ns.Help)
+  Widgets.addTip(f, function(self)
+    local p = self.tcPopup
+    if not p or type(p.names) ~= "table" or type(p.names[1]) ~= "string" or ns.isTestName(p.names[1]) then return nil end
+    if p.kind == "levelup" then return (ns.Help.tip("popupLevelup")) end
+    if p.kind == "online" and #p.names == 1 then return (ns.Help.tip("popupOnline")) end
+  end, function(self)
+    local p = self.tcPopup
+    return select(2, ns.Help.tip(p and p.kind == "levelup" and "popupLevelup" or "popupOnline"))
+  end, FEATURE)
   -- Only the fade is smooth; showing and hiding is decided by the ticker. A roast closes itself here once its
   -- time is over, so it also goes away while this module (and its ticker) is off.
   -- (the raw handler only adds up the time; the safe wrapper runs once per step)

@@ -301,7 +301,7 @@ return {
       A.ok(has(d, "setting:find:sharePosition"))
       A.no(has(d, "setting:comm:debug"), "no technical switch on Basics")
       A.no(has(d, "section:Essentials"))
-      A.ok(#d <= 26, "short: " .. #d .. " rows")
+      A.ok(#d <= 27, "short: " .. #d .. " rows") -- (27: How to use TwizCrew sits next to What's new)
       ns.Settings.setTab("advanced", "all")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "setting:comm:debug"), "Advanced has everything")

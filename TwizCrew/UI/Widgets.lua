@@ -1,5 +1,6 @@
--- Shared widgets: (i) button, toggle, slider, choice, text box, plain button, small menu, tag pill.
--- Every widget takes an info text and builds its own (i) button. Every script runs inside ns.Log.safe.
+-- Shared widgets: (i) button, mouse-over tips (tip, addTip, helpTip), toggle, slider, choice, text box, plain button,
+-- small menu, tag pill. Every setting widget takes an info text and builds its own (i) button. Every script runs
+-- inside ns.Log.safe. The words of the tips live in UI/Help.lua.
 local _, ns = ...
 
 local Widgets = {}
@@ -33,6 +34,62 @@ local function showTip(owner, title, text)
     GameTooltip:AddLine(text, r, g, b, true)
   end
   GameTooltip:Show()
+end
+
+-- Shows a tip (gold title, plain text that wraps) on the game's tooltip, owned by `owner`. anchor: default
+-- "ANCHOR_RIGHT". Safe while GameTooltip is missing (tests, a broken UI).
+function Widgets.tip(owner, title, text, anchor)
+  if not GameTooltip then return end
+  if anchor and anchor ~= "ANCHOR_RIGHT" then
+    GameTooltip:SetOwner(owner, anchor)
+    GameTooltip:SetText(title or "", T.rgb(C.title))
+    if text and text ~= "" then
+      local r, g, b = T.rgb(C.text)
+      GameTooltip:AddLine(text, r, g, b, true)
+    end
+    GameTooltip:Show()
+    return
+  end
+  showTip(owner, title, text)
+end
+
+-- After a tip: the pinned (i) tip comes back, else the tooltip goes.
+local function leaveTip()
+  if pinned then showTip(pinned, pinned.title, pinned.text) elseif GameTooltip then GameTooltip:Hide() end
+end
+Widgets.leaveTip = leaveTip
+
+-- Puts a mouse-over tip on a frame: OnEnter shows it, OnLeave hides it (both run inside ns.Log.safe under featureId).
+-- textOrFn: the text, or a function(frame) -> text worked out at each hover; title may be a function too (nil or ""
+-- from it: no tip this time). A frame that already has an OnEnter keeps it: the tip is hooked after it instead.
+function Widgets.addTip(frame, title, textOrFn, featureId, anchor)
+  if not frame or not frame.SetScript then return frame end
+  if frame.EnableMouse then frame:EnableMouse(true) end -- a plain frame (a heading, a hover area) must see the mouse
+  local function enter(self)
+    local t = type(title) == "function" and title(self) or title
+    local x = textOrFn
+    if type(x) == "function" then x = x(self) end
+    if t == nil or t == "" then return end
+    Widgets.tip(self, t, x, anchor)
+  end
+  local id = featureId or FEATURE
+  if frame.GetScript and frame:GetScript("OnEnter") and frame.HookScript then
+    frame:HookScript("OnEnter", function(...) ns.Log.safe(id, enter, ...) end)
+    frame:HookScript("OnLeave", function() ns.Log.safe(id, leaveTip) end)
+  else
+    script(frame, "OnEnter", enter, id)
+    script(frame, "OnLeave", leaveTip, id)
+  end
+  return frame
+end
+
+-- addTip with the words of ns.Help.TIPS[key] (a missing key: no tip). Or tip = { title, text } given directly.
+function Widgets.helpTip(frame, key, featureId, anchor)
+  local title, text
+  if type(key) == "table" then title, text = key[1], key[2]
+  elseif ns.Help then title, text = ns.Help.tip(key) end
+  if not title then return frame end
+  return Widgets.addTip(frame, title, text, featureId, anchor)
 end
 
 local function tipIsFor(owner)
@@ -181,6 +238,7 @@ function Widgets.choice(parent, label, info, choices, get, set)
   b:SetPoint("RIGHT", f, "RIGHT", 0, 0)
   boxed(b)
   if b.RegisterForClicks then b:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
+  Widgets.helpTip(b, "choice")
   local text = T.text(b, T.FONT.small, C.text)
   text:SetPoint("CENTER", b, "CENTER", 0, 0)
   f.control = b
@@ -280,8 +338,9 @@ function Widgets.lines(parent, label, info, getLines)
 end
 
 ---------------------------------------------------------------------------------------------------------- button
--- A plain button with a label. kind "danger" is the red one (reset).
-function Widgets.button(parent, label, onClick, kind, featureId)
+-- A plain button with a label. kind "danger" is the red one (reset). tip (optional): a ns.Help.TIPS key or
+-- { title, text }: a mouse-over tip.
+function Widgets.button(parent, label, onClick, kind, featureId, tip)
   local b = T.frame("Button", nil, parent)
   if kind == "danger" then boxed(b, C.danger, C.dangerBorder) else boxed(b) end
   b.text = T.text(b, T.FONT.small, C.white)
@@ -294,6 +353,7 @@ function Widgets.button(parent, label, onClick, kind, featureId)
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
   script(b, "OnClick", function() onClick() end, featureId)
+  if tip then Widgets.helpTip(b, tip, featureId) end
   return b
 end
 

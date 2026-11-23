@@ -166,7 +166,7 @@ local function build()
   -- the vote card: its title, up to 8 buttons in two columns, "N of M voted" and the presenter's Skip
   voteTitle = centered(T.text(frame, T.FONT.normal, GOLD), -34)
   for i = 1, MAX_BUTTONS do
-    local b = Widgets.button(frame, "", function() Show.vote(onButton[i]) end, nil, FEATURE)
+    local b = Widgets.button(frame, "", function() Show.vote(onButton[i]) end, nil, FEATURE, "vote")
     b:SetSize(BUTTON_W, BUTTON_H)
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
     b:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD + col * (BUTTON_W + BUTTON_GAP), -60 - row * (BUTTON_H + 4))
@@ -174,7 +174,7 @@ local function build()
     buttons[i] = b
   end
   voteLine = centered(T.text(frame, T.FONT.small, C.text), -180)
-  skipButton = Widgets.button(frame, "Skip", function() Show.skipVote() end, nil, FEATURE)
+  skipButton = Widgets.button(frame, "Skip", function() Show.skipVote() end, nil, FEATURE, "skip")
   skipButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, 8)
   skipButton:Hide()
 

@@ -81,6 +81,7 @@ local function dayTip(self)
   if j then GameTooltip:AddLine(Calendar.whoAtText(j), 1, 0.85, 0.4, true) end
   if e then GameTooltip:AddLine("Click for " .. ns.Util.safeText(e.name) .. "'s usual times", 0.6, 0.6, 0.6) end
   GameTooltip:AddLine("Right-click to add a note at that time", 0.6, 0.6, 0.6)
+  if P.dayPane.nowLine:IsShown() then GameTooltip:AddLine(ns.Help.LINES.calNow, 0.6, 0.6, 0.6) end
   GameTooltip:Show()
 end
 
@@ -104,7 +105,8 @@ local function buildDay()
   P.dayPane = CreateFrame("Frame", nil, P.frame)
   P.dayPane:SetPoint("TOPLEFT", P.frame, "TOPLEFT", PAD, -TOP)
   P.dayPane:SetSize(WIDTH - 2 * PAD, HEIGHT - TOP - PAD)
-  local back = Widgets.button(P.dayPane, "Back to the month", function() Calendar.show("month") end, nil, FEATURE)
+  local back = Widgets.button(P.dayPane, "Back to the month", function() Calendar.show("month") end, nil, FEATURE,
+    "calBack")
   back:SetPoint("TOPLEFT", P.dayPane, "TOPLEFT", 0, 0)
   local prev = arrowButton(P.dayPane, PREV_TEX, function() Calendar.openDay(P.shownDay - 1) end)
   prev:SetPoint("LEFT", back, "RIGHT", 8, 0)
@@ -112,7 +114,8 @@ local function buildDay()
   nxt:SetPoint("LEFT", prev, "RIGHT", 2, 0)
   P.dayPane.label = T.readable(T.text(P.dayPane, T.FONT.normal, C.title), 2)
   P.dayPane.label:SetPoint("LEFT", nxt, "RIGHT", 10, 0)
-  local weekGrid = Widgets.button(P.dayPane, "This week as a grid", function() Calendar.showWeek(P.shownDay) end, nil, FEATURE)
+  local weekGrid = Widgets.button(P.dayPane, "This week as a grid", function() Calendar.showWeek(P.shownDay) end, nil,
+    FEATURE, "calWeekGrid")
   weekGrid:SetPoint("TOPRIGHT", P.dayPane, "TOPRIGHT", 0, 0)
   -- the hour axis
   for h = 0, 24, 3 do

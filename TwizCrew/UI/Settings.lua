@@ -47,12 +47,13 @@ local BASICS = {
   { id = "popups", key = "online" },
   { id = "minimap", key = "show" },
   { id = "panel", key = "whatsNew" },
+  { id = "panel", key = "about" },
   { title = "Find the crew", note = "arrows to your group and meet-ups" },
   { id = "find", key = "rowArrows" },
   { id = "find", key = "meetups" },
   { id = "find", key = "sharePosition" },
 }
-local TABS = { { id = "basic", label = "Basics" }, { id = "advanced", label = "Advanced" } }
+local TABS = { { id = "basic", label = "Basics", tip = "setBasics" }, { id = "advanced", label = "Advanced", tip = "setAdvanced" } }
 
 -- Pictures next to module names and common options (where a picture says it faster than words).
 local MODULE_ICONS = {
@@ -74,6 +75,7 @@ local SETTING_ICONS = {
   ["panel:hideInCombat"] = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
   ["panel:showQuest"] = "Interface\\Icons\\INV_Misc_Note_02", ["panel:questRequests"] = "Interface\\Icons\\Spell_ChargePositive",
   ["panel:showXP"] = "Interface\\Icons\\Spell_Holy_PowerInfusion", ["panel:whatsNew"] = "Interface\\Icons\\INV_Misc_Book_09",
+  ["panel:about"] = "Interface\\Icons\\INV_Misc_QuestionMark",
   ["tags:autoAway"] = "AFK_TAG", ["roasts:editMocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
   ["roasts:cheers"] = "Interface\\Icons\\INV_Misc_Gift_01", ["roasts:mocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
   ["popups:online"] = "Interface\\Icons\\Ability_Warrior_BattleShout", ["popups:death"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
@@ -495,6 +497,7 @@ local function build()
     hl:SetAllPoints(b)
     T.color(hl, C.white, 0.06)
     script(b, "OnClick", function() Win.setTab(t.id) end)
+    Widgets.helpTip(b, t.tip, FEATURE, "ANCHOR_TOP")
     tabButtons[t.id] = b
     x = x + 94
   end
@@ -537,7 +540,7 @@ local function build()
   closeButton = Widgets.button(frame, "Close", function() Win.close() end, nil, FEATURE)
   closeButton:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 10)
   resetButton = Widgets.button(frame, "Reset everything to defaults", function() Win.confirmReset() end, "danger",
-    FEATURE)
+    FEATURE, "setReset")
   resetButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -PAD, 10)
 
   confirmBox = T.frame("Frame", nil, frame)

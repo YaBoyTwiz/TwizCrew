@@ -20,7 +20,8 @@ local iconTexture, arrowButton = P.iconTexture, P.arrowButton
 -- local time and date (what their computer's clock says, not the server's).
 local maker
 local mk = { day = 0, minutes = nil, kind = "note", dungeon = nil, icon = 1, edit = nil } -- edit: a note's key
-local KINDS = { { id = "note", label = "Note" }, { id = "dungeon", label = "Dungeon" }, { id = "raid", label = "Raid" } }
+local KINDS = { { id = "note", label = "Note", tip = "makerNote" }, { id = "dungeon", label = "Dungeon", tip = "makerDungeon" },
+  { id = "raid", label = "Raid", tip = "makerRaid" } }
 
 -- A dungeon's small icon for menus: the game's group finder icon when this game version has it, else a sword
 -- (dungeon) or a dragon head (raid).
@@ -161,8 +162,8 @@ drawMaker = function()
   end
 end
 
-local function smallButton(parent, label, w, onClick)
-  local b = Widgets.button(parent, label, onClick, nil, FEATURE)
+local function smallButton(parent, label, w, onClick, tip)
+  local b = Widgets.button(parent, label, onClick, nil, FEATURE, tip)
   b:SetSize(w, 22)
   b.fill = b:CreateTexture(nil, "BACKGROUND", nil, 1)
   b.fill:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
@@ -243,6 +244,9 @@ local function buildMaker()
     box:EnableMouse(true)
     if box.EnableMouseWheel then box:EnableMouseWheel(true) end
     script(box, "OnMouseWheel", function(_, delta) Calendar.stepTime(what, delta > 0 and 1 or -1) end)
+    Widgets.helpTip(box, "makerTime", FEATURE, "ANCHOR_TOP")
+    maker.timeBoxes = maker.timeBoxes or {}
+    maker.timeBoxes[what] = box
     local up = stepButton(maker.timeBox, ARROW_UP, function() Calendar.stepTime(what, 1) end)
     up:SetPoint("BOTTOMLEFT", box, "RIGHT", 2, 1)
     local down = stepButton(maker.timeBox, ARROW_DOWN, function() Calendar.stepTime(what, -1) end)
@@ -256,7 +260,7 @@ local function buildMaker()
   maker.minText = number(78, "minute")
   maker.ampm = smallButton(maker, "PM", 50, function() Calendar.stepTime("ampm", 0) end)
   maker.ampm:SetPoint("LEFT", maker.timeBox, "LEFT", 150, 0)
-  maker.noTime = smallButton(maker, "No time", 80, function() mk.minutes = nil; drawMaker() end)
+  maker.noTime = smallButton(maker, "No time", 80, function() mk.minutes = nil; drawMaker() end, "makerNoTime")
   maker.noTime:SetPoint("LEFT", maker.ampm, "RIGHT", 6, 0)
   maker.zone = T.text(maker, T.FONT.small, C.muted)
   maker.zone:SetPoint("TOPLEFT", maker, "TOPLEFT", X, -122)
@@ -273,7 +277,7 @@ local function buildMaker()
       if k.id == "note" then mk.dungeon = nil
       elseif mk.dungeon and ((ns.Notes.dungeon(mk.dungeon).raid == true) ~= (k.id == "raid")) then mk.dungeon = nil end
       drawMaker()
-    end)
+    end, k.tip)
     b:SetPoint("TOPLEFT", maker, "TOPLEFT", kx, -148)
     maker.kinds[k.id] = b
     kx = kx + 84
@@ -315,6 +319,7 @@ local function buildMaker()
     hl:SetAllPoints(r)
     T.color(hl, C.white, 0.1)
     script(r, "OnClick", function(self) if self.tcItem then self.tcItem.onClick() end end)
+    Widgets.helpTip(r, "makerLevels", FEATURE) -- what the colour of the level range means
     if r.EnableMouseWheel then r:EnableMouseWheel(true) end
     script(r, "OnMouseWheel", function(_, delta) Calendar.scrollList(delta > 0 and -1 or 1) end)
     maker.rows[i] = r

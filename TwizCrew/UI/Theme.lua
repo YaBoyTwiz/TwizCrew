@@ -158,6 +158,12 @@ function Theme.paint(frame, bgHex, alpha, borderHex, edge)
 end
 
 function Theme.setBackgroundAlpha(frame, alpha)
+  local skin = rawget(frame, "tcSkin")
+  if skin then -- a themed frame (UI/Skin.lua)
+    skin.alpha = alpha
+    if Theme.skinAlpha then Theme.skinAlpha(frame, skin) end
+    return
+  end
   local p = frame.tcPaint
   if not p then return end
   if p.backdrop then
@@ -171,5 +177,146 @@ end
 function Theme.text(parent, font, hex, layer)
   local fs = parent:CreateFontString(nil, layer or "OVERLAY", font or Theme.FONT.normal)
   if hex then Theme.textColor(fs, hex) end
+  return fs
+end
+
+---------------------------------------------------------------------------------------------------------- themes
+-- Three looks (owner, 2026-11-23): Classic (game art only), Crowned crew (the default) and Tavern night. The values
+-- are data in UI/Themes.lua; the drawing is in UI/Skin.lua. The choice is the panel setting `theme`; a theme whose
+-- art does not load is drawn as Classic (the choice stays saved).
+Theme.ART = "Interface\\AddOns\\TwizCrew\\Art\\"
+Theme.DEFAULT = "crowned"
+Theme.ORDER = { "classic", "crowned", "tavern" }
+Theme.THEMES = {} -- filled by UI/Themes.lua
+Theme.MORPHEUS = "Fonts\\MORPHEUS.ttf"
+
+-- Our art files are TGAs stored bottom row first. If the game shows them upside down, set FLIP_ART to true: every
+-- texcoord on our own art (frames, tab skins, emblems, the icon atlas) goes through Theme.flipV, and nothing else
+-- needs to change.
+Theme.FLIP_ART = false
+function Theme.flipV(top, bottom)
+  if Theme.FLIP_ART then return 1 - top, 1 - bottom end
+  return top, bottom
+end
+
+-- SetTexture that never raises. Returns "loaded" (the game said true), "failed" (false, or an error) or "unknown"
+-- (no answer: older clients return nothing, so no answer is not a failure).
+function Theme.setTexture(tex, path, ...)
+  if type(tex) ~= "table" or type(tex.SetTexture) ~= "function" then return "failed" end
+  local ok, r = pcall(tex.SetTexture, tex, path, ...)
+  if not ok or r == false then return "failed" end
+  if r == true then return "loaded" end
+  return "unknown"
+end
+
+-- Texcoords that never raise.
+function Theme.setCoords(tex, l, r, t, b)
+  if type(tex) == "table" and type(tex.SetTexCoord) == "function" then pcall(tex.SetTexCoord, tex, l, r, t, b) end
+end
+
+-- Does a file load? Asked once per path with a hidden texture; "loaded", "failed" or "unknown".
+local probes = {}
+local probeFrame
+function Theme.probe(path)
+  local known = probes[path]
+  if known then return known end
+  local result = "unknown"
+  pcall(function()
+    if type(CreateFrame) ~= "function" then return end
+    probeFrame = probeFrame or CreateFrame("Frame", nil, UIParent)
+    probeFrame:Hide()
+    result = Theme.setTexture(probeFrame:CreateTexture(nil, "BACKGROUND"), path)
+  end)
+  probes[path] = result
+  return result
+end
+function Theme.forgetProbesForTest() probes = {} end
+
+-- The theme the player chose (always a known id).
+function Theme.chosen()
+  local id = ns.Modules and ns.Modules.setting("panel", "theme")
+  if type(id) ~= "string" or not Theme.THEMES[id] then id = Theme.DEFAULT end
+  return id
+end
+
+-- true (loaded), false (failed) or nil (no answer, or the theme needs no file).
+function Theme.artLoaded(id)
+  local t = Theme.THEMES[id]
+  if not t or not t.probe then return nil end
+  local p = Theme.probe(t.probe)
+  if p == "failed" then return false elseif p == "loaded" then return true end
+  return nil
+end
+
+local warnedArt = {}
+-- The theme drawn for `id` (default: the chosen one): itself, or Classic when its art failed to load.
+function Theme.drawnId(id)
+  id = (type(id) == "string" and Theme.THEMES[id]) and id or Theme.chosen()
+  if Theme.artLoaded(id) == false then
+    if not warnedArt[id] then
+      warnedArt[id] = true
+      if ns.Log then ns.Log.add("warn", "theme art missing, using Classic (%s)", id) end
+    end
+    return "classic"
+  end
+  return id
+end
+function Theme.active(id) return Theme.THEMES[Theme.drawnId(id)] end
+
+-- One line for /tc report: which theme is drawn and whether its art and the icons loaded.
+function Theme.reportLine()
+  local chosen, drawn = Theme.chosen(), Theme.drawnId()
+  local function name(id) return (Theme.THEMES[id] and Theme.THEMES[id].name) or tostring(id) end
+  local function state(path)
+    local p = Theme.probe(path)
+    return p == "failed" and "missing" or p == "loaded" and "loaded" or "loaded (the game gave no answer)"
+  end
+  local t = Theme.THEMES[chosen]
+  local art = t.probe and ("art " .. state(t.probe)) or "no art files needed"
+  local icons = ns.Icons and ns.Icons.ATLAS and ("icons " .. state(ns.Icons.ATLAS)) or "icons not built"
+  local line = "Theme: " .. name(chosen) .. ", drawn " .. name(drawn) .. "; " .. art .. "; " .. icons
+  if drawn ~= chosen then line = line .. " (using Classic until the art loads)" end
+  return line
+end
+
+-- Text styles that a theme sets (colour, font, outline, shadow, upper case): Theme.ink(fontString, role[, words]).
+-- The role's values come from the drawn theme's `ink` table (or the fixed theme of fs.tcThemeId, the settings
+-- previews); a theme change repaints every inked text. words: the text, kept for themes that write it in capitals.
+local inked = setmetatable({}, { __mode = "k" })
+Theme.inked = inked
+
+function Theme.paintInk(fs)
+  local id = rawget(fs, "tcThemeId")
+  local t = Theme.active(id)
+  local r = t and t.ink and t.ink[fs.tcRole]
+  if not r then return end
+  local base = fs.tcBaseFont
+  if base and fs.SetFont then
+    local size = r.size or (base[2] + (r.grow or 0))
+    local flags = r.flags or base[3]
+    local ok, done = pcall(fs.SetFont, fs, r.font or base[1], size, flags)
+    if r.font and (not ok or done == false) then pcall(fs.SetFont, fs, base[1], size, flags) end
+  end
+  if r.color and fs.SetTextColor then fs:SetTextColor(r.color[1], r.color[2], r.color[3], r.color[4] or 1) end
+  if r.shadow then
+    local s = r.shadow
+    if fs.SetShadowColor then fs:SetShadowColor(s[1], s[2], s[3], s[4]) end
+    if fs.SetShadowOffset then fs:SetShadowOffset(s[5] or 0, s[6] or 0) end
+  end
+  local words = rawget(fs, "tcWords")
+  if type(words) == "string" and fs.SetText then fs:SetText(r.upper and words:upper() or words) end
+end
+
+function Theme.ink(fs, role, words)
+  if type(fs) ~= "table" then return fs end
+  fs.tcRole = role
+  if words ~= nil then fs.tcWords = words end
+  if rawget(fs, "tcBaseFont") == nil then
+    local ok, path, size, flags = pcall(function() return fs:GetFont() end)
+    fs.tcBaseFont = (ok and type(path) == "string" and type(size) == "number" and size > 0)
+      and { path, size, flags or "" } or false
+  end
+  inked[fs] = true
+  Theme.paintInk(fs)
   return fs
 end

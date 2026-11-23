@@ -342,7 +342,7 @@ end
 -- { title, text }: a mouse-over tip.
 function Widgets.button(parent, label, onClick, kind, featureId, tip)
   local b = T.frame("Button", nil, parent)
-  if kind == "danger" then boxed(b, C.danger, C.dangerBorder) else boxed(b) end
+  if kind == "danger" then boxed(b, C.danger, C.dangerBorder) end -- (the red one keeps its own look)
   b.text = T.text(b, T.FONT.small, C.white)
   b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
   b.text:SetText(label or "")
@@ -352,6 +352,8 @@ function Widgets.button(parent, label, onClick, kind, featureId, tip)
   local hl = b:CreateTexture(nil, "HIGHLIGHT")
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
+  b.hl = hl
+  if kind ~= "danger" then T.skinButton(b) end -- the theme's button (UI/Skin.lua)
   script(b, "OnClick", function() onClick() end, featureId)
   if tip then Widgets.helpTip(b, tip, featureId) end
   return b
@@ -381,7 +383,7 @@ local function buildMenu()
   if menu.SetToplevel then menu:SetToplevel(true) end
   if menu.SetClampedToScreen then menu:SetClampedToScreen(true) end
   menu:EnableMouse(true)
-  T.paint(menu, C.backdrop, 0.95, C.border, 2)
+  T.skin(menu, "menu", { alpha = 0.95 }) -- the theme's frame (UI/Skin.lua)
   menu:Hide()
   script(menu, "OnHide", function() catcher:Hide() end)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewMenu") end -- Escape closes it

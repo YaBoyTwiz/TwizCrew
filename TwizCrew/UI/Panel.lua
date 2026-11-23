@@ -31,6 +31,7 @@ local C = T.COLOR
 local ROW_WIDTH = { full = 230, compact = 200, tiny = 160 }
 local HEADER_HEIGHT, PAD, GAP, LINE = 24, 8, 10, 15
 local TAB_HEIGHT, BOARD_WIDTH = 18, 320
+local TAB_ICON = 14     -- the icon left of a tab's words (Crew, Hall of Shame, Activity, Calendar)
 local OFF_HEIGHT = 20    -- the "Guild online (N)" and "Offline (N)" bars
 local HEAD_HEIGHT = 14   -- the thin "My party" / "Pinned" headings
 local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
@@ -183,17 +184,26 @@ local function syncCalPulse(on)
   end
 end
 
-local function setWords(b, words)
-  if b.words == words then return end
-  b.words = words
+-- words on a tab button; withIcon: its icon shows left of the words (it takes TAB_ICON + 2 more)
+local function setWords(b, words, withIcon)
+  withIcon = (withIcon ~= false) and rawget(b, "tcIconOn") and true or false
+  if b.words == words and b.tcIconShown == withIcon then return end
+  b.words, b.tcIconShown = words, withIcon
   b.label:SetText(words)
   local w = b.label:GetStringWidth()
   if type(w) ~= "number" or w <= 0 then w = #words * 6 end
-  b:SetWidth(w + 10)
+  local icon = rawget(b, "icon")
+  if icon then
+    b.label:ClearAllPoints()
+    b.label:SetPoint("CENTER", b, "CENTER", withIcon and (TAB_ICON + 2) / 2 or 0, 0)
+    if withIcon then icon:Show() else icon:Hide() end
+  end
+  b:SetWidth(w + 10 + (withIcon and (TAB_ICON + 2) or 0))
 end
 
 -- The words on the bar, from the longest: the first step that fits the panel's width (narrow row styles take the
 -- short words; the "?" goes before "Hall of Shame" is shortened).
+-- With icons the words are tried first with them; when no step fits, again without the icons.
 local TAB_STEPS = {
   { shame = "Hall of Shame", act = "Activity", cal = "Calendar", help = true },
   { shame = "Hall of Shame", act = "Activity", cal = "Cal", help = true },
@@ -213,17 +223,24 @@ local function drawTabs(width)
   local stats, cal, act = statsOn(), calOn(), actOn()
   local count = P.actUnseen > 0 and (" (" .. math.min(P.actUnseen, 99) .. ")") or ""
   local help = true
-  for i, st in ipairs(TAB_STEPS) do
-    setWords(shameTab, st.shame)
-    setWords(actTab, st.act .. count)
-    setWords(calTab, st.cal)
-    local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
-      + (act and (actTab:GetWidth() + 4) or 0) + (cal and (calTab:GetWidth() + 4) or 0)
-    local fits = used + (st.help and helpTab:GetWidth() or 0) <= width
-    if fits or i == #TAB_STEPS then
-      help = st.help and fits
-      break
+  local tries = rawget(crewTab, "tcIconOn") and { true, false } or { false }
+  for n, withIcons in ipairs(tries) do
+    local done = false
+    setWords(crewTab, "Crew", withIcons)
+    for i, st in ipairs(TAB_STEPS) do
+      setWords(shameTab, st.shame, withIcons)
+      setWords(actTab, st.act .. count, withIcons)
+      setWords(calTab, st.cal, withIcons)
+      local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
+        + (act and (actTab:GetWidth() + 4) or 0) + (cal and (calTab:GetWidth() + 4) or 0)
+      local fits = used + (st.help and helpTab:GetWidth() or 0) <= width
+      if fits or (i == #TAB_STEPS and n == #tries) then
+        help = st.help and fits
+        done = true
+        break
+      end
     end
+    if done then break end
   end
   crewTab:SetActive(tab == "crew")
   local last = crewTab
@@ -241,7 +258,8 @@ local function drawTabs(width)
   chain(calTab, cal)
   if cal then
     local fresh = calFresh()
-    T.textColor(calTab.label, fresh and C.text or C.muted)
+    calTab.tcHot = fresh or nil -- the label lights up while the calendar has something new
+    calTab:SetActive(false)
     syncCalPulse(fresh)
   else
     stopCalPulse()
@@ -779,7 +797,9 @@ local function build()
   if P.root.SetDontSavePosition then P.root:SetDontSavePosition(true) end -- the position lives in our saved data
   if P.root.SetClampedToScreen then P.root:SetClampedToScreen(true) end
   P.root:SetSize(ROW_WIDTH.full + 2 * PAD, HEADER_HEIGHT + 2 * PAD)
-  T.paint(P.root, C.backdrop, clamp(setting("bgAlpha"), 0, 1, 0.8), C.border, 2)
+  -- the theme's frame (UI/Skin.lua): the title plate or band behind the header, the crew emblem on the bottom edge
+  T.skin(P.root, "panel", { alpha = clamp(setting("bgAlpha"), 0, 1, 0.8), plate = "panel", band = true,
+    emblem = "panel" })
   draggable(P.root)
   script(P.root, "OnHide", stopDrag)
   if P.root.EnableMouseWheel then P.root:EnableMouseWheel(true) end
@@ -816,6 +836,11 @@ local function build()
     f.text:SetPoint("LEFT", f, "LEFT", 2, 0)
     f.text:SetJustifyH("LEFT")
     f.text:SetText(words)
+    T.ink(f.text, "heading", words)
+    f.line = f:CreateTexture(nil, "ARTWORK") -- the theme's divider after the words
+    f.line:SetPoint("LEFT", f.text, "RIGHT", 6, 0)
+    f.line:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+    T.divider(f.line)
     draggable(f)
     Widgets.helpTip(f, HEAD_TIPS[words], FEATURE)
     f:Hide()
@@ -861,7 +886,17 @@ local function build()
     -- "?": the About window (How to use TwizCrew), after the Calendar button (or the last tab shown)
     helpTab = ns.Board.textButton(P.tabBar, "?", function() if ns.About then ns.About.toggle() end end, FEATURE,
       "about")
-    T.textColor(helpTab.label, C.title)
+    -- the theme's tab look, and the icons left of the words (the "?" gets none)
+    for id, b in pairs({ crew = crewTab, shame = shameTab, activity = actTab, calendar = calTab }) do
+      T.skinTab(b)
+      b.icon = b:CreateTexture(nil, "ARTWORK")
+      b.icon:SetSize(TAB_ICON, TAB_ICON)
+      b.icon:SetPoint("RIGHT", b.label, "LEFT", -2, 0)
+      b.tcIconOn = ns.Icons.set(b.icon, ns.Icons.tab(id)) == "atlas"
+      b.words = nil
+      setWords(b, b.label:GetText() or "")
+    end
+    T.skinTab(helpTab, "tabTextSel")
     P.tabBar:Hide()
   end
   P.root:Hide()
@@ -1111,6 +1146,7 @@ ns.Modules.register({
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
     showSelf = false, noticeScope = "close",
     keepOpen = false, peek = true, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
+    theme = "crowned",
     position = { point = "LEFT", x = 40, y = 100 },
   },
   settings = {
@@ -1184,6 +1220,9 @@ ns.Modules.register({
       onClick = function() if ns.About then ns.About.open() end end,
       info = "A short page about what TwizCrew does and how to use it. Also: the \"?\" next to the panel's tabs, "
         .. "the wrench menu, or /tc about." },
+    { key = "theme", label = "Theme", kind = "choice", picker = "theme",
+      choices = { { "classic", "Classic" }, { "crowned", "Crowned crew" }, { "tavern", "Tavern night" } },
+      info = select(2, ns.Help.tip("theme")) },
   },
   onEnable = onEnable,
   onDisable = onDisable,
@@ -1191,6 +1230,7 @@ ns.Modules.register({
     if P.root and key == "scale" then rescaleSavedPosition() end
     if P.root and LOOK_KEYS[key] then applyLook() end
     if key == "keepOpen" then Panel.keepOpenChanged() end
+    if key == "theme" then T.apply(); if P.enabled then requestRedraw() end end
     if (key == "tabSide" or key == "tabY") and P.root and not moving then applyPosition() end
     if key == "locked" and P.enabled then requestRedraw() end
   end,

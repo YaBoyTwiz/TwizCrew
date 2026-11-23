@@ -40,6 +40,7 @@ function Board.textButton(parent, label, onClick, featureId, tip)
   local hl = b:CreateTexture(nil, "HIGHLIGHT")
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
+  b.hl = hl -- (a themed tab bar re-draws it: Theme.skinTab)
   script(b, "OnClick", function() onClick() end, featureId)
   function b.SetActive(self, on) T.textColor(self.label, on and C.title or C.muted) end
   if tip then Widgets.helpTip(b, tip, featureId or FEATURE, "ANCHOR_TOP") end

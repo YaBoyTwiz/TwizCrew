@@ -25,6 +25,13 @@ local KIND_ICON = {
   online = "Interface\\Icons\\Ability_Warrior_BattleShout", qshare = "Interface\\Icons\\Spell_ChargePositive",
   runaway = "Interface\\Icons\\Ability_Rogue_Sprint",
 }
+-- A pop-up's picture: TwizCrew's own icon for its kind (UI/Icons.lua), else the game texture as before (trimmed).
+local function setIcon(f, name, path)
+  if name and ns.Icons.set(f.icon, name, path) == "atlas" then return end
+  T.setTexture(f.icon, path)
+  T.setCoords(f.icon, 0.08, 0.92, 0.08, 0.92)
+  f.icon:Show()
+end
 local LEVEL_UP_SOUND = 888 -- the game's own level-up sound (LEVELUPSOUND), when SOUNDKIT has no name for it
 
 local logic          -- PopupLogic instance (nil while the module is off)
@@ -126,7 +133,7 @@ local function newFrame()
   local f = T.frame("Button", nil, UIParent)
   f:SetSize(WIDTH, HEIGHT)
   f:SetFrameStrata("FULLSCREEN_DIALOG")
-  T.paint(f, C.backdrop, 0.92, C.rowBorder)
+  T.skin(f, "popup", { alpha = 0.92 }) -- the theme's pop-up (UI/Skin.lua); the coloured edge stays
   f.edge = f:CreateTexture(nil, "ARTWORK")
   f.edge:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
   f.edge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
@@ -135,11 +142,11 @@ local function newFrame()
   f.icon:SetSize(T.icon(28), T.icon(28))
   f.icon:SetPoint("LEFT", f, "LEFT", 10, 0)
   f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  f.title = T.text(f, T.FONT.normal, C.text)
+  f.title = T.ink(T.text(f, T.FONT.normal, C.text), "popTitle")
   f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 16 + T.icon(28), -8)
   f.title:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.title:SetJustifyH("LEFT")
-  f.sub = T.text(f, T.FONT.small, C.muted)
+  f.sub = T.ink(T.text(f, T.FONT.small, C.muted), "popSub")
   f.sub:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -3)
   f.sub:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.sub:SetJustifyH("LEFT")
@@ -234,7 +241,7 @@ local function show(p)
   f.tcText, f.tcSub = text, sub or false
   f.tcExpires = ns.now() + SECONDS + FADE
   T.color(f.edge, EDGE[p.kind] or EDGE.death, 1)
-  f.icon:SetTexture(KIND_ICON[p.kind] or KIND_ICON.death)
+  setIcon(f, ns.Icons.popup(p.kind), KIND_ICON[p.kind] or KIND_ICON.death)
   f.title:SetText(text)
   f.sub:SetText(sub or "")
   f:SetAlpha(1)
@@ -469,7 +476,7 @@ function Popups.showRoast(text, seconds)
   f.tcExpires = ns.now() + (tonumber(seconds) or ns.Config.ROAST_SECONDS) + FADE
   f:SetWidth(ROAST_WIDTH)
   T.color(f.edge, EDGE.roast, 1)
-  f.icon:SetTexture(KIND_ICON.roast)
+  setIcon(f, ns.Icons.popup("roast"), KIND_ICON.roast)
   f.title:SetText(text)
   f.sub:SetText("")
   f:SetAlpha(1)
@@ -490,7 +497,7 @@ function Popups.questRequest(name, title)
   f.tcExpires = ns.now() + QSHARE_SECONDS + FADE
   f:SetWidth(ROAST_WIDTH)
   T.color(f.edge, EDGE.qshare, 1)
-  f.icon:SetTexture(KIND_ICON.qshare)
+  setIcon(f, nil, KIND_ICON.qshare)
   f.title:SetText(f.tcText)
   f.sub:SetText(f.tcSub)
   f:SetAlpha(1)
@@ -504,7 +511,8 @@ end
 
 -- A notice from one of our own tools (e.g. a stolen crown): icon, title, the line under it, what a
 -- click does. Shows whether or not the pop-ups module is on, and closes itself after `seconds` (12).
-function Popups.notice(icon, title, sub, onClick, seconds)
+-- atlasIcon (optional): TwizCrew's own icon for it ("crown_stolen", "new_member"); `icon` is then the fallback.
+function Popups.notice(icon, title, sub, onClick, seconds, atlasIcon)
   if type(title) ~= "string" then return end
   local f = takeFrame()
   seq = seq + 1
@@ -514,7 +522,7 @@ function Popups.notice(icon, title, sub, onClick, seconds)
   f.tcExpires = ns.now() + (tonumber(seconds) or 12) + FADE
   f:SetWidth(ROAST_WIDTH)
   T.color(f.edge, EDGE.notice, 1)
-  f.icon:SetTexture(icon or KIND_ICON.levelup)
+  setIcon(f, atlasIcon, icon or KIND_ICON.levelup)
   f.title:SetText(title)
   f.sub:SetText(sub or "")
   f:SetAlpha(1)

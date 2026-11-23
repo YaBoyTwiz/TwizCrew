@@ -36,6 +36,9 @@ Layer\LayerSensor.lua
 Layer\Layer.lua
 UI\Help.lua
 UI\Theme.lua
+UI\Themes.lua
+UI\Icons.lua
+UI\Skin.lua
 UI\Widgets.lua
 UI\ClassIcon.lua
 UI\PanelLogic.lua

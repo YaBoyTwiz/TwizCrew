@@ -20,6 +20,7 @@ local PIN_SIZE = 16
 local PIN_ROOM = PIN_SIZE + 4 -- what a pin button takes from the corner texts
 local PIN_GREEN = "6fbf73"
 local PIN_STAR = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1" -- the yellow star
+local TITLE_ICON = 13 -- the crown or clown left of an award title
 local arrowTicker -- turns the visible row arrows between redraws (Find the crew)
 ---------------------------------------------------------------------------------------------------------- rows
 local function createRow()
@@ -41,18 +42,18 @@ local function createRow()
   r.mock = T.frame("Button", nil, r)
   r.mock:SetSize(54, 18)
   r.mock:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
-  T.paint(r.mock, "8a1c1c", 1, "000000", 1)
-  T.gloss(r.mock, nil, 0.25, "ARTWORK")
   r.mock.icon = r.mock:CreateTexture(nil, "OVERLAY")
   r.mock.icon:SetSize(T.icon(14), T.icon(14))
   r.mock.icon:SetPoint("LEFT", r.mock, "LEFT", 3, 0)
-  r.mock.icon:SetTexture(ns.Tags.ICON.DEAD)
+  ns.Icons.set(r.mock.icon, "mock", ns.Tags.ICON.DEAD)
   r.mock.text = T.readable(T.text(r.mock, T.FONT.small, C.white))
   r.mock.text:SetPoint("LEFT", r.mock.icon, "RIGHT", 2, 0)
   r.mock.text:SetText("Mock")
   local mockHl = r.mock:CreateTexture(nil, "HIGHLIGHT")
   mockHl:SetAllPoints(r.mock)
   T.color(mockHl, C.white, 0.15)
+  r.mock.hl = mockHl
+  T.skinButton(r.mock, "mock") -- the theme's button (UI/Skin.lua)
   script(r.mock, "OnClick", function(self) Panel.mock(self:GetParent()) end)
   script(r.mock, "OnEnter", function(self)
     local m = self:GetParent().tcModel
@@ -71,19 +72,18 @@ local function createRow()
   r.cheer = T.frame("Button", nil, r)
   r.cheer:SetSize(66, 18)
   r.cheer:SetFrameLevel((r:GetFrameLevel() or 1) + 5)
-  T.paint(r.cheer, "1f7a2e", 1, "000000", 1)
-  T.gloss(r.cheer, nil, 0.25, "ARTWORK")
   r.cheer.icon = r.cheer:CreateTexture(nil, "OVERLAY")
   r.cheer.icon:SetSize(T.icon(14), T.icon(14))
   r.cheer.icon:SetPoint("LEFT", r.cheer, "LEFT", 3, 0)
-  r.cheer.icon:SetTexture("Interface\\Icons\\INV_Misc_Gift_01")
-  r.cheer.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  ns.Icons.set(r.cheer.icon, "congrats", "Interface\\Icons\\INV_Misc_Gift_01")
   r.cheer.text = T.readable(T.text(r.cheer, T.FONT.small, C.white))
   r.cheer.text:SetPoint("LEFT", r.cheer.icon, "RIGHT", 2, 0)
   r.cheer.text:SetText("Congrats")
   local cheerHl = r.cheer:CreateTexture(nil, "HIGHLIGHT")
   cheerHl:SetAllPoints(r.cheer)
   T.color(cheerHl, C.white, 0.15)
+  r.cheer.hl = cheerHl
+  T.skinButton(r.cheer, "congrats")
   script(r.cheer, "OnClick", function(self) Panel.cheer(self:GetParent()) end)
   script(r.cheer, "OnEnter", function(self)
     local m = self:GetParent().tcModel
@@ -149,6 +149,9 @@ local function createRow()
   r.zone = T.text(r, T.FONT.small, C.zone)
   r.status = T.text(r, T.FONT.small, C.status)
   r.title = T.text(r, T.FONT.small, C.muted)
+  r.titleIcon = r:CreateTexture(nil, "ARTWORK") -- a crown (or the clown) left of the award title
+  r.titleIcon:SetSize(TITLE_ICON, TITLE_ICON)
+  r.titleIcon:Hide()
   r.quest = T.text(r, T.FONT.small, C.status) -- the quest they're on, with a ! (or ? when ready to turn in)
   r.questIcon = r:CreateTexture(nil, "ARTWORK")
   r.questIcon:SetSize(T.icon(12), T.icon(12))
@@ -378,6 +381,12 @@ local function layoutRow(r, m, style, width)
   local y = 5 + icon + 2
   if m.title then -- award title: a small muted line under the name, in every row style
     local left = 6 + icon + 5
+    local clown = ns.ShowLogic and m.title == ns.ShowLogic.CLOWN_TITLE
+    if ns.Icons.set(r.titleIcon, clown and "clown" or "crown") == "atlas" then
+      r.titleIcon:ClearAllPoints()
+      r.titleIcon:SetPoint("TOPLEFT", r, "TOPLEFT", left, -(y - 2))
+      left = left + TITLE_ICON + 3
+    end
     r.title:ClearAllPoints()
     r.title:SetPoint("TOPLEFT", r, "TOPLEFT", left, -(y - 2))
     r.title:SetWidth(width - left - 8)
@@ -386,6 +395,7 @@ local function layoutRow(r, m, style, width)
     y = y + LINE
   else
     r.title:Hide()
+    r.titleIcon:Hide()
   end
   r.zone:Hide(); r.status:Hide(); r.xpBack:Hide(); r.xpFill:Hide(); r.xpText:Hide()
   r.quest:Hide(); r.questIcon:Hide(); r.share:Hide()
@@ -477,6 +487,10 @@ local function layoutRow(r, m, style, width)
   if mockOn then
     local back = m.mockBack and not dead
     r.mock.text:SetText(back and "Mock back" or "Mock")
+    if r.tcMockIcon ~= (back and "mock_back" or "mock") then
+      r.tcMockIcon = back and "mock_back" or "mock"
+      ns.Icons.set(r.mock.icon, r.tcMockIcon, ns.Tags.ICON.DEAD)
+    end
     r.mock:SetWidth(back and 80 or 54)
     r.mock:ClearAllPoints()
     r.mock:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)

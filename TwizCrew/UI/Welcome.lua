@@ -64,7 +64,7 @@ end
 local function popup(e)
   local title, sub = Logic.popupText(e.name or e.key, e.level, className(e.class))
   local name = e.name or e.key
-  ns.Popups.notice(I .. "INV_Misc_Gift_01", title, sub, function() sayHi(name) end, POPUP_SECONDS)
+  ns.Popups.notice(I .. "INV_Misc_Gift_01", title, sub, function() sayHi(name) end, POPUP_SECONDS, "new_member")
 end
 
 -- A guild list loaded: new members get a "Say hi" pop-up (WelcomeLogic.joins).
@@ -119,7 +119,7 @@ local function showStart()
   end
   buttons[#buttons + 1] = { label = "Close" }
   if not card then
-    card = ns.AwayCard.newCard("TwizCrewWelcomeCard", I .. "INV_Misc_Gift_01", "Welcome to TwizCrew", false, FEATURE)
+    card = ns.AwayCard.newCard("TwizCrewWelcomeCard", I .. "INV_Misc_Gift_01", "Welcome to TwizCrew", false, FEATURE, "online")
   end
   local id = G.id()
   card.fill(id and ("You are in " .. ns.Util.safeText(id) .. ".") or nil, lines, buttons)

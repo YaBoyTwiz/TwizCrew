@@ -82,7 +82,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   script(frame, "OnDragStart", function(self) self:StartMoving() end)
   script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.paint(frame, C.backdrop, 0.97, C.border, 2)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewMockEditor") end -- Escape
 
   local title = T.text(frame, T.FONT.normal, C.title)

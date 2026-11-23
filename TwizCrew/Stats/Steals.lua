@@ -141,7 +141,7 @@ function Steals.flush()
     sub = table.concat(parts, ", ")
   end
   lastTitle = title
-  ns.Popups.notice(first.def.icon, title, sub, function() openAt(first.def) end)
+  ns.Popups.notice(first.def.icon, title, sub, function() openAt(first.def) end, nil, "crown_stolen")
 end
 
 function Steals.lastShown() return lastTitle end

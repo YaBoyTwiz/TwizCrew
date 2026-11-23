@@ -174,8 +174,7 @@ local function build()
   if P.frame.RegisterForDrag then P.frame:RegisterForDrag("LeftButton") end
   script(P.frame, "OnDragStart", function(self) self:StartMoving() end)
   script(P.frame, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.paint(P.frame, C.backdrop, 0.97, C.border, 2)
-  T.gloss(P.frame, nil, 0.04, "BORDER")
+  T.skin(P.frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewCalendar") end
   script(P.frame, "OnHide", function() Calendar.shownFlag = false end)
   local logo = iconTexture(P.frame, ICON_CAL, 26)

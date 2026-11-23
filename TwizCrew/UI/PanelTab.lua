@@ -376,7 +376,7 @@ function P.buildTab()
   tab:SetMovable(true)
   if tab.SetDontSavePosition then tab:SetDontSavePosition(true) end
   if tab.SetClampedToScreen then tab:SetClampedToScreen(true) end
-  T.paint(tab, C.backdrop, 0.9, C.border, 2)
+  T.skin(tab, "tab", { alpha = 0.9 }) -- the theme's banner (UI/Skin.lua)
   tab.glow = tab:CreateTexture(nil, "ARTWORK")
   tab.glow:SetPoint("TOPLEFT", tab, "TOPLEFT", 2, -2)
   tab.glow:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -2, 2)
@@ -388,7 +388,9 @@ function P.buildTab()
   tab.label = T.readable(T.text(tab, T.FONT.small, C.title))
   tab.label:SetPoint("TOP", tab, "TOP", 0, -7)
   tab.label:SetText("C\nR\nE\nW")
+  T.ink(tab.label, "tuckLetters")
   tab.count = T.readable(T.text(tab, T.FONT.normal, C.text), 1)
+  T.ink(tab.count, "tuckCount")
   tab.count:SetPoint("BOTTOM", tab, "BOTTOM", 0, 8)
   -- the missed number (red: a click opens the panel on the Activity tab), the gold "!" of a waiting update, and the
   -- two marks
@@ -554,6 +556,7 @@ local function seeTick(now, snap)
   if idle < 1 then solid, soft = seeSolid(now) end
   if solid then lastSolidAt = now end
   seeTarget = Logic.seeTarget(idle, solid, lastSolidAt and now - lastSolidAt or nil, SEE_DELAY)
+  if P.root then T.setFaded(P.root, keepOpen() and seeTarget < 1) end -- (Tavern night darkens its oak; cached)
   if solid and not soft then snap = true end -- news, an open panel, a slide, a drag: solid at once, no rise
   if snap or seeCur == nil then applyAlpha(seeTarget); seeAt = nil; stopSeeFrame(); return end
   seeMove(now)

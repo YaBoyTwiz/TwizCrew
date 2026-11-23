@@ -186,6 +186,17 @@ local function build()
     icon:SetTexture(FALLBACK_ICON)
     ns.Log.add("warn", "minimap: icon %s is missing in this game, showing a question mark", ns.Config.MINIMAP_ICON)
   end
+  -- the theme's crew emblem replaces the icon (Crowned crew: the crest, Tavern night: the tankards; Classic keeps it)
+  T.track(icon, function(tex, theme)
+    local emblem = T.emblemFile(theme)
+    if emblem then
+      T.setTexture(tex, emblem)
+      T.setCoords(tex, 0, 1, T.flipV(0, 1))
+    else
+      T.setTexture(tex, iconMissing and FALLBACK_ICON or ns.Config.MINIMAP_ICON)
+      T.setCoords(tex, 0.08, 0.92, 0.08, 0.92)
+    end
+  end)
   texture("OVERLAY", "Interface\\Minimap\\MiniMap-TrackingBorder", 53, 0, 0)
   -- the update badge: a gold "!" at the icon's top-right, above the ring
   badge = T.text(button, "GameFontNormalLarge", C.title, "OVERLAY")

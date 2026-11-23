@@ -110,8 +110,13 @@ return {
       A.ok(f:IsShown())
       local paths = {}
       for _, t in ipairs(seen.textures) do paths[#paths + 1] = t.tcPath end
-      A.ok(hasLine(paths, ns.Config.MINIMAP_ICON), "the icon")
+      A.ok(hasLine(paths, "Interface\\AddOns\\TwizCrew\\Art\\CrownedCrew\\Crest.tga"),
+        "Crowned crew (the default theme): the crest instead of the icon")
       A.ok(hasLine(paths, "Interface\\Minimap\\MiniMap-TrackingBorder"), "the round border")
+      ns.Modules.set("panel", "theme", "classic")
+      paths = {}
+      for _, t in ipairs(seen.textures) do paths[#paths + 1] = t.tcPath end
+      A.ok(hasLine(paths, ns.Config.MINIMAP_ICON), "Classic: the icon")
       A.eq(#ns.Log.errors(5), 0)
     end,
 
@@ -437,6 +442,7 @@ return {
       local seen = record(W)
       W.state.missingTextures = { [ns.Config.MINIMAP_ICON] = true }
       boot(W)
+      ns.Modules.set("panel", "theme", "classic") -- (the other themes show their emblem instead)
       local paths = {}
       for _, t in ipairs(seen.textures) do paths[#paths + 1] = t.tcPath end
       A.ok(hasLine(paths, "Interface\\Icons\\INV_Misc_QuestionMark"))

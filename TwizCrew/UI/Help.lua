@@ -103,6 +103,8 @@ Help.TIPS = {
     "Every setting and the panel's place go back to the start (you are asked first). Stats, notes and friends stay." },
   setAbout = { "How to use TwizCrew", "A short page about what TwizCrew does and how to use it. Also /tc about." },
   choice = { "Next choice", "Click for the next choice. Right-click goes back one." },
+  theme = { "Theme", "How TwizCrew's windows look: Classic (the game's own look), Crowned crew or Tavern night. "
+    .. "Click a picture and it changes at once." },
   mockTry = { "Try it", "Shows this mock on yourself, only on your screen." },
   mockDelete = { "Delete", "Takes this mock off your list." },
 }

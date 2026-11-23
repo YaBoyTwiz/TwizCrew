@@ -465,7 +465,7 @@ local function buildWindow()
   if f.RegisterForDrag then f:RegisterForDrag("LeftButton") end
   Widgets.script(f, "OnDragStart", function(self) self:StartMoving() end, TOOLS)
   Widgets.script(f, "OnDragStop", function(self) self:StopMovingOrSizing() end, TOOLS)
-  T.paint(f, C.backdrop, 0.97, C.border, 2)
+  T.skin(f, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewTryItOut") end -- Escape
   local title = T.text(f, T.FONT.normal, C.title)
   title:SetPoint("TOPLEFT", f, "TOPLEFT", WIN_PAD, -12)

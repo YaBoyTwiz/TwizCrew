@@ -1329,6 +1329,8 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
     calendar_button_next_to_the_tabs = function(ns, A, W)
+      -- (the words alone: without the icon atlas the tabs carry no icons; the icons' room: test_tab.lua)
+      W.state.missingArt = { ["Interface\\AddOns\\TwizCrew\\Art\\Icons\\Icons.tga"] = true }
       start(ns, W)
       ns.Modules.set("panel", "keepOpen", true) -- (the button pulses only while the panel is on screen)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

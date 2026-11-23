@@ -97,7 +97,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   Widgets.script(frame, "OnDragStart", function(self) self:StartMoving() end, FEATURE)
   Widgets.script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end, FEATURE)
-  T.paint(frame, C.backdrop, 0.97, C.border, 2)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewRecent") end -- Escape closes it
   Widgets.script(frame, "OnHide", function() isOpen = false; stopTicker() end, FEATURE)
   if frame.EnableMouseWheel then frame:EnableMouseWheel(true) end

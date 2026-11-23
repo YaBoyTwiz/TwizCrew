@@ -1531,6 +1531,8 @@ return {
     end,
 
     the_tab_row_fits_in_every_row_style = function(ns, A, W)
+      -- the words alone (no icon atlas: the tabs carry no icons); with icons: tab_icons_count_in_the_fit below
+      W.state.missingArt = { ["Interface\\AddOns\\TwizCrew\\Art\\Icons\\Icons.tga"] = true }
       ready(W)
       ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
       local tabs = ns.Panel.tabButtonsForTest()

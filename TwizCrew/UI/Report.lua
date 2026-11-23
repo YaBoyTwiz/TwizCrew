@@ -161,6 +161,7 @@ function Report.lines()
   section("Stats", function() statsLines(add) end)
   section("Updates", function() add(ns.Updates.reportLine()) end)
   section("Minimap button", function() add(ns.MinimapButton.reportLine()) end)
+  section("Theme", function() add(ns.Theme.reportLine()) end)
   section("Test tools", function() add(ns.TestTools.reportLine()) end)
   section("Find the crew", function()
     local ok, findLine = ns.Log.safe("find", ns.Find.reportLine)
@@ -205,7 +206,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   Widgets.script(frame, "OnDragStart", function(self) self:StartMoving() end, FEATURE)
   Widgets.script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end, FEATURE)
-  T.paint(frame, C.backdrop, 0.97, C.border, 2)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewReport") end -- Escape
 
   local title = T.text(frame, T.FONT.normal, C.title)

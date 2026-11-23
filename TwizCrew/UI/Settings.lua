@@ -101,7 +101,7 @@ local SUBTABS = {
     { module = "panel" },
     { title = "Look" },
     { id = "panel", key = "scale" }, { id = "panel", key = "idleAlpha" }, { id = "panel", key = "bgAlpha" },
-    { id = "panel", key = "rowStyle" }, { id = "panel", key = "sort" },
+    { id = "panel", key = "rowStyle" }, { id = "panel", key = "sort" }, { id = "panel", key = "theme" },
     { title = "The tab" },
     { id = "panel", key = "keepOpen" }, { id = "panel", key = "peek" }, { id = "panel", key = "barHover" },
     { id = "panel", key = "locked" },
@@ -497,7 +497,7 @@ local function build()
     isOpen = false
     showConfirm(false)
   end)
-  T.paint(frame, C.backdrop, 0.97, C.border, 2)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewSettings") end -- Escape
 
   local title = T.text(frame, T.FONT.normal, C.title)

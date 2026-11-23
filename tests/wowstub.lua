@@ -160,8 +160,23 @@ local IMPL = {
   SetFocus = function(self) self._focus = true end,
   ClearFocus = function(self) self._focus = false end,
   HasFocus = function(self) return self._focus == true end,
-  SetTexture = function(self, t) self._texture = t end,
+  -- W.state.missingArt = true: TwizCrew's own art files (Interface\AddOns\TwizCrew\Art\...) fail to load like a
+  -- missing file (SetTexture returns false); a table { [path] = true } fails just those paths. Otherwise SetTexture
+  -- answers nothing, like older clients.
+  SetTexture = function(self, t)
+    local missing = self._W.state.missingArt
+    if type(t) == "string" and ((missing == true and t:find("AddOns\\TwizCrew\\Art\\", 1, true))
+      or (type(missing) == "table" and missing[t])) then
+      self._texture = nil
+      return false
+    end
+    self._texture = t
+  end,
   GetTexture = function(self) return self._texture end,
+  SetTexCoord = function(self, ...) self._coords = { ... } end,
+  SetVertexColor = function(self, r, g, b, a) self._vertex = { r, g, b, a } end,
+  SetBackdrop = function(self, bd) self._backdrop = bd end,
+  GetBackdrop = function(self) return self._backdrop end,
   SetVerticalScroll = function(self, v) self._vscroll = v end,
   GetVerticalScroll = function(self) return self._vscroll or 0 end,
   SetScrollChild = function(self, c) self._scrollChild = c end,
@@ -238,6 +253,7 @@ local function build(W)
     end
     local f = newObject(W, typ, name, parent, template)
     W.frames[#W.frames + 1] = f
+    if type(name) == "string" and name ~= "" then env[name] = f end -- (the game makes a named frame a global)
     return f
   end
   env.BackdropTemplateMixin = {}

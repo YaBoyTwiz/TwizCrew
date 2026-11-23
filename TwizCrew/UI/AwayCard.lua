@@ -37,7 +37,8 @@ local last       -- { sub, lines } of the card shown this session (the wrench me
 -- and buttons at the bottom. closeOnClick: a click anywhere on it closes it. Returns { frame, fill(sub, lines,
 -- buttons) }: lines { icon, text, onClick (a click on the row: runs it, then closes the card) }, buttons { label,
 -- onClick } (the card closes after).
-function AwayCard.newCard(name, icon, title, closeOnClick, featureId)
+-- atlasIcon: the card's logo in TwizCrew's icon set (Icons.CELLS; `icon` is the fallback).
+function AwayCard.newCard(name, icon, title, closeOnClick, featureId, atlasIcon)
   featureId = featureId or FEATURE
   local c = { rows = {}, buttons = {} }
   local frame = T.frame("Frame", name, UIParent)
@@ -47,18 +48,17 @@ function AwayCard.newCard(name, icon, title, closeOnClick, featureId)
   frame:SetFrameStrata("FULLSCREEN_DIALOG")
   frame:EnableMouse(true)
   if frame.SetClampedToScreen then frame:SetClampedToScreen(true) end
-  T.paint(frame, C.backdrop, 0.97, C.title, 2)
-  T.gloss(frame, nil, 0.05, "BORDER")
+  T.skin(frame, "card", { alpha = 0.97, plate = "card", emblem = "card" }) -- the theme's card (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, name) end
   local logo = frame:CreateTexture(nil, "ARTWORK")
   logo:SetSize(T.icon(26), T.icon(26))
   logo:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -10)
-  logo:SetTexture(icon)
-  logo:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  c.title = T.readable(T.text(frame, T.FONT.normal, C.title), 3)
+  ns.Icons.set(logo, atlasIcon, icon)
+  c.logo = logo
+  c.title = T.ink(T.readable(T.text(frame, T.FONT.normal, C.title), 3), "cardTitle")
   c.title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
   c.title:SetText(title)
-  c.sub = T.readable(T.text(frame, T.FONT.small, C.muted))
+  c.sub = T.ink(T.readable(T.text(frame, T.FONT.small, C.muted)), "cardMuted")
   c.sub:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -TOP + 4)
   c.sub:SetWidth(WIDTH - 2 * PAD)
   c.sub:SetJustifyH("LEFT")
@@ -100,7 +100,7 @@ function AwayCard.newCard(name, icon, title, closeOnClick, featureId)
       r:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(top + (i - 1) * ROW))
       r.icon:SetTexture(l.icon)
       r.text:SetText(l.text)
-      T.textColor(r.text, l.onClick and C.title or C.white)
+      T.ink(r.text, l.onClick and "cardLink" or "cardText")
       r.tcClick = l.onClick
       r:Show()
     end
@@ -230,7 +230,7 @@ local function work()
 end
 
 local function show(sub, lines)
-  if not card then card = AwayCard.newCard("TwizCrewAwayCard", I .. "INV_Misc_PocketWatch_01", "While you were away", true) end
+  if not card then card = AwayCard.newCard("TwizCrewAwayCard", I .. "INV_Misc_PocketWatch_01", "While you were away", true, nil, "card_away") end
   card.fill(sub, lines)
   last = { sub = sub, lines = lines }
 end

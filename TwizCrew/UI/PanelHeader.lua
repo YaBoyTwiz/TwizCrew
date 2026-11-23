@@ -15,6 +15,7 @@ local setting, keepOpen, openMenu, script, draggable = P.setting, P.keepOpen, P.
 local KEEP_HEIGHT = 20   -- the Keep open switch right under the header
 local UPDATE_HEIGHT = 17 -- the gold "Update available: vX" line under it
 local NEWS_HEIGHT = 18   -- the "New in vX!" line under it, only until the What's new window has been opened
+local NEWS_ICON, NEWS_ICON_GAP = 16, 4 -- the icon left of the news line while news is slid out
 
 local afkButton -- the "zzz" button in the header: go AFK / come back
 local toolsButton -- the wrench in the header: a menu of handy tools (spell ranks, ...)
@@ -29,6 +30,7 @@ local keepBar -- the Keep open switch: "Keep open: OFF" (dim) / "Keep open: ON" 
 local keepTextNow -- what it says now (test hook)
 local countButton -- a hover area over the count ("2 here · 9 online"): what the two numbers mean
 local rootHead
+local newsIcon -- the news's icon left of the news line (tab slid out)
 local barTextNow = ""  -- the text on the bar's count spot now (test hook)
 ---------------------------------------------------------------------------------------------------------- update
 -- "Update available: vX" or nil, worked out inside Remind me to update' own guard: an error there means "no line",
@@ -94,8 +96,18 @@ local function drawHeader(s, view, news)
     versionText:Hide()
     P.countText:ClearAllPoints()
     P.countText:SetPoint("RIGHT", rootHead, "RIGHT", -(PAD - 2), 0)
-    if noticeLine then P.countText:SetPoint("LEFT", titleText, "RIGHT", 8, 0) end
+    -- the news's icon left of its line (the atlas; none for layer news, or when the atlas did not load)
+    local icon = noticeLine and newsIcon and ns.Icons.news(notice.kind)
+    if icon and ns.Icons.set(newsIcon, icon) == "atlas" then
+      newsIcon:ClearAllPoints()
+      newsIcon:SetPoint("LEFT", titleText, "RIGHT", 8, 0)
+      P.countText:SetPoint("LEFT", newsIcon, "RIGHT", NEWS_ICON_GAP, 0)
+    else
+      if newsIcon then newsIcon:Hide() end
+      if noticeLine then P.countText:SetPoint("LEFT", titleText, "RIGHT", 8, 0) end
+    end
   else
+    if newsIcon then newsIcon:Hide() end
     -- the full header: take the first step that fits, measured with the buttons' real size
     local function used(st, c)
       local right = (PAD - 2) + (st.gear and (B + 4) or 0) + B + 6
@@ -135,7 +147,7 @@ local function drawHeader(s, view, news)
   end
   if P.countText.SetJustifyH then P.countText:SetJustifyH("RIGHT") end
   if P.countText.SetWordWrap then P.countText:SetWordWrap(false) end
-  T.textColor(P.countText, noticeLine and C.text or C.muted)
+  T.ink(P.countText, noticeLine and "news" or "count") -- (the theme's header colours)
   barTextNow = Logic.barText(noticeLine, count)
   P.countText:SetText(barTextNow)
   if noticeButton then
@@ -171,9 +183,7 @@ local function drawHeader(s, view, news)
   local kept = keepOpen()
   keepTextNow = Logic.keepSwitchText(kept, style)
   keepBar.text:SetText(keepTextNow)
-  T.textColor(keepBar.text, kept and C.title or C.muted)
-  keepBar.glow:SetAlpha(kept and 0.35 or 0.06)
-  keepBar.dot:SetAlpha(kept and 1 or 0.35)
+  T.setKeep(keepBar, kept) -- the theme's switch, lit while on (UI/Skin.lua)
   keepBar:ClearAllPoints()
   keepBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 2, -(top - 2))
   keepBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", -2, -(top - 2))
@@ -254,6 +264,10 @@ function P.buildHeader()
   titleText = title
   title:SetPoint("LEFT", grip, "RIGHT", 4, 0)
   title:SetText("TwizCrew")
+  T.ink(title, "title") -- the theme's title colour and font
+  newsIcon = head:CreateTexture(nil, "ARTWORK")
+  newsIcon:SetSize(NEWS_ICON, NEWS_ICON)
+  newsIcon:Hide()
   versionText = T.text(head, T.FONT.small, C.muted)
   versionText:SetPoint("LEFT", title, "RIGHT", 4, 0)
   -- click the title (or its version) for What's new; dragging it still moves the panel
@@ -368,7 +382,6 @@ function P.buildHeader()
   -- the Keep open switch: a wide button right under the header, lit while on (owner: "extremely easy and visible")
   keepBar = CreateFrame("Button", nil, P.root)
   keepBar:SetHeight(KEEP_HEIGHT)
-  T.paint(keepBar, C.row, 0.7, C.border, 1)
   keepBar.glow = keepBar:CreateTexture(nil, "ARTWORK")
   keepBar.glow:SetPoint("TOPLEFT", keepBar, "TOPLEFT", 1, -1)
   keepBar.glow:SetPoint("BOTTOMRIGHT", keepBar, "BOTTOMRIGHT", -1, 1)
@@ -383,6 +396,7 @@ function P.buildHeader()
   keepBar.dot:SetSize(T.icon(14), T.icon(14))
   keepBar.dot:SetPoint("RIGHT", keepBar.text, "LEFT", -4, 0)
   keepBar.dot:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  T.skinKeep(keepBar)
   script(keepBar, "OnClick", function() Panel.toggleKeepOpen() end)
   ns.Widgets.helpTip(keepBar, "keepOpen", "panel", "ANCHOR_TOP")
   keepBar:Hide()
@@ -458,4 +472,5 @@ end
 function Panel.keepSwitchForTest() return keepBar end
 function Panel.keepTextForTest() return keepTextNow end
 function Panel.noticeButtonForTest() return noticeButton end
+function Panel.newsIconForTest() return newsIcon end
 function Panel.countButtonForTest() return countButton end

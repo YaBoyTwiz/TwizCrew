@@ -565,6 +565,11 @@ local function build(W)
   st.mouseDown = {}
   fakes.IsMouselooking = function() return st.mouselook == true end
   fakes.IsMouseButtonDown = function(button) return st.mouseDown[button or "LeftButton"] == true end
+  -- the game's mouse focus: GetMouseFoci (newer clients: a list, st.mouseFoci) and GetMouseFocus (older clients: one
+  -- frame, st.mouseFocus); nil = the test did not say (the addon then goes by the mouse position alone). Both
+  -- hideable through st.missing ("GetMouseFoci", "GetMouseFocus").
+  fakes.GetMouseFoci = function() return st.mouseFoci end
+  fakes.GetMouseFocus = function() return st.mouseFocus end
   fakes.RollOnLoot = function() end -- hideable through st.missing
   fakes.GetLootRollItemLink = function() return nil end
 

@@ -1011,7 +1011,8 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
 3. **Turning the camera.** Hold the right (or left) mouse button and turn the camera so the cursor passes over the
    tab: the panel must not open. Let go with the cursor resting on the tab: it opens after the pause.
 4. **Fights and dungeons.** In a fight, rest the mouse on the tab: nothing. Click the tab: it opens; click again: it
-   closes and does not slide right back out while the mouse stays on the tab. Inside a dungeon or raid: the same
+   closes and does not slide right back out while the mouse stays on the tab. Out of a fight, rest the mouse so it
+   slides out and click at once: it stays out. Right-click the tab quickly: only the menu opens. Inside a dungeon or raid: the same
    (hover does nothing, a click works). News does not slide out during a fight; it is counted on the tab.
 5. **Right edge.** Drag the tab to the right edge of the screen. Rest the mouse on it: the panel slides out to the
    LEFT. Hover a row: its tooltip opens on the left of the row (toward the middle of the screen), not off the edge.
@@ -1030,8 +1031,9 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    minimap button's menu do the same.
 8. **The one-time note (an existing user).** On the first login of this version (you had TwizCrew before), about 10
    seconds after login (never during a fight: it waits): a pop-up "TwizCrew now tucks away into a small tab" and a
-   chat line "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything. Want it always open?
-   Click Keep open at the top of the panel." Clicking the pop-up slides the panel out. The tab sits on the side of
+   chat line "TwizCrew now tucks away into a small tab. Mouse over the tab, or click it, to see everything. Want it
+   always open? Click Keep open at the top of the panel." Inside a dungeon it waits until you are out. Clicking the
+   pop-up slides the panel out and it stays (about 6 seconds, or until your mouse has been on it and left). The tab sits on the side of
    the screen where your panel was, at about its height. Turning Keep open on puts the panel back exactly where it
    was. The note never comes again.
 9. **News and how long it stays.** With the panel tucked: **Friend comes online** slides out one row (the line
@@ -1048,14 +1050,19 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    red skull mark sits on the tab; on OTHER LAYER a portal mark. When a newer TwizCrew is out, a gold "!" sits on
    the tab. Is the tab readable ("C R E W" and the number)? Does anything on it overlap?
 11. **Scale and Hall of Shame.** Set Scale to 150%: the tab and the panel are bigger, and the slide still shows the
-   whole panel. Open the Hall of Shame tab on the slid-out panel: the panel grows wider (336) smoothly and nothing
+   whole panel. With Scale at 150%, drag the tab: it stays exactly where you drop it, it reaches the very top and
+   the very bottom of the screen, and changing Scale does not move it. Set Scale back to 100%. Open the Hall of Shame tab on the slid-out panel: the panel grows wider (336) smoothly and nothing
    is cut off on the far side.
 12. **Pop-ups.** By default pop-ups show as before AND the news slides out of the tab. Turn **Show news on the tab,
    not as pop-ups** on: online, death, level-up, layer and running-off pop-ups stop while the panel is tucked and
    news slides out; roasts, meet-ups, quest shares and the other notices still pop up. With Keep open on: pop-ups as
    always.
 13. **Hiding.** Hide during fights / in dungeons / when no crew is online hide the tab too. `/tc hide`: no tab;
-   `/tc show`: back.
+   `/tc show`: back. Turn **Hide during fights** on, click the tab so the panel is out, start a fight: all gone. When
+   the fight ends only the tab comes back (the panel does not slide out by itself).
+14. **Bags over the tab.** Open your bags so they cover the tab (move the tab if needed). Rest the mouse on the bags
+   where the tab is: the panel does not open. Close the bags with the mouse still there: it opens. If the panel
+   never opens by hover at all, tell Claude.
 
 ## What to send back
 

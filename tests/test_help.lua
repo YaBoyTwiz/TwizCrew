@@ -242,6 +242,7 @@ return {
     hall_of_shame_switch_tabs_and_wipe_line = function(ns, A, W)
       local tip = recordTip(W)
       start(ns, W)
+      ns.Modules.set("panel", "keepOpen", true) -- (the board is drawn only while the panel is on screen)
       ns.Panel.setTab("shame"); W:advance(1)
       local b = ns.Board.buttonsForTest()
       hover(b.session); A.eq(tip.lines[1], "This session")

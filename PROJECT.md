@@ -754,13 +754,16 @@ visible": a clearly labelled switch, not a small icon.
 - **Everything:** the mouse resting on the tab about 0.3 s, or a click, slides the whole panel out as it always looked
   (header, Keep open switch, tabs, sections, bars, Hall of Shame, Calendar button, "?", menus, tooltips). It slides
   back about 1 s after the mouse has left the tab, the panel and any menu opened from them. A click while it is out
-  closes it. Opening it counts what was missed as seen.
+  closes it, except a click within about 1 s of a hover-open: that keeps it out (as a click-open). A right-click
+  during the hover pause opens the menu alone (no hover-open until the mouse leaves the tab). Opening it counts what
+  was missed as seen and hides the tab's tooltip.
 - **News:** one row slides out (the news line in the title bar and that friend's row; a calendar note has no row),
   then back. Plain news stays the `peekSeconds` setting (5 s): came online, died, levelled up, other layer / back on
   my layer, ran off, a new calendar note (or an answer on mine). News whose row shows a button stays
-  `PanelLogic.REACT_SECONDS` (12): Congrats after a level-up, Mock after a death, **Mock back** on a mock or congrats
+  `PanelLogic.REACT_SECONDS` (12, or the `peekSeconds` setting when that is longer): Congrats after a level-up, Mock after a death, **Mock back** on a mock or congrats
   aimed at me (decided by `PanelLogic.newsReactable` from `Roasts.canCheer` / `canMock`, the same rules the row's
-  buttons use). With two or more waiting, plain news shortens to 3 s and reactable news to 5 s. The mouse on the row
+  buttons use). With two or more waiting, plain news shortens to 3 s and reactable news to the longer of 3 s and the
+  setting (5 s by default). The mouse on the row
   keeps it out; it goes 0.6 s after the mouse leaves. A right-click menu on it keeps it out. A click on the news line:
   congratulate (level-up), whisper (online), the calendar (a note), the big arrow (running off), the whole panel (a
   layer change), else the Recent list. Scope: exactly the old rules (`FeedLogic.inScope`, `Panel.noticeInScope`,
@@ -778,12 +781,16 @@ visible": a clearly labelled switch, not a small icon.
   open" / "Tuck away"), the tab's menu, the minimap button's menu and the setting.
 - **Pop-ups:** they show as before, and the news slides out of the tab too. "Show news on the tab, not as pop-ups"
   (`barInstead`, default off) stops the online, death, level-up, layer and running-off pop-ups while the panel is
-  tucked, the tab is on screen and news slides out.
-- Hide during fights / in dungeons / when no crew is online and `/tc hide` hide the tab too.
+  tucked, the tab is on screen and news slides out, never in a fight (nothing slides out then, so the pop-up shows).
+- Hide during fights / in dungeons / when no crew is online and `/tc hide` hide the tab too. Hiding closes a panel
+  that was out: it comes back as the tab.
 
 **Claude's calls (designer and builder; change any).** A 0.3 s pause before hover opens; no hover-open while
 `IsMouselooking()` or a mouse button is held (the pause starts again), in a fight (`InCombatLockdown`) or in a dungeon
-or raid; a click always works. No news slides out in a fight (a fight drops the waiting news; it is still counted), as
+or raid; a click always works. Hover (and the mouse keeping the panel out) also needs the game's mouse focus on the
+tab, the panel or one of their children (`GetMouseFoci()`, else `GetMouseFocus()`, else the mouse position alone), so
+bags or action bars lying over the tab do not open it. The Hall of Shame is not drawn while the panel is tucked and
+closed; it is drawn when the panel slides out. No news slides out in a fight (a fight drops the waiting news; it is still counted), as
 the old peek. The slide: the panel frame hangs in a holder (`TwizCrewPanelHolder`) that clips its children
 (`SetClipsChildren`, guarded: without it the panel shows at once); the panel is laid out once (while tucked it is laid
 out as the full panel behind the closed holder, ready to slide) and only the holder's width is eased over 0.18 s by an
@@ -804,8 +811,10 @@ version (`db.panelTabSince`, account-wide) sets `keepOpen` off and `barHover` on
 older marks `panelSince0112` / `fadeOnSince017`), places the tab on the edge nearest to where the panel was, at about
 its height (`PanelLogic.tabFromPosition`), turns a grow-up position saved while minimized back into the panel's, keeps
 the panel's own position for Keep open, and shows a one-time note (`db.tabNoteDue`; a chat line and a pop-up about
-10 s after login, never in a fight): "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything.
-Want it always open? Click Keep open at the top of the panel." A new install gets the tab and no note.
+10 s after login, never in a fight or inside a dungeon or raid: it waits, `ns.AwayCard.busy`): "TwizCrew now tucks
+away into a small tab. Mouse over the tab, or click it, to see everything. Want it always open? Click Keep open at the
+top of the panel." Clicking the pop-up opens the panel (`openTab("note")`): it stays until the mouse has been on the
+tab or the panel and left, or at least 6 s. A new install gets the tab and no note.
 
 **Files.** `UI/PanelTab.lua` (was `UI/PanelMini.lua`): the tab, the holder and the slide, the ticker, hover and click,
 the news queue and its kinds, pop-up suppression, Keep open. `UI/PanelLogic.lua`: view, hoverOpens, tabCount,
@@ -817,7 +826,9 @@ clampTabY, tabSnap, tabFromPosition, tabMarks, newsReactable, newsSeconds, slide
 it pops at once); whether the slide looks smooth and the holder's clamp keeps a tall panel on screen near the bottom
 edge; whether `IsMouseOver` on the tab and the panel behaves for hover, the 1 s close and a menu; whether
 `IsMouselooking` / `IsMouseButtonDown` exist and stop hover while turning the camera; whether the tab drags and snaps
-right and stays on screen after a resolution or UI scale change; whether "C R E W" on four lines and the number fit
+right and stays on screen after a resolution or UI scale change, and with Scale not 100%;
+whether `GetMouseFoci` / `GetMouseFocus` exist on Forever and name the tab and the panel's rows while the mouse is on
+them (if not, hover would never open: tell Claude); whether "C R E W" on four lines and the number fit
 and read well, and the marks, badge and "!" beside the tab look right; whether the Keep open switch reads as a switch
 at a glance; whether the right-edge tooltips and menus land toward the middle; whether re-parenting the panel between
 the holder and the screen (Keep open on and off) leaves it in the right place; the one-time note's timing.

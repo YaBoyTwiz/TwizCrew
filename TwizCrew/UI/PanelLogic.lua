@@ -565,11 +565,15 @@ function PanelLogic.newsReactable(kind, dir, can)
   return false
 end
 
--- How long a piece of news stays out: len (normally), busyLen (while two or more wait behind it).
+-- How long a piece of news stays out: len (normally), busyLen (while two or more wait behind it). News with a button
+-- is never shorter than plain news (a "How long" setting above 12 s counts for it too).
 function PanelLogic.newsSeconds(reactable, plainSeconds, short)
   plainSeconds = tonumber(plainSeconds) or 5
   short = tonumber(short) or 3
-  if reactable then return PanelLogic.REACT_SECONDS, math.max(plainSeconds, short) end
+  if reactable then
+    local len = math.max(PanelLogic.REACT_SECONDS, plainSeconds)
+    return len, math.min(len, math.max(plainSeconds, short))
+  end
   return plainSeconds, math.min(plainSeconds, short)
 end
 

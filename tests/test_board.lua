@@ -17,6 +17,7 @@ end
 -- Boots and lets the session be decided.
 local function start(ns, W)
   boot(W)
+  ns.Modules.set("panel", "keepOpen", true) -- (the board is drawn only while the panel is on screen, not tucked away)
   W:advance(ns.Config.SESSION_DECIDE_AFTER + 1)
 end
 

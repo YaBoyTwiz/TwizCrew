@@ -61,6 +61,9 @@ local function twoFriends(H, wait)
   login(tw)
   login(fr)
   H.advance(wait or 25)
+  -- (the Hall of Shame is drawn only while the panel is on screen, not tucked into its tab)
+  twNs.Modules.set("panel", "keepOpen", true)
+  frNs.Modules.set("panel", "keepOpen", true)
   return { tw = tw, twNs = twNs, fr = fr, frNs = frNs }
 end
 

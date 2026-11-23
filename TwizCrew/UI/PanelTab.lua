@@ -26,6 +26,8 @@ local SLIDE_SECONDS = 0.18 -- the slide out and back
 local HOVER_DELAY = 0.3    -- the mouse rests on the tab this long before the panel slides out
 local CLOSE_AFTER = 1      -- the panel slides back this long after the mouse left the tab, the panel and their menus
 local LEAVE_GRACE = 0.6    -- slid-out news stays this long after the mouse leaves it
+local CLICK_KEEPS = 1      -- a click this soon after a hover-open keeps the panel out (it does not close it)
+local NOTE_MIN = 6         -- opened from the one-time note's pop-up: out at least this long unless the mouse came by
 local FLASH_SECONDS, BAR_TICK = 1.6, 0.1
 local GLOW = 0.35          -- the tab's steady glow while there is unseen news
 local DEAD_COLOR = "ff3030"
@@ -36,7 +38,7 @@ local clips = false         -- the holder clips its children (SetClipsChildren e
 local holderW = 0           -- the holder's width now
 local barTicker, lastTickAt
 local hoverSince            -- when the mouse came to rest on the tab
-local hoverBlocked = false  -- a click closed the panel: no hover-open until the mouse leaves the tab
+local hoverBlocked = false  -- a click closed the panel, or a right-click: no hover-open until the mouse leaves the tab
 local tabHover = false      -- the tab's OnEnter ran and the mouse has not been seen leaving
 local newsHeld = false      -- the mouse is on the slid-out news
 local flashAt               -- when the last news was counted (the tab flashes)
@@ -60,11 +62,43 @@ end
 
 local function shownNow(f) return f ~= nil and f:IsShown() == true end
 
+-- The frames the game says the mouse is on (GetMouseFoci on newer clients, GetMouseFocus on older ones), or nil when
+-- it cannot tell (then the mouse position alone decides).
+local function focusFrames()
+  if type(GetMouseFoci) == "function" then
+    local ok, list = pcall(GetMouseFoci)
+    if ok and type(list) == "table" then return list end
+  end
+  if type(GetMouseFocus) == "function" then
+    local ok, f = pcall(GetMouseFocus)
+    if ok and f ~= nil then return { f } end
+  end
+  return nil
+end
+
+-- Is the mouse focus `frame` or one of its children? (Bags or action bars lying over the tab or the panel have the
+-- mouse then, not us.) True when the game cannot tell.
+local function focusOn(frame)
+  local list = focusFrames()
+  if not list then return true end
+  for _, f in ipairs(list) do
+    for _ = 1, 30 do -- (up the parents; a guard against a loop)
+      if type(f) ~= "table" then break end
+      if f == frame then return true end
+      if type(f.GetParent) ~= "function" then break end
+      local ok, parent = pcall(f.GetParent, f)
+      if not ok then break end
+      f = parent
+    end
+  end
+  return false
+end
+
 -- Is the mouse on the panel (or on one of our menus, which hang off it or the tab)? Tucked, only while it is out.
 local function mouseOverPanel()
   if not P.root then return false end
   local out = keepOpen() or shownNow(holder)
-  if out and shownNow(P.root) and over(P.root) then return true end
+  if out and shownNow(P.root) and over(P.root) and focusOn(P.root) then return true end
   -- an open menu counts only when it was opened from the panel or the tab
   local menu = ns.Widgets.menuFrame and ns.Widgets.menuFrame() or nil
   if menu and P.menuAnchor and menu.IsShown then
@@ -78,7 +112,7 @@ local function mouseOverPanel()
 end
 P.mouseOverPanel = mouseOverPanel
 
-local function mouseOverTab() return shownNow(tab) and over(tab) end
+local function mouseOverTab() return shownNow(tab) and over(tab) and focusOn(tab) end
 
 -- The player is turning the camera or holding a mouse button (guarded: not every client has these).
 local function busyMouse()
@@ -313,6 +347,7 @@ function P.buildTab()
   holder:Hide()
 
   tab = T.frame("Button", "TwizCrewTab", UIParent)
+  P.tab = tab -- (applyLook scales it with the panel: the placing code counts in the tab's own scaled units)
   tab:SetSize(TAB_WIDTH, TAB_HEIGHT)
   tab:SetFrameStrata("MEDIUM")
   tab:SetMovable(true)
@@ -362,7 +397,12 @@ function P.buildTab()
   script(tab, "OnHide", function(self) if dragging then dragStop(self) end end)
   script(tab, "OnClick", function(self, button)
     if dragging or (dragEndAt and ns.now() - dragEndAt < 0.3) then return end
-    if button == "RightButton" then openMenu(self, Panel.tabMenuItems()) else Panel.tabClicked() end
+    if button == "RightButton" then
+      hoverBlocked, hoverSince = true, nil -- (the panel must not slide out under the menu)
+      openMenu(self, Panel.tabMenuItems())
+    else
+      Panel.tabClicked()
+    end
   end)
   script(tab, "OnEnter", function(self)
     tabHover = true
@@ -374,11 +414,27 @@ function P.buildTab()
 end
 
 ---------------------------------------------------------------------------------------------------------- open / close
--- The whole panel slides out of the tab (by = "hover" or "click"). What was missed counts as seen.
+-- The tab's tooltip goes when the panel slides out (it could cover the header).
+local function hideTabTip()
+  if not tab or not GameTooltip then return end
+  local owned = false
+  if type(GameTooltip.IsOwned) == "function" then
+    local ok, yes = pcall(GameTooltip.IsOwned, GameTooltip, tab)
+    owned = ok and yes == true
+  elseif type(GameTooltip.GetOwner) == "function" then
+    local ok, owner = pcall(GameTooltip.GetOwner, GameTooltip)
+    owned = ok and owner == tab
+  end
+  if owned then GameTooltip:Hide() end
+end
+
+-- The whole panel slides out of the tab (by = "hover", "click" or "note": the one-time note's pop-up, where the mouse
+-- is somewhere else). What was missed counts as seen.
 function Panel.openTab(by)
   if not P.enabled or keepOpen() or not P.bar then return end
-  P.open = { by = by == "hover" and "hover" or "click" }
+  P.open = { by = (by == "hover" or by == "note") and by or "click", at = ns.now() }
   hoverSince = nil
+  hideTabTip()
   P.bar:clear()
   P.bar:clearMissed()
   flashAt = nil
@@ -392,9 +448,13 @@ function Panel.closeTab()
   requestRedraw()
 end
 
--- A click on the tab: open the panel, or close it when it is out (a click works in fights and dungeons too).
+-- A click on the tab: open the panel, or close it when it is out (a click works in fights and dungeons too). A click
+-- right after the mouse slid it out keeps it out instead (the player clicked to open it, it was just quicker).
 function Panel.tabClicked()
-  if P.open then
+  local o = P.open
+  if o and o.by == "hover" and ns.now() - (o.at or 0) < CLICK_KEEPS then
+    o.by = "click"
+  elseif o then
     Panel.closeTab()
     hoverBlocked = true -- (the mouse is still on the tab: it must not slide right back out)
   else
@@ -442,7 +502,9 @@ local function barTick()
     local onTab = mouseOverTab()
     if P.open then
       if onTab or mouseOverPanel() then
-        P.open.leftAt = nil
+        P.open.leftAt, P.open.visited = nil, true
+      elseif P.open.by == "note" and not P.open.visited and now - (P.open.at or now) < NOTE_MIN then
+        P.open.leftAt = nil -- (opened from the note's pop-up: the mouse has not come yet)
       else
         P.open.leftAt = P.open.leftAt or now
         if now - P.open.leftAt >= CLOSE_AFTER then P.open = nil; changed = true end
@@ -572,6 +634,7 @@ end
 
 -- Is this pop-up (the pop-ups module's kind) replaced by the tab right now? Only while the panel is tucked into its
 -- tab, the tab is on screen and slides news out, and the player turned on "show news on the tab, not as pop-ups".
+-- Never in a fight: nothing slides out then, so the pop-up shows (the after-fight news leaves out what it showed).
 function Panel.suppressesPopup(popupKind, name)
   local takes
   if FL.POPUP_FEED[popupKind] then
@@ -581,7 +644,7 @@ function Panel.suppressesPopup(popupKind, name)
   end
   return FL.suppressesPopup(popupKind, {
     tucked = not keepOpen(),
-    tabShown = P.enabled and P.shown and P.curView ~= "full" and setting("peek") == true,
+    tabShown = P.enabled and P.shown and P.curView ~= "full" and setting("peek") == true and not P.inCombat,
     setting = setting("barInstead") == true,
     takes = takes,
   })

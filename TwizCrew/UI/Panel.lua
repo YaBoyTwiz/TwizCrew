@@ -62,6 +62,7 @@ P.open = nil           -- { by = "hover" | "click", leftAt } while the whole pan
 P.curView = "full"     -- "full", "peek" or "tab" (PanelLogic.view), set by every redraw
 P.marks = { dead = false, layer = false } -- the tab's steady marks (PanelLogic.tabMarks)
 P.here = 0             -- the header's "here" count (the tab shows it)
+P.tab = nil            -- the crew tab frame (made in UI/PanelTab.lua's buildTab; scaled with the panel)
 
 local noteText
 local offBar, guildBar -- the "Offline (N)" and "Guild online (N)" bars
@@ -390,6 +391,7 @@ local function hide()
     P.root:Hide()
   end
   P.hideTab()
+  P.open = nil -- (hidden in a fight, a dungeon or alone: it must not slide out by itself when it comes back)
   if P.tipRow then Panel.hideRowTip(P.tipRow) end
   P.shown = false
   if ns.Guild then ns.Guild.setWatched(false) end
@@ -575,6 +577,11 @@ local function redraw()
     stopCalPulse()
   end
 
+  if tab == "shame" and layout == "full" and not live then
+    -- tucked and closed: nobody sees the board behind the closed holder; it is drawn when the panel slides out
+    P.syncBarTicker()
+    return
+  end
   if tab == "shame" and layout == "full" then
     for _, r in ipairs(rowFrames) do r:Hide() end
     hideChrome()
@@ -873,8 +880,8 @@ function Panel.isMovingForTest() return moving end
 -- are there) gets the tab on the edge nearest to where the panel was, at about its height, "open when my mouse rests
 -- on the tab" turned on (saved settings keep their old values, so a new default alone would not reach them), Keep
 -- open off, and a one-time note. Their panel's place is kept for when they turn Keep open on.
-local TAB_NOTE = "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything. Want it always open? "
-  .. "Click Keep open at the top of the panel."
+local TAB_NOTE = "TwizCrew now tucks away into a small tab. Mouse over the tab, or click it, to see everything. "
+  .. "Want it always open? Click Keep open at the top of the panel."
 local function migrateToTab(existing)
   if not ns.db or ns.db.panelTabSince then return end
   ns.db.panelTabSince = true
@@ -899,10 +906,15 @@ local function migrateToTab(existing)
   ns.db.tabNoteDue = true
 end
 
--- The one-time note: a chat line and a pop-up, never in a fight (it waits for the fight to end).
+-- The one-time note: a chat line and a pop-up, never in a fight or inside a dungeon or raid (hover does not open the
+-- panel there): it waits until the player is free (the away card's rule, ns.AwayCard.busy).
+local function noteBusy()
+  if P.inCombat or ns.Util.plain(InCombatLockdown) or inDungeon() then return true end
+  return ns.AwayCard ~= nil and type(ns.AwayCard.busy) == "function" and ns.AwayCard.busy() == true
+end
 local function showTabNote()
   if not ns.db or not ns.db.tabNoteDue or not P.enabled then return end
-  if P.inCombat or ns.Util.plain(InCombatLockdown) then
+  if noteBusy() then
     if C_Timer and C_Timer.After then C_Timer.After(5, function() ns.Log.safe(FEATURE, showTabNote) end) end
     return
   end
@@ -910,7 +922,7 @@ local function showTabNote()
   print("|cffffd100TwizCrew:|r " .. TAB_NOTE)
   if ns.Popups and ns.Popups.notice then
     ns.Popups.notice("Interface\\Icons\\Ability_Warrior_BattleShout", "TwizCrew now tucks away into a small tab",
-      "Mouse over the tab to see everything.", function() Panel.openTab("click") end, 20)
+      "Mouse over the tab, or click it, to see everything.", function() Panel.openTab("note") end, 20)
   end
 end
 Panel.TAB_NOTE = TAB_NOTE

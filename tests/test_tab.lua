@@ -848,6 +848,350 @@ return {
       A.eq(ns.db.panelTabSince, true)
     end,
 
+    -------------------------------------------------------------------------------------------------- review fixes
+    the_tab_follows_scale_when_dragged_and_reaches_the_edges = function(ns, A, W)
+      ready(W)
+      rawset(W.env.UIParent, "GetWidth", function() return 1920 end)
+      rawset(W.env.UIParent, "GetHeight", function() return 1080 end)
+      ns.Modules.set("panel", "scale", 1.5)
+      local t = tabFrame(ns)
+      A.eq(t:GetScale(), 1.5, "the tab is scaled with the panel")
+      -- the game answers GetCenter in the frame's own (scaled) units
+      local function dropAt(x, y)
+        rawset(t, "GetCenter", function(self) local s = self:GetEffectiveScale(); return x / s, y / s end)
+        t._scripts.OnDragStart(t)
+        t._scripts.OnDragStop(t)
+      end
+      dropAt(1850, 740)
+      A.eq(ns.Modules.setting("panel", "tabSide"), "right")
+      A.eq(ns.Modules.setting("panel", "tabY"), 133.3, "200 above the middle, in the tab's own units")
+      local p = { t:GetPoint(1) }
+      A.eq(p[5] * t:GetEffectiveScale(), 133.3 * 1.5, "it stays where it was dropped")
+      dropAt(100, 1300)
+      p = { t:GetPoint(1) }
+      A.eq((p[5] + ns.Panel._.TAB_HEIGHT / 2) * t:GetEffectiveScale(), 540, "it reaches the top of the screen")
+      dropAt(100, -300)
+      p = { t:GetPoint(1) }
+      A.eq((p[5] - ns.Panel._.TAB_HEIGHT / 2) * t:GetEffectiveScale(), -540, "and the bottom")
+      -- changing Scale keeps it where it is on screen
+      local before = p[5] * t:GetEffectiveScale()
+      ns.Modules.set("panel", "scale", 1.0)
+      p = { t:GetPoint(1) }
+      A.eq(t:GetScale(), 1.0)
+      A.eq(p[5] * t:GetEffectiveScale(), before)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    hidden_in_a_fight_the_open_panel_does_not_slide_out_after = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "hideInCombat", true)
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(0.5)
+      A.eq(ns.Panel.viewForTest(), "full")
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED"); W:advance(1)
+      A.no(ns.Panel.isShown())
+      A.eq(ns.Panel.openForTest(), nil, "hiding closes it")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED"); W:advance(1)
+      A.ok(ns.Panel.tabStateForTest().shown)
+      A.eq(ns.Panel.viewForTest(), "tab", "back as the tab, not the whole panel")
+    end,
+
+    the_switch_does_not_swallow_news_in_a_fight = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "barInstead", true)
+      friend(W, ns, "Frostie")
+      W:advance(8)
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(1)
+      A.ok(hasPopup(ns, "reached level 13"), "in a fight nothing slides out, so the pop-up shows")
+      A.eq(ns.Panel.viewForTest(), "tab")
+    end,
+
+    a_click_right_after_a_hover_open_keeps_it_open = function(ns, A, W)
+      ready(W)
+      hoverOpen(W, ns)
+      A.eq(ns.Panel.openForTest().by, "hover")
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(0.1)
+      A.eq(ns.Panel.viewForTest(), "full", "not closed: the click came right after it slid out")
+      A.eq(ns.Panel.openForTest().by, "click")
+      W:advance(3)
+      A.eq(ns.Panel.viewForTest(), "full", "the mouse is still on the tab")
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(0.1)
+      A.eq(ns.Panel.viewForTest(), "tab", "a later click closes it")
+    end,
+
+    a_right_click_in_the_hover_wait_stops_the_hover_open = function(ns, A, W)
+      ready(W)
+      mouseTab(ns, true); W:advance(0.1)
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "RightButton")
+      W:advance(1)
+      A.eq(ns.Panel.viewForTest(), "tab", "the menu opens alone")
+      mouseTab(ns, false); W:advance(0.2)
+      mouseTab(ns, true); W:advance(0.5)
+      A.eq(ns.Panel.viewForTest(), "full", "after the mouse left, hover works again")
+    end,
+
+    the_notes_popup_opens_the_panel_long_enough = function(ns, A, W)
+      W.env.TwizCrewDB = { panelSince0112 = true, panelSince0113 = true, fadeOnSince017 = true, myStatus = "",
+        modules = { panel = { enabled = true, settings = {} } } }
+      W:fire("ADDON_LOADED", "TwizCrew"); W:fire("PLAYER_LOGIN"); W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(11)
+      local i
+      for n, t in ipairs(ns.Popups.textsForTest()) do if t.text:find("tucks away", 1, true) then i = n end end
+      A.ok(i, "the note's pop-up")
+      A.eq(ns.Popups.textsForTest()[i].subtext, "Mouse over the tab, or click it, to see everything.")
+      ns.Popups.clickForTest(i)
+      W:advance(3)
+      A.eq(ns.Panel.viewForTest(), "full", "the mouse was on the pop-up: the panel waits for it")
+      mousePanel(ns, true); W:advance(1)
+      mousePanel(ns, false); W:advance(1.2)
+      A.eq(ns.Panel.viewForTest(), "tab", "it was looked at and the mouse left: the normal rule")
+      W:advance(1)
+      -- the mouse never comes: it still goes after a while
+      ns.Panel.openTab("note"); W:advance(5)
+      A.eq(ns.Panel.viewForTest(), "full")
+      W:advance(2.5)
+      A.eq(ns.Panel.viewForTest(), "tab")
+    end,
+
+    the_note_waits_for_a_dungeon_to_end = function(ns, A, W)
+      W.env.TwizCrewDB = { panelSince0112 = true, panelSince0113 = true, fadeOnSince017 = true, myStatus = "",
+        modules = { panel = { enabled = true, settings = {} } } }
+      W.state.inInstance, W.state.instanceType = true, "party"
+      W:fire("ADDON_LOADED", "TwizCrew"); W:fire("PLAYER_LOGIN"); W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(30)
+      A.no(hasPopup(ns, "tucks away"), "not inside a dungeon")
+      W.state.inInstance, W.state.instanceType = false, "none"
+      W:advance(6)
+      A.ok(hasPopup(ns, "tucks away"))
+      local said
+      for _, l in ipairs(W.printed) do if l:find("Mouse over the tab, or click it, to see everything.", 1, true) then said = true end end
+      A.ok(said, "the chat line says a click works too")
+    end,
+
+    reactable_news_never_shorter_than_plain = function(ns, A)
+      local L = ns.PanelLogic
+      A.eq({ L.newsSeconds(true, 15, 3) }, { 15, 15 }, "a long setting: at least as long as plain news")
+      A.eq({ L.newsSeconds(false, 15, 3) }, { 15, 3 })
+      A.eq({ L.newsSeconds(true, 5, 3) }, { 12, 5 })
+      A.eq({ L.newsSeconds(true, 2, 3) }, { 12, 3 })
+    end,
+
+    hover_needs_the_mouse_focus_on_the_tab_or_panel = function(ns, A, W)
+      ready(W)
+      local bag = W.env.CreateFrame("Frame", "ContainerFrame1", W.env.UIParent)
+      W.state.mouseFoci = { bag }
+      mouseTab(ns, true); W:advance(1)
+      A.eq(ns.Panel.viewForTest(), "tab", "a bag lies over the tab: no hover-open")
+      W.state.mouseFoci = { tabFrame(ns) } -- (the bag closed: the tab gets the mouse, and its OnEnter)
+      mouseTab(ns, true); W:advance(0.5)
+      A.eq(ns.Panel.viewForTest(), "full")
+      ns.Panel.finishSlideForTest()
+      mouseTab(ns, false); mousePanel(ns, true)
+      W.state.mouseFoci = { ns.Panel.keepSwitchForTest() }
+      W:advance(3)
+      A.eq(ns.Panel.viewForTest(), "full", "the mouse on a child of the panel keeps it out")
+      W.state.mouseFoci = { bag }
+      W:advance(1.5)
+      A.eq(ns.Panel.viewForTest(), "tab", "an action bar over the panel does not keep it out")
+      -- an older client: GetMouseFocus only
+      mousePanel(ns, false); W:advance(1)
+      W.state.missing.GetMouseFoci = true
+      W.state.mouseFoci = nil
+      W.state.mouseFocus = bag
+      mouseTab(ns, true); W:advance(1)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      W.state.mouseFocus = tabFrame(ns)
+      mouseTab(ns, true); W:advance(0.5)
+      A.eq(ns.Panel.viewForTest(), "full")
+      -- neither: the mouse position alone
+      mouseTab(ns, false); W:advance(2)
+      W.state.missing.GetMouseFocus = true
+      mouseTab(ns, true); W:advance(0.5)
+      A.eq(ns.Panel.viewForTest(), "full")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_tabs_tooltip_goes_when_the_panel_slides_out = function(ns, A, W)
+      ready(W)
+      local tip = { shown = false }
+      W.env.GameTooltip = {
+        SetOwner = function(_, owner) tip.owner = owner end, GetOwner = function() return tip.owner end,
+        SetText = function() end, AddLine = function() end,
+        Show = function() tip.shown = true end, Hide = function() tip.shown = false; tip.owner = nil end,
+        IsOwned = function(_, f) return tip.owner == f end,
+      }
+      mouseTab(ns, true)
+      A.ok(tip.shown, "the tab's tooltip")
+      W:advance(0.6)
+      A.eq(ns.Panel.viewForTest(), "full")
+      A.no(tip.shown, "hidden as the panel slides out")
+    end,
+
+    the_hall_of_shame_is_not_drawn_while_tucked = function(ns, A, W)
+      ready(W)
+      hoverOpen(W, ns)
+      ns.Panel.setTab("shame"); W:advance(0.5)
+      ns.Panel.finishSlideForTest()
+      mouseTab(ns, false); W:advance(2); ns.Panel.finishSlideForTest(); W:advance(0.2)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      local draws, draw = 0, ns.Board.draw
+      ns.Board.draw = function(...) draws = draws + 1; return draw(...) end
+      ns.Panel.refresh(); W:advance(0.2)
+      ns.Panel.refresh(); W:advance(0.2)
+      A.eq(draws, 0, "nobody sees it behind the closed holder")
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(0.1)
+      A.ok(draws >= 1, "drawn when the panel slides out")
+      A.eq(root(ns):GetWidth(), 336)
+      ns.Board.draw = draw
+    end,
+
+    clicking_an_online_notice_whispers = function(ns, A, W)
+      ready(W)
+      local told
+      W.env.ChatFrame_SendTell = function(name) told = name end
+      friend(W, ns, "Frostie")
+      W:advance(0.2)
+      ns.Panel.noticeButtonForTest()._scripts.OnClick()
+      A.eq(told, "Frostie")
+    end,
+
+    online_notice_whisper_uses_the_full_name = function(ns, A, W)
+      ready(W)
+      local told
+      W.env.ChatFrameUtil = { SendTell = function(name) told = name end }
+      ns.Transport.fullName = function(n) return n .. " Stormwind" end
+      friend(W, ns, "Frostie")
+      W:advance(0.2)
+      ns.Panel.noticeButtonForTest()._scripts.OnClick()
+      A.eq(told, "Frostie Stormwind", "only ChatFrameUtil.SendTell exists: used with the full name")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    clicking_a_notice_that_is_no_longer_the_one_drawn_does_nothing = function(ns, A, W)
+      ready(W)
+      local told
+      W.env.ChatFrame_SendTell = function(name) told = name end
+      friend(W, ns, "Frostie")
+      W:advance(0.2)
+      local drawn = ns.Panel.noticeForTest()
+      A.ok(drawn, "a notice is drawn")
+      -- the queue moved on to news that has not been drawn yet
+      ns.Panel.barForTest():dismiss(ns.now())
+      friend(W, ns, "Ginkan")
+      ns.Panel.noticeClicked()
+      A.eq(told, nil, "no action")
+      A.ok(ns.Panel.noticeForTest() == drawn, "and nothing dismissed")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    toggle_mini_shows_a_hidden_panel_instead = function(ns, A, W)
+      ready(W)
+      ns.Modules.setEnabled("panel", false)
+      ns.Commands.toggleMini(true)
+      A.ok(ns.Modules.isEnabled("panel"), "hidden: shown")
+      A.eq(ns.Modules.setting("panel", "keepOpen"), false, "as it was left, not switched")
+      W:advance(1)
+      A.ok(ns.Panel.tabStateForTest().shown)
+    end,
+
+    keep_open_survives_a_reload = function(ns, A, W, H)
+      ready(W)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:fire("PLAYER_LOGOUT")
+      local saved = ns.Util.copy(W.env.TwizCrewDB)
+      local W2, ns2 = H.client("Twiz")
+      W2.env.TwizCrewDB = saved
+      W2:fire("ADDON_LOADED", "TwizCrew"); W2:fire("PLAYER_LOGIN"); W2:fire("PLAYER_ENTERING_WORLD"); W2:advance(6)
+      A.eq(ns2.Panel.viewForTest(), "full")
+      A.no(ns2.Panel.tabStateForTest().shown)
+      A.ok(ns2.Panel.rootForTest():GetParent() == W2.env.UIParent)
+    end,
+
+    changing_the_scale_keeps_the_kept_open_panel_corner_in_place = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "keepOpen", true)
+      ns.Modules.set("panel", "position", { point = "TOPLEFT", x = 600, y = -300 })
+      ns.Modules.set("panel", "scale", 1.5)
+      local p = ns.Modules.setting("panel", "position")
+      A.eq({ p.point, p.x, p.y }, { "TOPLEFT", 400, -200 })
+      ns.Modules.set("panel", "scale", 1.5)
+      p = ns.Modules.setting("panel", "position")
+      A.eq({ p.x, p.y }, { 400, -200 }, "same scale: unchanged")
+      local pt = { root(ns):GetPoint(1) }
+      A.eq({ pt[1], pt[4], pt[5] }, { "TOPLEFT", 400, -200 })
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    fade_enters_the_safe_wrapper_once_per_step_only = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      local h = root(ns)._scripts.OnUpdate
+      A.eq(type(h), "function", "fade is on by default with Keep open")
+      local calls, safe = 0, ns.Log.safe
+      ns.Log.safe = function(...) calls = calls + 1; return safe(...) end
+      for _ = 1, 9 do h(root(ns), 0.01) end
+      A.eq(calls, 0, "frames inside the step cost no safe call")
+      h(root(ns), 0.02)
+      A.eq(calls, 1)
+      ns.Log.safe = safe
+    end,
+
+    slid_out_news_does_not_move_my_scroll = function(ns, A, W)
+      ready(W)
+      for i = 1, 12 do friend(W, ns, "Friend" .. string.char(64 + i)) end
+      W:advance(70) -- (the online news has gone by)
+      ns.Panel.scroll(-1); W:advance(1)
+      local first = ns.Panel.firstRowForTest()
+      A.ok(first > 1, "scrolled")
+      receive(W, ns, "FriendA", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.viewForTest(), "peek")
+      W:advance(13)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      A.eq(ns.Panel.firstRowForTest(), first)
+    end,
+
+    news_row_finds_the_friend_in_any_section_with_the_guild_bar_closed = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie"); friend(W, ns, "Ginkan")
+      W:advance(12)
+      ns.Panel.pin("Ginkan"); W:advance(1)
+      hoverOpen(W, ns)
+      A.ok(ns.Panel.guildBarForTest() ~= nil, "the Guild online bar is there, closed (Ginkan is pinned)")
+      A.eq(ns.Modules.setting("panel", "showGuildOnline"), false)
+      mouseTab(ns, false); W:advance(2); ns.Panel.finishSlideForTest()
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.viewForTest(), "peek")
+      A.eq(ns.Panel.rowCountForTest(), 1, "only that friend's row, though his section is closed")
+      A.eq(ns.Panel.models()[1].key, "Frostie")
+      A.eq(ns.Panel.guildBarForTest(), nil, "no bars in a slid-out row")
+      W:advance(13)
+      receive(W, ns, "Ginkan", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.models()[1].key, "Ginkan", "a pinned friend too")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_fast_ticker_stops_when_the_tab_is_idle = function(ns, A, W)
+      ready(W)
+      A.no(ns.Panel.barTickerForTest(), "nothing going on: no ticker")
+      mouseTab(ns, true)
+      A.ok(ns.Panel.barTickerForTest(), "the mouse on the tab: ticking")
+      W:advance(0.6)
+      mouseTab(ns, false); W:advance(2); ns.Panel.finishSlideForTest(); W:advance(0.3)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      A.no(ns.Panel.barTickerForTest(), "tucked and quiet: stopped")
+      friend(W, ns, "Frostie"); W:advance(0.2)
+      A.ok(ns.Panel.barTickerForTest(), "news: ticking")
+      W:advance(8)
+      A.no(ns.Panel.barTickerForTest(), "the news has gone: stopped")
+    end,
+
     -------------------------------------------------------------------------------------------------- misc
     test_tools_news_slides_out = function(ns, A, W)
       ready(W)

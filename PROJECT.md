@@ -1068,6 +1068,33 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   drawn on screen, a helper watching `_forever_/Screenshots` gives it to a model that can see images, and the
   reaction comes out **outside the game** (spoken voice, a window over the game, a Discord post), since it cannot
   get back in live.
+  **Research 2026-11-23 (web and other addons' source, nothing tried by us; the owner is planning a personal
+  local-model helper, separate from TwizCrew):**
+  - *Correction to the above:* data CAN get in while playing without a `/reload`, by tricks other Forever addons
+    use: (1) "slot" addons marked load-on-demand, made before the game starts; a helper writes the next slot's
+    Lua file and the addon calls `C_AddOns.LoadAddOn`, which reads it from disk then; each slot works once per UI
+    session, a `/reload` frees the pool; a "doorbell" tells the addon mail is waiting (a sound file over 174,762
+    bytes is re-read from disk on each play; `C_Sound.IsPlaying` 0.15 s after `PlaySoundFile` tells a real file
+    from a missing one; needs game sound on). Measured by t3code-wow under Proton: about 1.2 s. (2) hundreds of
+    empty dummy addons as bits through the character's `AddOns.txt` (`C_AddOns.SaveAddOns` / `ResetAddOns` /
+    `GetAddOnEnableState`): Windows-only so far, has damaged a player's own addon list, untested on Proton.
+  - *Out of the game, live:* the chat log file is NOT live on Forever (written every few minutes or at exit), so
+    the only live ways out are a strip of coloured pixels read by screen capture (the technique pixel bots use;
+    one author removed it for that reason) or the `AddOns.txt` bits. Chat text inside dungeons, raids and
+    battlegrounds is a secret value: an addon can show it but not encode it.
+  - *Sending:* `C_ChatInfo.SendChatMessage` to WHISPER, PARTY, RAID, GUILD needs no hardware event per the wiki
+    (our own check found guild chat needs a click); a button click is a hardware event anyway. Chat is restricted
+    during boss encounters. Copy and paste between Linux and the game under Proton is reported unreliable.
+  - *Rules (Blizzard EULA of 2024-03-21, Anti-cheating Agreement, add-on policy):* forbidden and enforced: a
+    program pressing keys, reading game memory, "automated control of a Game, or any other feature of the
+    Platform" (chat is a feature, so no sends without the player's own click or key). Not named anywhere:
+    reading and suggesting. No confirmed ban was found for a tool that only read and suggested. The data-mining
+    clause ("reads ... information generated ... by the Platform") is broad on paper. Blizzard's habit with live
+    data bridges is to break them by a patch (combat log, 10.2). One self-reported 2023 ban involved a script
+    writing addon files plus a reload macro and scripts moving addons ("injecting data into the game").
+    Risk order, safest first: output outside the game; reading files the game writes; a data file read at a
+    manual `/reload`; pre-filled chat box or paste with the player's Enter; screen pixels with no input; live
+    file tricks; automatic chat; pressing keys; memory reading.
 - **The game's calendar works on the server, its window is switched off** (research 2026-11-08, from the code
   and notes of Ultimate Calendar v1.9.2, CurseForge 1339939, which supports Forever; not tried by us):
   Forever ships Blizzard's calendar code (`C_Calendar`) with no window. Ultimate Calendar draws its own window

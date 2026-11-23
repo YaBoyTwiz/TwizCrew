@@ -147,7 +147,8 @@ local function drawHeader(s, view, news)
   end
   if P.countText.SetJustifyH then P.countText:SetJustifyH("RIGHT") end
   if P.countText.SetWordWrap then P.countText:SetWordWrap(false) end
-  T.ink(P.countText, noticeLine and "news" or "count") -- (the theme's header colours)
+  local countRole = noticeLine and "news" or "count" -- (the theme's header colours; a theme change re-inks it)
+  if P.countText.tcRole ~= countRole then T.ink(P.countText, countRole) end
   barTextNow = Logic.barText(noticeLine, count)
   P.countText:SetText(barTextNow)
   if noticeButton then

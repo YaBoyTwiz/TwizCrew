@@ -26,8 +26,12 @@ local CLASSIC_PANEL = { style = "backdrop", border = { 1, 1, 1, 1 },
   backdrop = backdrop("UI-DialogBox-Background", "UI-DialogBox-Border", 24, 6) }
 local CLASSIC_GOLD = { style = "backdrop", border = { 1, 1, 1, 1 },
   backdrop = backdrop("UI-DialogBox-Background-Dark", "UI-DialogBox-Gold-Border", 32, 11) }
+-- The tucked tab is 24 wide and a pop-up 50 tall: smaller edges than the spec's 16 and 32, so the border pieces do
+-- not overlap (the skin also never lets an edge be more than half a frame's smaller side).
 local CLASSIC_TAB = { style = "backdrop", border = { 1, 1, 1, 1 }, alpha = 0.85,
-  backdrop = backdrop("UI-DialogBox-Background", "UI-DialogBox-Border", 16, 4) }
+  backdrop = backdrop("UI-DialogBox-Background", "UI-DialogBox-Border", 12, 3) }
+local CLASSIC_POPUP = { style = "backdrop", border = { 1, 1, 1, 1 },
+  backdrop = backdrop("UI-DialogBox-Background-Dark", "UI-DialogBox-Gold-Border", 16, 5) }
 
 -- 9-slice cuts (texcoords) for a square margin: Crowned crew 36 texels of 256 x 512, Tavern night 13 of 128 x 256.
 local CROWN_FILE = ART .. "CrownedCrew\\Frame.tga"
@@ -40,7 +44,9 @@ local OAK = ART .. "TavernNight\\Oak.tga"
 local TAV_U, TAV_V = { 0, 0.1015625, 0.8984375, 1 }, { 0, 0.05078125, 0.94921875, 1 }
 -- the oak inside the frame: 35% darker (50% while the kept-open panel is see-through: it goes muddy over bright
 -- scenes otherwise)
-local TAV_OAK = { file = OAK, tile = 256, inset = 10, shade = 0.65, fadedShade = 0.5 }
+-- (color: what the part shows if its own picture does not load)
+local OAK_COLOR = { 0.36, 0.22, 0.12, 1 }
+local TAV_OAK = { file = OAK, tile = 256, inset = 10, shade = 0.65, fadedShade = 0.5, color = OAK_COLOR }
 local TAVERN = { style = "slice", file = TAV_FILE, margin = 10, u = TAV_U, v = TAV_V, center = false, fill = TAV_OAK }
 local PARCHMENT = { style = "flat", bg = { 0.96, 0.92, 0.81, 0.97 }, border = { 0.10, 0.05, 0.02, 1 }, edge = 1,
   alpha = 0.97 }
@@ -82,7 +88,7 @@ end
 T.THEMES.classic = {
   id = "classic", name = "Classic", probe = false,
   accent = GOLD,
-  frames = { panel = CLASSIC_PANEL, card = CLASSIC_GOLD, popup = CLASSIC_GOLD, window = CLASSIC_GOLD,
+  frames = { panel = CLASSIC_PANEL, card = CLASSIC_GOLD, popup = CLASSIC_POPUP, window = CLASSIC_GOLD,
     menu = CLASSIC_PANEL, tab = CLASSIC_TAB },
   plate = { file = DLG .. "UI-DialogBox-Header" },
   band = false,
@@ -124,16 +130,16 @@ T.THEMES.tavern = {
   plate = false,
   -- the header band: oak at 256, lighter, a dark 1 px border and a faint top highlight
   band = { file = OAK, tile = 256, shade = { 1, 0.90, 0.78, 1 }, border = { 0.10, 0.05, 0.02, 1 },
-    shine = { 1, 0.86, 0.63, 0.3 } },
+    shine = { 1, 0.86, 0.63, 0.3 }, color = OAK_COLOR },
   emblem = ART .. "TavernNight\\Tankards.tga",
   tabs = { style = "flat", bg = { 0.80, 0.72, 0.55, 0.75 }, bgSel = { 0.95, 0.89, 0.75, 1 }, hoverAlpha = 0.25,
     shadow = { 0, 0, 0, 0.5 } },
   button = { style = "band", file = OAK, tile = 256, shade = { 1, 0.90, 0.78, 1 }, border = { 0.10, 0.05, 0.02, 1 },
-    shine = { 1, 0.86, 0.63, 0.3 },
+    shine = { 1, 0.86, 0.63, 0.3 }, color = OAK_COLOR,
     mock = { bottom = { 0.42, 0.06, 0.03, 1 }, top = { 0.69, 0.16, 0.10, 1 }, border = { 0.16, 0.02, 0, 1 } },
     congrats = { bottom = { 0.10, 0.30, 0.14, 1 }, top = { 0.18, 0.48, 0.24, 1 }, border = { 0.02, 0.10, 0.04, 1 } } },
   keep = { style = "chalk", file = ART .. "TavernNight\\Chalk.tga", tile = 128, border = { 0.42, 0.26, 0.13, 1 },
-    border2 = { 0.10, 0.05, 0.02, 1 } },
+    border2 = { 0.10, 0.05, 0.02, 1 }, color = { 0.16, 0.17, 0.16, 1 } },
   divider = { style = "line", color = { 0.42, 0.26, 0.13, 1 }, height = 1 },
   preview = { margin = 5, tile = 64 },
   ink = {

@@ -77,6 +77,7 @@ local crewTab, shameTab, actTab, calTab, helpTab
 local actRows, actShown = {}, {} -- the Activity tab's rows (Recent.newRow) and what they show (test hook)
 local actOffset = 0              -- the Activity tab's scroll
 local actClear                   -- the Activity tab's "Clear" button (right of "Scroll for more")
+local CLEAR_W, CLEAR_H = 50, 18
 local ACT_ROWS = 10              -- Activity rows shown at once
 P.actUnseen = 0                  -- entries the Activity list got since it (or the Recent window) was last looked at
 local calTicker        -- pulses the glow behind the Calendar button while the calendar has something new
@@ -204,7 +205,8 @@ end
 
 -- The words on the bar, from the longest: the first step that fits the panel's width (narrow row styles take the
 -- short words; the "?" goes before "Hall of Shame" is shortened).
--- With icons the words are tried first with them; when no step fits, again without the icons.
+-- The words never give way to the icons: the step is chosen by the words alone, and the icons show only when they fit
+-- at that same step (with the "?" the words left room for).
 local TAB_STEPS = {
   { shame = "Hall of Shame", act = "Activity", cal = "Calendar", help = true },
   { shame = "Hall of Shame", act = "Activity", cal = "Cal", help = true },
@@ -224,24 +226,25 @@ local function drawTabs(width)
   local stats, cal, act = statsOn(), calOn(), actOn()
   local count = P.actUnseen > 0 and (" (" .. math.min(P.actUnseen, 99) .. ")") or ""
   local help = true
-  local tries = rawget(crewTab, "tcIconOn") and { true, false } or { false }
-  for n, withIcons in ipairs(tries) do
-    local done = false
+  local function place(st, withIcons)
     setWords(crewTab, "Crew", withIcons)
-    for i, st in ipairs(TAB_STEPS) do
-      setWords(shameTab, st.shame, withIcons)
-      setWords(actTab, st.act .. count, withIcons)
-      setWords(calTab, st.cal, withIcons)
-      local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
-        + (act and (actTab:GetWidth() + 4) or 0) + (cal and (calTab:GetWidth() + 4) or 0)
-      local fits = used + (st.help and helpTab:GetWidth() or 0) <= width
-      if fits or (i == #TAB_STEPS and n == #tries) then
-        help = st.help and fits
-        done = true
-        break
-      end
+    setWords(shameTab, st.shame, withIcons)
+    setWords(actTab, st.act .. count, withIcons)
+    setWords(calTab, st.cal, withIcons)
+    return (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
+      + (act and (actTab:GetWidth() + 4) or 0) + (cal and (calTab:GetWidth() + 4) or 0)
+  end
+  local chosen = TAB_STEPS[#TAB_STEPS]
+  for i, st in ipairs(TAB_STEPS) do
+    local fits = place(st, false) + (st.help and helpTab:GetWidth() or 0) <= width
+    if fits or i == #TAB_STEPS then
+      chosen, help = st, st.help and fits
+      break
     end
-    if done then break end
+  end
+  if rawget(crewTab, "tcIconOn") then
+    local helpRoom = help and helpTab:GetWidth() or 0
+    if place(chosen, true) + helpRoom > width then place(chosen, false) end
   end
   crewTab:SetActive(tab == "crew")
   local last = crewTab
@@ -663,19 +666,21 @@ local function redraw()
     if #list == 0 then note = "Nothing has happened yet."
     elseif #list > ACT_ROWS then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #list .. ")"
     else note = nil end
-    if note then y = drawNote(note, y, width) else noteText:Hide() end
-    -- "Clear" right of "Scroll for more" (the theme's button): empties the list, like the Recent window's button
-    if #list > ACT_ROWS then
+    -- "Clear" (the theme's button) at the right of the "Scroll for more" line, inside the panel's padding; the note is
+    -- narrowed by the button's room while it shows. It empties the list, like the Recent window's button.
+    local clearOn = #list > ACT_ROWS and note ~= nil
+    local noteTop = y - GAP + 4 -- (where drawNote puts the note)
+    if note then y = drawNote(note, y, clearOn and (width - CLEAR_W - 4) or width) else noteText:Hide() end
+    if clearOn then
       if not actClear then
         actClear = Widgets.button(P.root, "Clear", function() if ns.Feed then ns.Feed.clear() end end, nil, FEATURE,
           "actClear")
-        actClear:SetSize(50, 18)
+        actClear:SetSize(CLEAR_W, CLEAR_H)
       end
-      local w = noteText:GetStringWidth()
-      if type(w) ~= "number" or w <= 0 then w = #note * 5 end
       actClear:ClearAllPoints()
-      actClear:SetPoint("TOPLEFT", noteText, "TOPLEFT", math.floor(w + 4), 2)
+      actClear:SetPoint("TOPRIGHT", P.root, "TOPLEFT", PAD + width, -(noteTop - 1))
       actClear:Show()
+      y = math.max(y, noteTop - 1 + CLEAR_H) -- (the panel reaches below the button)
     elseif actClear then
       actClear:Hide()
     end

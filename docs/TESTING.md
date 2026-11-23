@@ -1167,23 +1167,28 @@ enough): the new picture files and code files are only found at start-up. Riskie
    150%, and on a card (`/tc test`, a card) and the settings window.
 4. **Are the icons sharp at 16 px?** The icons on the panel's tabs, the Mock and Congrats buttons, the news line, the
    Hall of Shame: crisp, no bits of the neighbouring icon at the edges.
-5. **Crowned crew.** The title plate behind "TwizCrew" (it sticks out a little above the panel), the crest on the
-   bottom edge, character-style tabs, red game buttons (Close, Mock), the Keep open bar as a game button that lights
-   up when on. Slide the panel out of the tab: are the plate and the crest cut off by the slide?
+5. **Crowned crew.** The title plate behind "TwizCrew" (it sticks out a little above the panel), the crest hanging
+   under the bottom edge (it must not cover the last row or "Scroll for more"), character-style tabs, red game buttons
+   (Close, Mock), the Keep open bar as a game button that lights up when on. Slide the panel out of the tab: the plate
+   and the crest are whole, and the panel is where it used to be. Move the tab to the very top and bottom of the
+   screen: the panel still slides out fully on screen.
 6. **Tavern night** (`/tc`, Basics, click the third picture). It changes at once: oak frame and background, a lighter
    oak band behind the title, "TwizCrew" in the old-book font, cream tabs, a chalk Keep open bar, the tavern sign as
    the tab, tankards on the panel's edge. Cards and pop-ups are parchment with dark text: readable?
 7. **Classic** (the first picture): the game's own dialog borders, the gold-bordered cards, no emblem; the minimap
    button shows its old icon again (the other two show the crest or the tankards).
 8. **The picker.** The three previews look like small versions of each theme; the chosen one has a gold outline and
-   its name in gold. The same picker is first on the Panel tab. Reset everything: back to Crowned crew.
+   its name in gold. The same picker is first on the Panel tab. Reset everything: back to Crowned crew. If the art
+   did not load (check 1), a line under the picker says every theme is drawn as Classic.
 9. **Icons in their places.** The Hall of Shame: an icon on each award row and, when the row fits, on each category
    button; the awards show's big badge; pop-ups (`/tc test`); Recent activity (`/tc recent`) and the Activity tab;
    the news line when news slides out of the tab; a crown before an award title; the card logos; the calendar's Fun
    and Crew notes. Nowhere an empty square.
 10. **See-through.** Keep open on, Fade when I'm not using it 40%, mouse away: all three themes still readable over a
     bright zone (the Barrens) and a dark one (a dungeon). Tavern night's oak goes a bit darker while faded.
-11. **The settings tabs.** One row of six tabs with icons: does it fit? The grey lines under the Basics controls are
+11. **The panel's tabs.** In each row style the words are the same as before the icons (Full rows: "Hall of Shame",
+    the "?" where it used to be); icons only where they fit. **The settings tabs.** One row of six tabs with icons:
+    does it fit? The grey lines under the Basics controls are
     readable; the two links at the top turn white with a line under them on hover and open their windows. The Panel
     tab starts with the picker, Rarely needed has the theme's divider above it.
 12. **Activity Clear.** Open the panel's Activity tab with more than ten entries: a small **Clear** button right of

@@ -366,3 +366,7 @@ function Calendar.viewForTest() return P.view, P.shownYear, P.shownMonth, P.show
 function Calendar.tipFramesForTest() return { tabs = tabs, subs = subs, zone = P.zoneHover } end
 
 -- (Diary's onEnable listens for CALENDAR_CHANGED and calls Calendar.refresh.)
+
+-- A theme change re-inks every button's words in the theme's colour; the Month / Usual times buttons (and the two
+-- tabs) show which one is open by their colour, so put that back. (Its own id: listens whether the module runs.)
+ns.Bus.on("calendarui", "THEME_CHANGED", function() if P.frame and subs then drawTabs() end end)

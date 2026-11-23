@@ -525,6 +525,179 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    ---------------------------------------------------------------------------------------------------- review fixes
+    tucked_the_plate_and_crest_lie_inside_the_holder = function(ns, A, W)
+      boot(W)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
+      W:advance(1)
+      local root, holder = ns.Panel.rootForTest(), ns.Panel.holderForTest()
+      A.eq(root:GetParent(), holder, "tucked: the panel hangs in the clipping holder")
+      local top, bottom = ns.Theme.PANEL_OVERHANG.top, ns.Theme.PANEL_OVERHANG.bottom
+      local s = skin(root)
+      -- the plate: 10 above the frame; the crest: its top 2 above the bottom edge, 38 tall
+      local _, _, _, px, py = s.parts.plate:GetPoint(1)
+      A.ok(py <= top, "the plate's overhang (" .. py .. ") fits in the holder's top " .. top)
+      local point, rel, relPoint, _, cy = s.parts.emblem:GetPoint(1)
+      A.eq({ point, rel, relPoint }, { "TOP", root, "BOTTOM" })
+      local _, ch = s.parts.emblem:GetSize()
+      A.ok(ch - cy <= bottom, "the crest's overhang (" .. (ch - cy) .. ") fits in the holder's bottom " .. bottom)
+      for _, scale in ipairs({ 1, 1.5 }) do
+        ns.Modules.set("panel", "scale", scale); W:advance(0.5)
+        local h = (ns.Panel._.rootH or 0) * scale
+        A.eq(holder:GetHeight(), math.max(1, h) + (top + bottom) * scale, "holder = panel + overhang, at scale " .. scale)
+        local _, _, _, _, ry = root:GetPoint(1)
+        A.eq(ry, -top, "the panel hangs the top overhang lower in it (its own units)")
+        local _, _, _, _, hy = holder:GetPoint(1)
+        A.eq(hy, top * scale, "and the holder sits that much higher: the panel stays where it was")
+      end
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_crest_never_covers_content = function(ns, A, W)
+      boot(W)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(1)
+      local s = skin(ns.Panel.rootForTest())
+      local _, _, _, _, cy = s.parts.emblem:GetPoint(1)
+      -- every layout leaves at least 2 under its last line (the panel's height is the content + 2)
+      A.ok(cy <= 2, "the crest's top is inside the bottom padding (" .. cy .. ")")
+    end,
+
+    tab_words_are_the_same_with_and_without_icons = function(ns, A, W)
+      boot(W)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
+      local tabs = ns.Panel.tabButtonsForTest()
+      local order = { "crew", "shame", "act", "cal", "help" }
+      local function words()
+        local out = {}
+        for _, k in ipairs(order) do
+          local b = tabs[k]
+          out[#out + 1] = (b:IsShown() and "" or "(hidden)") .. tostring(b.label:GetText())
+        end
+        return table.concat(out, " | ")
+      end
+      local with = {}
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
+        with[style] = words()
+      end
+      -- the same panel as if the atlas had not loaded: no tab has an icon
+      for _, k in ipairs(order) do rawset(tabs[k], "tcIconOn", false) end
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
+        A.eq(with[style], words(), style .. ": icons never take the words' place")
+        for _, k in ipairs(order) do A.no(tabs[k].tcIconShown, style .. " " .. k .. ": no icon") end
+      end
+      A.contains(with.full, "Hall of Shame", "full rows keep Hall of Shame")
+    end,
+
+    a_tavern_button_sized_later_is_tiled_again = function(ns, A, W)
+      boot(W)
+      ns.Modules.set("panel", "theme", "tavern"); W:advance(0.2)
+      local b = ns.Widgets.button(W.env.UIParent, "X", function() end)
+      b:SetSize(80, 20)
+      local bg = b.tcButton.parts.bg
+      A.eq(bg._coords[2], 80 / 256, "the oak follows the new width")
+      A.eq(bg._coords[4], 20 / 256, "and height")
+    end,
+
+    the_activity_clear_button_stays_inside_the_panel = function(ns, A, W)
+      boot(W)
+      W:advance(40)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
+      W:advance(1)
+      for lv = 13, 30 do receive(W, ns, "Frostie", "UPDATE", { lv = tostring(lv) }); W:advance(0.1) end
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      ns.Panel.setTab("activity"); W:advance(0.2)
+      local root = ns.Panel.rootForTest()
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
+        local clear = ns.Panel.activityClearForTest()
+        A.ok(clear:IsShown(), style)
+        local point, rel, relPoint, x, y = clear:GetPoint(1)
+        A.eq({ point, rel, relPoint }, { "TOPRIGHT", root, "TOPLEFT" })
+        A.ok(x <= root:GetWidth() - 8, style .. ": its right edge inside the padding (" .. x .. ")")
+        A.ok(-y + 18 <= root:GetHeight(), style .. ": its bottom inside the panel")
+        local note = ns.Panel.noteTextForTest()
+        A.ok(note:GetWidth() <= x - 8 - 4, style .. ": the note makes room for it")
+      end
+    end,
+
+    edges_are_never_more_than_half_a_side = function(ns, A, W)
+      local T = ns.Theme
+      A.eq(T.clampEdge(32, 270, 50), 25, "a pop-up 50 tall: at most 25")
+      A.eq(T.clampEdge(16, 24, 86), 12, "the tucked tab, 24 wide: at most 12")
+      A.eq(T.clampEdge(10, 16, 16), 8, "the ? tab's caps")
+      A.eq(T.clampEdge(12, 400, 300), 12, "a big frame keeps the edge")
+      A.eq(T.clampEdge(12, 0, 0), 12, "a frame not sized yet keeps it")
+      A.eq(T.THEMES.classic.frames.popup.backdrop.edgeSize, 16, "Classic's pop-up edge")
+      A.eq(T.THEMES.classic.frames.tab.backdrop.edgeSize, 12, "Classic's tucked tab edge")
+      boot(W)
+      ns.Modules.set("panel", "theme", "classic")
+      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
+      local help = ns.Panel.tabButtonsForTest().help
+      local cap = help.tcTab.parts.piece1:GetWidth()
+      A.ok(cap * 2 <= help:GetWidth(), "the ?'s two caps fit (" .. cap .. " of " .. help:GetWidth() .. ")")
+      local tab = ns.Panel.tabForTest()
+      A.ok(tab._backdrop.edgeSize * 2 <= 24, "the tucked tab's border fits")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_calendar_keeps_its_open_button_lit_after_a_switch = function(ns, A, W)
+      boot(W)
+      ns.Calendar.open(); ns.Calendar.show("month"); W:advance(0.2)
+      local subs = ns.Calendar.tipFramesForTest().subs
+      local function white(b) local c = b.text._textColor; return c and c[1] == 1 and c[2] == 1 and c[3] == 1 end
+      A.ok(white(subs.usual), "Usual times (not open) is white")
+      A.no(white(subs.month), "Month (open) is lit")
+      ns.Modules.set("panel", "theme", "tavern"); W:advance(0.2)
+      A.ok(white(subs.usual), "still white after the switch")
+      A.no(white(subs.month))
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    each_tavern_picture_has_its_own_fallback = function(ns, A, W)
+      W.state.missingArt = { ["Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Oak.tga"] = true,
+        ["Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Chalk.tga"] = true }
+      boot(W)
+      ns.Modules.set("panel", "theme", "tavern")
+      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
+      A.eq(ns.Theme.drawnId(), "tavern", "the frame loaded, so Tavern night is drawn")
+      local s = skin(ns.Panel.rootForTest())
+      A.eq(s.parts.fill._texture, nil, "no oak picture")
+      A.eq(s.parts.fill._color, { 0.36, 0.22, 0.12, 1 }, "the oak's colour instead")
+      A.eq(s.parts.band._color, { 0.36, 0.22, 0.12, 1 }, "the band too")
+      local keep = ns.Panel.keepSwitchForTest()
+      A.eq(keep.tcKeep.parts.chalk._color, { 0.16, 0.17, 0.16, 1 }, "the chalk board's colour")
+      local b = ns.Widgets.button(W.env.UIParent, "X", function() end)
+      b:SetSize(80, 20)
+      A.eq(b.tcButton.parts.bg._color, { 0.36, 0.22, 0.12, 1 }, "an oak button's colour")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_picker_says_when_the_art_did_not_load = function(ns, A, W)
+      W.state.missingArt = true
+      boot(W)
+      ns.Settings.open()
+      local picker = ns.Settings.pickerForTest("basic")
+      A.eq(ns.Settings.pickerNote(), "The game could not load TwizCrew's art, so every theme is drawn as Classic.")
+      A.ok(picker.note:IsShown())
+      A.eq(picker.note:GetText(), ns.Settings.pickerNote())
+      picker.previews[3]._scripts.OnClick(picker.previews[3])
+      A.eq(ns.Modules.setting("panel", "theme"), "tavern", "the choice is still saved")
+      A.eq(ns.Theme.drawnId(), "classic")
+    end,
+
+    the_picker_line_is_hidden_when_the_art_loads = function(ns, A, W)
+      boot(W)
+      ns.Settings.open()
+      A.eq(ns.Settings.pickerNote(), nil)
+      A.no(ns.Settings.pickerForTest("basic").note:IsShown())
+      local first = ns.Settings.pickerForTest("basic").previews[1]
+      local _, _, _, x = first:GetPoint(1)
+      A.ok(x >= 2, "the outline (2 px outside the box) stays inside the page")
+    end,
+
     tavern_oak_darkens_while_see_through = function(ns, A, W)
       boot(W)
       ns.Modules.set("panel", "theme", "tavern")

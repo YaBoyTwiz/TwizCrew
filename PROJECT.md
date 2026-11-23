@@ -973,8 +973,9 @@ for the look. The build document is `docs/THEMES-SPEC.md` (the designer's), the 
 **What a theme changes.** The frame, border and background of the panel and the other windows, the header (a title
 plate behind the title in Classic and Crowned crew, an oak band in Tavern night), the panel's tab bar and the buttons
 (the game's red buttons and character tabs, or Tavern night's oak buttons and cream tabs), the Keep open switch, the
-tucked tab's skin (a dark box, the crown banner or the tavern sign), the crew emblem (on the panel's bottom edge, a
-faint mark on cards, the minimap button; none in Classic), the accent colour and the title and heading font (Tavern
+tucked tab's skin (a dark box, the crown banner or the tavern sign), the crew emblem (hanging under the panel's
+bottom edge, its top 2 inside the bottom padding so it never covers a row or a note; a faint mark on cards; the
+minimap button; none in Classic), the accent colour and the title and heading font (Tavern
 night: Morpheus). **Never:** layout, sizes and order, the icons, class and tag colours, body text, sounds, the
 see-through and Background darkness settings. Tavern night's cards and pop-ups are parchment, so their text is dark
 there (the one place text colour follows the theme). The kept-open panel's oak is drawn 50% darker while it is
@@ -984,7 +985,8 @@ see-through (35% when solid), the designer's "if testers say so" idea, built in.
 settings. A change repaints everything at once (no `/reload`). Saved data from v0.3.0 gets the default by itself
 (`DB.init` writes defaults in); Reset everything goes back to Crowned crew. The picker: three small previews drawn live
 in each theme's own frame (no picture files of their own), on Basics under "The panel" and first on the Panel page;
-a click switches at once.
+a click switches at once. When a theme's art did not load, one plain line under the picker says so ("The game could
+not load TwizCrew's art, so every theme is drawn as Classic."); the choice stays saved.
 
 **Which windows take it.** The panel and its tucked tab; cards (While you were away, Welcome, Today's recap) and
 pop-ups (their coloured edge stays); the settings, Recent activity, calendar, How to use TwizCrew and What's new
@@ -997,7 +999,16 @@ speech bubble, the calendar's day squares, crew rows, pills, the XP bar, the red
 loads (a hidden texture; `SetTexture`'s answer; no answer counts as loaded, not as missing). Missing: that theme is
 drawn as Classic for the session, the choice stays saved, one log line "theme art missing, using Classic", and
 `/tc report` has a Theme line (chosen, drawn, art and icons loaded or missing). Every texture call is guarded: a
-missing file never raises an error. The emblem, the tab skins and the divider each fall back on their own too.
+missing file never raises an error. The emblem, the tab skins and the divider each fall back on their own too, and
+Tavern night's oak and chalk become plain colours if just that picture is missing. No edge (a border, a 9-slice
+margin, a button's cap) is ever more than half a frame's smaller side; Classic's pop-ups and tucked tab have smaller
+borders of their own (16 and 12, the spec said 32 and 16).
+
+**The tucked panel's holder.** While tucked, the panel hangs in a holder that clips it for the slide. The holder is
+taller than the panel by the skin's overhang (the title plate's 10 above, the crest's 36 below, times Panel size) and
+sits that much higher, so nothing is cut off and the panel is where it always was; hover and the see-through fade go
+by the panel frame itself, never the overhang. The holder's screen clamp leaves the overhang out
+(`SetClampRectInsets`).
 
 **Upside down?** The TGAs are stored bottom row first. If anything shows upside down, one switch flips all our own
 art and the icons: `Theme.FLIP_ART` in `UI/Theme.lua`.
@@ -1007,8 +1018,8 @@ art and the icons: `Theme.FLIP_ART` in `UI/Theme.lua`.
 row fits; else the words alone, as before), the awards show's badge, the row buttons Mock / Mock back / Congrats,
 pop-ups (death, roast, level-up, online, running off, a stolen crown, a new guild member), Recent and Activity rows
 (when a row has no class icon), an icon left of the news line while news is slid out of the tab, the panel's tabs
-(Crew, Hall of Shame, Activity, Calendar; their width counts the icon, and when no word step fits the icons go, not
-the words), the crown or clown before an award title, the card logos, the settings tabs, and the calendar's "Fun"
+(Crew, Hall of Shame, Activity, Calendar; the words are chosen first, as without icons, and the icons show only when
+they also fit at that step: icons never take the words' place), the crown or clown before an award title, the card logos, the settings tabs, and the calendar's "Fun"
 and "Crew" notes. Without the atlas every place draws what it drew before (no empty squares). Kept the game's icons:
 tags, layer news, quest share, the meet-up, pins, the header buttons, the tucked tab's marks, the other 14 note kinds.
 
@@ -1022,6 +1033,8 @@ and Alerts); the old `setTab("advanced", page)` still works. The panel's Activit
 
 **Claude's calls, where the build differs from the spec.**
 - Tavern night's header band is drawn inside the frame without moving the header row down 7 (layout stays as it was).
+- The crest hangs under the panel (its top at the bottom edge + 2) instead of being centred on the edge, so it never
+  covers the last row, the Offline bar or the note line.
 - Crowned crew's card text inset (16 / 14) is not applied: the cards keep their layout.
 - The designer's row, pill, XP bar, guild bar and row hover colours (Classic and Tavern night) are not applied: the
   brief limited a theme to frames, header, tabs and buttons, the tucked tab, the emblem, accent and title font.
@@ -1040,7 +1053,8 @@ the flip, `Theme.ink` for text styles, the report line), `UI/Icons.lua`, `UI/Set
 `tests/test_themes.lua`.
 
 **Only the game can tell (riskiest first):** whether Forever loads our TGAs at all (else everything is Classic and
-the icons are the game's); whether any shows upside down; whether `SetTexture` really answers false for a missing
+the icons are the game's); whether any shows upside down; whether `SetClampRectInsets` takes its signs as written (if
+not, a tucked panel near the very top or bottom of the screen sits a little off); whether `SetTexture` really answers false for a missing
 file; clean 9-slice edges and seams at Scale 100% and 150%; the icons sharp at 13 to 19 px; how the title plate
 (sticking 10 above the frame) and the crest (half below the bottom edge) look, and whether the tucked panel's clipping
 holder cuts them while it slides out; the game button and tab textures' texcoords (from memory of Blizzard's

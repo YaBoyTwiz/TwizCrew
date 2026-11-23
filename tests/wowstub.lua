@@ -98,6 +98,14 @@ local newObject
 
 local function callArgs(...) return { n = select("#", ...), ... } end
 
+local function sizeChanged(self)
+  local scripts = rawget(self, "_scripts")
+  if not scripts then return end
+  local w, h = rawget(self, "_w") or 0, rawget(self, "_h") or 0
+  if scripts.OnSizeChanged then scripts.OnSizeChanged(self, w, h) end
+  if scripts["hook:OnSizeChanged"] then scripts["hook:OnSizeChanged"](self, w, h) end
+end
+
 -- implementations that keep state; every other whitelisted method is a no-op (Get* answers 0, Is* answers false)
 local IMPL = {
   RegisterEvent = function(self, e) self._events[e] = true end,
@@ -106,7 +114,11 @@ local IMPL = {
   IsEventRegistered = function(self, e) return self._events[e] == true end,
   SetScript = function(self, name, fn) self._scripts[name] = fn end,
   GetScript = function(self, name) return self._scripts[name] end,
-  HookScript = function(self, name, fn) self._scripts["hook:" .. name] = fn end,
+  -- hooks add up, like the game's: "hook:<name>" runs every hook set so far, in order
+  HookScript = function(self, name, fn)
+    local before = self._scripts["hook:" .. name]
+    self._scripts["hook:" .. name] = before and function(...) before(...); return fn(...) end or fn
+  end,
   HasScript = function() return true end,
   Show = function(self) self._shown = true end,
   Hide = function(self) self._shown = false end,
@@ -130,9 +142,14 @@ local IMPL = {
   GetAlpha = function(self) return self._alpha end,
   SetScale = function(self, s) self._scale = s end,
   GetScale = function(self) return self._scale end,
-  SetWidth = function(self, w) self._w = w end,
-  SetHeight = function(self, h) self._h = h end,
-  SetSize = function(self, w, h) self._w, self._h = w, h end,
+  -- a frame whose size changes runs its OnSizeChanged script and hooks, like the game's
+  SetWidth = function(self, w) local was = self._w; self._w = w; if was ~= w then sizeChanged(self) end end,
+  SetHeight = function(self, h) local was = self._h; self._h = h; if was ~= h then sizeChanged(self) end end,
+  SetSize = function(self, w, h)
+    local changed = self._w ~= w or self._h ~= h
+    self._w, self._h = w, h
+    if changed then sizeChanged(self) end
+  end,
   GetWidth = function(self) return self._w or 0 end,
   GetHeight = function(self) return self._h or 0 end,
   GetSize = function(self) return self._w or 0, self._h or 0 end,
@@ -177,6 +194,7 @@ local IMPL = {
   SetVertexColor = function(self, r, g, b, a) self._vertex = { r, g, b, a } end,
   SetBackdrop = function(self, bd) self._backdrop = bd end,
   SetTextColor = function(self, r, g, b, a) self._textColor = { r, g, b, a } end,
+  SetColorTexture = function(self, r, g, b, a) self._color = { r, g, b, a } end,
   GetBackdrop = function(self) return self._backdrop end,
   SetVerticalScroll = function(self, v) self._vscroll = v end,
   GetVerticalScroll = function(self) return self._vscroll or 0 end,

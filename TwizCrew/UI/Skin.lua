@@ -102,8 +102,14 @@ local function art(tex, file, l, r, t, b, own)
   return loaded
 end
 
--- A tiled file: texcoords 0..w/tile, 0..h/tile with the REPEAT wrap mode.
-local function tiled(tex, file, w, h, tile)
+-- A tiled file: texcoords 0..w/tile, 0..h/tile with the REPEAT wrap mode. color: what the part shows instead when the
+-- file did not load (each file is asked once), so a missing picture never leaves a blank or odd-coloured part.
+local function tiled(tex, file, w, h, tile, color)
+  if color and T.probe(file) == "failed" then
+    solid(tex, color)
+    T.setCoords(tex, 0, 1, 0, 1)
+    return "failed"
+  end
   local loaded = T.setTexture(tex, file, "REPEAT", "REPEAT")
   local r = math.max(0.01, (tonumber(w) or tile) / tile)
   local t, b = T.flipV(0, math.max(0.01, (tonumber(h) or tile) / tile))
@@ -155,8 +161,17 @@ function T.slicePoints(col, row, d)
   return v1 .. h1, x1, y1, v2 .. h2, x2, y2
 end
 
+-- An edge (a backdrop's edge size, a 9-slice margin, a button's cap) is never more than half the frame's smaller side,
+-- or the pieces would overlap (a frame whose size is not known yet keeps the edge as it is).
+function T.clampEdge(edge, w, h)
+  w, h = tonumber(w) or 0, tonumber(h) or 0
+  if w <= 0 or h <= 0 then return edge end
+  return math.max(0, math.min(edge, math.floor(math.min(w, h) / 2)))
+end
+
 local function slice(frame, rec, spec, margin)
-  local d = margin or spec.margin
+  local d = T.clampEdge(margin or spec.margin, frame:GetWidth(), frame:GetHeight())
+  rec.edge = d
   local loaded
   for i = 1, 9 do
     local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
@@ -176,7 +191,12 @@ end
 ---------------------------------------------------------------------------------------------------------- frames
 local LEGACY = { bg = { T.rgb(T.COLOR.backdrop) }, border = { T.rgb(T.COLOR.border) }, edge = 2 } -- the old flat look
 local PLATE = { panel = { w = 140, h = 35, x = 2, y = 10 }, card = { share = 0.62, h = 48, x = 6, y = 12 } }
-local EMBLEM = { panel = 38, card = 104, cardAlpha = 0.16 }
+-- the panel's crest hangs below the bottom edge: its top is 2 above the edge, inside the panel's bottom padding (every
+-- layout leaves at least 2 under the last line), so it never covers a row, a bar or a note
+local EMBLEM = { panel = 38, panelTop = 2, card = 104, cardAlpha = 0.16 }
+-- How far the panel's skin reaches outside the frame (the title plate above, the crest below): the tucked panel's
+-- clipping holder is this much taller (UI/PanelTab.lua), so nothing is cut off.
+T.PANEL_OVERHANG = { top = PLATE.panel.y, bottom = EMBLEM.panel - EMBLEM.panelTop }
 local BAND = { top = -3, height = 20, inset = 8 }
 
 -- The background alpha of a skinned frame (the panel's Background darkness; cards and pop-ups fixed).
@@ -214,15 +234,20 @@ local function refit(frame)
   local fill = rec.spec.fill
   if fill and rec.parts.fill and rec.parts.fill:IsShown() then
     local inset = rec.opts.margin or fill.inset
-    tiled(rec.parts.fill, fill.file, (w or 0) - 2 * inset, (h or 0) - 2 * inset, rec.opts.tile or fill.tile)
+    tiled(rec.parts.fill, fill.file, (w or 0) - 2 * inset, (h or 0) - 2 * inset, rec.opts.tile or fill.tile, fill.color)
   end
   local band = rec.parts.band
   if band and band:IsShown() and rec.band then
-    tiled(band, rec.band.file, (w or 0) - 2 * BAND.inset, BAND.height, rec.band.tile)
+    tiled(band, rec.band.file, (w or 0) - 2 * BAND.inset, BAND.height, rec.band.tile, rec.band.color)
   end
   local plate = rec.parts.plate
   if plate and plate:IsShown() and rec.opts.plate == "card" then
     plate:SetWidth(math.max(40, math.floor((w or 0) * PLATE.card.share)))
+  end
+  -- a size change that changes the clamped edge: draw the frame again (paintFrame calls refit; no loop, it matches then)
+  if rec.edge and (rec.mode == "backdrop" or rec.mode == "slice") and rec.wantEdge
+    and T.clampEdge(rec.wantEdge, w, h) ~= rec.edge and T.paintFrame then
+    T.paintFrame(frame, T.themeOf(frame))
   end
 end
 T.refit = refit
@@ -235,12 +260,16 @@ local function paintFrame(frame, t)
   if frame.SetBackdrop then pcall(frame.SetBackdrop, frame, nil) end
   rec.spec, rec.mode, rec.band = spec, nil, nil
   local opts = rec.opts
+  rec.edge, rec.wantEdge = nil, nil
   if spec.style == "backdrop" then
     local bd = spec.backdrop
-    if opts.edgeSize then
-      local inset = math.floor(bd.insets.left * opts.edgeSize / bd.edgeSize + 0.5)
+    rec.wantEdge = opts.edgeSize or bd.edgeSize
+    local edge = T.clampEdge(rec.wantEdge, frame:GetWidth(), frame:GetHeight())
+    rec.edge = edge
+    if edge ~= bd.edgeSize then
+      local inset = math.floor(bd.insets.left * edge / bd.edgeSize + 0.5)
       bd = { bgFile = bd.bgFile, edgeFile = bd.edgeFile, tile = bd.tile, tileSize = bd.tileSize,
-        edgeSize = opts.edgeSize, insets = { left = inset, right = inset, top = inset, bottom = inset } }
+        edgeSize = edge, insets = { left = inset, right = inset, top = inset, bottom = inset } }
     end
     local ok = frame.SetBackdrop and pcall(frame.SetBackdrop, frame, bd)
     if ok then
@@ -252,6 +281,7 @@ local function paintFrame(frame, t)
     end
   elseif spec.style == "slice" then
     rec.mode = "slice"
+    rec.wantEdge = opts.margin or spec.margin
     slice(frame, rec, spec, opts.margin)
   elseif spec.style == "flat" then
     rec.mode = "flat"
@@ -312,7 +342,7 @@ local function paintFrame(frame, t)
       local tex = part(holder, rec, "emblem", "OVERLAY", 0)
       art(tex, emblem, 0, 1, 0, 1, true)
       tex:SetSize(EMBLEM.panel, EMBLEM.panel)
-      tex:SetPoint("CENTER", frame, "BOTTOM", 0, 2)
+      tex:SetPoint("TOP", frame, "BOTTOM", 0, EMBLEM.panelTop)
     end
   elseif opts.emblem == "card" and emblem then
     local tex = part(frame, rec, "emblem", "BORDER", 7)
@@ -324,6 +354,7 @@ local function paintFrame(frame, t)
   refit(frame)
   skinAlpha(frame, rec)
 end
+T.paintFrame = paintFrame
 
 function T.skin(frame, kind, opts)
   if type(frame) ~= "table" then return frame end
@@ -363,6 +394,7 @@ end
 ---------------------------------------------------------------------------------------------------------- buttons
 -- Three pieces (left cap, stretched middle, right cap) of one file.
 local function threePieces(owner, rec, prefix, file, coords, cap, layer, sub)
+  cap = T.clampEdge(cap, owner:GetWidth(), owner:GetWidth()) -- (two caps never wider than the button)
   local list = {}
   for i = 1, 3 do
     local tex = part(owner, rec, prefix .. i, layer, sub)
@@ -406,7 +438,7 @@ local function paintButton(b, t)
       fade(bg, "VERTICAL", v.bottom, v.top)
       edges(b, rec, "edge", v.border, 1, "BORDER", 0)
     else
-      tiled(bg, spec.file, b:GetWidth(), b:GetHeight(), spec.tile)
+      tiled(bg, spec.file, b:GetWidth(), b:GetHeight(), spec.tile, spec.color)
       vertex(bg, rgba(spec.shade))
       edges(b, rec, "edge", spec.border, 1, "BORDER", 0)
       local shine = part(b, rec, "shine", "BORDER", 1)
@@ -433,6 +465,8 @@ function T.skinButton(b, variant)
   if type(b) ~= "table" then return b end
   b.tcButton = { parts = {}, variant = variant }
   if b.HookScript then
+    -- a button sized after it was made (0 x 0 at first in the game): its caps and oak tiling follow the new size
+    b:HookScript("OnSizeChanged", function(self) ns.Log.safe(FEATURE, paintButton, self, themeOf(self)) end)
     b:HookScript("OnMouseDown", function(self) ns.Log.safe(FEATURE, pressButton, self, true) end)
     b:HookScript("OnMouseUp", function(self) ns.Log.safe(FEATURE, pressButton, self, false) end)
     b:HookScript("OnHide", function(self) ns.Log.safe(FEATURE, pressButton, self, false) end)
@@ -483,6 +517,9 @@ T.paintTab = paintTab
 function T.skinTab(b, fixedRole)
   if type(b) ~= "table" then return b end
   b.tcTab = { parts = {}, active = false, fixedRole = fixedRole }
+  if b.HookScript then -- (a new word changes the width: the caps follow)
+    b:HookScript("OnSizeChanged", function(self) ns.Log.safe(FEATURE, paintTab, self, themeOf(self)) end)
+  end
   b.SetActive = function(self, on)
     on = on and true or false
     local rec = self.tcTab
@@ -506,7 +543,7 @@ local function paintKeep(bar, t)
     local bg = part(bar, rec, "chalk", "BACKGROUND", 0)
     bg:SetPoint("TOPLEFT", bar, "TOPLEFT", 3, -3)
     bg:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -3, 3)
-    tiled(bg, spec.file, bar:GetWidth(), bar:GetHeight(), spec.tile)
+    tiled(bg, spec.file, bar:GetWidth(), bar:GetHeight(), spec.tile, spec.color)
     edges(bar, rec, "frameA", spec.border, 2, "BORDER", 0, 1)
     edges(bar, rec, "frameB", spec.border2, 1, "BORDER", 1, 0)
   else

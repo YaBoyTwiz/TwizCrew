@@ -344,6 +344,23 @@ local function previewBox(parent, id)
   return box
 end
 
+-- One plain line under the picker when a theme's art did not load (it is drawn as Classic then; the choice stays
+-- saved), else nil.
+function Win.pickerNote()
+  local failed, art = {}, 0
+  for _, id in ipairs(T.ORDER) do
+    if T.THEMES[id].probe then
+      art = art + 1
+      if T.artLoaded(id) == false then failed[#failed + 1] = T.THEMES[id].name end
+    end
+  end
+  if #failed == 0 then return nil end
+  if #failed == art then return "The game could not load TwizCrew's art, so every theme is drawn as Classic." end
+  return "The game could not load the art for " .. table.concat(failed, " and ") .. ", so it is drawn as Classic."
+end
+local PICKER_NOTE = 30 -- (room for two lines)
+local function pickerHeight() return PICKER_ROW + (Win.pickerNote() and PICKER_NOTE or 0) end
+
 -- "Theme" with its (i), then the three previews (Classic, Crowned crew, Tavern night) with their names; the chosen
 -- one has a 2 px accent outline and its name in the accent colour. A click switches at once. page: one row per page.
 local function pickerRow(page)
@@ -361,7 +378,8 @@ local function pickerRow(page)
     for i, id in ipairs(T.ORDER) do
       local b = CreateFrame("Button", nil, f)
       b:SetSize(PREVIEW, PREVIEW + 16)
-      b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (PREVIEW + PREVIEW_GAP), -24)
+      -- (2 in, so the chosen one's 2 px outline is not cut by the page's edge)
+      b:SetPoint("TOPLEFT", f, "TOPLEFT", 2 + (i - 1) * (PREVIEW + PREVIEW_GAP), -24)
       b.box = previewBox(b, id)
       b.box:SetPoint("TOP", b, "TOP", 0, 0)
       if b.box.EnableMouse then b.box:EnableMouse(false) end
@@ -386,7 +404,14 @@ local function pickerRow(page)
       b.tcId = id
       f.previews[i] = b
     end
+    f.note = T.text(f, T.FONT.small, C.muted)
+    f.note:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -PICKER_ROW)
+    f.note:SetWidth(CONTENT_WIDTH)
+    f.note:SetJustifyH("LEFT")
     f.Refresh = function()
+      local note = Win.pickerNote()
+      f.note:SetText(note or "")
+      if note then f.note:Show() else f.note:Hide() end
       local chosen = T.chosen()
       local a = T.active().accent
       for _, b in ipairs(f.previews) do
@@ -578,7 +603,7 @@ local function layout()
         place(sectionRow({ tier = "page:" .. item.title, title = item.title, note = item.note or "" }), 0,
           SECTION_ROW + 4, "section:" .. item.title)
       elseif item.picker then
-        place(pickerRow(tab), 0, PICKER_ROW, "picker:panel:theme")
+        place(pickerRow(tab), 0, pickerHeight(), "picker:panel:theme")
       elseif item.module then
         local def = ns.Modules.get(item.module)
         if def then

@@ -382,7 +382,12 @@ local function layoutRow(r, m, style, width)
   if m.title then -- award title: a small muted line under the name, in every row style
     local left = 6 + icon + 5
     local clown = ns.ShowLogic and m.title == ns.ShowLogic.CLOWN_TITLE
-    if ns.Icons.set(r.titleIcon, clown and "clown" or "crown") == "atlas" then
+    local want = clown and "clown" or "crown"
+    if rawget(r, "tcTitleIcon") ~= want then -- (set only when it changes, not on every layout)
+      r.tcTitleIcon, r.tcTitleIconOk = want, ns.Icons.set(r.titleIcon, want) == "atlas"
+    end
+    if r.tcTitleIconOk then
+      r.titleIcon:Show()
       r.titleIcon:ClearAllPoints()
       r.titleIcon:SetPoint("TOPLEFT", r, "TOPLEFT", left, -(y - 2))
       left = left + TITLE_ICON + 3

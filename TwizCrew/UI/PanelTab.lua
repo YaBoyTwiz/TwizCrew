@@ -206,12 +206,24 @@ end
 -- The holder is out (or sliding back in).
 function P.clipOut() return shownNow(holder) end
 
--- After a redraw: the holder takes the panel's height (and, while it is out, slides to the panel's width).
+-- How far the panel's skin reaches above and below the frame (the title plate, the crest: UI/Skin.lua). The holder is
+-- that much taller and the panel hangs that much lower inside it, so the clipping never cuts them; on screen the panel
+-- sits exactly where it did (the holder moves up by the top overhang). Not the mouse's: hover and the see-through
+-- fade go by the panel frame itself.
+local function overhang()
+  local o = T.PANEL_OVERHANG or {}
+  return tonumber(o.top) or 0, tonumber(o.bottom) or 0
+end
+P.overhang = overhang
+
+-- After a redraw: the holder takes the panel's height plus the overhang (and, while it is out, slides to the panel's
+-- width).
 function P.fitClip()
   if not holder or keepOpen() or not P.root then return end
   local scale = P.appliedScale()
   local w, h = (tonumber(P.rootW) or 0) * scale, (tonumber(P.rootH) or 0) * scale
-  holder:SetHeight(math.max(1, h))
+  local top, bottom = overhang()
+  holder:SetHeight(math.max(1, h) + (top + bottom) * scale)
   if P.curView ~= "tab" and P.shown then P.slideTo(w) end
 end
 
@@ -252,8 +264,12 @@ function P.placeTab()
   local edge = right and "RIGHT" or "LEFT"
   tab:ClearAllPoints()
   tab:SetPoint(edge, UIParent, edge, 0, y)
+  local oTop, oBottom = overhang()
   holder:ClearAllPoints()
-  if right then holder:SetPoint("TOPRIGHT", tab, "TOPLEFT", 0, 0) else holder:SetPoint("TOPLEFT", tab, "TOPRIGHT", 0, 0) end
+  if right then holder:SetPoint("TOPRIGHT", tab, "TOPLEFT", 0, oTop * scale)
+  else holder:SetPoint("TOPLEFT", tab, "TOPRIGHT", 0, oTop * scale) end
+  -- the screen clamp counts the panel, not the overhang (positive bottom and negative top shrink the clamp area)
+  if holder.SetClampRectInsets then pcall(holder.SetClampRectInsets, holder, 0, 0, -oTop * scale, oBottom * scale) end
   -- the badge, the "!" and the marks sit on the side away from the edge
   local out, outPoint = right and "LEFT" or "RIGHT", right and "TOPLEFT" or "TOPRIGHT"
   local dx = right and -1 or 1
@@ -267,8 +283,8 @@ function P.placeTab()
   tab.layer:SetPoint("CENTER", tab, out, dx * 2, -8)
   if P.root and not keepOpen() then
     P.root:ClearAllPoints()
-    if right then P.root:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
-    else P.root:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, 0) end
+    if right then P.root:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, -oTop)
+    else P.root:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, -oTop) end -- (the panel's own, scaled units)
   end
 end
 
@@ -516,7 +532,8 @@ local function seeSolid(now)
   if P.open ~= nil or P.slide ~= nil or P.curView == "peek" then return true end
   if P.bar and (P.bar:current() ~= nil or (flashAt ~= nil and now - flashAt < FLASH_SECONDS)) then return true end
   if mouseOverTab() or mouseOverPanel() then return true, true end
-  if shownNow(holder) and over(holder) and focusOn(holder) then return true, true end
+  -- (the holder's part over the panel only: its overhang above and below never holds it solid)
+  if shownNow(holder) and over(holder) and over(P.root) and focusOn(holder) then return true, true end
   return false
 end
 

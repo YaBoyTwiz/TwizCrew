@@ -85,6 +85,8 @@ Calendar\CalendarMaker.lua
 Calendar\NoteView.lua
 UI\Extras.lua
 UI\Recap.lua
+UI\AwayLogic.lua
+UI\AwayCard.lua
 UI\Settings.lua
 UI\Report.lua
 UI\GuildTest.lua

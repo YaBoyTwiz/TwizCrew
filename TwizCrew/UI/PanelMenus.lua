@@ -105,6 +105,8 @@ function Panel.toolItems()
       onClick = function() ns.Recent.open() end } or nil,
     ns.Recap and { label = "Today's recap", icon = "Interface\\Icons\\INV_Misc_Book_11",
       onClick = function() ns.Recap.show() end } or nil,
+    ns.AwayCard and ns.AwayCard.hasCard() and { label = "While you were away",
+      icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", onClick = function() ns.AwayCard.reshow() end } or nil,
     ns.Changelog and { label = "What's new", icon = "Interface\\Icons\\INV_Misc_Book_09",
       onClick = function() ns.Changelog.open() end } or nil,
     { label = "Health check (to copy to Discord)", icon = "Interface\\Icons\\INV_Misc_Note_01",

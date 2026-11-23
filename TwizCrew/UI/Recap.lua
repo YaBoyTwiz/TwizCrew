@@ -183,13 +183,20 @@ end
 ns.Modules.register({
   id = FEATURE, name = "Today's recap", tier = "extra",
   info = "A short card about your play session: time played, levels and XP, quests, deaths, gold, mocks and who "
-    .. "from the crew was on. It shows when you log out (during the countdown), or any time with /tc recap.",
-  defaults = { onLogout = true },
+    .. "from the crew was on. It shows when you log out (during the countdown), or any time with /tc recap. Also the "
+    .. "\"While you were away\" card after a long break.",
+  defaults = { onLogout = true, awayCard = true },
   settings = {
     { key = "show", label = "Show today's recap now", kind = "button", onClick = function() Recap.show() end,
       info = "Opens the card for this play session so far." },
     { key = "onLogout", label = "Show it when I log out", kind = "toggle",
       info = "The card shows by itself while the game counts down to log out or quit." },
+    { key = "awayCard", label = "Show what changed while I was away", kind = "toggle",
+      info = "About ten seconds after you log in, if you were gone 12 hours or more, one card shows what changed: "
+        .. "who leveled up (\"Irek 27 -> 30\"), who joined or left the guild, new calendar notes and Hall of Shame "
+        .. "crowns that changed hands. Level-ups, joins and leaves cover everyone in the guild, also members "
+        .. "without TwizCrew. Click it to close. During a fight or inside a dungeon or raid it waits until you are "
+        .. "out." },
   },
   onEnable = onEnable,
   onDisable = onDisable,

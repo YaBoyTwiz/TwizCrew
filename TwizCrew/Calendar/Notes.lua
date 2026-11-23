@@ -563,6 +563,21 @@ function Notes.isNew(noteKey)
   return not (type(r) == "table" and not r.x)
 end
 
+-- How many notes by someone else were made at or after `since` (UTC seconds, the time in the note's key), still
+-- count and are not opened yet (isNew): the "While you were away" card's calendar line.
+function Notes.newSince(since)
+  since = tonumber(since)
+  if not since then return 0 end
+  local n = 0
+  for key, note in pairs(store() or {}) do
+    if type(key) == "string" and type(note) == "table" and not note.x and inWindow(note.d) and created(key) >= since
+      and created(key) ~= math.huge and Notes.isNew(key) then
+      n = n + 1
+    end
+  end
+  return n
+end
+
 -- I'm going ("yes"), "maybe" or can't ("no"); nil takes my answer back.
 function Notes.rsvp(noteKey, status)
   local s, key, r = myReply(noteKey, "r")

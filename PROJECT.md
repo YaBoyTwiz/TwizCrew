@@ -804,6 +804,19 @@ visible": a clearly labelled switch, not a small icon.
   old ordinary window (drag anywhere, saved position, fade, grow direction, lock), the tab is hidden. Also `/tc mini`
   (and `/tc minimize`), the key binding "Keep the crew panel open, or let it tuck away", the title bar menu ("Keep
   open" / "Tuck away"), the tab's menu, the minimap button's menu and the setting.
+- **See-through when idle** (owner, 2026-11-23: "i want the panel by default to be transparent unless its being
+  interacted with, but if news happens or slides etc that doesnt need to be transparent"; **not tested in the game
+  yet**). The tab, and the panel when Keep open is on, fade as whole frames (text and bars too: `SetAlpha`, fine in
+  fights) to the setting `idleAlpha` ("See-through when idle", 10% to 100%, default 40% for everyone; 100% = off; a
+  change applies at once; tip `Help.TIPS.idleAlpha`). It replaced the old "Fade when the mouse is not over it" and
+  "How much to fade" (`fadeOut`, `fadeAlpha`, Keep open only). Solid (1) while: the mouse is on the tab, the panel or
+  the holder (the same focus check as hover); the panel is out (hover, click, the note) or sliding; news is showing
+  or the tab flashes for new news; a menu opened from the panel or tab is open; the tab or the kept-open panel is
+  being dragged. To solid in 0.2 s; back to idle 1 s after the last reason ended, over 0.4 s. The rules are
+  `PanelLogic.seeTarget` / `seeStep`; the work is in `UI/PanelTab.lua` (the 0.1 s ticker decides the target, a frame's
+  OnUpdate smooths the fade and runs only while it moves). The ticker stops when settled. A kept-open panel has no tab
+  to wake the ticker, so it polls the mouse (an OnUpdate, 10 times a second) while it is see-through. The update "!"
+  and the missed glow do not hold it solid.
 - **Pop-ups:** they show as before, and the news slides out of the tab too. "Show news on the tab, not as pop-ups"
   (`barInstead`, default off) stops the online, death, level-up, layer and running-off pop-ups while the panel is
   tucked, the tab is on screen and news slides out, never in a fight (nothing slides out then, so the pop-up shows).

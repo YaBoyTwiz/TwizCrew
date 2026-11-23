@@ -32,6 +32,8 @@ Help.TIPS = {
   about = { "How to use TwizCrew", "A short page about what TwizCrew does and how to use it." },
   crewTab = { "Crew tab",
     "Rest your mouse here or click to see the whole panel. News slides out from here for a few seconds." },
+  idleAlpha = { "See-through when idle",
+    "How visible the tab, or the panel when kept open, stays while your mouse is away. News and menus make it solid; 100% is off." },
   keepOpen = { "Keep open",
     "ON: the panel stays on screen. OFF: it tucks away into its small tab and slides out when you mouse over it." },
   ------------------------------------------------------------------------------------------------- Hall of Shame

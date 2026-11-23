@@ -1075,6 +1075,14 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    opening it clears that. Click the red number on the tab: the panel opens straight on Activity. Switch to Tiny rows:
    the words shorten ("Act", "Cal") and nothing overlaps or pokes out of the panel. Turn Stats and Calendar off in
    the settings: the bar still shows Crew and Activity. `/tc recent` still opens the Recent window.
+17. **See-through when idle** (not tested in the game yet). Leave the mouse away from the tab: it is faint, about
+   40%, text and all. Move the mouse onto it: it turns solid in a fraction of a second. Move away: about a second
+   later it fades back over under half a second. Rest on it so the panel slides out: solid the whole time, and the
+   panel is never faded. Let a friend come online: the tab and the news are solid while it shows, then fade about
+   a second after it slides back. Right-click the tab: solid while the menu is open. Drag the tab: solid. Turn on
+   **Keep open**: the whole panel is faint when the mouse is away and solid with the mouse on it (move between rows,
+   the header and the tabs: no flicker). Settings, **See-through when idle**: moving the slider changes it at once;
+   100% means nothing is ever faint; hover its (i) for the tip. Fight with it faint: no errors.
 
 ## Server-side storage probes (2026-11-23)
 

@@ -30,8 +30,7 @@ local BASICS = {
   { id = "panel", key = "bgAlpha" },
   { id = "panel", key = "scale" },
   { id = "panel", key = "rowStyle" },
-  { id = "panel", key = "fadeOut" },
-  { id = "panel", key = "fadeAlpha" },
+  { id = "panel", key = "idleAlpha" },
   { title = "Handy", note = "the things people change most" },
   { module = "panel" },
   { id = "panel", key = "showOffline" },
@@ -68,7 +67,7 @@ local MODULE_ICONS = {
 }
 local SETTING_ICONS = {
   ["panel:bgAlpha"] = "Interface\\Icons\\Spell_Shadow_Twilight", ["panel:scale"] = "Interface\\Icons\\INV_Misc_Spyglass_03",
-  ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:fadeOut"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
+  ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:idleAlpha"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
   ["panel:keepOpen"] = "Interface\\Icons\\INV_Misc_Spyglass_03", ["panel:peek"] = "Interface\\Icons\\Spell_Holy_MindVision",
   ["activity:chat"] = "Interface\\Icons\\INV_Misc_Note_02",
   ["panel:showOffline"] = "Interface\\Icons\\Ability_Stealth", ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",

@@ -587,6 +587,34 @@ function PanelLogic.slideWidth(from, to, t0, dur, t)
   return from + (to - from) * k, false
 end
 
+-- See-through when idle: how visible the tab (or the kept-open panel) should be now. `idle` is the setting (0.1 to 1;
+-- 1 = the feature is off), `solid` whether something wants it solid right now, `since` how long ago anything last did
+-- (nil: never), `delay` how long it stays solid after the last reason ends.
+function PanelLogic.seeTarget(idle, solid, since, delay)
+  idle = math.max(0.1, math.min(1, tonumber(idle) or 0.4))
+  if idle >= 1 or solid then return 1 end
+  if since ~= nil and since < (tonumber(delay) or 0) then return 1 end
+  return idle
+end
+
+-- One step of the fade from `cur` toward `target` after `dt` seconds: the whole span between idle and solid takes
+-- `rise` seconds going up and `fall` seconds going down. nil `cur` jumps to the target.
+function PanelLogic.seeStep(cur, target, dt, idle, rise, fall)
+  if cur == nil or cur == target then return target end
+  idle = math.max(0.1, math.min(1, tonumber(idle) or 0.4))
+  local span = 1 - idle
+  dt = math.max(0, tonumber(dt) or 0)
+  if span <= 0 then return target end
+  if target > cur then
+    local r = tonumber(rise) or 0
+    if r <= 0 then return target end
+    return math.min(target, cur + dt * span / r)
+  end
+  local f = tonumber(fall) or 0
+  if f <= 0 then return target end
+  return math.max(target, cur - dt * span / f)
+end
+
 -- A grow-up panel saved by an older version while minimized kept the bar's y (`mini = true`): the y of the whole
 -- panel's bottom corner again.
 function PanelLogic.yAfterRestore(barSavedY, fullHeight, barHeight)

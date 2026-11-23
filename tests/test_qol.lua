@@ -130,18 +130,15 @@ return {
     end,
     older_saved_settings_switch_once = function(ns, A, W)
       local saved = { fadeOnSince017 = true,
-        modules = { panel = { enabled = true, settings = { showOffline = true, showSelf = false, fadeAlpha = 0.35 } } } }
+        modules = { panel = { enabled = true, settings = { showOffline = true, showSelf = false } } } }
       local db = start(ns, W, saved)
       A.eq(ns.Modules.setting("panel", "showOffline"), false)
       A.eq(ns.Modules.setting("panel", "showSelf"), false, "on in v0.1.12, off again in v0.1.13")
-      A.eq(ns.Modules.setting("panel", "fadeAlpha"), 0.5)
       A.eq(db.panelSince0112, true)
       -- the owner changes them back: they stay
       ns.Modules.set("panel", "showOffline", true)
-      ns.Modules.set("panel", "fadeAlpha", 0.35)
       ns.Modules.setEnabled("panel", false); ns.Modules.setEnabled("panel", true)
       A.eq(ns.Modules.setting("panel", "showOffline"), true)
-      A.eq(ns.Modules.setting("panel", "fadeAlpha"), 0.35)
     end,
     ------------------------------------------------------------------------------------------- came online pop-up
     a_friend_coming_online_pops_up = function(ns, A, W)

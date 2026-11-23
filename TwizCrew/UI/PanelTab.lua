@@ -30,6 +30,7 @@ local CLICK_KEEPS = 1      -- a click this soon after a hover-open keeps the pan
 local NOTE_MIN = 6         -- opened from the one-time note's pop-up: out at least this long unless the mouse came by
 local FLASH_SECONDS, BAR_TICK = 1.6, 0.1
 local GLOW = 0.35          -- the tab's steady glow while there is unseen news
+local SEE_RISE, SEE_FALL, SEE_DELAY = 0.2, 0.4, 1 -- see-through: to solid in 0.2 s; to idle 1 s after the last reason, in 0.4 s
 local DEAD_COLOR = "ff3030"
 local LAYER_COLOR = ns.Tags.COLOR.LAYER
 
@@ -50,6 +51,10 @@ local AFTER_FIGHT = 3       -- seconds after a fight ends before its news slides
 local FIGHT_MAX = 20        -- news kept from a fight at most
 local fightNews = {}        -- copies of the news that came in a fight (in scope), oldest first, until it is shown
 local fightWait = 0         -- counts the fights' ends: only the last one's wait acts
+local seeCur, seeTarget      -- the alpha now and the one it is fading toward (nil until first set)
+local seeAt                  -- time of the last fade step (nil while settled)
+local lastSolidAt            -- when something last wanted the tab / panel solid
+local seeFrame               -- frame whose OnUpdate runs the fade smoothly, only while it is fading
 P.slide = nil               -- { from, to, t0 } while the holder slides
 
 ---------------------------------------------------------------------------------------------------------- mouse
@@ -329,6 +334,7 @@ local function dragStart(self)
   if setting("locked") or not self.StartMoving then return end
   dragging = true
   self:StartMoving()
+  startBarTicker()
 end
 
 local function dragStop(self)
@@ -493,10 +499,85 @@ function Panel.tabClicked()
   end
 end
 
+---------------------------------------------------------------------------------------------------------- see-through
+-- Idle, the tab (and the kept-open panel) fade to the "See-through when idle" level (whole frames: text and bars too).
+-- Solid (1) while: the mouse is on the tab, the panel or the holder, or on a menu opened from them; the panel is out
+-- (hover, click, the note) or sliding; news is out or the tab flashes for new news; the tab or the kept-open panel is
+-- being dragged. It goes back to idle SEE_DELAY seconds after the last of those. 100% = nothing but alpha 1.
+local function idleAlpha() return clamp(setting("idleAlpha"), 0.1, 1, 0.4) end
+
+local function seeSolid(now)
+  if dragging or (P.isMoving and P.isMoving()) then return true end
+  if P.open ~= nil or P.slide ~= nil or P.curView == "peek" then return true end
+  if P.bar and (P.bar:current() ~= nil or (flashAt ~= nil and now - flashAt < FLASH_SECONDS)) then return true end
+  if mouseOverTab() or mouseOverPanel() then return true end
+  if shownNow(holder) and over(holder) and focusOn(holder) then return true end
+  return false
+end
+
+local function applyAlpha(a)
+  seeCur = a
+  local kept = keepOpen()
+  if tab then tab:SetAlpha(a) end
+  if holder then holder:SetAlpha(kept and 1 or a) end
+  if P.root then P.root:SetAlpha(kept and a or 1) end
+end
+
+local function stopSeeFrame() if seeFrame then seeFrame:SetScript("OnUpdate", nil) end end
+
+-- Moves the alpha toward the target by the time since the last step; a frame's OnUpdate keeps it smooth until it
+-- arrives (then nothing runs).
+local function seeMove(now)
+  if seeTarget == nil then return end
+  local dt = seeAt and math.max(0, math.min(now - seeAt, 1)) or 0
+  seeAt = now
+  local nxt = Logic.seeStep(seeCur, seeTarget, dt, idleAlpha(), SEE_RISE, SEE_FALL)
+  if nxt ~= seeCur then applyAlpha(nxt) end
+  if nxt == seeTarget then seeAt = nil; stopSeeFrame(); return end
+  if not seeFrame then seeFrame = CreateFrame("Frame") end
+  seeFrame:SetScript("OnUpdate", function() ns.Log.safe(FEATURE, seeMove, ns.now()) end)
+end
+
+-- Decides the target (every ticker tick, or at once with `snap`: a setting changed) and steps toward it.
+local function seeTick(now, snap)
+  local idle = idleAlpha()
+  local solid = idle < 1 and seeSolid(now)
+  if solid then lastSolidAt = now end
+  seeTarget = Logic.seeTarget(idle, solid, lastSolidAt and now - lastSolidAt or nil, SEE_DELAY)
+  if snap or seeCur == nil then applyAlpha(seeTarget); seeAt = nil; stopSeeFrame(); return end
+  seeMove(now)
+end
+
+-- Is the see-through level still changing or waiting to change (the ticker must run)?
+local function seeBusy(now)
+  if idleAlpha() >= 1 then return false end
+  if seeCur ~= seeTarget then return true end
+  if lastSolidAt and now - lastSolidAt < SEE_DELAY then return true end
+  return seeSolid(now)
+end
+
+local seeWaited = 0
+local function seeWake(_, elapsed)
+  seeWaited = seeWaited + (tonumber(elapsed) or 0)
+  if seeWaited < 0.1 then return end
+  seeWaited = 0
+  ns.Log.safe(FEATURE, function() if mouseOverPanel() then startBarTicker() end end)
+end
+
+-- The setting or the mode changed (applyLook): apply at once. A kept-open panel has no tab whose OnEnter wakes the
+-- ticker, so it polls the mouse (a cheap check, 10 times a second) while it is see-through.
+function P.seeSync()
+  if idleAlpha() >= 1 then lastSolidAt = nil end
+  seeTick(ns.now(), true)
+  if P.root then P.root:SetScript("OnUpdate", (keepOpen() and idleAlpha() < 1) and seeWake or nil) end
+  startBarTicker()
+end
+
 ---------------------------------------------------------------------------------------------------------- ticker
 local function needTicker()
   if not P.bar or not P.enabled then return false end
   return P.bar:current() ~= nil or P.open ~= nil or P.slide ~= nil or tabHover or newsHeld
+    or seeBusy(ns.now())
     or (flashAt ~= nil and ns.now() - flashAt < FLASH_SECONDS)
 end
 
@@ -557,6 +638,7 @@ local function barTick()
     tabHover = false
   end
   drawTab(now)
+  seeTick(now)
   if changed then requestRedraw() end
   if not needTicker() then stopBarTicker() end
 end
@@ -798,6 +880,10 @@ end
 
 ---------------------------------------------------------------------------------------------------------- test hooks
 function Panel.barForTest() return P.bar end
+function Panel.seeForTest()
+  return { cur = seeCur, target = seeTarget, tab = tab and tab:GetAlpha(), root = P.root and P.root:GetAlpha(),
+    holder = holder and holder:GetAlpha() }
+end
 function Panel.barTickerForTest() return barTicker ~= nil end
 function Panel.viewForTest() return P.curView end
 function Panel.noticeForTest() return P.noticeShown end

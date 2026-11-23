@@ -363,7 +363,7 @@ return {
       A.no(has(d, "setting:comm:password"), "no crew code")
       A.ok(has(d, "module:panel:switch"))
       A.ok(has(d, "setting:panel:scale"))
-      A.ok(has(d, "child:panel:fadeAlpha"), "a setting with a parent is indented")
+      A.ok(has(d, "child:panel:peekSeconds"), "a setting with a parent is indented")
       A.ok(has(d, "module:popups:switch"))
       A.ok(has(d, "module:pokes:coming later"))
       A.ok(has(d, "module:races:coming later"))

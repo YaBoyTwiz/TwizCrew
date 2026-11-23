@@ -37,7 +37,7 @@ local BOARD_UNAVAILABLE = "Hall of Shame unavailable right now"
 local TICK = 30 -- seconds; keeps "last seen 2h ago" fresh
 local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
   BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
-local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, fadeOut = true, fadeAlpha = true }
+local LOOK_KEYS = { scale = true, bgAlpha = true, position = true, idleAlpha = true }
 local REDRAW_ON = { "MEMBER_UPDATED", "MEMBER_ONLINE", "MEMBER_OFFLINE", "SELF_UPDATED", "LAYER_RELATION",
   "SETTING_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "STATS_CHANGED", "SESSION_CHANGED", "UPDATE_SEEN",
   "MEMBER_REMOVED", "AWAY_CHANGED", "FIND_CHANGED", "TROPHIES_CHANGED", "CLOWN_CHANGED", "GUILD_LIST", "GUILD_STATE",
@@ -90,7 +90,6 @@ local firstRow = 1
 local pending, moving = false, false
 local ticker
 local redraws = 0
-local fadeElapsed = 0
 local FL = ns.FeedLogic
 local NOTICE_SHORT, NOTICE_QUEUE = 3, 8 -- news stays 3 s when two or more wait, 8 wait at most
 
@@ -336,7 +335,10 @@ local function startDrag()
   if setting("locked") or not keepOpen() or not P.root.StartMoving then return end
   moving = true
   P.root:StartMoving()
+  if P.startBarTicker then P.startBarTicker() end
 end
+
+function P.isMoving() return moving end
 
 local function stopDrag()
   if not moving then return end
@@ -356,22 +358,6 @@ end
 P.draggable = draggable
 
 ---------------------------------------------------------------------------------------------------------- look
-local function fadeStep()
-  local over = false
-  if P.root.IsMouseOver then over = P.root:IsMouseOver()
-  elseif type(MouseIsOver) == "function" then over = MouseIsOver(P.root) end
-
-  P.root:SetAlpha(over and 1 or clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
-end
-
--- The raw handler only adds up the time; the safe wrapper runs once per 0.1 s step.
-local function fadeTick(_, elapsed)
-  fadeElapsed = fadeElapsed + (tonumber(elapsed) or 0)
-  if fadeElapsed < 0.1 then return end
-  fadeElapsed = 0
-  ns.Log.safe(FEATURE, fadeStep)
-end
-
 local appliedScale -- the scale the panel has now, to keep its corner still when the scale changes
 P.appliedScale = function() return appliedScale or 1 end
 
@@ -408,13 +394,7 @@ local function applyLook()
   for _, r in ipairs(rowFrames) do T.setBackgroundAlpha(r, alpha) end
   if P.tab then P.tab:SetScale(newScale) end
   applyPosition()
-  if setting("fadeOut") and keepOpen() then -- (a tucked panel only shows while it is looked at)
-    P.root:SetScript("OnUpdate", fadeTick)
-    P.root:SetAlpha(clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
-  else
-    P.root:SetScript("OnUpdate", nil)
-    P.root:SetAlpha(1)
-  end
+  if P.seeSync then P.seeSync() end -- the see-through level (UI/PanelTab.lua)
 end
 P.applyLook = applyLook
 
@@ -1056,7 +1036,6 @@ local function onEnable()
     -- row on, a lighter fade
     if ns.Modules.setting(FEATURE, "showOffline") == true then ns.Modules.set(FEATURE, "showOffline", false) end
     if ns.Modules.setting(FEATURE, "showSelf") == false then ns.Modules.set(FEATURE, "showSelf", true) end
-    if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.35 then ns.Modules.set(FEATURE, "fadeAlpha", 0.5) end
   end
   if ns.db then ns.db.panelSince0112 = true end
   if ns.db and not ns.db.panelSince0113 then -- v0.1.13: my own row off again ("too much clutter"); once
@@ -1065,8 +1044,6 @@ local function onEnable()
   end
   if ns.db and not ns.db.fadeOnSince017 then -- v0.1.10: fading became the default; once, for everyone
     ns.db.fadeOnSince017 = true
-    if ns.Modules.setting(FEATURE, "fadeOut") == false then ns.Modules.set(FEATURE, "fadeOut", true) end
-    if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.3 then ns.Modules.set(FEATURE, "fadeAlpha", 0.35) end
   end
   if not P.root then build() end
   migrateToTab(existing)
@@ -1130,7 +1107,7 @@ ns.Modules.register({
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
     showQuest = true, shareQuest = true, questRequests = true, questHeadsUp = true,
     xpText = true, xpTooltip = true,
-    fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
+    idleAlpha = 0.4, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
     showSelf = false, noticeScope = "close",
     keepOpen = false, peek = true, peekSeconds = 5, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
@@ -1201,13 +1178,8 @@ ns.Modules.register({
     { key = "xpTooltip", label = "XP details on hover", kind = "toggle",
       info = "Hover over a friend's row to see the exact XP they need for the next level, their rested XP, "
         .. "and about how long until they level at their pace this session (shown once there is a steady pace)." },
-    { key = "fadeOut", label = "Fade when the mouse is not over it", kind = "toggle",
-      info = "Makes the panel see-through while your mouse is somewhere else, so it gets in the way less. "
-        .. "Important things, like the Mock button and the update line, stay fully visible. Only with Keep open on: "
-        .. "a tucked panel only slides out while you look at it." },
-    { key = "fadeAlpha", label = "How much to fade", kind = "slider", min = 0.1, max = 1, step = 0.05,
-      fmt = Widgets.percent, parent = "fadeOut",
-      info = "How visible the panel stays while it is faded. Lower means more see-through." },
+    { key = "idleAlpha", label = "See-through when idle", kind = "slider", min = 0.1, max = 1, step = 0.05,
+      fmt = Widgets.percent, info = select(2, ns.Help.tip("idleAlpha")) },
     { key = "locked", label = "Lock position", kind = "toggle",
       info = "Stops the panel (with Keep open on) and the crew tab from being dragged by accident. Turn it off to "
         .. "move them again." },

@@ -278,11 +278,11 @@ return {
       for i, s in ipairs(d.settings) do keys[i] = s.key end
       A.eq(keys, { "noticeScope", "keepOpen", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "questHeadsUp", "showXP",
         "xpText", "xpTooltip",
-        "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "about", "tag_DEAD",
+        "idleAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "about", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
-      A.eq(d.defaults.fadeAlpha, 0.5); A.eq(d.defaults.showOffline, false); A.eq(d.defaults.showSelf, false); A.eq(d.defaults.fadeOut, true); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
+      A.eq(d.defaults.idleAlpha, 0.4); A.eq(d.defaults.showOffline, false); A.eq(d.defaults.showSelf, false); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
       local sort
       for _, s in ipairs(d.settings) do if s.key == "sort" then sort = s end end
       A.eq(sort.choices, { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },

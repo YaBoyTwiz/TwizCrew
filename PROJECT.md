@@ -13,6 +13,13 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.4.0 released (2026-11-23, owner: "release the update"):** everything built after v0.3.0 on the branch
+  `pin-party`: the party pin fix, the fixes from the review of v0.3.0, tips and the About page, the away and welcome
+  cards, the crew tab with the after-fight summary and the Activity tab, see-through when idle, simpler settings, the
+  three themes and the icon set, and the two probes `/tc caltest` and `/tc chattest`. **Released without an in-game
+  try of any of it**: the "not released, not seen in the game" notes in the entries below are from before the
+  release. First things to learn from the crew: does the game load the theme art, and is anything upside down
+  (`Theme.FLIP_ART`). It adds files and pictures, so the game must be fully restarted (`RESTART_SINCE` is 0.4.0).
 - **Themes and icons (2026-11-23, owner picked from mock-ups: three themes, Classic, Crowned crew (the default) and
   Tavern night, chosen in the settings; a set of 55 icons; and the settings layout that waited for the look):** built
   on the branch `pin-party`, **not released, not seen in the game; it adds 3 code files and 10 picture files, so the

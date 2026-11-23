@@ -14,6 +14,24 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.4.0", date = "2026-11-23", lines = {
+    "The panel now tucks away into a small tab on the edge of your screen, so you get your screen back.",
+    "  Rest your mouse on the tab and the whole panel slides out. Move away and it tucks in again.",
+    "  News slides out one line at a time. News you can react to (Mock, Congrats) stays a little longer.",
+    "  Want it always open, like before? Flip the big \"Keep open\" switch at the top of the panel.",
+    "  The tab and a kept-open panel are see-through until you use them. Settings: Fade when I'm not using it.",
+    "After a fight, the tab shows what you missed. A new Activity tab lists what happened lately.",
+    "Themes: Crowned crew, Classic and Tavern night. Pick one in Settings, Basics. It changes at once.",
+    "TwizCrew's own icons: on the Hall of Shame awards, Mock and Congrats, pop-ups, news and the minimap button.",
+    "Settings are much shorter: six tabs, and Basics has just 8 things, each with a line saying what it does.",
+    "  Many fine-tuning switches are gone. Chat news and Sounds are one choice each. Your choices carry over.",
+    "  Hover any (i) for an explanation. How to use TwizCrew: a new page, linked at the top of Settings.",
+    "While you were away: a card at login says what changed in the guild. New members get a welcome card.",
+    "You can pin people in your party: click + on their row, or right-click their portrait.",
+    "Fixes for the quest list and the calendar notes from 0.3.0. /tc help is shorter (/tc help more for the rest).",
+    "If the new art does not show, everything is drawn as Classic: tell Twiz, and send /tc report.",
+    "Needs a full restart of the game (new files and pictures), not just /reload.",
+  } },
   { ver = "0.3.0", date = "2026-11-22", lines = {
     "Quests: see every quest a friend can share with you, not only the one they're on.",
     "  Right-click a friend's row, Their quests: a list opens. Click a quest to ask them to share it.",

@@ -129,6 +129,25 @@ function Quest.wire()
   }
 end
 
+-- My whole quest log for the crew (Crew/QuestList.lua): { id, title (cut for the wire), shareable (true / false /
+-- nil when the game doesn't say) }. Empty when I don't share quests.
+Quest.TITLE_MAX = TITLE_MAX
+function Quest.log()
+  local out = {}
+  if ns.Modules.setting("panel", "shareQuest") == false then return out end
+  for _, q in ipairs(entries()) do
+    if type(q.id) == "number" then
+      local shareable
+      if QLog().IsPushableQuest then
+        local p = call(QLog().IsPushableQuest, q.id)
+        if p ~= nil and readable(p) then shareable = (p and p ~= 0) and true or false end
+      end
+      out[#out + 1] = { id = q.id, title = ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX), shareable = shareable }
+    end
+  end
+  return out
+end
+
 -- "Kobold Camp Cleanup (3/8)" / "(ready to turn in)" from a crew member's shared fields (pure); nil without one.
 function Quest.short(name, objText, complete)
   if type(name) ~= "string" or name == "" then return nil end

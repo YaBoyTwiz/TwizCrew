@@ -42,9 +42,212 @@ local function labels(items)
   return out
 end
 
+-- Every message of one type sent since `from` (an index into W.sent), decoded: a list of their fields.
+local function sentOf(ns, W, msgType, from)
+  local out = {}
+  for i = (from or 0) + 1, #W.sent do
+    local msg = ns.Codec.decode(W.sent[i].text)
+    if msg and msg.type == msgType then out[#out + 1] = msg.fields end
+  end
+  return out
+end
+
+-- A friend's quest list arrives (in as many pieces as it takes).
+local function receiveList(ns, W, sender, stamp, quests)
+  local fields = { s = stamp, n = tostring(#quests) }
+  for _, q in ipairs(quests) do fields["q" .. q[1]] = q[2] .. q[3] end
+  local texts = ns.Codec.encode("QLA", fields, { repeatKeys = { "s", "n" } })
+  for _, text in ipairs(texts) do W:fire("CHAT_MSG_ADDON", "TwizCrew", text, "GUILD", sender) end
+  return #texts
+end
+
 return {
   files = "toc",
   tests = {
+    my_whole_quest_list_goes_to_a_friend_who_asks = function(ns, A, W)
+      local quests = {
+        { id = 7, title = "Kobold Camp Cleanup", objectives = {} },
+        { id = 33, title = "Wolves Across the Border", objectives = {} },
+        { id = 52, title = "A Very Long Quest Name That Goes On And On Forever", objectives = {} },
+      }
+      questLog(W, quests, 7)
+      rawset(W.env.C_QuestLog, "IsPushableQuest", function(id) return id ~= 33 end)
+      start(ns, W)
+      W.state.inGroup = true
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(2)
+      local before = #W.sent
+      receive(ns, W, "Ginkan", "QLQ", { t = "Twiz" })
+      receive(ns, W, "Frostie", "QLQ", { t = "Holly" })
+      W:advance(5)
+      A.eq(#sentOf(ns, W, "QLA", before), 0, "not for strangers, not when it is meant for someone else")
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      W:advance(5)
+      local got = sentOf(ns, W, "QLA", before)
+      A.eq(#got, 1, "three quests fit in one message")
+      A.eq(got[1].n, "3")
+      A.eq(got[1].q7, "1Kobold Camp Cleanup")
+      A.eq(got[1].q33, "0Wolves Across the Border", "0: the game won't share this one")
+      A.eq(got[1].q52, "1A Very Long Quest Name That Goes On And ", "the name is cut as on the row")
+      -- asked again at once: no second answer
+      before = #W.sent
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      W:advance(5)
+      A.eq(#sentOf(ns, W, "QLA", before), 0)
+      -- my quests change while I'm in a group: the group gets the new list by itself
+      quests[4] = { id = 60, title = "Brand New", objectives = {} }
+      W:fire("QUEST_ACCEPTED", 60)
+      W:advance(6)
+      got = sentOf(ns, W, "QLA", before)
+      A.eq(#got, 1, "one new list")
+      A.eq(got[1].n, "4"); A.eq(got[1].q60, "1Brand New")
+      -- nothing changed: nothing more
+      before = #W.sent
+      W:fire("QUEST_LOG_UPDATE")
+      W:advance(6)
+      A.eq(#sentOf(ns, W, "QLA", before), 0)
+      -- sharing switched off: an empty list
+      ns.Modules.set("panel", "shareQuest", false)
+      W:advance(11)
+      before = #W.sent
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      W:advance(5)
+      got = sentOf(ns, W, "QLA", before)
+      A.eq(got[#got].n, "0"); A.eq(got[#got].q7, nil)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_friends_whole_quest_list_shows_what_i_can_get = function(ns, A, W)
+      questLog(W, { { id = 7, title = "Kobold Camp Cleanup", objectives = {} } }, 7)
+      local done = { [40] = true }
+      rawset(W.env.C_QuestLog, "IsQuestFlaggedCompleted", function(id) return done[id] == true end)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", qn = "Wolves Across the Border", qi = "33", qs = "1" })
+      W:advance(1)
+      local QL = ns.QuestList
+      A.eq(QL.known("Frostie"), false)
+      A.eq(QL.count("Frostie"), 0, "no list yet")
+      local row = ns.Panel.models()[1]
+      local item
+      for _, it in ipairs(ns.Panel.rowMenu(row)) do if it.label:find("^Their quests") then item = it end end
+      A.ok(item, "Their quests in the row menu")
+      A.eq(item.label, "Their quests (asking...)")
+      W:advance(2)
+      local asks = sentOf(ns, W, "QLQ")
+      A.eq(#asks, 1, "opening the menu asked for their list")
+      A.eq(asks[1].t, "Frostie")
+      A.eq(#ns.Panel.rowMenu(row) > 0, true)
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "QLQ"), 1, "not asked again right away")
+      receiveList(ns, W, "Frostie", "100x1", {
+        { 33, "1", "Wolves Across the Border" }, -- can be shared, I don't have it
+        { 7, "1", "Kobold Camp Cleanup" },       -- I have it too
+        { 40, "1", "Old one" },                  -- I did it
+        { 41, "0", "Bound to them" },            -- the game won't share it
+        { 42, "1", "A Fine Quest" },
+      })
+      A.eq(QL.known("Frostie"), true)
+      A.eq(QL.count("Frostie"), 2)
+      A.eq(labels(QL.menuItems("Frostie")), {
+        "Ask to share: A Fine Quest",
+        "Ask to share: Wolves Across the Border",
+        "Can't share: Bound to them (it can't be shared)",
+        "Can't share: Old one (you already did it)",
+        "1 quest you both have",
+      })
+      for _, it in ipairs(ns.Panel.rowMenu(row)) do if it.label:find("^Their quests") then item = it end end
+      A.eq(item.label, "Their quests (2 you can get)")
+      item.onClick()
+      A.eq(labels(QL.lastMenu)[1], "Ask to share: A Fine Quest", "the click opens their quests")
+      -- asking for one of them is the usual share request
+      W.state.inGroup = true
+      local before = #W.sent
+      QL.lastMenu[1].onClick()
+      W:advance(2)
+      local req = sentOf(ns, W, "QREQ", before)
+      A.eq(#req, 1); A.eq(req[1].q, "A Fine Quest"); A.eq(req[1].t, "Frostie")
+      -- a newer list replaces the old one
+      W:advance(6)
+      receiveList(ns, W, "Frostie", "200x2", { { 42, "1", "A Fine Quest" } })
+      A.eq(QL.count("Frostie"), 1)
+      A.eq(labels(QL.menuItems("Frostie")), { "Ask to share: A Fine Quest" })
+      W:advance(6)
+      receiveList(ns, W, "Frostie", "300x3", {})
+      A.eq(labels(QL.menuItems("Frostie")), { "They have no quests (or don't share them)" })
+      -- a full quest log comes in several pieces and is only used once whole
+      local many = {}
+      for i = 1, 25 do many[i] = { 1000 + i, "1", "Quest number " .. i .. " with a long enough name" } end
+      W:advance(6)
+      local pieces = receiveList(ns, W, "Frostie", "400x4", many)
+      A.ok(pieces > 1, "more than one message")
+      A.eq(QL.listForTest("Frostie").n, 25)
+      A.eq(QL.count("Frostie"), 25)
+      -- half a list changes nothing
+      W:advance(6)
+      local texts = ns.Codec.encode("QLA", { s = "500x5", n = "3", q1 = "1One" }, { repeatKeys = { "s", "n" } })
+      W:fire("CHAT_MSG_ADDON", "TwizCrew", texts[1], "GUILD", "Frostie")
+      A.eq(QL.count("Frostie"), 25, "still the last whole list")
+      -- strangers' lists are not kept
+      receiveList(ns, W, "Ginkan", "1x1", { { 42, "1", "A Fine Quest" } })
+      A.eq(QL.known("Ginkan"), false)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_group_member_with_quests_for_me_gets_one_heads_up = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
+      W:advance(1)
+      -- not in my group: the list is kept, nothing pops up
+      receiveList(ns, W, "Holly", "1x1", { { 42, "1", "A Fine Quest" } })
+      A.eq(#ns.Popups.textsForTest(), 0)
+      -- I join a group with Frostie: their list is asked for
+      W.state.inGroup = true
+      W.state.groupMembers = { "Frostie" }
+      local before = #W.sent
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(4)
+      local asks = sentOf(ns, W, "QLQ", before)
+      A.eq(#asks, 1, "asked the one in my group, once")
+      A.eq(asks[1].t, "Frostie")
+      receiveList(ns, W, "Frostie", "5x1", { { 42, "1", "A Fine Quest" }, { 43, "1", "Another One" },
+        { 44, "0", "Bound to them" } })
+      local t = ns.Popups.textsForTest()
+      A.eq(#t, 1)
+      A.eq(t[1].text, "Frostie has 2 quests you can get")
+      A.eq(t[1].subtext, "Click to see them and ask")
+      A.contains(W.printed[#W.printed], "Frostie has 2 quests you can get")
+      ns.Popups.clickForTest(1)
+      A.eq(labels(ns.QuestList.lastMenu), { "Ask to share: A Fine Quest", "Ask to share: Another One",
+        "Can't share: Bound to them (it can't be shared)" }, "the click opens their quests")
+      -- their list changes: no second pop-up in the same grouping
+      W:advance(6)
+      receiveList(ns, W, "Frostie", "6x2", { { 42, "1", "A Fine Quest" }, { 45, "1", "Third" }, { 46, "1", "Fourth" } })
+      A.eq(#ns.Popups.textsForTest(), 0)
+      -- Holly joins: her list is already here, so she gets hers right away
+      W.state.groupMembers = { "Frostie", "Holly" }
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      t = ns.Popups.textsForTest()
+      A.eq(t[#t].text, "Holly has 1 quest you can get")
+      A.eq(t[#t].subtext, "Click to see it and ask")
+      -- the group ends and forms again: told again
+      W:advance(20)
+      W.state.inGroup = false
+      W.state.groupMembers = {}
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      ns.Modules.set("panel", "questHeadsUp", false)
+      W.state.inGroup = true
+      W.state.groupMembers = { "Frostie" }
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      A.eq(#ns.Popups.textsForTest(), 0, "switched off: no pop-up")
+      ns.Modules.set("panel", "questHeadsUp", true)
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      t = ns.Popups.textsForTest()
+      A.eq(t[#t].text, "Frostie has 3 quests you can get")
+      A.eq(ns.Log.errors(10), {})
+    end,
     short_and_objective_lines = function(ns, A)
       local Q = ns.Quest
       A.eq(Q.short("Kobold Camp Cleanup", "Kobold Vermin slain: 3/8; Kobold Worker slain: 0/6"),
@@ -148,10 +351,9 @@ return {
       for _, it in ipairs(items) do if it.label:find("^Ask to share") then ask = it end end
       A.ok(ask, "Ask to share in the row menu")
       A.eq(ask.label, "Ask to share: Wolves Across the Border")
-      local before = #W.sent
       ask.onClick()
       W:advance(1)
-      A.eq(#W.sent, before, "not in a group: nothing sent")
+      A.eq(#sentOf(ns, W, "QREQ"), 0, "not in a group: nothing sent")
       A.contains(W.printed[#W.printed], "only works in a group")
       -- grouped, but the game's name check misses Frostie (as on Forever): still asks
       W.state.inGroup = true

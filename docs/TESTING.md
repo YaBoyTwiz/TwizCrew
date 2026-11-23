@@ -843,6 +843,30 @@ With a friend:
    Claude if the color is too weak or too strong, and if the note words are still easy to read on the gold.
 3. **Today.** Today's square still shows its gold line on top, with or without an event.
 
+## Quest list (2026-11-22)
+
+**Restart the game** (a new file was added; `/reload` is not enough). You need a friend who also has this version;
+with a friend on the released version only step 6 can be checked.
+
+1. **The menu.** Hover a friend's row, then right-click it: there is a line "Their quests (N you can get)". The
+   first time it may say "(asking...)": close the menu and right-click again a second later.
+2. **The list.** Click that line: a second menu opens under the row with "Ask to share: <quest>" for each quest
+   you can get, "Can't share: <quest> (why)" for the others, and "N quests you both have" at the bottom. Compare it
+   with your friend's real quest log: is anything missing or wrong?
+3. **Asking.** In a group with them, click one "Ask to share" line: they get the usual pop-up, they click it, and
+   the game offers you the quest. Try one that is not the quest shown on their row.
+4. **The tooltip.** Hover their row: a green line "Can share N quests with you".
+5. **The heads-up.** Leave the group, then group again: a pop-up "<Name> has N quests you can get" and a chat line,
+   once. Click the pop-up: their quests open at the mouse. It should not come back each time they pick up a quest.
+6. **A friend on the old version.** Their line stays "Their quests (asking...)", and clicking it says they may
+   have an older TwizCrew. "Ask to share" for the quest on their row still works as before.
+7. **Keeping up.** While grouped, your friend accepts a new quest: a few seconds later it is in their list on your
+   side (right-click again).
+8. **Switches.** Settings, Panel: "Tell me what my group can share" off = no pop-up. "Share my quests" off on your
+   friend's side = their list is empty on yours.
+9. **Tell Claude:** is the count right without Questie (it can count quests you are too low for)? Is the pop-up
+   useful or annoying?
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

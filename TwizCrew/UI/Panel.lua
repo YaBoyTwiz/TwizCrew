@@ -904,7 +904,7 @@ ns.Modules.register({
     .. "Drag it to move it; right-click its title for quick options.",
   defaults = {
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
-    showQuest = true, shareQuest = true, questRequests = true,
+    showQuest = true, shareQuest = true, questRequests = true, questHeadsUp = true,
     xpText = true, xpTooltip = true,
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
@@ -954,12 +954,16 @@ ns.Modules.register({
     { key = "showQuest", label = "Show quests", kind = "toggle",
       info = "Shows the quest each friend is on, like \"Kobold Camp Cleanup (3/8)\". Hover a row for all its "
         .. "objectives." },
-    { key = "shareQuest", label = "Share my quest", kind = "toggle",
+    { key = "shareQuest", label = "Share my quests", kind = "toggle",
       info = "Tells your crew which quest you're on (the one you made progress on last, or the one you track) and "
-        .. "its objectives. Turn it off to keep it to yourself." },
+        .. "its objectives, and lets them see the names of the other quests in your log, so they can ask you to "
+        .. "share one. Turn it off to keep them to yourself." },
     { key = "questRequests", label = "Quest share requests", kind = "toggle",
       info = "Lets friends ask you to share your quest (right-click your row, Ask to share). You get a pop-up; one "
         .. "click on it shares the quest. Sharing only works in a group." },
+    { key = "questHeadsUp", label = "Tell me what my group can share", kind = "toggle",
+      info = "When someone in your group has quests you can get, one pop-up says how many. Click it to see them and "
+        .. "ask. You can always see them yourself: right-click a friend's row, Their quests." },
     { key = "showXP", label = "Show XP bar", kind = "toggle",
       info = "Shows a gold bar with how close each friend is to their next level. It gets brighter as it fills." },
     { key = "xpText", label = "Show level and XP numbers", kind = "toggle",

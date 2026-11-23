@@ -517,6 +517,16 @@ function Panel.showRowTip(r)
       GameTooltip:AddLine("Distance: " .. a.text, cr, cg, cb)
     end
   end
+  -- live: how many of their quests I can get (asks for their list when ours is old)
+  if ns.QuestList and not m.offline and not m.noAddon then
+    local key = m.key or m.name
+    ns.QuestList.want(key)
+    local n = ns.QuestList.count(key)
+    if n > 0 then
+      GameTooltip:AddLine("Can share " .. (n == 1 and "1 quest" or (n .. " quests")) .. " with you: right-click, "
+        .. "Their quests", 0.3, 1, 0.4)
+    end
+  end
   local mr, mg, mb = T.rgb(C.muted)
   GameTooltip:AddLine("Right-click for options", mr, mg, mb)
   GameTooltip:Show()

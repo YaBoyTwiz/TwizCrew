@@ -10,6 +10,7 @@ local KNOWN_TYPES = { HELLO = true, STATE = true, UPDATE = true, PING = true, BY
   STATS = true, STATSREQ = true, ROAST = true, UPDREQ = true, MOCK = true,
   POS = true, MEET = true, -- find the crew: a group member's position, a meet-up
   QREQ = true, -- "please share this quest with me" (t = who should share, q = the quest title)
+  QLQ = true, QLA = true, -- "send me your quest list" (t = who should answer); the list (Crew/QuestList.lua)
   CALD = true, CALQ = true, CALP = true, -- crew calendar: digest, "send me this person", one person's diary
   TRD = true, TRQ = true, TRP = true, -- trophy case: digest, "send me this session", one session's record
   CALN = true, CALR = true, -- a calendar note; a reply to one (seen, going / maybe / no, a comment)

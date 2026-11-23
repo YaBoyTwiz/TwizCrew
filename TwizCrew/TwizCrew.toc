@@ -27,6 +27,7 @@ Core\Version.lua
 Core\UpdateLogic.lua
 Tags\Tags.lua
 Crew\Quest.lua
+Crew\QuestList.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua
 Layer\Layer.lua

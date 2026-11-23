@@ -292,6 +292,9 @@ function Panel.rowMenu(m)
           onClick = function() print("TwizCrew: no use asking: " .. tostring(words) .. ".") end }
       end
     end
+    if ns.QuestList and not m.noAddon then -- all their quests (Crew/QuestList.lua)
+      items[#items + 1] = ns.QuestList.rowItem(name)
+    end
     if m.dinged and ns.Roasts and ns.Roasts.canCheer and ns.Roasts.canCheer(name) then
       items[#items + 1] = { label = "Congratulate them", onClick = function() Panel.cheer({ tcModel = m }) end }
     end

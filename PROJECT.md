@@ -13,6 +13,11 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **All of a friend's quests, and a heads-up in a group (2026-11-22, owner: "do 1 and 3 in one pass"):** until now a
+  copy only told the crew the one quest you're on, so that was the only quest a friend could ask for. Now a copy
+  can ask a friend for their whole quest log and shows which of those quests you can get. Details: "Quest list"
+  below. Same branch, **not tested in game, not released; it adds a file (Crew/QuestList.lua), so the game must be
+  restarted, not only reloaded.** Check: `docs/TESTING.md`, "Quest list".
 - **Calendar window bigger (2026-11-22, owner: "I would like the calendar by default to be bigger on the screen"):**
   the window is drawn at 125% of its design size (700 x 570), and "Calendar size" (70% to 180%) is a slider in the
   calendar's settings (`size`, read in Calendar.refresh). The note window and "Create a note" keep their size.
@@ -554,6 +559,35 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   "Edit" and "Remove" buttons on mine (the small "X" is gone), right-click for Open / Edit / Remove. The note's own
   window: "Edit my note" next to "Delete my note". Remove asks nothing first.
 
+## Quest list (2026-11-22)
+
+- **What the owner asked:** "so far it only shows one quest ... is there a way we can improve this". He picked
+  option 1 (see every quest a friend can share) and option 3 (a heads-up when you group). Option 2 (one click
+  shares everything you're missing) was left out: nobody has checked that the game accepts several shares from one
+  click.
+- **How it travels (Crew/QuestList.lua):** `QLQ` = "send me your quest list" (t = who should answer). `QLA` = the
+  list: `s` (a stamp, the same in every piece), `n` (how many quests), and one `q<questID>` = flag + title per
+  quest (flag: 1 can be shared, 0 can't, ? the game doesn't say; title cut to 40 like the row's). A full log takes
+  several messages; a list is used only once all `n` quests arrived, so half a list never replaces a whole one.
+  Whispered when the friend can be whispered, else sent to the group. Sent in the slow lane (bulk).
+- **When a copy asks:** when you hover a friend's row or open its right-click menu (not again within 20 s, and not
+  while the list is younger than 60 s), and for every crew member in your group when the group changes (not while
+  their list is younger than 5 minutes). A copy in a group sends its list to the group again by itself, 2 s after
+  its quests change. An asker gets at most one answer per 10 s.
+- **What you see:** the row's right-click menu has "Their quests (4 you can get)"; a click opens a second menu:
+  "Ask to share: <quest>" (the usual share request, still needs a group and their click), "Can't share: <quest>
+  (why)", and "N quests you both have". The row's tooltip adds "Can share N quests with you". The row itself still
+  shows the one quest they're on, with its green or red mark, as before.
+- **"You can get it" is the same rule as the row's mark:** yes when Questie says so, or, without Questie, when the
+  game says it can be shared and you neither have it nor did it. Without Questie that can count a quest you are too
+  low for.
+- **The heads-up:** when a group member's list shows quests you can get, one pop-up ("Frostie has 4 quests you can
+  get", click = their quests) and one chat line. Once per friend per grouping; leaving the group resets it. Switch:
+  "Tell me what my group can share" (`questHeadsUp`, Panel, on by default).
+- **Privacy:** "Share my quest" is now "Share my quests": off means the list goes out empty too.
+- **Older copies (v0.2.0 and before)** drop both message types: for them the menu says "Their quests (asking...)"
+  and only the one quest on the row can be asked for, as before.
+
 ## Website and Discord (on hold, owner 2026-11-11)
 
 - The owner wants TwizCrew tied to a website (a subfolder of twizgame.com first, movable to its own domain) and
@@ -581,6 +615,7 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   objectives moved last, else the first watched; never C_SuperTrack, see test_lint). Rows show "Quest (3/8)" with a
   ! or ?, hover adds where, quest objectives, status and distance; right-click a row for Whisper, Invite, Inspect
   (when near), Point the arrow, Mock (when dead), Add to friends. Switches: Show quests, Share my quest (Panel).
+  Since 2026-11-22 a friend's whole quest log can be asked for too: see "Quest list".
 - **Advanced sub-tabs (2026-11-07):** "way too much stuff and takes forever to drag to the bottom". Advanced has
   sub-tabs: Panel, Roasts, Pop-ups, Find, Crew, Test, and All (the old single page).
 - **AFK lives in the panel only (2026-11-07):** the AFK button and `/tc afk` tell the crew, never set the game's own

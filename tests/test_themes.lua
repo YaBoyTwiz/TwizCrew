@@ -419,6 +419,96 @@ return {
       end
     end,
 
+    ---------------------------------------------------------------------------------------------------- settings
+    the_picker_switches_at_once = function(ns, A, W)
+      boot(W)
+      ns.Settings.open()
+      local picker = ns.Settings.pickerForTest("basic")
+      A.ok(picker and picker:IsShown(), "the picker on Basics")
+      local ids = {}
+      for i, b in ipairs(picker.previews) do ids[i] = b.tcId end
+      A.eq(ids, { "classic", "crowned", "tavern" })
+      local function outlined(b) return b.outline[1]:IsShown() end
+      A.ok(outlined(picker.previews[2]), "Crowned crew is chosen")
+      A.no(outlined(picker.previews[1])); A.no(outlined(picker.previews[3]))
+      -- each preview is drawn in its own theme, small, whatever the chosen one
+      A.eq(skin(picker.previews[1].box).mode, "backdrop", "Classic: the dialog backdrop")
+      A.eq(picker.previews[1].box._backdrop.edgeSize, 12)
+      A.eq(skin(picker.previews[2].box).mode, "slice"); A.eq(skin(picker.previews[2].box).opts.margin, 6)
+      A.eq(skin(picker.previews[3].box).opts.margin, 5, "Tavern night: margin 5")
+      A.eq(skin(picker.previews[3].box).opts.tile, 64, "and the oak at 64")
+      A.no(skin(picker.previews[1].box).parts.emblem, "no emblem on Classic")
+      local tavern = picker.previews[3]
+      tavern._scripts.OnClick(tavern)
+      A.eq(ns.Modules.setting("panel", "theme"), "tavern", "a click switches the setting")
+      A.eq(ns.Theme.drawnId(), "tavern")
+      A.eq(skin(ns.Panel.rootForTest()).parts.fill:IsShown(), true, "and the panel repaints at once")
+      A.ok(outlined(tavern), "the outline moves")
+      A.no(outlined(picker.previews[2]))
+      ns.Settings.setTab("panel")
+      local again = ns.Settings.pickerForTest("panel")
+      A.ok(again:IsShown(), "first on the Panel page too")
+      A.ok(outlined(again.previews[3]))
+      again.previews[1]._scripts.OnClick(again.previews[1])
+      A.eq(ns.Modules.setting("panel", "theme"), "classic")
+      A.eq(skin(ns.Panel.rootForTest()).mode, "backdrop")
+      A.eq(skin(picker.previews[3].box).opts.margin, 5, "the Tavern preview still shows Tavern night")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    grey_lines_and_the_rarely_needed_heading = function(ns, A, W)
+      A.eq(ns.Settings.greyLines("short"), 1)
+      A.eq(ns.Settings.greyLines(string.rep("x", 75)), 2, "about 74 letters a line without the game's measure")
+      A.eq(ns.Settings.greyLines("anything", 26), 2, "the game's measure: 13 a line")
+      A.eq(ns.Settings.greyLines("anything", 12), 1)
+      for key, line in pairs(ns.Help.SETTING_LINES) do
+        A.ok(#line <= 100, key .. ": one short line")
+        A.no(line:find("\226\128\148", 1, true), key .. ": no em dash")
+      end
+      boot(W)
+      ns.Settings.open(); ns.Settings.setTab("panel")
+      local d = ns.Settings.describeForTest()
+      local rare
+      for _, v in ipairs(d) do if v == "section:Rarely needed" then rare = true end end
+      A.ok(rare, "the Rarely needed heading")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    without_the_atlas_the_tabs_keep_their_words = function(ns, A, W)
+      W.state.missingArt = { [ATLAS] = true }
+      boot(W)
+      ns.Settings.open()
+      A.no(ns.Settings.tabIconsForTest(), "no icons")
+      local tabs = ns.Settings.tabButtonsForTest()
+      for _, pg in ipairs(ns.Settings.PAGES) do
+        A.eq(tabs[pg.id].label:GetText(), pg.label, "the word stays")
+        A.no(tabs[pg.id].icon:IsShown(), pg.id .. ": no empty square")
+        A.eq(tabs[pg.id]:GetWidth(), math.floor(4 + #pg.label * 6 + 4 + 0.5), pg.id .. ": the icon's room is gone")
+      end
+    end,
+
+    the_activity_tab_has_a_clear_button = function(ns, A, W)
+      boot(W)
+      W:advance(40) -- (the login quiet time)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
+      W:advance(1)
+      for lv = 13, 30 do receive(W, ns, "Frostie", "UPDATE", { lv = tostring(lv) }); W:advance(0.1) end
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      ns.Panel.setTab("activity"); W:advance(0.2)
+      A.contains(ns.Panel.noteForTest(), "Scroll for more")
+      local clear = ns.Panel.activityClearForTest()
+      A.ok(clear and clear:IsShown(), "Clear, right of Scroll for more")
+      A.eq({ clear:GetSize() }, { 50, 18 })
+      A.ok(rawget(clear, "tcButton"), "in the theme's button look")
+      clear._scripts.OnClick(clear); W:advance(0.2)
+      A.eq(#ns.Feed.entries(), 0, "the list is empty")
+      A.eq(ns.Panel.noteForTest(), "Nothing has happened yet.")
+      A.no(clear:IsShown(), "nothing to scroll: no button")
+      ns.Panel.setTab("crew"); W:advance(0.2)
+      A.no(clear:IsShown())
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     tavern_oak_darkens_while_see_through = function(ns, A, W)
       boot(W)
       ns.Modules.set("panel", "theme", "tavern")

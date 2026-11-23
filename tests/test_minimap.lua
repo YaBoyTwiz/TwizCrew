@@ -122,7 +122,7 @@ return {
 
     settings_window_lists_it_on_more = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
+      ns.Settings.open(); ns.Settings.setTab("more")
       local d = ns.Settings.describeForTest()
       local found = false
       for _, v in ipairs(d) do

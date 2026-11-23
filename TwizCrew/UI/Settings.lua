@@ -1,6 +1,10 @@
 -- The settings window ("TwizCrewSettings"), built from the module registry, and the Options → AddOns entry.
 -- Feature id "settings": part of the essentials, not a registered module.
 -- Rows are made once and reused (game frames cannot be deleted); a rebuild only re-places them.
+-- Layout (2026-11-23, with the themes): the title and two links (How to use TwizCrew · What's new), one row of six
+-- tabs (Basics, Panel, Alerts, Fun, Find, More) in the theme's tab look, each with its icon (dropped, not the words,
+-- when the row does not fit), then the page. Every setting is on exactly one page; the theme picker (three previews
+-- drawn live) is on Basics and first on Panel. Basics has a grey line under each control (UI/Help.lua SETTING_LINES).
 local _, ns = ...
 
 local Win = {}
@@ -11,18 +15,22 @@ local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 local WIDTH, PAD = 400, 14
 local CONTENT_WIDTH = WIDTH - 2 * PAD
-local HEADER = 84 -- title, version line and the Basics / Advanced tabs
-local SUBTAB_ROW = 24 -- the Advanced tab's own row of sub-tabs
+local HEADER = 80 -- title, version line and the row of tabs
+local TAB_Y, TAB_H, TAB_ICON = 50, 22, 13 -- the tab row: its top, height and the icons left of the words
+local GREY_LINE = 13 -- one line of the grey explanation under a Basics control
+local PICKER_ROW = 24 + 80 + 6 -- "Theme" and its (i), then the three previews with their names
+local PREVIEW, PREVIEW_GAP = 64, 8
 local FOOTER, CONFIRM = 40, 58
 local ROW, MODULE_ROW, BROKEN_ROW, SECTION_ROW = 24, 26, 38, 26
 local INDENT = { child = 32 } -- a setting under its parent switch
 local WHEEL_STEP = 40
 local RARE = { title = "Rarely needed", note = "most people never change these" }
--- The Basics tab: the few things people really change (each also on an Advanced sub-tab), then the two help buttons.
+-- The Basics tab: the few things people really change (on no other page), each with a grey line under it.
 -- Items: { module = id } is that module's on/off switch; { id, key } one of its settings; { title, note } a heading;
--- { button = key } a button of this window (BUTTONS below).
+-- { button = key } a button of this window (BUTTONS below); { picker = "theme" } the theme picker.
 local BASICS = {
   { title = "The panel", note = "the crew list and its tab" },
+  { picker = "theme" },
   { id = "panel", key = "keepOpen" },
   { id = "panel", key = "scale" },
   { id = "panel", key = "idleAlpha" },
@@ -33,10 +41,9 @@ local BASICS = {
   { id = "popups", key = "sounds" },
   { title = "Me", note = "what your crew sees" },
   { id = "tags", key = "autoAway" },
-  { title = "Help" },
-  { id = "panel", key = "about" },
-  { id = "panel", key = "whatsNew" },
 }
+-- Settings that are not on a page: the two links at the top of the window do what these buttons did.
+Win.LINKED = { ["panel:about"] = true, ["panel:whatsNew"] = true }
 -- Buttons that belong to this window rather than to a module.
 local BUTTONS = {
   tryit = { label = "Try it out\226\128\166", icon = "Interface\\Icons\\Trade_Engineering",
@@ -44,7 +51,6 @@ local BUTTONS = {
       .. "for your crew. Only on your screen. Also: /tc test.",
     onClick = function() if ns.TestTools and ns.TestTools.open then ns.TestTools.open() end end },
 }
-local TABS = { { id = "basic", label = "Basics", tip = "setBasics" }, { id = "advanced", label = "Advanced", tip = "setAdvanced" } }
 
 -- Pictures next to module names and common options (where a picture says it faster than words).
 local MODULE_ICONS = {
@@ -94,32 +100,28 @@ local function decorate(r, tex)
   ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   r.tcIcon = ic
 end
--- The Advanced tab's sub-tabs, each a list of items like BASICS (everyday first, then the rarely needed ones). A
--- module that is on no page (a new one) lands at the end of More with its switch and all its settings.
+-- The other five tabs, each a list of items like BASICS (everyday first, then the rarely needed ones). A module that
+-- is on no page (a new one) lands at the end of More with its switch and all its settings.
 local SUBTABS = {
   { id = "panel", label = "Panel", items = {
+    { picker = "theme" },
     { module = "panel" },
     { title = "Look" },
-    { id = "panel", key = "scale" }, { id = "panel", key = "idleAlpha" }, { id = "panel", key = "bgAlpha" },
-    { id = "panel", key = "rowStyle" }, { id = "panel", key = "sort" }, { id = "panel", key = "theme" },
+    { id = "panel", key = "bgAlpha" }, { id = "panel", key = "rowStyle" }, { id = "panel", key = "sort" },
     { title = "The tab" },
-    { id = "panel", key = "keepOpen" }, { id = "panel", key = "peek" }, { id = "panel", key = "barHover" },
-    { id = "panel", key = "locked" },
+    { id = "panel", key = "peek" }, { id = "panel", key = "barHover" }, { id = "panel", key = "locked" },
     { title = "Hiding" },
     { id = "panel", key = "hideInCombat" }, { id = "panel", key = "hideInInstance" },
     { title = "Me", note = "what your crew sees" },
-    { id = "tags", key = "autoAway" }, { id = "panel", key = "shareQuest" },
+    { id = "panel", key = "shareQuest" },
     RARE,
     { id = "panel", key = "hideWhenAlone" }, { id = "panel", key = "showNoAddon" }, { id = "panel", key = "showSelf" },
     { id = "panel", key = "barInstead" }, { id = "tags", key = "awayMinutes" }, { module = "tags" }, { module = "layer" },
   } },
   { id = "alerts", label = "Alerts", items = {
-    { id = "panel", key = "noticeScope" },
-    { module = "popups" },
+    { title = "Pop-ups", note = "which news gets one" },
     { id = "popups", key = "online" }, { id = "popups", key = "death" }, { id = "popups", key = "levelUp" },
     { id = "popups", key = "layerDiff" }, { id = "popups", key = "newMember" }, { id = "panel", key = "questHeadsUp" },
-    { title = "Chat and sounds" },
-    { id = "activity", key = "chatNews" }, { id = "popups", key = "sounds" },
     RARE,
     { module = "activity" },
   } },
@@ -157,12 +159,20 @@ local SUBTABS = {
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"
 local RESET_QUESTION = "Reset all TwizCrew settings and the panel position?"
 
-local frame, scroll, content, subtitle, confirmBox, closeButton, resetButton
-local tab = "basic"   -- the tab shown: "basic" or "advanced"
-local sub = "panel"   -- the Advanced sub-tab shown
-local tabButtons, subButtons = {}, {}
+-- The six tabs, left to right (icon: UI/Icons.lua page names).
+local PAGES = { { id = "basic", label = "Basics", tip = "setBasics", items = BASICS } }
+for _, st in ipairs(SUBTABS) do
+  PAGES[#PAGES + 1] = { id = st.id, label = st.label, tip = "set" .. st.label, items = st.items }
+end
+Win.PAGES = PAGES
 
-local function headerHeight() return tab == "advanced" and HEADER + SUBTAB_ROW or HEADER end
+local frame, scroll, content, subtitle, confirmBox, closeButton, resetButton
+local tab = "basic"   -- the tab shown: a PAGES id
+local tabButtons = {}
+local tabIcons = false -- the tab row has room for its icons (decided when the window is built)
+local links -- the two links on the title line: { about, new }
+
+local function headerHeight() return HEADER end
 local isOpen, dirty, confirming = false, true, false
 local rows = {}       -- cache key -> row frame
 local placed = {}     -- rows placed by the last layout, in order
@@ -215,13 +225,23 @@ local function plainRow(f)
   return f
 end
 
+-- A font string a few points bigger or smaller than its font object (the game's font; unchanged if it cannot).
+local function resize(fs, by)
+  local ok, path, size, flags = pcall(function() return fs:GetFont() end)
+  if ok and type(path) == "string" and type(size) == "number" and size > 0 then
+    pcall(fs.SetFont, fs, path, size + by, flags or "")
+  end
+  return fs
+end
+
 local function sectionRow(sec)
   return cached("section:" .. sec.tier, function()
     local f = CreateFrame("Frame", nil, content)
     f:SetSize(CONTENT_WIDTH, SECTION_ROW)
-    local title = T.text(f, T.FONT.normal, C.title)
+    local title = resize(T.text(f, T.FONT.normal, C.title), -1.5)
     title:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 5)
     title:SetText(sec.title)
+    T.ink(title, "setHeading", sec.title) -- the theme's heading look (accent, Friz 12; Tavern night: Morpheus)
     local note = T.text(f, T.FONT.small, C.muted)
     note:SetPoint("LEFT", title, "RIGHT", 8, 0)
     note:SetText(sec.note)
@@ -231,6 +251,156 @@ local function sectionRow(sec)
     line:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
     T.color(line, C.line, 1)
     return plainRow(f)
+  end)
+end
+
+-- "Rarely needed": the theme's divider across the page 10 above it, then the words, muted.
+local RARE_ROW = 10 + SECTION_ROW
+local function rareRow()
+  return cached("rare", function()
+    local f = CreateFrame("Frame", nil, content)
+    f:SetSize(CONTENT_WIDTH, RARE_ROW)
+    local line = f:CreateTexture(nil, "ARTWORK")
+    line:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -2)
+    line:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -2)
+    T.divider(line)
+    f.line = line
+    local title = resize(T.text(f, T.FONT.normal, "998f70"), -1.5)
+    title:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 5)
+    title:SetText(RARE.title)
+    local note = T.text(f, T.FONT.small, "808080")
+    note:SetPoint("LEFT", title, "RIGHT", 6, 0)
+    note:SetText(RARE.note)
+    return plainRow(f)
+  end)
+end
+
+-- How many grey lines a text takes (the game's measure when it has one, else about 74 letters a line).
+function Win.greyLines(text, realHeight)
+  if type(realHeight) == "number" and realHeight > 0 then
+    return math.max(1, math.floor(realHeight / GREY_LINE + 0.5))
+  end
+  return math.max(1, math.ceil(#tostring(text or "") / 74))
+end
+
+-- The grey explanation under a Basics control (UI/Help.lua SETTING_LINES); returns the row and its height.
+local function greyRow(key, text)
+  local r = cached("grey:" .. key, function()
+    local f = CreateFrame("Frame", nil, content)
+    f:SetSize(CONTENT_WIDTH, GREY_LINE + 3)
+    f.text = resize(T.text(f, T.FONT.small, "9e9e9e"), -1)
+    f.text:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+    f.text:SetWidth(CONTENT_WIDTH)
+    f.text:SetJustifyH("LEFT")
+    if f.text.SetWordWrap then f.text:SetWordWrap(true) end
+    f.text:SetText(text)
+    return plainRow(f)
+  end)
+  local h = r.text.GetStringHeight and r.text:GetStringHeight() or nil
+  return r, Win.greyLines(text, h) * GREY_LINE + 3
+end
+
+---------------------------------------------------------------------------------------------------- theme picker
+-- One small panel drawn in a theme's own frame (no picture files): a title bar with an accent line under it, three
+-- bars in class colours, the emblem at the bottom (none for Classic).
+local PREVIEW_BARS = { { 0.98, 0.49, 0.04 }, { 0.25, 0.78, 0.92 }, { 0.96, 0.55, 0.73 } }
+local function paintPreviewInside(inner, t)
+  local accent = t.accent
+  inner.line:SetColorTexture(accent[1], accent[2], accent[3], 1)
+  local emblem = T.emblemFile(t)
+  if emblem then
+    T.setTexture(inner.emblem, emblem)
+    T.setCoords(inner.emblem, 0, 1, T.flipV(0, 1))
+    inner.emblem:Show()
+  else
+    inner.emblem:Hide()
+  end
+end
+
+local function previewBox(parent, id)
+  local box = T.frame("Frame", nil, parent)
+  box:SetSize(PREVIEW, PREVIEW)
+  box.tcThemeId = id
+  local p = T.THEMES[id].preview
+  T.skin(box, "panel", { alpha = 0.9, margin = p.margin, edgeSize = p.edgeSize, tile = p.tile })
+  local inner = CreateFrame("Frame", nil, box)
+  inner:SetAllPoints(box)
+  inner.tcThemeId = id
+  inner.line = inner:CreateTexture(nil, "ARTWORK")
+  inner.line:SetHeight(1)
+  inner.line:SetPoint("TOPLEFT", box, "TOPLEFT", 7, -17)
+  inner.line:SetPoint("TOPRIGHT", box, "TOPRIGHT", -7, -17)
+  for i, c in ipairs(PREVIEW_BARS) do
+    local bar = inner:CreateTexture(nil, "ARTWORK")
+    bar:SetHeight(6)
+    bar:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -(21 + (i - 1) * 9))
+    bar:SetPoint("TOPRIGHT", box, "TOPRIGHT", -8, -(21 + (i - 1) * 9))
+    bar:SetColorTexture(c[1], c[2], c[3], 0.7)
+  end
+  inner.emblem = inner:CreateTexture(nil, "OVERLAY")
+  inner.emblem:SetSize(16, 16)
+  inner.emblem:SetPoint("BOTTOM", box, "BOTTOM", 0, 3)
+  T.track(inner, paintPreviewInside)
+  return box
+end
+
+-- "Theme" with its (i), then the three previews (Classic, Crowned crew, Tavern night) with their names; the chosen
+-- one has a 2 px accent outline and its name in the accent colour. A click switches at once. page: one row per page.
+local function pickerRow(page)
+  return cached("picker:" .. page, function()
+    local def = settingDef("panel", "theme")
+    local f = CreateFrame("Frame", nil, content)
+    f:SetSize(CONTENT_WIDTH, PICKER_ROW)
+    f.label = T.text(f, T.FONT.small, C.text)
+    f.label:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -5)
+    f.label:SetText(def and def.label or "Theme")
+    f.info = Widgets.infoButton(f, def and def.label or "Theme", def and def.info or "")
+    f.info:SetPoint("LEFT", f.label, "RIGHT", 2, 0)
+    f.control = false
+    f.previews = {}
+    for i, id in ipairs(T.ORDER) do
+      local b = CreateFrame("Button", nil, f)
+      b:SetSize(PREVIEW, PREVIEW + 16)
+      b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (PREVIEW + PREVIEW_GAP), -24)
+      b.box = previewBox(b, id)
+      b.box:SetPoint("TOP", b, "TOP", 0, 0)
+      if b.box.EnableMouse then b.box:EnableMouse(false) end
+      b.outline = {}
+      -- the 2 px outline just outside the box: top, bottom, left, right
+      for k, side in ipairs({ { "TOPLEFT", -2, 2, "TOPRIGHT", 2, 2, "h" }, { "BOTTOMLEFT", -2, -2, "BOTTOMRIGHT", 2, -2, "h" },
+        { "TOPLEFT", -2, 2, "BOTTOMLEFT", -2, -2, "w" }, { "TOPRIGHT", 2, 2, "BOTTOMRIGHT", 2, -2, "w" } }) do
+        local o = b:CreateTexture(nil, "OVERLAY")
+        o:SetPoint(side[1], b.box, side[1], side[2], side[3])
+        o:SetPoint(side[4], b.box, side[4], side[5], side[6])
+        if side[7] == "h" then o:SetHeight(2) else o:SetWidth(2) end
+        b.outline[k] = o
+      end
+      b.name = T.text(b, T.FONT.small, C.text)
+      b.name:SetPoint("TOP", b.box, "BOTTOM", 0, -3)
+      b.name:SetText(T.THEMES[id].name)
+      local hl = b:CreateTexture(nil, "HIGHLIGHT")
+      hl:SetAllPoints(b.box)
+      T.color(hl, C.white, 0.12)
+      script(b, "OnClick", function() Win.save("panel", "theme", id) end)
+      Widgets.addTip(b, T.THEMES[id].name, "Click to use this look now.", FEATURE, "ANCHOR_TOP")
+      b.tcId = id
+      f.previews[i] = b
+    end
+    f.Refresh = function()
+      local chosen = T.chosen()
+      local a = T.active().accent
+      for _, b in ipairs(f.previews) do
+        local on = b.tcId == chosen
+        for _, o in ipairs(b.outline) do
+          o:SetColorTexture(a[1], a[2], a[3], 1)
+          if on then o:Show() else o:Hide() end
+        end
+        if on then b.name:SetTextColor(a[1], a[2], a[3], 1) else T.textColor(b.name, C.text) end
+      end
+    end
+    f.SetActive = function() end
+    f.Refresh()
+    return f
   end)
 end
 
@@ -390,39 +560,51 @@ local function layout()
     place(sr, sdef.parent and INDENT.child or 0, sr.tcList and sr.Height() or ROW,
       (sdef.parent and "child:" or "setting:") .. def.id .. ":" .. sdef.key)
   end
-  local function placeItems(list)
+  -- Basics: the grey line under a control
+  local function placeGrey(key)
+    local text = ns.Help.SETTING_LINES and ns.Help.SETTING_LINES[key]
+    if not text then return end
+    local r, height = greyRow(key, text)
+    y = y - 2
+    place(r, 0, height, "grey:" .. key)
+  end
+  local function placeItems(list, grey)
     for _, item in ipairs(list) do
-      if item.title then
+      if item == RARE then
+        if not first then y = y + 4 end
+        place(rareRow(), 0, RARE_ROW + 4, "section:" .. item.title)
+      elseif item.title then
         if not first then y = y + 10 end
         place(sectionRow({ tier = "page:" .. item.title, title = item.title, note = item.note or "" }), 0,
           SECTION_ROW + 4, "section:" .. item.title)
+      elseif item.picker then
+        place(pickerRow(tab), 0, PICKER_ROW, "picker:panel:theme")
       elseif item.module then
         local def = ns.Modules.get(item.module)
-        if def then placeModule(def) end
+        if def then
+          placeModule(def)
+          if grey then placeGrey("module:" .. def.id) end
+        end
       elseif item.button then
         local r = buttonRow(item.button)
         if r then place(r, 0, ROW, "button:" .. item.button) end
       else
         local def, sdef = ns.Modules.get(item.id), settingDef(item.id, item.key)
-        if def and sdef then placeSetting(def, sdef) end
+        if def and sdef then
+          placeSetting(def, sdef)
+          if grey then placeGrey(item.id .. ":" .. item.key) end
+        end
       end
     end
   end
-  if tab == "basic" then
-    placeItems(BASICS)
-    y = y + 12
-    place(sectionRow({ tier = "basic:more", title = "", note = "More options are on the Advanced tab." }), 0,
-      SECTION_ROW, "note:advanced")
-  else
-    local chosen = SUBTABS[1]
-    for _, st in ipairs(SUBTABS) do if st.id == sub then chosen = st end end
-    placeItems(chosen.items)
-    if chosen.id == "more" then
-      for _, def in ipairs(unlisted()) do
-        y = y + 8
-        placeModule(def)
-        for _, sdef in ipairs(def.settings) do placeSetting(def, sdef) end
-      end
+  local page = PAGES[1]
+  for _, p in ipairs(PAGES) do if p.id == tab then page = p end end
+  placeItems(page.items, page.id == "basic")
+  if page.id == "more" then
+    for _, def in ipairs(unlisted()) do
+      y = y + 8
+      placeModule(def)
+      for _, sdef in ipairs(def.settings) do placeSetting(def, sdef) end
     end
   end
   contentHeight = y
@@ -443,36 +625,27 @@ end
 
 ---------------------------------------------------------------------------------------------------- tabs
 local function drawTabs()
-  for id, b in pairs(tabButtons) do
-    local on = id == tab
-    T.textColor(b.text, on and C.title or C.muted)
-    if on then b.line:Show() else b.line:Hide() end
-  end
-  for id, b in pairs(subButtons) do
-    if tab == "advanced" then b:Show() else b:Hide() end
-    local on = id == sub
-    T.textColor(b.text, on and C.white or C.muted)
-    if on then b.fill:Show() else b.fill:Hide() end
-  end
+  for id, b in pairs(tabButtons) do b:SetActive(id == tab) end
 end
 
--- Shows the "basic" or "advanced" tab (anything else counts as basic); subId picks the Advanced sub-tab
--- ("panel", "alerts", "fun", "find" or "more"; nil keeps the last one).
-function Win.setTab(id, subId)
-  local want = id == "advanced" and "advanced" or "basic"
-  local wantSub = sub
-  if want == "advanced" and subId then
-    for _, st in ipairs(SUBTABS) do if st.id == subId then wantSub = subId end end
-  end
-  if want == tab and wantSub == sub then return end
-  tab, sub = want, wantSub
+-- Shows one of the six tabs: "basic", "panel", "alerts", "fun", "find" or "more" (an unknown id changes nothing).
+-- ("advanced", page) from before the six tabs still works: it shows that page.
+function Win.setTab(id, page)
+  if id == "advanced" then id = page or "panel" end
+  local known = false
+  for _, p in ipairs(PAGES) do if p.id == id then known = true end end
+  if not known or id == tab then return end
+  tab = id
   drawTabs()
   scrollOffset = 0
   Win.rebuild()
 end
 
 function Win.tab() return tab end
-function Win.subTab() return sub end
+function Win.tabIconsForTest() return tabIcons end
+function Win.tabButtonsForTest() return tabButtons end
+function Win.linksForTest() return links end
+function Win.pickerForTest(page) return rows["picker:" .. (page or "basic")] end
 
 ---------------------------------------------------------------------------------------------------- frame
 local function showConfirm(on)
@@ -500,62 +673,94 @@ local function build()
   T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewSettings") end -- Escape
 
-  local title = T.text(frame, T.FONT.normal, C.title)
+  local title = resize(T.text(frame, T.FONT.normal, C.title), 3) -- Friz 16.5
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -12)
-  title:SetText("TwizCrew")
+  title:SetText("TwizCrew settings")
+  T.ink(title, "title") -- the theme's title colour and font
   subtitle = T.text(frame, T.FONT.small, C.muted)
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
   subtitle:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
   subtitle:SetJustifyH("LEFT")
 
-  local x = PAD
-  for _, t in ipairs(TABS) do
+  -- the two links on the title line, right-aligned: How to use TwizCrew · What's new (they were buttons in Basics)
+  local function link(words, onClick, tip)
     local b = CreateFrame("Button", nil, frame)
-    b:SetSize(90, 22)
-    b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -52)
-    b.text = T.text(b, T.FONT.normal, C.muted)
-    b.text:SetPoint("CENTER", b, "CENTER", 0, 1)
-    b.text:SetText(t.label)
-    b.line = b:CreateTexture(nil, "ARTWORK")
-    b.line:SetHeight(2)
-    b.line:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 0, 0)
-    b.line:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
-    T.color(b.line, C.title, 1)
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(b)
-    T.color(hl, C.white, 0.06)
-    script(b, "OnClick", function() Win.setTab(t.id) end)
-    Widgets.helpTip(b, t.tip, FEATURE, "ANCHOR_TOP")
-    tabButtons[t.id] = b
-    x = x + 94
+    b.text = T.text(b, T.FONT.small, C.title)
+    b.text:SetPoint("LEFT", b, "LEFT", 0, 0)
+    b.text:SetText(words)
+    T.ink(b.text, "link")
+    local w = b.text:GetStringWidth()
+    if type(w) ~= "number" or w <= 0 then w = #words * 6 end
+    b:SetSize(w, 14)
+    b.under = b:CreateTexture(nil, "ARTWORK")
+    b.under:SetHeight(1)
+    b.under:SetPoint("TOPLEFT", b.text, "BOTTOMLEFT", 0, -1)
+    b.under:SetPoint("TOPRIGHT", b.text, "BOTTOMRIGHT", 0, -1)
+    T.color(b.under, C.white, 1)
+    b.under:Hide()
+    script(b, "OnClick", onClick)
+    script(b, "OnEnter", function(self)
+      self.text:SetTextColor(1, 1, 1, 1)
+      self.under:Show()
+      local t, x = ns.Help.tip(tip)
+      if t then Widgets.tip(self, t, x, "ANCHOR_TOP") end
+    end)
+    script(b, "OnLeave", function(self)
+      T.paintInk(self.text)
+      self.under:Hide()
+      if GameTooltip then GameTooltip:Hide() end
+    end)
+    return b
+  end
+  local newLink = link("What's new", function() if ns.Changelog then ns.Changelog.toggle() end end, "setNew")
+  newLink:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -14)
+  local dot = T.text(frame, T.FONT.small, C.muted)
+  dot:SetText(" \194\183 ")
+  dot:SetPoint("RIGHT", newLink, "LEFT", 0, 0)
+  local aboutLink = link("How to use TwizCrew", function() if ns.About then ns.About.toggle() end end, "setAbout")
+  aboutLink:SetPoint("RIGHT", dot, "LEFT", 0, 0)
+  links = { about = aboutLink, new = newLink }
+
+  -- one row of six tabs in the theme's tab look; each: 4, icon 13, 2, the word, 4; 2 between. When the row is wider
+  -- than the page, the icons go (never the words).
+  local made, total, iconsAll = {}, -2, true
+  for i, pg in ipairs(PAGES) do
+    local b = CreateFrame("Button", nil, frame)
+    b.label = T.text(b, T.FONT.small, C.muted)
+    b.label:SetText(pg.label)
+    b.hl = b:CreateTexture(nil, "HIGHLIGHT")
+    b.hl:SetAllPoints(b)
+    T.skinTab(b)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetSize(TAB_ICON, TAB_ICON)
+    b.icon:SetPoint("LEFT", b, "LEFT", 4, 0)
+    if ns.Icons.set(b.icon, ns.Icons.page(pg.id)) ~= "atlas" then iconsAll = false end
+    local w = b.label:GetStringWidth()
+    if type(w) ~= "number" or w <= 0 then w = #pg.label * 6 end
+    b.tcWordWidth = w
+    total = total + 4 + TAB_ICON + 2 + w + 4 + 2
+    local id = pg.id
+    script(b, "OnClick", function() Win.setTab(id) end)
+    Widgets.helpTip(b, pg.tip, FEATURE, "ANCHOR_TOP")
+    tabButtons[id] = b
+    made[i] = b
+  end
+  tabIcons = iconsAll and total <= CONTENT_WIDTH
+  local x = PAD
+  for _, b in ipairs(made) do
+    local lead = tabIcons and (4 + TAB_ICON + 2) or 4
+    b.label:ClearAllPoints()
+    b.label:SetPoint("LEFT", b, "LEFT", lead, 0)
+    if tabIcons then b.icon:Show() else b.icon:Hide() end
+    b:SetSize(math.floor(lead + b.tcWordWidth + 4 + 0.5), TAB_H)
+    b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -TAB_Y)
+    x = x + b:GetWidth() + 2
   end
   local under = frame:CreateTexture(nil, "ARTWORK")
   under:SetHeight(1)
-  under:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -74)
-  under:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -74)
+  under:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(TAB_Y + TAB_H))
+  under:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -(TAB_Y + TAB_H))
   T.color(under, C.line, 1)
-
-  -- the Advanced sub-tabs: small pill buttons in one row under the tabs
-  local sx = PAD
-  for _, st in ipairs(SUBTABS) do
-    local b = CreateFrame("Button", nil, frame)
-    b.text = T.text(b, T.FONT.small, C.muted)
-    b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
-    b.text:SetText(st.label)
-    local w = tonumber(b.text.GetStringWidth and b.text:GetStringWidth()) or 0
-    if w <= 0 then w = #st.label * 6 end
-    b:SetSize(math.floor(w + 14), 18)
-    b:SetPoint("TOPLEFT", frame, "TOPLEFT", sx, -80)
-    b.fill = b:CreateTexture(nil, "BACKGROUND")
-    b.fill:SetAllPoints(b)
-    T.color(b.fill, C.button, 1)
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(b)
-    T.color(hl, C.white, 0.08)
-    script(b, "OnClick", function() Win.setTab("advanced", st.id) end)
-    subButtons[st.id] = b
-    sx = sx + b:GetWidth() + 4
-  end
   drawTabs()
 
   scroll = CreateFrame("ScrollFrame", nil, frame)

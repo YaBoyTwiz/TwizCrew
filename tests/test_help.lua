@@ -272,7 +272,7 @@ return {
     choice_control_says_right_click_goes_back = function(ns, A, W)
       local tip = recordTip(W)
       start(ns, W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
+      ns.Settings.open(); ns.Settings.setTab("panel")
       local r = ns.Settings.rowForTest("panel", "rowStyle")
       hover(r.control)
       A.eq(tip.lines[1], "Next choice")

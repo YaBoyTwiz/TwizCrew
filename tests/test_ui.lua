@@ -274,7 +274,7 @@ return {
 
     settings_builds_and_resets_without_errors = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
+      ns.Settings.open(); ns.Settings.setTab("panel")
       A.ok(ns.Settings.isOpen())
       ns.Modules.set("panel", "scale", 1.5)
       ns.Settings.confirmReset()
@@ -282,7 +282,7 @@ return {
       ns.Settings.answerReset(true)
       A.eq(ns.Modules.setting("panel", "scale"), 1)
       A.no(ns.Settings.isConfirming())
-      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do ns.Settings.setTab("advanced", st) end
+      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more", "basic" }) do ns.Settings.setTab(st) end
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -297,48 +297,74 @@ return {
       end
       A.eq(controls, { "setting:panel:keepOpen", "setting:panel:scale", "setting:panel:idleAlpha",
         "setting:panel:noticeScope", "module:popups:switch", "setting:activity:chatNews", "setting:popups:sounds",
-        "setting:tags:autoAway", "setting:panel:about", "setting:panel:whatsNew" },
-        "the 8 everyday controls, then the two help buttons")
-      A.ok(has(d, "note:advanced"))
+        "setting:tags:autoAway" }, "the 8 everyday controls (the two help buttons are links at the top now)")
+      A.eq(d[2], "picker:panel:theme", "the theme picker first under The panel")
+      for _, c in ipairs(controls) do
+        local key = c:gsub("^setting:", ""):gsub("^module:(%w+):switch$", "module:%1")
+        A.eq(d[indexOf(d, c) + 1], "grey:" .. key, c .. ": a grey line under it")
+        A.ok(ns.Help.SETTING_LINES[key], key .. ": its words are in UI/Help.lua")
+      end
+      A.no(has(d, "note:advanced"), "no Advanced tab any more")
       A.no(has(d, "setting:comm:debug"), "no technical switch on Basics")
+      local links = ns.Settings.linksForTest()
+      A.eq(links.about.text:GetText(), "How to use TwizCrew")
+      A.eq(links.new.text:GetText(), "What's new")
+      links.about._scripts.OnClick(links.about)
+      A.ok(ns.About.isShown(), "the link opens How to use TwizCrew")
+      links.new._scripts.OnClick(links.new)
+      A.ok(ns.Changelog.isShown(), "the link opens What's new")
       A.eq(ns.Log.errors(10), {})
     end,
 
-    advanced_has_five_pages = function(ns, A, W)
+    six_tabs_in_one_row = function(ns, A, W)
       boot(W)
       ns.Settings.open()
-      ns.Settings.setTab("advanced", "panel")
-      A.eq(ns.Settings.subTab(), "panel")
+      local ids = {}
+      for _, pg in ipairs(ns.Settings.PAGES) do ids[#ids + 1] = pg.id end
+      A.eq(ids, { "basic", "panel", "alerts", "fun", "find", "more" })
+      ns.Settings.setTab("panel")
+      A.eq(ns.Settings.tab(), "panel")
       local d = ns.Settings.describeForTest()
-      A.eq(d[1], "module:panel:switch", "the part's switch first")
-      A.ok(has(d, "setting:panel:scale")); A.ok(has(d, "setting:tags:autoAway"))
+      A.eq(d[1], "picker:panel:theme", "the theme picker first")
+      A.eq(d[2], "module:panel:switch", "then the part's switch")
+      A.no(has(d, "setting:panel:scale"), "Panel size is on Basics only")
+      A.no(has(d, "setting:tags:autoAway"), "Mark me AFK is on Basics only")
       A.ok(indexOf(d, "section:Rarely needed") > indexOf(d, "setting:panel:hideInCombat"), "rarely needed come last")
       A.ok(indexOf(d, "setting:panel:showSelf") > indexOf(d, "section:Rarely needed"))
       A.ok(indexOf(d, "module:layer:switch") > indexOf(d, "section:Rarely needed"))
-      ns.Settings.setTab("advanced", "alerts")
+      ns.Settings.setTab("alerts")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "module:popups:switch")); A.ok(has(d, "setting:popups:sounds")); A.ok(has(d, "setting:activity:chatNews"))
-      A.ok(has(d, "setting:panel:noticeScope")); A.no(has(d, "setting:panel:scale"))
-      ns.Settings.setTab("advanced", "fun")
+      A.ok(has(d, "setting:popups:online")); A.ok(has(d, "setting:panel:questHeadsUp")); A.ok(has(d, "module:activity:switch"))
+      A.no(has(d, "module:popups:switch"), "the Pop-ups switch is on Basics"); A.no(has(d, "setting:panel:scale"))
+      ns.Settings.setTab("fun")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "setting:roasts:mocks")); A.ok(has(d, "module:stats:switch")); A.ok(has(d, "child:roasts:editMocks"))
-      ns.Settings.setTab("advanced", "find")
+      ns.Settings.setTab("find")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "module:find:switch"), "Find the crew has a real switch")
       A.ok(has(d, "setting:find:rowArrows"))
-      ns.Settings.setTab("advanced", "more")
+      ns.Settings.setTab("more")
       d = ns.Settings.describeForTest()
       A.ok(has(d, "module:calendar:switch")); A.ok(has(d, "module:updates:switch")); A.ok(has(d, "setting:minimap:show"))
       A.ok(has(d, "setting:version:versions")); A.ok(has(d, "button:tryit"))
-      ns.Settings.setTab("basic")
-      ns.Settings.setTab("advanced")
-      A.eq(ns.Settings.subTab(), "more", "Advanced remembers the last sub-tab")
-      ns.Settings.setTab("advanced", "nonsense")
-      A.eq(ns.Settings.subTab(), "more", "an unknown sub-tab changes nothing")
-      for _, gone in ipairs({ "all", "test", "roasts", "popups", "crew", "tools" }) do
-        ns.Settings.setTab("advanced", gone)
-        A.eq(ns.Settings.subTab(), "more", "no " .. gone .. " sub-tab any more")
+      ns.Settings.setTab("advanced", "fun")
+      A.eq(ns.Settings.tab(), "fun", "(\"advanced\", page) from before still shows that page")
+      ns.Settings.setTab("nonsense")
+      A.eq(ns.Settings.tab(), "fun", "an unknown tab changes nothing")
+      for _, gone in ipairs({ "advanced", "all", "test", "roasts", "popups", "crew", "tools" }) do
+        ns.Settings.setTab(gone)
+        A.ok(ns.Settings.tab() == "fun" or (gone == "advanced" and ns.Settings.tab() == "panel"), "no " .. gone .. " tab")
+        ns.Settings.setTab("fun")
       end
+      -- the tabs: the theme's tab look, the icons when the row fits
+      local tabs = ns.Settings.tabButtonsForTest()
+      A.ok(ns.Settings.tabIconsForTest(), "six tabs with icons fit in 372")
+      local used = -2
+      for _, pg in ipairs(ns.Settings.PAGES) do used = used + tabs[pg.id]:GetWidth() + 2 end
+      A.ok(used <= 372, "the row fits: " .. used)
+      A.eq(tabs.fun.icon._texture, "Interface\\AddOns\\TwizCrew\\Art\\Icons\\Icons.tga")
+      A.eq(tabs.fun.tcTab.active, true, "the shown tab is drawn selected")
+      A.eq(tabs.basic.tcTab.active, false)
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -346,20 +372,28 @@ return {
       boot(W)
       ns.Settings.open()
       local seen = {}
-      local pages = { { "basic" } }
-      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do pages[#pages + 1] = { "advanced", st } end
-      for _, pg in ipairs(pages) do
-        ns.Settings.setTab(pg[1], pg[2])
+      for _, pg in ipairs(ns.Settings.PAGES) do
+        ns.Settings.setTab(pg.id)
         for _, v in ipairs(ns.Settings.describeForTest()) do seen[v] = (seen[v] or 0) + 1 end
       end
       local function placed(id, key)
-        return seen["setting:" .. id .. ":" .. key] or seen["child:" .. id .. ":" .. key]
+        return (seen["setting:" .. id .. ":" .. key] or 0) + (seen["child:" .. id .. ":" .. key] or 0)
       end
       for _, def in ipairs(ns.Modules.list()) do
         if def.id ~= "testtools" then -- (its buttons are in their own window)
-          for _, sdef in ipairs(def.settings) do A.ok(placed(def.id, sdef.key), def.id .. ":" .. sdef.key .. " has a page") end
+          for _, sdef in ipairs(def.settings) do
+            local where = def.id .. ":" .. sdef.key
+            if where == "panel:theme" then
+              A.eq(seen["picker:panel:theme"], 2, "the theme picker: on Basics and first on Panel (the spec)")
+              A.eq(placed(def.id, sdef.key), 0, "and not also as a plain row")
+            elseif ns.Settings.LINKED[where] then
+              A.eq(placed(def.id, sdef.key), 0, where .. ": a link at the top of the window, not a row")
+            else
+              A.eq(placed(def.id, sdef.key), 1, where .. " is on exactly one page")
+            end
+          end
           if def.tier ~= "essential" and not def.comingSoon then
-            A.ok(seen["module:" .. def.id .. ":switch"], def.id .. " has its switch on a page")
+            A.eq(seen["module:" .. def.id .. ":switch"], 1, def.id .. " has its switch on exactly one page")
           end
         end
       end
@@ -372,7 +406,7 @@ return {
       ns.Modules.register({ id = "newpart", name = "New part", tier = "extra", info = "A test module.",
         defaults = { loud = true }, settings = { { key = "loud", label = "Loud", kind = "toggle", info = "A test." } } })
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
+      ns.Settings.open(); ns.Settings.setTab("more")
       local d = ns.Settings.describeForTest()
       A.ok(indexOf(d, "module:newpart:switch") > indexOf(d, "button:tryit"), "at the end of More")
       A.ok(indexOf(d, "setting:newpart:loud") > indexOf(d, "module:newpart:switch"))
@@ -380,7 +414,7 @@ return {
 
     settings_shows_broken_module = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "alerts")
+      ns.Settings.open(); ns.Settings.setTab("basic")
       ns.Modules.markBroken("popups")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "module:popups:broken"), "rebuilt while open")
@@ -390,14 +424,14 @@ return {
 
     settings_rebuilds_lazily_when_closed = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
+      ns.Settings.open(); ns.Settings.setTab("panel")
       ns.Settings.close()
       local before = ns.Settings.layoutCountForTest()
       ns.Modules.setEnabled("panel", false)
       ns.Modules.setEnabled("panel", true)
       ns.Modules.resetAll()
       A.eq(ns.Settings.layoutCountForTest(), before, "no rebuild while closed")
-      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
+      ns.Settings.open(); ns.Settings.setTab("panel")
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "one rebuild on the next open")
     end,
 

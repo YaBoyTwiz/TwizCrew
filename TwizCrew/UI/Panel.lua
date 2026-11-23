@@ -76,6 +76,7 @@ P.cheered = cheered
 local crewTab, shameTab, actTab, calTab, helpTab
 local actRows, actShown = {}, {} -- the Activity tab's rows (Recent.newRow) and what they show (test hook)
 local actOffset = 0              -- the Activity tab's scroll
+local actClear                   -- the Activity tab's "Clear" button (right of "Scroll for more")
 local ACT_ROWS = 10              -- Activity rows shown at once
 P.actUnseen = 0                  -- entries the Activity list got since it (or the Recent window) was last looked at
 local calTicker        -- pulses the glow behind the Calendar button while the calendar has something new
@@ -513,6 +514,7 @@ end
 
 local function hideActivity()
   for _, r in ipairs(actRows) do r:Hide() end
+  if actClear then actClear:Hide() end
   actShown = {}
 end
 
@@ -662,6 +664,21 @@ local function redraw()
     elseif #list > ACT_ROWS then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #list .. ")"
     else note = nil end
     if note then y = drawNote(note, y, width) else noteText:Hide() end
+    -- "Clear" right of "Scroll for more" (the theme's button): empties the list, like the Recent window's button
+    if #list > ACT_ROWS then
+      if not actClear then
+        actClear = Widgets.button(P.root, "Clear", function() if ns.Feed then ns.Feed.clear() end end, nil, FEATURE,
+          "actClear")
+        actClear:SetSize(50, 18)
+      end
+      local w = noteText:GetStringWidth()
+      if type(w) ~= "number" or w <= 0 then w = #note * 5 end
+      actClear:ClearAllPoints()
+      actClear:SetPoint("TOPLEFT", noteText, "TOPLEFT", math.floor(w + 4), 2)
+      actClear:Show()
+    elseif actClear then
+      actClear:Hide()
+    end
     P.root:SetSize(width + 2 * PAD, y + 2)
     P.root:Show()
     P.syncBarTicker()
@@ -999,6 +1016,7 @@ function Panel.tabButtonsForTest()
 end
 function Panel.activityForTest() return actShown end
 function Panel.activityRowForTest(i) return actRows[i] end
+function Panel.activityClearForTest() return actClear end
 function Panel.calPulseForTest() return calTicker ~= nil end
 function Panel.refresh() requestRedraw() end
 

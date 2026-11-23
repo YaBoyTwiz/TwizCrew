@@ -476,18 +476,18 @@ return {
     -------------------------------------------------------------------------------------------- settings / chat
     try_it_out_has_its_own_window = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
+      ns.Settings.open(); ns.Settings.setTab("more")
       local d = ns.Settings.describeForTest()
       local function at(what) for i, v in ipairs(d) do if v == what then return i end end end
       A.ok(at("button:tryit"), "More has the Try it out button")
       for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do
-        ns.Settings.setTab("advanced", st)
+        ns.Settings.setTab(st)
         for _, v in ipairs(ns.Settings.describeForTest()) do
           A.no(v:find("testtools", 1, true), "no test buttons in the settings window: " .. v)
         end
       end
       A.no(ns.TestTools.isOpen())
-      ns.Settings.setTab("advanced", "more")
+      ns.Settings.setTab("more")
       ns.Settings.buttonRowForTest("tryit").button._scripts.OnClick()
       A.ok(ns.TestTools.isOpen(), "Try it out opens the window")
       local win = ns.TestTools.windowForTest()

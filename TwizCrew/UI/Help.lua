@@ -96,9 +96,15 @@ Help.TIPS = {
   popupOnline = { "Click to whisper", "Opens a whisper to them in chat." },
   bigArrow = { "Big arrow",
     "Points the way to a friend or a meet-up. Drag it to move it (unless the panel is locked)." },
-  setBasics = { "Basics", "A few everyday options. Every option is also on the Advanced tab." },
-  setAdvanced = { "Advanced",
-    "Every option on five pages: Panel, Alerts, Fun, Find and More. The rarely needed ones are last on each page." },
+  setBasics = { "Basics", "The few options most people change. Everything else is on the other tabs." },
+  setPanel = { "Panel", "How the crew panel and its tab look and behave, and what your crew sees about you." },
+  setAlerts = { "Alerts", "Which news gets a pop-up. The rarely needed options are last." },
+  setFun = { "Fun", "Roasts, congrats and the Hall of Shame." },
+  setFind = { "Find", "Arrows to your group and meet-ups on the map." },
+  setMore = { "More", "The calendar, recap cards, spell ranks, updates and the minimap button." },
+  setNew = { "What's new", "Every TwizCrew version and what changed. Also: click the panel's title, or /tc new." },
+  actClear = { "Clear the list",
+    "Empties the Activity list (and the Recent activity window). Only on your screen; nobody else is told." },
   setReset = { "Reset everything",
     "Every setting and the panel's place go back to the start (you are asked first). Stats, notes and friends stay." },
   setAbout = { "How to use TwizCrew", "A short page about what TwizCrew does and how to use it. Also /tc about." },
@@ -127,6 +133,19 @@ Help.LINES = {
   calAnswers = "%s going   %s maybe",
   calLegend = "|cffffd100Gold|r: a note" .. DOT .. "|cff3fa9f5Blue|r: a dungeon run" .. DOT
     .. "|cffa335eePurple|r: a raid" .. DOT .. "|cffffd100new|r: not opened yet" .. DOT .. "Gold top line: today",
+}
+
+-- The grey line under each control on the settings window's Basics page ("module:<id>" is a part's switch): the
+-- (i) tip in one plain line.
+Help.SETTING_LINES = {
+  ["panel:keepOpen"] = "Off: the panel tucks into a small tab on the screen edge. On: it stays open where you drag it.",
+  ["panel:scale"] = "Makes the panel and its tab bigger or smaller. 100% is the normal size.",
+  ["panel:idleAlpha"] = "How see-through the tab, or the kept-open panel, is while your mouse is away. 100% is off.",
+  ["panel:noticeScope"] = "Whose news you get: only your party and pinned friends, or the whole guild.",
+  ["module:popups"] = "Small boxes on your screen when friends come online, die or level up.",
+  ["activity:chatNews"] = "Lines in your chat only you see. Important: deaths, level-ups, congrats and mocks.",
+  ["popups:sounds"] = "Which TwizCrew sounds play: none, just the mock laugh and the awards show, or all.",
+  ["tags:autoAway"] = "Your crew sees AFK next to your name when you have not played for a few minutes.",
 }
 
 -- title, text of a tip (nil when there is no such key).

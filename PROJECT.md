@@ -13,6 +13,14 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Review of v0.3.0, fixes (2026-11-23):** a review of the released code (never run in the game) found 8 defects;
+  all are fixed on the branch `pin-party`, **not released, not seen in the game**. The quest list no longer floods
+  the queue in a group (one group copy, newer replaces older; no whisper to a member who just got the group's copy;
+  asks wait a few seconds), never announces more quests than it sends; hovering a row asks once. A note from my
+  other install is never "new"; a note counts as mine by name only when the class matches too. The note window's
+  time line stays one line; the calendar size is kept to the screen's height and keeps the window's middle in
+  place; after only a /reload on an update that added a file, opening the calendar says to restart the game.
+  Checks: `docs/TESTING.md`, "Calendar: edit and remove notes" 7-8, "Calendar size" 3, "Quest list" 11.
 - **v0.3.0 released (2026-11-22, owner: "yes add it, and release"):** everything built on 2026-11-22 after v0.2.0:
   the calendar work (button and pulse, Events / Play times, time zones, edit and remove, bigger window, colored
   days) and the quest list with its heads-up and the "why a share was refused" message. **Released without an
@@ -557,7 +565,8 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   install has its own diary id (`calendar.me`), and a note's key starts with its author's id, so a note made on the
   other install looked like someone else's here: no remove control (and it counted as "new"). Seen in his saved data:
   two ids, both with the alts Yaboytwiz and Warpedpathos. **Notes.isMine now also says yes when the note's author
-  name is my character or one of my own alts.** Only notes are covered: an answer (going / maybe) given on the other
+  name is my character or one of my own alts, and its class is that character's** (the class part since
+  2026-11-23: two members can share a first name). Only notes are covered: an answer (going / maybe) given on the other
   install is still a second person's answer.
 - **Edit (Notes.update, new):** changes one of my notes in place (day, time, words, icon, dungeon). The key stays,
   so answers and comments stay; `u` goes up, so every copy (v0.2.0 too) takes it as a newer copy of the same note.
@@ -578,10 +587,12 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   quest (flag: 1 can be shared, 0 can't, ? the game doesn't say; title cut to 40 like the row's). A full log takes
   several messages; a list is used only once all `n` quests arrived, so half a list never replaces a whole one.
   Whispered when the friend can be whispered, else sent to the group. Sent in the slow lane (bulk).
-- **When a copy asks:** when you hover a friend's row or open its right-click menu (not again within 20 s, and not
-  while the list is younger than 60 s), and for every crew member in your group when the group changes (not while
-  their list is younger than 5 minutes). A copy in a group sends its list to the group again by itself, 2 s after
-  its quests change. An asker gets at most one answer per 10 s.
+- **When a copy asks:** when you hover a friend's row (once per hover) or open its right-click menu (not again
+  within 20 s, and not while the list is younger than 60 s), and, 6 s after the group changes, for every crew member
+  in your group whose list did not come by itself (not while their list is younger than 5 minutes). A copy in a
+  group sends its list to the group again by itself, 2 s after its quests change (a newer list replaces one still
+  waiting in the queue). An asker gets at most one answer per 10 s, and none when they were in my group when my
+  list went to it less than 30 s ago with the same quests. A list holds at most 30 quests, none without a name.
 - **What you see:** the row's right-click menu has "Their quests (4 you can get)"; a click opens a second menu:
   "Ask to share: <quest>" (the usual share request, still needs a group and their click), "Can't share: <quest>
   (why)", and "N quests you both have". The row's tooltip adds "Can share N quests with you". The row itself still

@@ -825,6 +825,14 @@ With a friend:
 
 6. **They see the edit.** Edit a note they can see: their copy changes to the new words and time.
 
+Review fixes (2026-11-23, branch `pin-party`):
+
+7. **Not "new" any more.** The note from your other install has no gold "new" on the Events month or in the day's
+   list, before and after you open it.
+8. **A namesake's note.** A guild member whose first name is one of your characters' but who plays another class
+   adds a note: you see `Open: ...` for it, never `Edit` / `Remove`, and it shows "new". Your own note from the other
+   install (same character, same class) still has `Edit` and `Remove`.
+
 ## Calendar size (2026-11-22)
 
 `/reload` is enough if the game was restarted since the Events / Play times change.
@@ -833,6 +841,9 @@ With a friend:
    is too big or still too small for a default.
 2. **The slider.** Settings, the calendar's part, `Calendar size`: drag it with the calendar open. The window
    changes at once; the words stay sharp.
+3. **Fits and stays put (review fix, 2026-11-23).** Drag the calendar near a corner, then move the slider: the
+   window grows and shrinks around its middle and does not jump across the screen. At the top of the slider the
+   whole window is still on the screen from top to bottom.
 
 ## Colored event days (2026-11-22)
 
@@ -872,6 +883,10 @@ with a friend on the released version only step 6 can be checked.
    eligible for that quest": **if nothing arrives on yours, tell Claude the exact words their game printed.**
 10. **Tell Claude:** is the count right without Questie (it can count quests you are too low for)? Is the pop-up
    useful or annoying?
+11. **Not too many messages (review fix, 2026-11-23).** Settings, Crew connection, "Show technical messages" on,
+   then group with two friends on this version. Right after grouping your chat shows your list going out once
+   (`send QLA via PARTY`) and no `send QLA via WHISPER` to those two right after it. Turn in two quests quickly: one
+   more `send QLA via PARTY`, not two. Their lists still show on your side (step 1).
 
 ## What to send back
 

@@ -811,6 +811,8 @@ return {
       A.eq(ns.Panel.tab(), "shame")
       A.eq(ns.Board.tab(), "deaths")
       A.eq(ns.Board.view(), "session")
+      A.eq(ns.Panel.viewForTest(), "full", "tucked into the crew tab: the panel slid out, so it can be seen")
+      A.eq(ns.Panel.openForTest().by, "note", "and stays a while for a mouse that is somewhere else")
       -- stats off: the click does nothing
       ns.Commands.setPanel(false, true)
       ns.Board.setView("all")

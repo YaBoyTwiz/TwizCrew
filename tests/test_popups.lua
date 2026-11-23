@@ -412,6 +412,19 @@ return {
       W:advance(5)
       A.eq(ns.Popups.visibleCount(), 0)   -- the pending layer pop-up was dropped
     end,
+    a_notice_closes_itself_with_the_module_off = function(ns, A, W)
+      ready(ns, W)
+      ns.Modules.setEnabled("popups", false)
+      ns.Popups.notice(nil, "A notice", "with words", nil, 5)
+      A.eq(ns.Popups.visibleCount(), 1, "shown although the module is off")
+      W:advance(5 + 2) -- its time and the fade
+      for _, f in ipairs(W.frames) do -- (the stub does not run OnUpdate by itself)
+        local h = f._scripts and f._scripts.OnUpdate
+        if h then h(f, 0.1) end
+      end
+      A.eq(ns.Popups.visibleCount(), 0, "gone after its time: no invisible frame left to click")
+      A.eq(ns.Log.errors(10), {})
+    end,
     names_from_others_are_escaped = function(ns, A, W)
       ready(ns, W)
       ns.Bus.fire("MEMBER_DIED", "Bad|cffff0000Name", "Zone|r", "")

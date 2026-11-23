@@ -201,6 +201,8 @@ local function openShame(tab)
     if tab then ns.Board.setTab(tab) end
   end
   if ns.Panel and ns.Panel.setTab then ns.Panel.setTab("shame") end
+  -- tucked into the crew tab nothing would show: slide the panel out (like the one-time note's pop-up does)
+  if ns.Panel and ns.Panel.openTab and ns.Panel.isKeptOpen and not ns.Panel.isKeptOpen() then ns.Panel.openTab("note") end
 end
 
 -- The card's words now, or nil when there is nothing to say (or nothing to compare).

@@ -153,8 +153,8 @@ local function newFrame()
     local p = self.tcPopup
     return select(2, ns.Help.tip(p and p.kind == "levelup" and "popupLevelup" or "popupOnline"))
   end, FEATURE)
-  -- Only the fade is smooth; showing and hiding is decided by the ticker. A roast closes itself here once its
-  -- time is over, so it also goes away while this module (and its ticker) is off.
+  -- Only the fade is smooth; showing and hiding is decided by the ticker. A roast, a share or a notice closes
+  -- itself here once its time is over, so it also goes away while this module (and its ticker) is off.
   -- (the raw handler only adds up the time; the safe wrapper runs once per step)
   local waited = 0
   f:SetScript("OnUpdate", function(self, elapsed)
@@ -164,7 +164,8 @@ local function newFrame()
     ns.Log.safe(FEATURE, function()
       if not self.tcShown then return end
       local left = self.tcExpires - ns.now()
-      local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare")
+      local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare"
+        or self.tcPopup.kind == "notice")
       if left <= 0 and own then close(self); return end
       self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
     end)

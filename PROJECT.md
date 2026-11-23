@@ -754,8 +754,11 @@ visible": a clearly labelled switch, not a small icon.
   (header, Keep open switch, tabs, sections, bars, Hall of Shame, Calendar button, "?", menus, tooltips). It slides
   back about 1 s after the mouse has left the tab, the panel and any menu opened from them. A click while it is out
   closes it, except a click within about 1 s of a hover-open: that keeps it out (as a click-open). A right-click
-  during the hover pause opens the menu alone (no hover-open until the mouse leaves the tab). Opening it counts what
-  was missed as seen and hides the tab's tooltip.
+  during the hover pause opens the menu alone (no hover-open until the mouse leaves the tab; the menu's full-screen
+  catcher takes the mouse, so this block holds for as long as the tab's menu is open, and after it closes until the mouse
+  has left the tab once). A click on a stolen-crown pop-up or on a crown line of the "While you were away" card
+  opens the Hall of Shame and, while tucked, slides the panel out ("note" open: stays at least about 6 s). Opening it
+  counts what was missed as seen and hides the tab's tooltip.
 - **News:** one row slides out (the news line in the title bar and that friend's row; a calendar note has no row),
   then back. Plain news stays the `peekSeconds` setting (5 s): came online, died, levelled up, other layer / back on
   my layer, ran off, a new calendar note (or an answer on mine). News whose row shows a button stays
@@ -769,7 +772,7 @@ visible": a clearly labelled switch, not a small icon.
   "Tell me about"). Layer, running-off and calendar news are made by the panel itself (`FeedLogic.newsEntry`, never in
   the Recent list or chat); layer news follows the pop-up switches Layer changes / Back on my layer, said once until
   "back"; calendar news is said once per sync (`CALENDAR_NEWS` from Calendar/Notes.lua); none of it in the first 30 s
-  after login.
+  after login (counted from login, not from when the files were read: a long loading screen does not eat it).
 - **After a fight** (owner, 2026-11-23: "is there any way to batch it to show stuff when the fight is over"): in a
   fight news is only counted (and pop-ups show, even with "Show news on the tab"). About 3 s after the fight ends (not
   in a new fight: then it waits for that one's end too, and the news of both fights goes together), the news that

@@ -239,6 +239,29 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
+    the_tabs_menu_catching_the_mouse_does_not_unblock_hover = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      W:advance(8)
+      mouseTab(ns, true)
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "RightButton")
+      A.ok(ns.Widgets.menuFrame():IsShown(), "the tab's menu is open")
+      mouseTab(ns, false) -- the menu's full-screen catcher now has the mouse
+      W:advance(0.5)
+      mouseTab(ns, true) -- (it is back on the tab while the menu is still open)
+      W:advance(0.6)
+      A.eq(ns.Panel.viewForTest(), "tab", "no slide-out under the open menu")
+      ns.Widgets.menuFrame():Hide()
+      W:advance(0.6)
+      A.eq(ns.Panel.viewForTest(), "tab", "nor right after it closes, with the mouse still on the tab")
+      mouseTab(ns, false)
+      W:advance(0.3)
+      mouseTab(ns, true)
+      W:advance(0.6)
+      A.eq(ns.Panel.viewForTest(), "full", "after the mouse left and came back it hovers open again")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     a_menu_from_the_panel_keeps_it_out = function(ns, A, W)
       ready(W)
       hoverOpen(W, ns)
@@ -315,6 +338,39 @@ return {
     end,
 
     -------------------------------------------------------------------------------------------------- news
+    the_login_quiet_time_counts_from_login_not_from_loading = function(ns, A, W)
+      W:advance(120) -- a long loading screen: the files were read long ago
+      W:fire("ADDON_LOADED", "TwizCrew")
+      W:fire("PLAYER_LOGIN")
+      W.env.TwizCrewDB.modules.panel.settings.noticeScope = "guild"
+      W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(3)
+      ns.Panel.news("runaway", "Frostie")
+      W:advance(0.3)
+      A.eq(ns.Panel.noticeForTest(), nil, "still quiet just after login")
+      W:advance(8)
+      W:advance(ns.Config.LOGIN_QUIET + 1)
+      ns.Panel.news("runaway", "Frostie")
+      W:advance(0.3)
+      A.eq(ns.Panel.noticeForTest().kind, "runaway", "news after the quiet time")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    news_marks_never_land_in_the_saved_feed = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie"); friend(W, ns, "Ginkan")
+      W:advance(12)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(0.3)
+      A.eq(ns.Panel.noticeForTest().kind, "levelup", "the news is out")
+      local n = 0
+      for _, e in ipairs(ns.db.feed) do
+        n = n + 1
+        A.eq(e.reactable, nil, "the saved entry has no reactable mark")
+      end
+      A.ok(n > 0, "something is saved")
+    end,
+
     plain_news_slides_out_for_five_seconds = function(ns, A, W)
       ready(W)
       friend(W, ns, "Frostie")
@@ -929,6 +985,7 @@ return {
       tabFrame(ns)._scripts.OnClick(tabFrame(ns), "RightButton")
       W:advance(1)
       A.eq(ns.Panel.viewForTest(), "tab", "the menu opens alone")
+      ns.Widgets.menuFrame():Hide() -- (while it is open the hover stays blocked: see the menu test above)
       mouseTab(ns, false); W:advance(0.2)
       mouseTab(ns, true); W:advance(0.5)
       A.eq(ns.Panel.viewForTest(), "full", "after the mouse left, hover works again")

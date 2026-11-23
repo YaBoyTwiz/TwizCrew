@@ -229,6 +229,8 @@ return {
       A.eq(texts(lines), { "Chaos took Professional Corpse from Frostie" })
       ns2.AwayCard.clickLineForTest(1)
       A.eq(ns2.Panel.tab(), "shame", "a click opens the Hall of Shame")
+      H.advance(0.2)
+      A.eq(ns2.Panel.viewForTest(), "full", "tucked into the crew tab, the panel slid out to show it")
       A.eq(ns2.Board.view(), "all")
       A.eq(ns2.Board.tab(), "deaths")
     end,

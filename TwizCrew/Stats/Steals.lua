@@ -40,6 +40,8 @@ local function openAt(def)
   if ns.Board and ns.Board.setView then ns.Board.setView("session") end
   if ns.Board and ns.Board.setTab then ns.Board.setTab(def.tab) end
   if ns.Panel and ns.Panel.setTab then ns.Panel.setTab("shame") end
+  -- tucked into the crew tab nothing would show: slide the panel out (like the one-time note's pop-up does)
+  if ns.Panel and ns.Panel.openTab and ns.Panel.isKeptOpen and not ns.Panel.isKeptOpen() then ns.Panel.openTab("note") end
 end
 
 -- The session board now: session, awards, who is on it (set), valueOf(def, name) -> "8 deaths".

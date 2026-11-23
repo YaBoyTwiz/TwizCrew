@@ -44,8 +44,8 @@ local newsHeld = false      -- the mouse is on the slid-out news
 local flashAt               -- when the last news was counted (the tab flashes)
 local dragging, dragEndAt = false, nil
 local lastLayer = {}        -- name -> "different" once "on another layer" was said (until "back on your layer")
-local quietUntil = ns.now() + ns.Config.LOGIN_QUIET -- no layer or calendar news while logging in
-local loadedAt = ns.now()   -- (no after-fight news in the first seconds after login)
+local quietUntil          -- no layer or calendar news while logging in (set once, when the panel first starts listening)
+local loadedAt               -- (no after-fight news in the first seconds after login; same moment)
 local AFTER_FIGHT = 3       -- seconds after a fight ends before its news slides out
 local FIGHT_MAX = 20        -- news kept from a fight at most
 local fightNews = {}        -- copies of the news that came in a fight (in scope), oldest first, until it is shown
@@ -116,6 +116,14 @@ local function mouseOverPanel()
   return false
 end
 P.mouseOverPanel = mouseOverPanel
+
+-- Is the tab's own right-click menu open? (Its full-screen catcher takes the mouse, so the mouse is "off" the tab.)
+local function tabMenuOpen()
+  local menu = ns.Widgets.menuFrame and ns.Widgets.menuFrame() or nil
+  if not menu or not tab or P.menuAnchor ~= tab or not menu.IsShown then return false end
+  local ok, shown = pcall(menu.IsShown, menu)
+  return ok and shown == true
+end
 
 local function mouseOverTab()
   if not shownNow(tab) then return false end
@@ -542,7 +550,8 @@ local function barTick()
       end
     end
     if not onTab then
-      hoverSince, hoverBlocked, tabHover = nil, false, false
+      hoverSince, tabHover = nil, false
+      if not tabMenuOpen() then hoverBlocked = false end -- (the menu's catcher has the mouse: still on the tab)
     end
   else
     tabHover = false
@@ -599,6 +608,12 @@ local function noticeWanted(e)
   return ns.Modules.isEnabled("popups") and ns.Modules.setting("popups", key) == true
 end
 
+local function copyOf(e)
+  local c = {}
+  for k, v in pairs(e) do c[k] = v end
+  return c
+end
+
 -- The activity feed recorded something (FEED_ADDED), or the tab made its own news (Panel.news). While tucked: one
 -- more missed (the tab glows) and, with "Slide out news" on and no fight, the news slides out in its turn.
 function Panel.onFeed(e)
@@ -613,11 +628,12 @@ function Panel.onFeed(e)
   P.bar:addMissed()
   flashAt = now
   if not P.inCombat then
-    if setting("peek") then P.bar:push(e, now) end
+    -- (a copy: feed entries are saved, and the queue writes its own marks on what it holds)
+    if setting("peek") then P.bar:push(copyOf(e), now) end
   elseif #fightNews < FIGHT_MAX then
-    -- in a fight it is only counted, and kept for after the fight (a copy: feed entries are saved)
-    local c = { inScope = true, got = now }
-    for k, v in pairs(e) do c[k] = v end
+    -- in a fight it is only counted, and kept for after the fight (a copy too)
+    local c = copyOf(e)
+    c.inScope, c.got = true, now
     fightNews[#fightNews + 1] = c
   end
   startBarTicker()
@@ -640,7 +656,7 @@ local function afterFight()
     c.reactable = canReact(c)
   end
   local act, e = FL.afterFight(fightNews, { inCombat = P.inCombat, peek = setting("peek") == true,
-    sinceLogin = now - loadedAt })
+    sinceLogin = now - (loadedAt or now) })
   if act == "wait" then return end
   fightNews = {}
   -- (the panel out or not on screen: nothing to slide out; the Activity tab has it all)
@@ -660,7 +676,7 @@ function P.fightEnded()
   end
 end
 
-local function inQuiet() return ns.now() < quietUntil end
+local function inQuiet() return quietUntil ~= nil and ns.now() < quietUntil end
 
 -- News only the tab shows: "otherlayer", "samelayer", "runaway", "calnote", "calreply" (FeedLogic.newsEntry).
 function Panel.news(kind, who, extra)
@@ -686,6 +702,8 @@ local function onRelation(name, old, new)
 end
 
 function P.listenForNews()
+  -- the quiet time counts from login, not from when the file was read (a long loading screen would eat it)
+  if not loadedAt then loadedAt = ns.now(); quietUntil = loadedAt + ns.Config.LOGIN_QUIET end
   ns.Bus.on(FEATURE, "LAYER_RELATION", onRelation)
   ns.Bus.on(FEATURE, "MEMBER_OFFLINE", function(name) if name then lastLayer[name] = nil end end)
   ns.Bus.on(FEATURE, "RUNNING_OFF", function(name, dist)

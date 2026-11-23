@@ -229,7 +229,11 @@ return {
       A.eq(card.title:GetText(), "Welcome to Crew Guild")
       A.eq(card.rows[1].text:GetText(), "Online near your level: Twiz (10)")
       A.no(card.rows[2] and card.rows[2]:IsShown(), "no best play time from a brand-new copy")
-      A.eq(card.buttons[1].text:GetText(), "Close", "no About page in this build: no button for it")
+      A.eq(card.buttons[1].text:GetText(), "How to use TwizCrew", "the card offers the About page")
+      A.no(sns.About.isShown(), "the About page did not also open by itself")
+      H.advance(30)
+      A.no(sns.About.isShown(), "...and does not later: the card offered it")
+      A.eq(S.env.TwizCrewDB.aboutSeen, true)
       noErrors(A, tns, sns)
     end,
     no_pop_up_for_the_first_list_or_with_the_setting_off = function(ns, A, W, H)

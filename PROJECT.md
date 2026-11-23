@@ -34,8 +34,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   narrow to read a page in. Ways in: the "?" after the panel's tabs (only while stats or the calendar is on, and
   when it fits), the wrench menu (so also the minimap menu), Settings next to What's new, `/tc about`, `/tc help`
   (also prints the command list; an unknown word still only prints the list). It opens once by itself on a new
-  install only (no saved data at all: `db.aboutSeen = false`, account-wide; older data gets `true` silently), 5 s
-  after login, never in a fight or a dungeon or raid. On the branch, **not released, not seen in the game; two new
+  install only (no saved data at all: `db.aboutSeen = false`, account-wide; older data gets `true` silently), never
+  in a fight or a dungeon or raid. In a guild the welcome card comes instead (about 30 s after login, with a "How to
+  use TwizCrew" button) and the page does not also open; only when that card cannot show (no guild) the page opens
+  by itself, about 45 s after login (About asks `Welcome.startOwed`, Claude's call: one window at first login). On the branch, **not released, not seen in the game; two new
   files, so the game must be restarted.** Checks: `docs/TESTING.md`, "Tips and the About page".
 - **Review of v0.3.0, fixes (2026-11-23):** a review of the released code (never run in the game) found 8 defects;
   all are fixed on the branch `pin-party`, **not released, not seen in the game**. The quest list no longer floods

@@ -164,6 +164,16 @@ function Welcome.start()
 end
 
 -- Test hooks.
+-- Is the start card still to come this session (not decided yet for a fresh copy, or owed and waiting for a free
+-- moment)? The About page asks, so a new install does not get two windows at once (UI/About.lua).
+function Welcome.startOwed()
+  local w = ns.db and ns.db.welcome
+  local state = type(w) == "table" and w.start or nil
+  if state == "shown" or state == "no" then return false end
+  if state == "due" then return true end
+  return started and fresh and not startDecided or false
+end
+
 function Welcome.isStartShown() return card ~= nil and card.frame:IsShown() and true or false end
 function Welcome.startCardForTest() return card end
 function Welcome.lastSaidForTest() return lastSaid end

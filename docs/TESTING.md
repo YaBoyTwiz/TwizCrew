@@ -963,8 +963,10 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
    wrong, unclear or missing?
 11. **Only on a new install.** Nothing opens by itself after this update (you already had TwizCrew). To see the
    first-run: on a test account (or after moving `WTF/Account/*/SavedVariables/TwizCrew.lua` away while the game
-   is closed, and back afterwards), log in: about 5 seconds later the page opens once; not in a fight or a dungeon
-   (it waits until you are out), and not again at the next login.
+   is closed, and back afterwards), log in. In the guild: about 30 seconds later the welcome card shows (with a
+   "How to use TwizCrew" button) and the page does NOT open by itself as well. On a character in no guild: the
+   page opens once by itself after about 45 seconds; not in a fight or a dungeon (it waits until you are out).
+   Either way nothing opens again at the next login.
 12. **Tiny row style.** Settings, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
    the wrench menu).
 

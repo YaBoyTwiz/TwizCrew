@@ -340,22 +340,31 @@ return {
       A.ok(ns.About.isShown())
     end,
     opens_once_by_itself_on_a_new_install = function(ns, A, W)
+      W.state.guild = nil -- no guild: no welcome card will come, so the page opens by itself
       boot(W) -- no saved data at all
       A.eq(ns.db.aboutSeen, false)
       W:advance(2)
       A.no(ns.About.isShown(), "not at once")
-      W:advance(5)
-      A.ok(ns.About.isShown(), "a few seconds after login")
+      W:advance(50)
+      A.ok(ns.About.isShown(), "after giving the welcome card its chance")
       A.eq(ns.db.aboutSeen, true)
       ns.About.close()
       W:fire("PLAYER_LOGIN")
-      W:advance(10)
+      W:advance(60)
       A.no(ns.About.isShown(), "only once")
     end,
+    in_a_guild_the_welcome_card_offers_the_page_instead = function(ns, A, W)
+      boot(W) -- a new install, in a guild: the welcome card comes with a "How to use TwizCrew" button
+      W:advance(60)
+      A.ok(ns.Welcome.isStartShown(), "the welcome card")
+      A.no(ns.About.isShown(), "one window is enough: the page did not open by itself too")
+      A.eq(ns.db.aboutSeen, true, "the card offered it")
+    end,
     waits_out_a_fight_and_a_dungeon = function(ns, A, W)
+      W.state.guild = nil
       W.state.inInstance, W.state.instanceType = true, "party"
       boot(W)
-      W:advance(10)
+      W:advance(60)
       A.no(ns.About.isShown(), "never in a dungeon")
       W.state.inInstance, W.state.instanceType = false, "none"
       W.state.combat = true

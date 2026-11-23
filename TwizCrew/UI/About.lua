@@ -108,8 +108,22 @@ local function busy()
   return kind == "party" or kind == "raid"
 end
 
+-- A new install in a guild is also owed the welcome card (UI/Welcome.lua), which has a button for this page: one
+-- window at first login is enough. So while that card is owed this page waits for it once; when the card has shown,
+-- this page counts as offered; when it could not show (no guild list, say), this page opens after all.
+local CARD_WAIT = 40 -- seconds; the welcome card shows about 30 s after login
+local waitedForCard = false
+
 local function tryFirst()
   if not ns.db or ns.db.aboutSeen ~= false then return end -- seen already, or saved data from an older version
+  local w = ns.db.welcome
+  if type(w) == "table" and w.start == "shown" then ns.db.aboutSeen = true; return end
+  if not waitedForCard and ns.Welcome and ns.Welcome.startOwed and ns.Welcome.startOwed()
+    and C_Timer and C_Timer.After then
+    waitedForCard = true
+    C_Timer.After(CARD_WAIT, function() ns.Log.safe(FEATURE, tryFirst) end)
+    return
+  end
   if busy() then
     if C_Timer and C_Timer.After then C_Timer.After(RETRY, function() ns.Log.safe(FEATURE, tryFirst) end) end
     return

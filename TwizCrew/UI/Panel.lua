@@ -47,6 +47,7 @@ P.tabBar = nil         -- the Crew / Hall of Shame tabs and the Calendar button 
 P.visibleRows = 0      -- rows drawn by the last redraw
 P.enabled, P.shown, P.inCombat = false, false, false
 P.tipRow = nil         -- the row whose tooltip is showing (redraws refresh it)
+P.tipKey = nil         -- whose row it was (a redraw can put someone else in that row)
 P.menuAnchor = nil     -- the frame the panel's last menu hangs from (see openMenu)
 P.noticeShown = nil    -- the entry the bar shows now (test hook)
 P.flashTex = nil       -- a soft glow over the bar that flashes when a notice arrives while minimized

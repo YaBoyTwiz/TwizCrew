@@ -22,6 +22,8 @@ local BUILD_AGE = 60     -- a list whose pieces stopped coming is dropped after 
 local CACHE = 5          -- seconds "what can I get from them" is remembered
 local MAX_QUESTS = 30    -- more than a quest log holds
 local GROUP_SETTLE = 1   -- seconds after a group change before looking at who is in it
+local GROUP_ASK_WAIT = 5 -- ... and this many more before asking them (their own lists to the group come first)
+local GROUP_COPY = 30    -- seconds a list I sent to the group stands in for a whisper to a member who asks
 local MENU_TITLE = 30    -- letters of a quest's name in a menu line
 local ICON_ASK = "Interface\\Icons\\Spell_ChargePositive"
 local ICON_NO = "Interface\\RaidFrame\\ReadyCheck-NotReady"
@@ -34,7 +36,8 @@ local told = {}       -- friend -> true: the heads-up for them was shown in this
 local cache = {}      -- friend -> { at, all }
 local sentSig         -- my quests as they were when I last sent my list
 local sends = 0
-local pushWaiting, groupWaiting = false, false
+local pushWaiting, groupWaiting, askWaiting = false, false, false
+local groupSent       -- { at, sig, members = { [name] = true } }: my last list sent to the group
 local anchor
 
 local function inAnyGroup()
@@ -64,9 +67,29 @@ local function signature(log)
   return table.concat(parts, ",")
 end
 
--- Sends my list: to `to` as a whisper when that works, else to the group.
+-- My quest log as it is sent: no quest without a name, and no more than a friend's copy takes (MAX_QUESTS), so the
+-- count in the list is what arrives.
+local function myLog()
+  local out = {}
+  for _, q in ipairs(ns.Quest.log()) do
+    if #out >= MAX_QUESTS then break end
+    if type(q.title) == "string" and q.title ~= "" then out[#out + 1] = q end
+  end
+  return out
+end
+
+local function groupMembers()
+  local out = {}
+  for _, name in ipairs(ns.roster and ns.roster:names() or {}) do
+    if not ns.isMe(name) and inMyGroup(name) then out[name] = true end
+  end
+  return out
+end
+
+-- Sends my list: to `to` as a whisper when that works, else to the group (a newer list takes the place of one
+-- still waiting in the queue).
 local function sendMine(to)
-  local log = ns.Quest.log()
+  local log = myLog()
   sends = sends + 1
   local fields = { s = (math.floor(ns.now()) % 100000) .. "x" .. sends, n = tostring(#log) }
   for _, q in ipairs(log) do
@@ -75,18 +98,21 @@ local function sendMine(to)
   local opts = { repeatKeys = { "s", "n" }, bulk = true }
   sentSig = signature(log)
   if to and ns.Comm.sendTo(to, "QLA", fields, opts) then return true end
-  return ns.Comm.sendGroup("QLA", fields, opts)
+  opts.replace = "QLA"
+  if not ns.Comm.sendGroup("QLA", fields, opts) then return false end
+  groupSent = { at = ns.now(), sig = sentSig, members = groupMembers() }
+  return true
 end
 
 -- My quests changed while I'm in a group: the group gets the new list (once, a moment later).
 local function pushIfChanged()
   if pushWaiting or not inAnyGroup() then return end
-  if signature(ns.Quest.log()) == sentSig then return end
+  if signature(myLog()) == sentSig then return end
   pushWaiting = true
   C_Timer.After(PUSH_WAIT, function()
     pushWaiting = false
     ns.Log.safe(FEATURE, function()
-      if inAnyGroup() and signature(ns.Quest.log()) ~= sentSig then sendMine(nil) end
+      if inAnyGroup() and signature(myLog()) ~= sentSig then sendMine(nil) end
     end)
   end)
 end
@@ -241,6 +267,30 @@ local function headsUp(name)
   print("TwizCrew: " .. title .. ". Right-click their row, Their quests.")
 end
 
+-- A list from them is on its way (some of its pieces are here).
+local function arriving(name)
+  local now = ns.now()
+  for _, cur in pairs(building[name] or {}) do
+    if now - cur.at <= BUILD_AGE and now >= cur.at then return true end
+  end
+  return false
+end
+
+-- A moment after a group change: asks the crew members in my group whose lists did not come by themselves.
+local function askGroupLater()
+  if askWaiting then return end
+  askWaiting = true
+  C_Timer.After(GROUP_ASK_WAIT, function()
+    askWaiting = false
+    ns.Log.safe(FEATURE, function()
+      if not inAnyGroup() then return end
+      for name in pairs(groupMembers()) do
+        if not arriving(name) then QuestList.want(name, GROUP_FRESH) end
+      end
+    end)
+  end)
+end
+
 local function onGroupChanged()
   if groupWaiting then return end
   groupWaiting = true
@@ -251,13 +301,9 @@ local function onGroupChanged()
         told = {}
         return
       end
-      for _, name in ipairs(ns.roster and ns.roster:names() or {}) do
-        if not ns.isMe(name) and inMyGroup(name) then
-          QuestList.want(name, GROUP_FRESH)
-          headsUp(name)
-        end
-      end
+      for name in pairs(groupMembers()) do headsUp(name) end
       pushIfChanged()
+      askGroupLater()
     end)
   end)
 end
@@ -270,6 +316,12 @@ local function onAsk(sender, f)
   if not (ns.roster and ns.roster:get(sender)) then return end -- crew only
   local now = ns.now()
   if answeredAt[sender] and now - answeredAt[sender] < ANSWER_GAP then return end
+  -- they were in my group when my list went to it a moment ago (it may still wait in the queue): they have it
+  local g = groupSent
+  if g and g.members[sender] and now - g.at < GROUP_COPY and now >= g.at and g.sig == signature(myLog())
+    and inAnyGroup() and inMyGroup(sender) then
+    return
+  end
   answeredAt[sender] = now
   sendMine(sender)
 end

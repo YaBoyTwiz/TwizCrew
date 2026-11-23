@@ -52,6 +52,17 @@ local function sentOf(ns, W, msgType, from)
   return out
 end
 
+-- Like sentOf, with how each one went: { fields, chatType, target }.
+local function sentWith(ns, W, msgType, from)
+  local out = {}
+  for i = (from or 0) + 1, #W.sent do
+    local m = W.sent[i]
+    local msg = ns.Codec.decode(m.text)
+    if msg and msg.type == msgType then out[#out + 1] = { fields = msg.fields, chatType = m.chatType, target = m.target } end
+  end
+  return out
+end
+
 -- A friend's quest list arrives (in as many pieces as it takes).
 local function receiveList(ns, W, sender, stamp, quests)
   local fields = { s = stamp, n = tostring(#quests) }
@@ -277,7 +288,7 @@ return {
       W.state.groupMembers = { "Frostie" }
       local before = #W.sent
       W:fire("GROUP_ROSTER_UPDATE")
-      W:advance(4)
+      W:advance(7)
       local asks = sentOf(ns, W, "QLQ", before)
       A.eq(#asks, 1, "asked the one in my group, once")
       A.eq(asks[1].t, "Frostie")
@@ -319,6 +330,126 @@ return {
       W:advance(2)
       t = ns.Popups.textsForTest()
       A.eq(t[#t].text, "Frostie has 3 quests you can get")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_group_does_not_flood_the_queue_with_quest_lists = function(ns, A, W)
+      local quests = { { id = 7, title = "Kobold Camp Cleanup", objectives = {} },
+        { id = 33, title = "Wolves Across the Border", objectives = {} } }
+      questLog(W, quests, 7)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Chaos", "STATE", { cl = "WARRIOR" })
+      receive(ns, W, "Lurabe", "STATE", { cl = "PRIEST" })
+      W:advance(2)
+      -- a group forms with Frostie and Chaos
+      W.state.inGroup = true
+      W.state.groupMembers = { "Frostie", "Chaos" }
+      local before = #W.sent
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(1.5)
+      A.eq(#sentOf(ns, W, "QLQ", before), 0, "no asks at once: their own lists may be on the way")
+      receiveList(ns, W, "Frostie", "10x1", { { 42, "1", "A Fine Quest" } }) -- Frostie's copy sent its list
+      W:advance(6)
+      local asks = sentOf(ns, W, "QLQ", before)
+      A.eq(#asks, 1, "only the one whose list did not come is asked")
+      A.eq(asks[1].t, "Chaos")
+      local mine = sentWith(ns, W, "QLA", before)
+      A.eq(#mine, 1, "my list went to the group once")
+      A.eq(mine[1].chatType, "PARTY")
+      -- they ask anyway (their asks crossed my list): no whispered copy on top of the group's
+      before = #W.sent
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      receive(ns, W, "Chaos", "QLQ", { t = "Twiz" })
+      W:advance(3)
+      A.eq(#sentOf(ns, W, "QLA", before), 0, "they have it from the group")
+      -- Lurabe joins after my list went out: she gets it whispered
+      W.state.groupMembers = { "Frostie", "Chaos", "Lurabe" }
+      W:fire("GROUP_ROSTER_UPDATE")
+      W:advance(2)
+      before = #W.sent
+      receive(ns, W, "Lurabe", "QLQ", { t = "Twiz" })
+      W:advance(3)
+      local got = sentWith(ns, W, "QLA", before)
+      A.eq(#got, 1, "a newcomer gets it")
+      A.eq(got[1].chatType, "WHISPER")
+      -- long after the group's copy, a group member who asks gets a whisper again
+      W:advance(30)
+      before = #W.sent
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      W:advance(3)
+      A.eq(#sentOf(ns, W, "QLA", before), 1)
+      -- my quests change twice while my list still waits in the queue: only the newest goes out
+      W:fire("ENCOUNTER_START")
+      before = #W.sent
+      quests[3] = { id = 60, title = "Brand New", objectives = {} }
+      W:fire("QUEST_ACCEPTED", 60)
+      W:advance(3)
+      quests[4] = { id = 61, title = "Newer Still", objectives = {} }
+      W:fire("QUEST_ACCEPTED", 61)
+      W:advance(3)
+      W:fire("ENCOUNTER_END")
+      W:advance(5)
+      got = sentWith(ns, W, "QLA", before)
+      A.eq(#got, 1, "the newer list took the older one's place")
+      A.eq(got[1].fields.n, "4")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    my_list_never_announces_more_quests_than_it_sends = function(ns, A, W)
+      local quests = {}
+      for i = 1, 35 do quests[i] = { id = 100 + i, title = "Quest " .. i, objectives = {} } end
+      quests[3].title = "" -- the game gave no name
+      questLog(W, quests, 101)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(2)
+      local before = #W.sent
+      receive(ns, W, "Frostie", "QLQ", { t = "Twiz" })
+      W:advance(30)
+      local n, count, empty = nil, 0, 0
+      for _, f in ipairs(sentOf(ns, W, "QLA", before)) do
+        n = n or f.n
+        for k, v in pairs(f) do
+          if k:match("^q%d+$") then
+            count = count + 1
+            if #v < 2 then empty = empty + 1 end
+          end
+        end
+      end
+      A.eq(n, "30", "no more than a friend's copy takes")
+      A.eq(count, 30, "as many as it says")
+      A.eq(empty, 0, "a quest without a name is left out")
+    end,
+    resting_the_mouse_on_a_row_asks_for_their_list_once = function(ns, A, W)
+      local tip = { lines = {}, shown = false }
+      W.env.GameTooltip = {
+        SetOwner = function(_, owner) tip.owner = owner; tip.lines = {} end,
+        SetText = function(_, t) tip.lines[#tip.lines + 1] = t end,
+        AddLine = function(_, t) tip.lines[#tip.lines + 1] = t end,
+        Show = function() tip.shown = true end,
+        Hide = function() tip.shown = false end,
+        IsOwned = function(_, f) return tip.owner == f end,
+        IsShown = function() return tip.shown end,
+      }
+      start(ns, W)
+      ns.Modules.set("panel", "showSelf", false)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE", lv = "12", xp = "63", xc = "637", xm = "1871" })
+      W:advance(1)
+      local r = ns.Panel.rowFrameForTest(1)
+      local before = #W.sent
+      r._scripts.OnEnter(r)
+      W:advance(1)
+      A.eq(#sentOf(ns, W, "QLQ", before), 1, "the first look asks")
+      -- the mouse stays: the panel redraws (and its tooltip with it) many times, an older copy never answers
+      for i = 1, 6 do
+        receive(ns, W, "Frostie", "UPDATE", { xc = tostring(700 + i) })
+        W:advance(10)
+      end
+      A.ok(tip.shown, "(the tooltip is still up)")
+      A.eq(#sentOf(ns, W, "QLQ", before), 1, "not asked again while it stays")
+      r._scripts.OnLeave(r)
+      r._scripts.OnEnter(r)
+      W:advance(1)
+      A.eq(#sentOf(ns, W, "QLQ", before), 2, "a new look asks again")
       A.eq(ns.Log.errors(10), {})
     end,
     short_and_objective_lines = function(ns, A)

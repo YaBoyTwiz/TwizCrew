@@ -91,8 +91,31 @@ function FeedLogic.line(kind, who, extra, colorName)
     return "New calendar note from " .. colorName(who)
   elseif kind == "calreply" then
     return colorName(who) .. " answered your calendar note"
+  elseif kind == "fight" then
+    return (tonumber(extra.count) or 0) .. " things happened in that fight"
   end
   return colorName(who)
+end
+
+-- The short form of a piece of news for the after-fight summary ("Frostie died", "Irek reached 28").
+function FeedLogic.shortLine(e, colorName)
+  colorName = colorName or identity
+  local who = colorName(type(e.who) == "string" and e.who or "?")
+  local k = e.kind
+  if k == "died" then return who .. " died" end
+  if k == "levelup" then
+    local lv = tonumber(e.level)
+    return lv and (who .. " reached " .. math.floor(lv)) or (who .. " leveled up")
+  end
+  if k == "online" then return who .. " came online" end
+  if k == "mock" then return who .. " mocked you" end
+  if k == "congrats" then return who .. " congratulated you" end
+  if k == "otherlayer" then return who .. " changed layer" end
+  if k == "samelayer" then return who .. " is back on your layer" end
+  if k == "runaway" then return who .. " ran off" end
+  if k == "calnote" then return "Calendar note from " .. who end
+  if k == "calreply" then return who .. " answered your note" end
+  return who
 end
 
 -- One saved / shown entry from the facts of an event. Everything in it is plain text or a number (it is saved).
@@ -270,6 +293,37 @@ function FeedLogic.suppressesPopup(popupKind, ctx)
   return ctx.tucked == true and ctx.tabShown == true and ctx.setting == true and ctx.takes == true
 end
 FeedLogic.POPUP_FEED = POPUP_FEED
+
+-- After a fight: what slides out of the crew tab for the news that came during it (in a fight it is only counted).
+-- items: that news, oldest first, each with inScope (false: left out), popup (true: a pop-up already showed it in the
+-- fight, left out) and reactable (its row would show a button). ctx: { inCombat (a new fight started before the
+-- wait was over), peek ("Slide out news" is on), sinceLogin (seconds) }.
+-- Returns "wait" (keep the items for the end of the new fight), "none", or "push" and the entry to slide out: the one
+-- piece of news as it is, or a summary (kind "fight": count, items, `summary` = up to two short lines and "+N more",
+-- and `show` = the first item with a button, whose row is then shown with the count in the title line).
+local DOT = "\194\183"
+function FeedLogic.afterFight(items, ctx)
+  ctx = ctx or {}
+  if ctx.inCombat then return "wait" end
+  if not ctx.peek or (tonumber(ctx.sinceLogin) or 0) < 3 then return "none" end
+  local kept, show = {}, nil
+  for _, e in ipairs(items or {}) do
+    if type(e) == "table" and e.inScope ~= false and not e.popup then
+      kept[#kept + 1] = e
+      if e.reactable and not show then show = e end
+    end
+  end
+  if #kept == 0 then return "none" end
+  if #kept == 1 then return "push", kept[1] end
+  local shorts = {}
+  for i = 1, math.min(2, #kept) do shorts[i] = FeedLogic.shortLine(kept[i]) end
+  local summary = table.concat(shorts, " " .. DOT .. " ") .. (#kept > 2 and (" +" .. (#kept - 2) .. " more") or "")
+  local e = { kind = "fight", news = true, count = #kept, items = kept, show = show, summary = summary,
+    who = show and show.who or "", class = show and show.class or nil, dir = show and show.dir or nil,
+    at = kept[#kept].at }
+  e.line = FeedLogic.line("fight", e.who, e)
+  return "push", e
+end
 
 -- The news queue of the crew tab and its "missed" counter.
 -- opts: seconds (a piece of news stays), short (it stays only this long when several wait behind it), max (waiting at

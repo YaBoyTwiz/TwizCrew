@@ -37,6 +37,7 @@ local quietDone = false
 local announced, sameSince = {}, {}
 local offlineAt = {} -- name -> when they went offline this session (a quick /reload gets no "online" pop-up)
 local history = {}   -- texts of the last pop-ups shown (test hook)
+local shownAt = {}   -- kind -> name -> when its pop-up was last shown (the crew tab's after-fight news leaves those out)
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 
@@ -222,6 +223,8 @@ local function show(p)
     level = p.extra.level, maxLevel = p.extra.maxLevel }
   if p.kind == "online" then extra.detail = onlineDetail(names) end
   local text, sub = ns.PopupLogic.text(p.kind, names, extra, colorName)
+  shownAt[p.kind] = shownAt[p.kind] or {}
+  for _, n in ipairs(names) do if type(n) == "string" then shownAt[p.kind][n] = ns.now() end end
   seq = seq + 1
   remember(text)
   f:SetWidth(WIDTH)
@@ -443,6 +446,12 @@ ns.Modules.register({
 local Popups = {}
 ns.Popups = Popups
 Popups.act = act
+
+-- Was a pop-up of this kind about this friend shown at `since` or later?
+function Popups.shownSince(kind, name, since)
+  local at = shownAt[kind] and shownAt[kind][name]
+  return at ~= nil and at >= (tonumber(since) or 0)
+end
 
 -- Shows one roast line (already safe plain text) for `seconds` plus the fade, whether or not this module is on.
 -- Clicking it closes it.

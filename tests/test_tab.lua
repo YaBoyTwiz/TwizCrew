@@ -1192,6 +1192,183 @@ return {
       A.no(ns.Panel.barTickerForTest(), "the news has gone: stopped")
     end,
 
+    -------------------------------------------------------------------------------------------------- after a fight
+    after_fight_decides_none_one_or_a_summary = function(ns, A)
+      local F = ns.FeedLogic.afterFight
+      local ok = { peek = true, sinceLogin = 100 }
+      local function e(kind, who, extra)
+        local x = { kind = kind, who = who, inScope = true }
+        for k, v in pairs(extra or {}) do x[k] = v end
+        return x
+      end
+      A.eq(F({}, ok), "none", "nothing happened")
+      A.eq(F(nil, ok), "none")
+      local one = e("calnote", "Frostie")
+      local act, got = F({ one }, ok)
+      A.eq(act, "push"); A.ok(got == one, "one thing: it slides out as it is")
+      local items = { e("died", "Frostie"), e("levelup", "Irek", { level = 28 }), e("online", "Ginkan") }
+      act, got = F(items, ok)
+      A.eq(act, "push")
+      A.eq(got.kind, "fight"); A.eq(got.count, 3)
+      A.eq(got.line, "3 things happened in that fight")
+      A.eq(got.summary, "Frostie died \194\183 Irek reached 28 +1 more")
+      A.eq(got.show, nil, "nothing to react to: the text summary")
+      act, got = F({ e("died", "Frostie"), e("online", "Ginkan") }, ok)
+      A.eq(got.summary, "Frostie died \194\183 Ginkan came online", "two: no \"more\"")
+      -- one of them has a button: its row, with the count in the title line
+      items = { e("online", "Ginkan"), e("died", "Frostie", { reactable = true }), e("levelup", "Irek", { reactable = true }) }
+      act, got = F(items, ok)
+      A.eq(got.kind, "fight"); A.eq(got.count, 3)
+      A.ok(got.show == items[2], "the first one with a button")
+      A.eq(got.who, "Frostie")
+      -- left out: out of scope, already shown as a pop-up
+      act, got = F({ e("died", "Frostie", { inScope = false }), e("online", "Ginkan", { popup = true }) }, ok)
+      A.eq(act, "none", "out of scope and a pop-up already said it")
+      act, got = F({ e("died", "Frostie", { popup = true }), e("calnote", "Irek") }, ok)
+      A.eq(act, "push"); A.eq(got.kind, "calnote", "one left: as it is")
+      -- a second fight started before the 3 s: wait for its end
+      A.eq(F({ one }, { peek = true, sinceLogin = 100, inCombat = true }), "wait")
+      A.eq(F({ one }, { peek = false, sinceLogin = 100 }), "none", "Slide out news is off")
+      A.eq(F({ one }, { peek = true, sinceLogin = 2 }), "none", "never in the 3 s after login")
+    end,
+
+    short_lines_for_the_summary = function(ns, A)
+      local S = ns.FeedLogic.shortLine
+      A.eq(S({ kind = "died", who = "Frostie" }), "Frostie died")
+      A.eq(S({ kind = "levelup", who = "Irek", level = 28 }), "Irek reached 28")
+      A.eq(S({ kind = "levelup", who = "Irek" }), "Irek leveled up")
+      A.eq(S({ kind = "online", who = "Ginkan" }), "Ginkan came online")
+      A.eq(S({ kind = "mock", who = "Ginkan", dir = "in" }), "Ginkan mocked you")
+      A.eq(S({ kind = "congrats", who = "Ginkan", dir = "in" }), "Ginkan congratulated you")
+      A.eq(S({ kind = "otherlayer", who = "Ginkan" }), "Ginkan changed layer")
+      A.eq(S({ kind = "samelayer", who = "Ginkan" }), "Ginkan is back on your layer")
+      A.eq(S({ kind = "runaway", who = "Ginkan" }), "Ginkan ran off")
+      A.eq(S({ kind = "calnote", who = "Ginkan" }), "Calendar note from Ginkan")
+      A.eq(S({ kind = "calreply", who = "Ginkan" }), "Ginkan answered your note")
+    end,
+
+    after_a_fight_one_thing_slides_out_as_usual = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Ginkan")
+      W:advance(12)
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "lol" })
+      W:advance(1)
+      A.eq(ns.Panel.viewForTest(), "tab", "nothing slides out in the fight")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(2.5)
+      A.eq(ns.Panel.viewForTest(), "tab", "it waits about 3 seconds")
+      W:advance(1)
+      A.eq(ns.Panel.viewForTest(), "peek")
+      A.eq(ns.Panel.noticeForTest().kind, "mock")
+      A.eq(ns.Panel.rowFrameForTest(1).mock.text:GetText(), "Mock back", "with its button")
+      W:advance(10)
+      A.eq(ns.Panel.viewForTest(), "peek", "the 12 s rule")
+      W:advance(3)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    after_a_fight_several_things_make_one_summary = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      W:advance(12)
+      ns.Modules.setEnabled("popups", false) -- (no pop-ups: the running-off news is not shown in the fight)
+      ns.Modules.set("roasts", "mocks", false) -- (no Mock back: a congrats for me is plain news)
+      ns.Panel.barForTest():clearMissed()
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      ns.Bus.fire("RUNNING_OFF", "Frostie", 140)
+      ns.Bus.fire("CALENDAR_NEWS", "note", "Frostie")
+      ns.Bus.fire("CALENDAR_NEWS", "note", "Frostie") -- (a sync of many notes says it once)
+      receive(W, ns, "Frostie", "MOCK", { t = "Twiz", x = "Grats", k = "g" })
+      W:advance(1)
+      A.eq(ns.Panel.barForTest().missed, 3, "counted on the tab")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(3.2)
+      A.eq(ns.Panel.viewForTest(), "peek")
+      A.eq(ns.Panel.noticeForTest().kind, "fight")
+      A.eq(barText(ns), "3 things happened in that fight")
+      A.eq(ns.Panel.rowCountForTest(), 0, "no friend's row")
+      A.eq(ns.Panel.noteForTest(), "Frostie ran off \194\183 Calendar note from Frostie +1 more")
+      A.eq(ns.Panel.barForTest().missed, 3, "the count on the tab is unchanged")
+      W:advance(11)
+      A.eq(ns.Panel.viewForTest(), "peek", "it stays the 12 s")
+      ns.Panel.noticeClicked()
+      W:advance(0.1)
+      A.eq(ns.Panel.viewForTest(), "full", "a click opens the panel")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    after_a_fight_a_thing_to_react_to_shows_its_row = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie"); friend(W, ns, "Ginkan")
+      W:advance(12)
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" }) -- (its pop-up shows in the fight: not repeated)
+      ns.Bus.fire("CALENDAR_NEWS", "note", "Frostie")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "lol" })
+      W:advance(1)
+      A.ok(hasPopup(ns, "reached level 13"), "the level-up pop-up showed in the fight")
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(3.2)
+      A.eq(ns.Panel.noticeForTest().kind, "fight")
+      A.eq(barText(ns), "2 things happened in that fight", "the level-up is left out")
+      A.eq(ns.Panel.rowCountForTest(), 1, "the row of the thing to react to")
+      A.eq(ns.Panel.models()[1].key, "Ginkan")
+      A.eq(ns.Panel.rowFrameForTest(1).mock.text:GetText(), "Mock back")
+      A.eq(ns.Panel.noteForTest(), nil)
+    end,
+
+    after_a_fight_a_new_fight_waits_and_death_still_shows = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Ginkan"); friend(W, ns, "Frostie")
+      W:advance(12)
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "lol" })
+      W:advance(0.5)
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(1)
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED") -- a second fight before the 3 s
+      W:advance(3)
+      A.eq(ns.Panel.viewForTest(), "tab", "not in the new fight")
+      receive(W, ns, "Frostie", "MOCK", { t = "Twiz", x = "Grats", k = "g" })
+      W:advance(0.5)
+      -- I die: the fight ends
+      W.state.dead, W.state.combat = true, false
+      W:fire("PLAYER_DEAD")
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(3.2)
+      A.eq(ns.Panel.noticeForTest().kind, "fight", "both fights' news together, dead or not")
+      A.eq(barText(ns), "2 things happened in that fight")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    after_a_fight_nothing_slides_when_slide_out_is_off = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Ginkan")
+      W:advance(12)
+      ns.Modules.set("panel", "peek", false)
+      ns.Panel.barForTest():clearMissed()
+      W.state.combat = true
+      W:fire("PLAYER_REGEN_DISABLED")
+      receive(W, ns, "Ginkan", "MOCK", { t = "Twiz", x = "lol" })
+      W:advance(0.5)
+      W.state.combat = false
+      W:fire("PLAYER_REGEN_ENABLED")
+      W:advance(4)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      A.eq(ns.Panel.barForTest().missed, 1, "counted as before")
+    end,
+
     -------------------------------------------------------------------------------------------------- misc
     test_tools_news_slides_out = function(ns, A, W)
       ready(W)

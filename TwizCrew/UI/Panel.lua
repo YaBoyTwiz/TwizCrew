@@ -532,8 +532,10 @@ local function redraw()
   local layout = view == "tab" and "full" or view
   local peekMember
   if layout == "peek" then
-    -- the news's friend (a calendar note has no row)
-    local key = (news.kind ~= "calnote" and news.kind ~= "calreply") and FL.keyOf(news) or nil
+    -- the news's friend (a calendar note has no row; the after-fight summary shows the row of the one thing to react
+    -- to, else none)
+    local about = news.kind == "fight" and news.show or news
+    local key = (about ~= nil and about.kind ~= "calnote" and about.kind ~= "calreply") and FL.keyOf(about) or nil
     peekMember = type(key) == "string" and ns.roster and ns.roster:get(key) or nil
     local rowSettings = {}
     for k, v in pairs(s) do rowSettings[k] = v end
@@ -541,7 +543,7 @@ local function redraw()
     models = peekMember and Logic.rows({ peekMember }, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(),
       ns.wallclock(), titleOf(), ns.maxLevel(), ctx) or {}
     for _, m in ipairs(models) do
-      if (news.kind == "mock" or news.kind == "congrats") and news.dir == "in" then m.mockBack = true end
+      if (about.kind == "mock" or about.kind == "congrats") and about.dir == "in" then m.mockBack = true end
     end
   end
   local now = ns.now()
@@ -662,7 +664,8 @@ local function redraw()
 
   note = nil
   if layout == "peek" then
-    -- no note under a slid-out row
+    -- no note under a slid-out row; the after-fight summary with no row names what happened
+    if news.kind == "fight" and not news.show then note = news.summary end
   elseif stateLine then note = stateLine
   elseif #entries == 0 then note = "Nobody else is in the guild yet."
   elseif #entries == 1 and entries[1].bar == "offline" then note = "Nobody else is online right now."
@@ -678,7 +681,7 @@ local function redraw()
   else
     noteText:Hide()
   end
-  if used == 0 and layout == "peek" then y = top + 4 end -- (news with no row: the header line alone)
+  if used == 0 and layout == "peek" and not note then y = top + 4 end -- (news with no row: the header line alone)
   P.root:SetSize(width + 2 * PAD, y + 2)
   P.root:Show()
   P.syncBarTicker()
@@ -976,7 +979,7 @@ local function onEnable()
   P.listenForNews() -- layer changes, running off, calendar notes (UI/PanelTab.lua)
   -- a fight drops the news waiting to slide out (it is still counted as missed)
   ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() P.inCombat = true; P.bar:clear(); requestRedraw() end)
-  ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() P.inCombat = false; requestRedraw() end)
+  ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() P.inCombat = false; requestRedraw(); P.fightEnded() end)
   ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", requestRedraw)
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, requestRedraw) end)
@@ -1031,7 +1034,8 @@ ns.Modules.register({
       info = "While the panel is tucked into its tab, news from your crew slides out from the tab for a few seconds "
         .. "with that friend's row, then slides back: someone comes online, dies, levels up, changes layer or runs "
         .. "off, a new calendar note, a congrats or mock for you. News with a Congrats or Mock button stays about 12 "
-        .. "seconds. Keep your mouse on it to keep it out. Never during a fight." },
+        .. "seconds. Keep your mouse on it to keep it out. Never during a fight: what came during the fight slides "
+        .. "out a few seconds after it." },
     { key = "peekSeconds", label = "How long news stays out", kind = "slider", min = 2, max = 15, step = 1,
       parent = "peek",
       info = "How many seconds plain news stays out from the tab. News with a Congrats or Mock button on it stays "

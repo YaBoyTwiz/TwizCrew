@@ -45,6 +45,11 @@ local flashAt               -- when the last news was counted (the tab flashes)
 local dragging, dragEndAt = false, nil
 local lastLayer = {}        -- name -> "different" once "on another layer" was said (until "back on your layer")
 local quietUntil = ns.now() + ns.Config.LOGIN_QUIET -- no layer or calendar news while logging in
+local loadedAt = ns.now()   -- (no after-fight news in the first seconds after login)
+local AFTER_FIGHT = 3       -- seconds after a fight ends before its news slides out
+local FIGHT_MAX = 20        -- news kept from a fight at most
+local fightNews = {}        -- copies of the news that came in a fight (in scope), oldest first, until it is shown
+local fightWait = 0         -- counts the fights' ends: only the last one's wait acts
 P.slide = nil               -- { from, to, t0 } while the holder slides
 
 ---------------------------------------------------------------------------------------------------------- mouse
@@ -549,15 +554,21 @@ function P.newsNow()
   return P.bar:current()
 end
 
--- How long a piece of news stays out: longer when its row shows a button to react with (PanelLogic.newsReactable).
-function P.newsLengths(e)
+-- Would this news's row show a button to react with (PanelLogic.newsReactable)?
+local function canReact(e)
   local key = FL.keyOf(e)
   local R = ns.Roasts
   local can = {
     cheer = R ~= nil and R.canCheer ~= nil and R.canCheer(key) and not P.cheered[key] or false,
     mock = R ~= nil and R.canMock ~= nil and R.canMock(key) or false,
   }
-  e.reactable = Logic.newsReactable(e.kind, e.dir, can)
+  return Logic.newsReactable(e.kind, e.dir, can)
+end
+
+-- How long a piece of news stays out: longer when its row shows a button to react with. The after-fight summary
+-- always stays the longer time.
+function P.newsLengths(e)
+  e.reactable = e.kind == "fight" or canReact(e)
   return Logic.newsSeconds(e.reactable, clamp(setting("peekSeconds"), 1, 30, 5), 3)
 end
 
@@ -583,9 +594,52 @@ function Panel.onFeed(e)
   local now = ns.now()
   P.bar:addMissed()
   flashAt = now
-  if setting("peek") and not P.inCombat then P.bar:push(e, now) end -- (in a fight it is only counted)
+  if not P.inCombat then
+    if setting("peek") then P.bar:push(e, now) end
+  elseif #fightNews < FIGHT_MAX then
+    -- in a fight it is only counted, and kept for after the fight (a copy: feed entries are saved)
+    local c = { inScope = true, got = now }
+    for k, v in pairs(e) do c[k] = v end
+    fightNews[#fightNews + 1] = c
+  end
   startBarTicker()
   requestRedraw()
+end
+
+-- The pop-up the pop-ups module shows for this news (its own kind names).
+local POPUP_OF = { online = "online", died = "death", levelup = "levelup", otherlayer = "layer_diff",
+  samelayer = "layer_same", runaway = "runaway" }
+
+-- About 3 s after a fight ends (and not in a new fight): the news that came during it and that no pop-up showed
+-- slides out: one piece as usual, several as one summary (FeedLogic.afterFight).
+local function afterFight()
+  if not P.enabled or not P.bar or keepOpen() or #fightNews == 0 then fightNews = {}; return end
+  local now = ns.now()
+  for _, c in ipairs(fightNews) do
+    local kind = POPUP_OF[c.kind]
+    c.popup = kind ~= nil and ns.Popups ~= nil and ns.Popups.shownSince ~= nil
+      and ns.Popups.shownSince(kind, FL.keyOf(c), (c.got or now) - 1) or false
+    c.reactable = canReact(c)
+  end
+  local act, e = FL.afterFight(fightNews, { inCombat = P.inCombat, peek = setting("peek") == true,
+    sinceLogin = now - loadedAt })
+  if act == "wait" then return end
+  fightNews = {}
+  -- (the panel out or not on screen: nothing to slide out; the Activity tab has it all)
+  if act ~= "push" or not P.shown or P.curView == "full" then return end
+  P.bar:push(e, now)
+  startBarTicker()
+  requestRedraw()
+end
+
+-- The fight ended (PLAYER_REGEN_ENABLED): its news comes AFTER_FIGHT seconds later.
+function P.fightEnded()
+  if #fightNews == 0 then return end
+  fightWait = fightWait + 1
+  local mine = fightWait
+  if C_Timer and C_Timer.After then
+    C_Timer.After(AFTER_FIGHT, function() if mine == fightWait then ns.Log.safe(FEATURE, afterFight) end end)
+  end
 end
 
 local function inQuiet() return ns.now() < quietUntil end
@@ -593,8 +647,9 @@ local function inQuiet() return ns.now() < quietUntil end
 -- News only the tab shows: "otherlayer", "samelayer", "runaway", "calnote", "calreply" (FeedLogic.newsEntry).
 function Panel.news(kind, who, extra)
   if not P.enabled or not P.bar or keepOpen() or type(who) ~= "string" or who == "" or inQuiet() then return end
-  if (kind == "calnote" or kind == "calreply") and (P.bar:has("calnote") or P.bar:has("calreply")) then
-    return -- a sync that brings many notes says it once
+  if kind == "calnote" or kind == "calreply" then
+    if P.bar:has("calnote") or P.bar:has("calreply") then return end -- a sync that brings many notes says it once
+    for _, c in ipairs(fightNews) do if c.kind == "calnote" or c.kind == "calreply" then return end end
   end
   local m = ns.roster and ns.roster:get(who)
   local e = FL.newsEntry(kind, who, extra, ns.wallclock(), m and m.class or nil)
@@ -663,6 +718,7 @@ function Panel.isKeptOpen() return keepOpen() end
 -- The "keepOpen" setting changed (the switch, /tc mini, the key, a menu, the settings window or a reset).
 function Panel.keepOpenChanged()
   P.open = nil
+  fightNews = {}
   newsHeld, hoverSince = false, nil
   if P.bar then P.bar:clear(); P.bar:clearMissed() end
   flashAt = nil
@@ -694,6 +750,9 @@ function Panel.noticeClicked()
     if ns.BigArrow and not ns.isTestName(raw) then ns.BigArrow.point({ kind = "member", name = raw }) end
   elseif e.kind == "otherlayer" or e.kind == "samelayer" then
     return Panel.openTab("click")
+  elseif e.kind == "fight" then -- the after-fight summary: the whole panel, on the Activity tab
+    Panel.openTab("click")
+    return Panel.setTab("activity")
   elseif ns.Recent then
     ns.Recent.open()
   end

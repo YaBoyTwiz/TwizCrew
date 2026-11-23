@@ -619,7 +619,7 @@ end
 local NOTICE_CLICK = { levelup = "Click to congratulate them", online = "Click to whisper them",
   calnote = "Click to open the calendar", calreply = "Click to open the calendar",
   runaway = "Click for a big arrow to them", otherlayer = "Click to see the whole panel",
-  samelayer = "Click to see the whole panel" }
+  samelayer = "Click to see the whole panel", fight = "Click to see what happened" }
 function PanelLogic.noticeClickText(kind)
   return NOTICE_CLICK[kind] or "Click to open the recent activity list"
 end

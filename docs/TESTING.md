@@ -1063,6 +1063,11 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
 14. **Bags over the tab.** Open your bags so they cover the tab (move the tab if needed). Rest the mouse on the bags
    where the tab is: the panel does not open. Close the bags with the mouse still there: it opens. If the panel
    never opens by hover at all, tell Claude.
+15. **After a fight.** Ask a friend to mock you (or send a congrats) while you fight a mob, and to add a calendar
+   note. Nothing slides out during the fight. About 3 seconds after the fight: "2 things happened in that fight" in
+   the title bar with the friend's row and its **Mock back** button, for about 12 seconds. Only one thing: it slides
+   out as usual. Things whose pop-up you already saw in the fight (a level-up, a death) are not repeated. With
+   **Slide out news** off: nothing slides out after the fight. Die in a fight: it still comes after.
 
 ## What to send back
 

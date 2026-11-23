@@ -771,6 +771,18 @@ visible": a clearly labelled switch, not a small icon.
   the Recent list or chat); layer news follows the pop-up switches Layer changes / Back on my layer, said once until
   "back"; calendar news is said once per sync (`CALENDAR_NEWS` from Calendar/Notes.lua); none of it in the first 30 s
   after login.
+- **After a fight** (owner, 2026-11-23: "is there any way to batch it to show stuff when the fight is over"): in a
+  fight news is only counted (and pop-ups show, even with "Show news on the tab"). About 3 s after the fight ends (not
+  in a new fight: then it waits for that one's end too, and the news of both fights goes together), the news that
+  came in the fight, was in scope and was not already shown by a pop-up (`Popups.shownSince`) slides out: one piece
+  as usual (its button and the 12 s rule); two or more as ONE summary: the title line "3 things happened in that
+  fight", and either the row of the first one with a button (Congrats, Mock, Mock back) or, when none has one, the
+  note line under the title naming two in short form ("Frostie died · Irek reached 28 +1 more"). The summary stays
+  12 s; a click on its line opens the panel on the Activity tab. Not with "Slide out news" off (the count is as
+  before), not in the 3 s after login; a fight that ends with my death still shows it. The rule:
+  `FeedLogic.afterFight` (short forms `FeedLogic.shortLine`). Because pop-ups show in fights, deaths, level-ups,
+  online and layer news (whose pop-up switches must be on for the tab to take them) mostly had their pop-up already:
+  the summary is mainly mocks and congrats aimed at me, calendar notes and running off with pop-ups off.
 - **The tab's marks:** unseen news: a soft gold glow (a brighter flash when it arrives) and a red number; a party
   member or pinned friend DEAD: a small red skull mark; on OTHER LAYER: a portal mark in the layer tag's colour; an
   update waiting: the gold "!".
@@ -790,8 +802,8 @@ visible": a clearly labelled switch, not a small icon.
 or raid; a click always works. Hover (and the mouse keeping the panel out) also needs the game's mouse focus on the
 tab, the panel or one of their children (`GetMouseFoci()`, else `GetMouseFocus()`, else the mouse position alone), so
 bags or action bars lying over the tab do not open it. The Hall of Shame is not drawn while the panel is tucked and
-closed; it is drawn when the panel slides out. No news slides out in a fight (a fight drops the waiting news; it is still counted), as
-the old peek. The slide: the panel frame hangs in a holder (`TwizCrewPanelHolder`) that clips its children
+closed; it is drawn when the panel slides out. No news slides out in a fight (a fight drops the waiting news; it is still counted, and kept
+for the after-fight news, at most 20). The slide: the panel frame hangs in a holder (`TwizCrewPanelHolder`) that clips its children
 (`SetClipsChildren`, guarded: without it the panel shows at once); the panel is laid out once (while tucked it is laid
 out as the full panel behind the closed holder, ready to slide) and only the holder's width is eased over 0.18 s by an
 OnUpdate, also finished by the 0.1 s ticker; the holder is clamped to the screen, the panel itself not (it must sit
@@ -819,7 +831,7 @@ tab or the panel and left, or at least 6 s. A new install gets the tab and no no
 **Files.** `UI/PanelTab.lua` (was `UI/PanelMini.lua`): the tab, the holder and the slide, the ticker, hover and click,
 the news queue and its kinds, pop-up suppression, Keep open. `UI/PanelLogic.lua`: view, hoverOpens, tabCount,
 clampTabY, tabSnap, tabFromPosition, tabMarks, newsReactable, newsSeconds, slideWidth, keepLabel, keepSwitchText.
-`UI/FeedLogic.lua`: newsEntry, the queue's per-entry lengths (`lengths`), `endAfter`, `has`. Tests: `tests/test_tab.lua`
+`UI/FeedLogic.lua`: newsEntry, the queue's per-entry lengths (`lengths`), `endAfter`, `has`, afterFight, shortLine. Tests: `tests/test_tab.lua`
 (was `tests/test_minimize.lua`).
 
 **Only the game can tell:** whether `SetClipsChildren` exists and clips on Forever (and so whether the slide shows or

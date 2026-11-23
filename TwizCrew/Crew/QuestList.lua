@@ -318,5 +318,11 @@ function QuestList.start()
   end
 end
 
+-- Something about what I can get changed (the game refused a share, say): count again and redraw.
+function QuestList.changed()
+  cache = {}
+  redraw()
+end
+
 -- Test hooks.
 function QuestList.listForTest(name) return lists[name] end

@@ -14,6 +14,21 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.3.0", date = "2026-11-22", lines = {
+    "Quests: see every quest a friend can share with you, not only the one they're on.",
+    "  Right-click a friend's row, Their quests: a list opens. Click a quest to ask them to share it.",
+    "  Hovering a friend says how many quests they can share with you.",
+    "  In a group, one pop-up says when someone has quests you can get. Switch: Settings, Panel.",
+    "  If the game refuses a share (too low, an earlier quest is missing), you're told why. No Questie needed.",
+    "  Both of you need this version. \"Share my quest\" is now \"Share my quests\".",
+    "Calendar: a Calendar button next to the Crew and Hall of Shame tabs. It pulses when there is something new.",
+    "Calendar: two tabs, Events (notes, dungeon runs, raids) and Play times (when people plan to play).",
+    "Calendar: times show your own time zone by name (CST, EST...). A note also shows its author's time.",
+    "Calendar: right-click a day to create, edit or remove notes. Your notes have Edit and Remove buttons.",
+    "Calendar: days with something planned are colored: gold a note, blue a dungeon run, purple a raid.",
+    "Calendar: the window is bigger, and Settings has a Calendar size slider.",
+    "Needs a full restart of the game (new files), not just /reload.",
+  } },
   { ver = "0.2.0", date = "2026-11-22", lines = {
     "TwizCrew now runs through the guild. Be in the guild and it connects: no channel, no code, nothing to set up.",
     "  Only guild members are heard. Anyone outside the guild is ignored.",

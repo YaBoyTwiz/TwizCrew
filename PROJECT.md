@@ -13,6 +13,11 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.3.0 released (2026-11-22, owner: "yes add it, and release"):** everything built on 2026-11-22 after v0.2.0:
+  the calendar work (button and pulse, Events / Play times, time zones, edit and remove, bigger window, colored
+  days) and the quest list with its heads-up and the "why a share was refused" message. **Released without an
+  in-game try of any of it**: the "not tested in game, not released" notes in the entries below are from before
+  the release, and their checks in `docs/TESTING.md` are still to do. `RESTART_SINCE` is 0.3.0 (new files).
 - **All of a friend's quests, and a heads-up in a group (2026-11-22, owner: "do 1 and 3 in one pass"):** until now a
   copy only told the crew the one quest you're on, so that was the only quest a friend could ask for. Now a copy
   can ask a friend for their whole quest log and shows which of those quests you can get. Details: "Quest list"
@@ -585,6 +590,15 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   get", click = their quests) and one chat line. Once per friend per grouping; leaving the group resets it. Switch:
   "Tell me what my group can share" (`questHeadsUp`, Panel, on by default).
 - **Privacy:** "Share my quest" is now "Share my quests": off means the list goes out empty too.
+- **Questie is not needed (owner: "I want it usable if the user doesn't have it").** Without Questie nothing knows
+  ahead of time that you are too low or miss an earlier quest, so such a quest is offered. What happens then
+  (Crew/Quest.lua, "why a share didn't work"): the game tells only the sharer why a share failed, as a system line
+  ("Twiz is not eligible for that quest"). For 10 s after a share made from a friend's request, the sharer's copy
+  watches for that line about that friend (the game's own texts `ERR_QUEST_PUSH_..._S`, else the English ones) and
+  sends the reason back: `QRES` (t = who asked, q = title, i = quest ID, r = inv / done / have / full / busy / decl
+  / far). The asker's copy prints why; "not eligible" and "already done" are remembered, so that quest shows as
+  "Can't share" everywhere (list, row mark, tooltip) until a level-up, a quest turned in, or a /reload.
+  **Not checked on Forever:** that the game prints these lines there, and their exact words.
 - **Older copies (v0.2.0 and before)** drop both message types: for them the menu says "Their quests (asking...)"
   and only the one quest on the row can be asked for, as before.
 

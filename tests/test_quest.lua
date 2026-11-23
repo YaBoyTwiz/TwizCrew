@@ -191,6 +191,79 @@ return {
       A.eq(QL.known("Ginkan"), false)
       A.eq(ns.Log.errors(10), {})
     end,
+    a_refused_share_is_explained_to_the_one_who_asked = function(ns, A, W)
+      A.eq(ns.Quest.resultPatternForTest("%s is busy."), "^(.+) is busy")
+      A.eq(ns.Quest.resultPatternForTest("%s's quest log is full"), "^(.+)'s quest log is full")
+      -- my side shares: the game's answer goes back to the one who asked
+      questLog(W, { { id = 33, title = "Wolves Across the Border", objectives = {} } }, 33)
+      rawset(W.env.C_QuestLog, "IsPushableQuest", function() return true end)
+      W.env.QuestLogPushQuest = function() end
+      start(ns, W)
+      W.state.inGroup = true
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
+      receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Wolves Across the Border" })
+      local before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is not eligible for that quest.")
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "QRES", before), 0, "no share was made yet: not ours to explain")
+      ns.Popups.clickForTest(#ns.Popups.textsForTest())
+      W:fire("CHAT_MSG_SYSTEM", "Sharing quest with Frostie...")
+      W:fire("CHAT_MSG_SYSTEM", "Holly is not eligible for that quest.") -- someone else in the group
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "QRES", before), 0, "only the one who asked is told")
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is not eligible for that quest.")
+      W:advance(2)
+      local res = sentOf(ns, W, "QRES", before)
+      A.eq(#res, 1)
+      A.eq(res[1].t, "Frostie"); A.eq(res[1].q, "Wolves Across the Border"); A.eq(res[1].i, "33"); A.eq(res[1].r, "inv")
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is not eligible for that quest.")
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "QRES", before), 1, "told once")
+      -- the game's own words (another language, say) are used when it has them
+      W.env.ERR_QUEST_PUSH_BUSY_S = "%s ist beschaeftigt."
+      W:advance(16)
+      receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Wolves Across the Border" })
+      ns.Popups.clickForTest(#ns.Popups.textsForTest())
+      before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie ist beschaeftigt.")
+      W:advance(2)
+      A.eq(sentOf(ns, W, "QRES", before)[1].r, "busy")
+      -- too late: a line long after the share is not its answer
+      W:advance(16)
+      receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Wolves Across the Border" })
+      ns.Popups.clickForTest(#ns.Popups.textsForTest())
+      W:advance(11)
+      before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is not eligible for that quest.")
+      W:advance(2)
+      A.eq(#sentOf(ns, W, "QRES", before), 0)
+
+      -- the other side: I asked, and their copy tells me why it didn't work
+      local Q = ns.Quest
+      receiveList(ns, W, "Frostie", "9x1", { { 77, "1", "Deep Trouble" }, { 78, "1", "Easy One" } })
+      A.eq(ns.QuestList.count("Frostie"), 2, "without Questie both look fine")
+      receive(ns, W, "Ginkan", "QRES", { t = "Twiz", q = "Deep Trouble", i = "77", r = "inv" })
+      receive(ns, W, "Frostie", "QRES", { t = "Holly", q = "Deep Trouble", i = "77", r = "inv" })
+      A.eq(Q.canGet(77, "Deep Trouble", true), "unknown", "not from strangers, not when meant for someone else")
+      receive(ns, W, "Frostie", "QRES", { t = "Twiz", q = "Deep Trouble", i = "77", r = "inv" })
+      A.contains(W.printed[#W.printed], "Frostie couldn't share \"Deep Trouble\": you can't take it yet")
+      local st, words = Q.canGet(77, "Deep Trouble", true)
+      A.eq(st, "no"); A.eq(words, "you can't take it yet (too low, or an earlier quest is missing)")
+      A.eq(ns.QuestList.count("Frostie"), 1, "no longer offered")
+      A.eq(labels(ns.QuestList.menuItems("Frostie")), { "Ask to share: Easy One",
+        "Can't share: Deep Trouble (you can't take it yet (too low, or an earlier quest is missing))" })
+      -- a passing reason is said but not remembered
+      receive(ns, W, "Frostie", "QRES", { t = "Twiz", q = "Easy One", i = "78", r = "busy" })
+      A.contains(W.printed[#W.printed], "you were busy")
+      A.eq(ns.QuestList.count("Frostie"), 1)
+      A.eq(Q.canGet(78, "Easy One", true), "unknown")
+      -- a level later it may work: offered again
+      W:fire("PLAYER_LEVEL_UP", 11)
+      A.eq(Q.canGet(77, "Deep Trouble", true), "unknown")
+      A.eq(ns.QuestList.count("Frostie"), 2)
+      A.eq(ns.Log.errors(10), {})
+    end,
     a_group_member_with_quests_for_me_gets_one_heads_up = function(ns, A, W)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })

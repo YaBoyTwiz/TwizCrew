@@ -864,7 +864,12 @@ with a friend on the released version only step 6 can be checked.
    side (right-click again).
 8. **Switches.** Settings, Panel: "Tell me what my group can share" off = no pop-up. "Share my quests" off on your
    friend's side = their list is empty on yours.
-9. **Tell Claude:** is the count right without Questie (it can count quests you are too low for)? Is the pop-up
+9. **A refused share (the one to check first without Questie).** Ask a friend for a quest you are too low for (or
+   whose earlier quest you have not done). After they click their pop-up, your chat should say "TwizCrew: <Name>
+   couldn't share "<quest>": you can't take it yet (too low, or an earlier quest is missing)", and that quest
+   should now be a "Can't share" line in their list. On their side the game itself prints a line like "<You> is not
+   eligible for that quest": **if nothing arrives on yours, tell Claude the exact words their game printed.**
+10. **Tell Claude:** is the count right without Questie (it can count quests you are too low for)? Is the pop-up
    useful or annoying?
 
 ## What to send back

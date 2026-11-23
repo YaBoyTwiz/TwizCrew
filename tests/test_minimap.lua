@@ -115,16 +115,28 @@ return {
       A.eq(#ns.Log.errors(5), 0)
     end,
 
-    settings_window_lists_it_under_essentials = function(ns, A, W)
+    settings_window_lists_it_on_more = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
       local d = ns.Settings.describeForTest()
-      local i, j
-      for k, v in ipairs(d) do
-        if v == "module:minimap:always on" then i = k end
-        if v == "setting:minimap:show" then j = k end
+      local found = false
+      for _, v in ipairs(d) do
+        if v == "setting:minimap:show" then found = true end
+        A.no(v == "module:minimap:always on", "no 'always on' row")
       end
-      A.ok(i and j and j == i + 1, "module row then its switch")
+      A.ok(found, "its switch is on the More page")
+    end,
+
+    right_click_menu_is_trimmed = function(ns, A, W)
+      boot(W)
+      local labels = {}
+      for _, it in ipairs(ns.MinimapButton.menuItems()) do labels[#labels + 1] = it.label end
+      A.ok(#labels <= 12, "at most 12 entries, got " .. #labels)
+      for _, l in ipairs(labels) do
+        A.no(l:find("^%.%.%."), "no spell-rank switches: " .. l)
+        A.no(l == "Recent activity", "no Recent activity (the Activity tab and the crew tab's menu have it)")
+      end
+      A.eq(labels[#labels], "Open settings")
     end,
 
     left_click_opens_and_closes_settings = function(ns, A, W)
@@ -438,9 +450,9 @@ return {
       A.eq(minimapLine(ns), "Minimap button: hidden (/tc minimap shows it)")
     end,
 
-    help_lists_tc_minimap = function(ns, A, W)
+    help_more_lists_tc_minimap = function(ns, A, W)
       boot(W)
-      tc(W, "help")
+      tc(W, "help more")
       A.ok(printed(W, "/tc minimap - show or hide the TwizCrew button on the minimap"))
     end,
 

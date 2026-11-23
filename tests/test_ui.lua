@@ -162,14 +162,16 @@ return {
       tc(W, "help")
       local helpLines = #W.printed - before
       A.ok(helpLines >= 8, "help should list the commands")
+      tc(W, "help more")
       local text = table.concat(W.printed, "\n")
       for _, cmd in ipairs({ "/tc show", "/tc hide", "/tc status", "/tc reset", "/tc report", "/tc debug",
         "/tc forget", "/tc remove" }) do
         A.contains(text, cmd)
       end
       A.no(text:find("/tc add", 1, true), "no list of names to add any more")
+      local mark = #W.printed
       tc(W, "fly me to the moon")
-      A.eq(#W.printed - before, 2 * helpLines, "an unknown command shows the same help")
+      A.eq(#W.printed - mark, helpLines, "an unknown command shows the everyday help")
     end,
 
     slash_empty_toggles_settings = function(ns, A, W)
@@ -272,7 +274,7 @@ return {
 
     settings_builds_and_resets_without_errors = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
       A.ok(ns.Settings.isOpen())
       ns.Modules.set("panel", "scale", 1.5)
       ns.Settings.confirmReset()
@@ -280,6 +282,7 @@ return {
       ns.Settings.answerReset(true)
       A.eq(ns.Modules.setting("panel", "scale"), 1)
       A.no(ns.Settings.isConfirming())
+      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do ns.Settings.setTab("advanced", st) end
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -288,92 +291,96 @@ return {
       ns.Settings.open()
       A.eq(ns.Settings.tab(), "basic")
       local d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:panel:bgAlpha"), "transparency")
-      A.ok(has(d, "setting:panel:scale"))
-      A.ok(has(d, "module:panel:switch"))
-      A.ok(has(d, "module:popups:switch"))
-      A.ok(has(d, "setting:tags:autoAway"))
-      A.ok(has(d, "child:tags:awayMinutes"))
-      A.ok(has(d, "setting:minimap:show"))
+      local controls = {}
+      for _, v in ipairs(d) do
+        if v:find("^setting:") or v:find("^child:") or v:find("^module:") then controls[#controls + 1] = v end
+      end
+      A.eq(controls, { "setting:panel:keepOpen", "setting:panel:scale", "setting:panel:idleAlpha",
+        "setting:panel:noticeScope", "module:popups:switch", "setting:activity:chatNews", "setting:popups:sounds",
+        "setting:tags:autoAway", "setting:panel:about", "setting:panel:whatsNew" },
+        "the 8 everyday controls, then the two help buttons")
       A.ok(has(d, "note:advanced"))
-      A.ok(has(d, "setting:find:rowArrows"), "Find the crew: row arrows")
-      A.ok(has(d, "setting:find:meetups"))
-      A.ok(has(d, "setting:find:sharePosition"))
       A.no(has(d, "setting:comm:debug"), "no technical switch on Basics")
-      A.no(has(d, "section:Essentials"))
-      A.ok(#d <= 27, "short: " .. #d .. " rows") -- (27: How to use TwizCrew sits next to What's new)
-      ns.Settings.setTab("advanced", "all")
-      d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:comm:debug"), "Advanced has everything")
-      ns.Settings.setTab("basic")
-      A.no(has(ns.Settings.describeForTest(), "setting:comm:debug"))
       A.eq(ns.Log.errors(10), {})
     end,
 
-    advanced_has_short_sub_tabs = function(ns, A, W)
+    advanced_has_five_pages = function(ns, A, W)
       boot(W)
       ns.Settings.open()
       ns.Settings.setTab("advanced", "panel")
       A.eq(ns.Settings.subTab(), "panel")
       local d = ns.Settings.describeForTest()
-      A.ok(has(d, "module:panel:switch")); A.ok(has(d, "setting:panel:scale")); A.ok(has(d, "setting:tags:autoAway"))
-      A.no(has(d, "setting:comm:debug"), "the connection is on its own sub-tab")
-      A.no(has(d, "section:Essentials"), "no big section headers")
-      ns.Settings.setTab("advanced", "roasts")
+      A.eq(d[1], "module:panel:switch", "the part's switch first")
+      A.ok(has(d, "setting:panel:scale")); A.ok(has(d, "setting:tags:autoAway"))
+      A.ok(indexOf(d, "section:Rarely needed") > indexOf(d, "setting:panel:hideInCombat"), "rarely needed come last")
+      A.ok(indexOf(d, "setting:panel:showSelf") > indexOf(d, "section:Rarely needed"))
+      A.ok(indexOf(d, "module:layer:switch") > indexOf(d, "section:Rarely needed"))
+      ns.Settings.setTab("advanced", "alerts")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:roasts:mocks")); A.no(has(d, "setting:panel:scale"))
+      A.ok(has(d, "module:popups:switch")); A.ok(has(d, "setting:popups:sounds")); A.ok(has(d, "setting:activity:chatNews"))
+      A.ok(has(d, "setting:panel:noticeScope")); A.no(has(d, "setting:panel:scale"))
+      ns.Settings.setTab("advanced", "fun")
+      d = ns.Settings.describeForTest()
+      A.ok(has(d, "setting:roasts:mocks")); A.ok(has(d, "module:stats:switch")); A.ok(has(d, "child:roasts:editMocks"))
       ns.Settings.setTab("advanced", "find")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "module:find:switch"), "Find the crew has a real switch, not 'coming later'")
+      A.ok(has(d, "module:find:switch"), "Find the crew has a real switch")
       A.ok(has(d, "setting:find:rowArrows"))
-      ns.Settings.setTab("advanced", "crew")
+      ns.Settings.setTab("advanced", "more")
       d = ns.Settings.describeForTest()
-      A.ok(has(d, "setting:comm:debug")); A.ok(has(d, "module:pokes:coming later"))
-      ns.Settings.setTab("advanced", "test")
-      A.ok(has(ns.Settings.describeForTest(), "module:testtools:tools"))
+      A.ok(has(d, "module:calendar:switch")); A.ok(has(d, "module:updates:switch")); A.ok(has(d, "setting:minimap:show"))
+      A.ok(has(d, "setting:version:versions")); A.ok(has(d, "button:tryit"))
       ns.Settings.setTab("basic")
       ns.Settings.setTab("advanced")
-      A.eq(ns.Settings.subTab(), "test", "Advanced remembers the last sub-tab")
+      A.eq(ns.Settings.subTab(), "more", "Advanced remembers the last sub-tab")
       ns.Settings.setTab("advanced", "nonsense")
-      A.eq(ns.Settings.subTab(), "test", "an unknown sub-tab changes nothing")
-      -- every module is on some sub-tab
-      local seen = {}
-      for _, st in ipairs({ "panel", "roasts", "popups", "find", "crew", "tools", "test" }) do
-        ns.Settings.setTab("advanced", st)
-        for _, v in ipairs(ns.Settings.describeForTest()) do
-          local id = v:match("^module:([^:]+):")
-          if id then seen[id] = true end
-        end
+      A.eq(ns.Settings.subTab(), "more", "an unknown sub-tab changes nothing")
+      for _, gone in ipairs({ "all", "test", "roasts", "popups", "crew", "tools" }) do
+        ns.Settings.setTab("advanced", gone)
+        A.eq(ns.Settings.subTab(), "more", "no " .. gone .. " sub-tab any more")
       end
-      for _, def in ipairs(ns.Modules.list()) do A.ok(seen[def.id], def.id .. " is on a sub-tab") end
       A.eq(ns.Log.errors(10), {})
     end,
 
-    settings_layout_follows_registry = function(ns, A, W)
+    every_setting_and_switch_has_a_place = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open()
+      local seen = {}
+      local pages = { { "basic" } }
+      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do pages[#pages + 1] = { "advanced", st } end
+      for _, pg in ipairs(pages) do
+        ns.Settings.setTab(pg[1], pg[2])
+        for _, v in ipairs(ns.Settings.describeForTest()) do seen[v] = (seen[v] or 0) + 1 end
+      end
+      local function placed(id, key)
+        return seen["setting:" .. id .. ":" .. key] or seen["child:" .. id .. ":" .. key]
+      end
+      for _, def in ipairs(ns.Modules.list()) do
+        if def.id ~= "testtools" then -- (its buttons are in their own window)
+          for _, sdef in ipairs(def.settings) do A.ok(placed(def.id, sdef.key), def.id .. ":" .. sdef.key .. " has a page") end
+          if def.tier ~= "essential" and not def.comingSoon then
+            A.ok(seen["module:" .. def.id .. ":switch"], def.id .. " has its switch on a page")
+          end
+        end
+      end
+      A.no(seen["module:comm:always on"], "no 'always on' rows")
+      A.no(seen["module:pokes:coming later"], "no 'coming later' rows")
+      A.no(seen["setting:comm:debug"], "the technical switch is /tc debug only")
+    end,
+
+    a_new_module_lands_on_more = function(ns, A, W)
+      ns.Modules.register({ id = "newpart", name = "New part", tier = "extra", info = "A test module.",
+        defaults = { loud = true }, settings = { { key = "loud", label = "Loud", kind = "toggle", info = "A test." } } })
+      boot(W)
+      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
       local d = ns.Settings.describeForTest()
-      local ess, mods, ext = indexOf(d, "section:Essentials"), indexOf(d, "section:Modules"), indexOf(d, "section:Extras")
-      A.ok(ess and mods and ext and ess < mods and mods < ext, "sections in order")
-      A.ok(has(d, "module:comm:always on"))
-      A.ok(has(d, "module:version:always on"))
-      A.ok(has(d, "setting:comm:debug"))
-      A.no(has(d, "setting:comm:transport"), "no connection choice: always the guild")
-      A.no(has(d, "setting:comm:channel"), "no crew channel")
-      A.no(has(d, "setting:comm:password"), "no crew code")
-      A.ok(has(d, "module:panel:switch"))
-      A.ok(has(d, "setting:panel:scale"))
-      A.ok(has(d, "child:panel:peekSeconds"), "a setting with a parent is indented")
-      A.ok(has(d, "module:popups:switch"))
-      A.ok(has(d, "module:pokes:coming later"))
-      A.ok(has(d, "module:races:coming later"))
-      A.ok(indexOf(d, "module:comm:always on") < mods and indexOf(d, "module:panel:switch") > mods)
-      A.ok(indexOf(d, "module:pokes:coming later") > ext)
+      A.ok(indexOf(d, "module:newpart:switch") > indexOf(d, "button:tryit"), "at the end of More")
+      A.ok(indexOf(d, "setting:newpart:loud") > indexOf(d, "module:newpart:switch"))
     end,
 
     settings_shows_broken_module = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "alerts")
       ns.Modules.markBroken("popups")
       local d = ns.Settings.describeForTest()
       A.ok(has(d, "module:popups:broken"), "rebuilt while open")
@@ -383,14 +390,14 @@ return {
 
     settings_rebuilds_lazily_when_closed = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
       ns.Settings.close()
       local before = ns.Settings.layoutCountForTest()
       ns.Modules.setEnabled("panel", false)
       ns.Modules.setEnabled("panel", true)
       ns.Modules.resetAll()
       A.eq(ns.Settings.layoutCountForTest(), before, "no rebuild while closed")
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
       A.eq(ns.Settings.layoutCountForTest(), before + 1, "one rebuild on the next open")
     end,
 
@@ -503,9 +510,9 @@ return {
 
     help_lists_new_commands = function(ns, A, W)
       boot(W)
-      tc(W, "help")
+      tc(W, "help"); tc(W, "help more")
       local text = table.concat(W.printed, "\n")
-      for _, cmd in ipairs({ "/tc awards", "/tc awards all", "/tc session new", "/tc stats reset", "/tc guild ", "/tc guildtest", "/tc forget" }) do
+      for _, cmd in ipairs({ "/tc awards", "/tc awards all", "/tc session new", "/tc stats reset", "/tc guild ", "/tc forget" }) do
         A.contains(text, cmd)
       end
     end,

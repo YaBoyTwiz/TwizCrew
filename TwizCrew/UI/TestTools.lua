@@ -134,9 +134,9 @@ end
 
 local function popupHint(key, label)
   if not ns.Modules.isEnabled("popups") then
-    say("pop-ups are turned off (/tc, Modules, Pop-ups), so nothing shows.")
+    say("pop-ups are turned off (/tc, Alerts, Pop-ups), so nothing shows.")
   elseif key and not ns.Modules.setting("popups", key) then
-    say("\"" .. label .. "\" pop-ups are off in /tc, under Pop-ups, so nothing shows.")
+    say("\"" .. label .. "\" pop-ups are off in /tc, under Alerts, so nothing shows.")
   end
 end
 
@@ -248,7 +248,7 @@ function ACTIONS.layer()
   if ns.Layer and ns.Layer.lookNow then ns.Layer.lookNow() end -- the fakes' first look, before the button's own news
   local now = layerOf[BUDDY] == "different" and "same" or "different"
   if not ns.Modules.isEnabled("layer") then say("the Layer tracker is turned off in /tc, so nothing shows.") end
-  popupHint(now == "same" and "layerSame" or "layerDiff", now == "same" and "Back on my layer" or "Layer changes")
+  popupHint("layerDiff", "Layer changes")
   layerOf[BUDDY] = now
   layerTurn = layerTurn + 1
   expect(now == "same" and "layer_same" or "layer_diff", BUDDY, function()
@@ -280,7 +280,7 @@ local function pretendUpdate(restart)
   local ver = (head or "0.0.") .. ((tonumber(n) or 0) + 1)
   inject(BUDDY, "UPDATE", { ver = ver, rs = restart and ver or ns.RESTART_SINCE })
   if not ns.Modules.isEnabled("updates") then
-    say("Update reminders is turned off in /tc, so nothing shows.")
+    say("Remind me to update is turned off in /tc, so nothing shows.")
     return
   end
   ns.Updates.showHowTo()
@@ -428,7 +428,7 @@ local COMMANDS = {
 }
 
 TestTools.HELP = {
-  "TwizCrew test tools: only on your screen, never sent to your crew, never saved (also in /tc, under Try it out):",
+  "TwizCrew test tools: only on your screen, never sent to your crew, never saved (/tc test alone opens their window):",
   "/tc test fake - pretend friends: Testbuddy (earns XP, levels up after about 7 min), Maxbuddy (max level), "
     .. "Offbuddy (offline)",
   "/tc test copy - a pretend friend made from your own numbers, to compare with your XP bar (again: removes it)",
@@ -446,9 +446,63 @@ TestTools.HELP = {
   "/tc test clear - remove every pretend thing (Reset to defaults and /reload do too)",
 }
 
--- /tc test <what>
+---------------------------------------------------------------------------------------------- the Try it out window
+-- Its own small window in the settings window's frame style: one button per test tool, each with its (i). Opened
+-- by "Try it out..." on the settings window's More page and by /tc test.
+local WIN_WIDTH, WIN_PAD, WIN_ROW, WIN_TOP, WIN_FOOTER = 330, 14, 24, 52, 44
+local win
+
+local function buildWindow()
+  local T, Widgets = ns.Theme, ns.Widgets
+  local C = T.COLOR
+  local f = T.frame("Frame", "TwizCrewTryItOut", UIParent)
+  f:SetWidth(WIN_WIDTH)
+  f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  f:SetFrameStrata("DIALOG")
+  if f.SetClampedToScreen then f:SetClampedToScreen(true) end
+  f:SetMovable(true)
+  f:EnableMouse(true)
+  if f.RegisterForDrag then f:RegisterForDrag("LeftButton") end
+  Widgets.script(f, "OnDragStart", function(self) self:StartMoving() end, TOOLS)
+  Widgets.script(f, "OnDragStop", function(self) self:StopMovingOrSizing() end, TOOLS)
+  T.paint(f, C.backdrop, 0.97, C.border, 2)
+  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewTryItOut") end -- Escape
+  local title = T.text(f, T.FONT.normal, C.title)
+  title:SetPoint("TOPLEFT", f, "TOPLEFT", WIN_PAD, -12)
+  title:SetText("Try it out")
+  local note = T.text(f, T.FONT.small, C.muted)
+  note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+  note:SetText("Pretend friends and pop-ups. Only on your screen: never sent, never saved.")
+  local y = WIN_TOP
+  f.rows = {}
+  for _, def in ipairs(ns.Modules.get(TOOLS).settings) do
+    local r = Widgets.action(f, def.label, def.info, def.onClick, TOOLS)
+    r:SetPoint("TOPLEFT", f, "TOPLEFT", WIN_PAD, -y)
+    r:SetWidth(WIN_WIDTH - 2 * WIN_PAD)
+    f.rows[#f.rows + 1] = r
+    y = y + WIN_ROW
+  end
+  local close = Widgets.button(f, "Close", function() f:Hide() end, nil, TOOLS)
+  close:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", WIN_PAD, 10)
+  f:SetHeight(y + WIN_FOOTER)
+  f:Hide()
+  return f
+end
+
+function TestTools.open()
+  if not win then win = buildWindow() end
+  win:Show()
+end
+
+function TestTools.close() if win then win:Hide() end end
+function TestTools.isOpen() return win ~= nil and win:IsShown() == true end
+function TestTools.windowForTest() return win end
+
+-- /tc test: the window. /tc test <what>: that tool. /tc test help (or a word it doesn't know): the list in chat.
 function TestTools.command(rest)
-  local id = COMMANDS[ns.Util.trim(tostring(rest or "")):lower():gsub("%s+", " ")]
+  local word = ns.Util.trim(tostring(rest or "")):lower():gsub("%s+", " ")
+  if word == "" then TestTools.open() return end
+  local id = COMMANDS[word]
   if not id then
     for _, line in ipairs(TestTools.HELP) do print(line) end
     return
@@ -464,7 +518,7 @@ ns.Modules.register({
   id = TOOLS, name = "Test tools", tier = "tools",
   info = "Pretend friends and pop-ups, so you can check how TwizCrew looks without waiting for your crew. Only on "
     .. "your screen: nothing is sent to your crew and nothing is saved. Clear test stuff, Reset everything to "
-    .. "defaults or /reload removes it all. Also in chat: /tc test.",
+    .. "defaults or /reload removes it all. Their window: Try it out on the settings' More page, or /tc test.",
   settings = {
     button("fake", "Fake friends", "Adds three pretend friends to the Crew panel: Testbuddy (level 12, XP numbers, "
       .. "FIGHTING, AFK and OTHER LAYER tags), Maxbuddy (max level) and Offbuddy (offline). Try every Row style and "

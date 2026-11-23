@@ -474,36 +474,49 @@ return {
     end,
 
     -------------------------------------------------------------------------------------------- settings / chat
-    try_it_out_section_in_settings = function(ns, A, W)
+    try_it_out_has_its_own_window = function(ns, A, W)
       boot(W)
-      ns.Settings.open(); ns.Settings.setTab("advanced", "all")
+      ns.Settings.open(); ns.Settings.setTab("advanced", "more")
       local d = ns.Settings.describeForTest()
       local function at(what) for i, v in ipairs(d) do if v == what then return i end end end
-      A.ok(at("section:Try it out") and at("section:Try it out") > at("section:Extras"), "last section")
-      A.ok(at("module:testtools:tools"))
-      for _, key in ipairs({ "fake", "copy", "ding", "death", "layer", "roast", "updateReload", "updateRestart",
-        "clear" }) do
-        A.ok(at("setting:testtools:" .. key), "button " .. key)
+      A.ok(at("button:tryit"), "More has the Try it out button")
+      for _, st in ipairs({ "panel", "alerts", "fun", "find", "more" }) do
+        ns.Settings.setTab("advanced", st)
+        for _, v in ipairs(ns.Settings.describeForTest()) do
+          A.no(v:find("testtools", 1, true), "no test buttons in the settings window: " .. v)
+        end
       end
+      A.no(ns.TestTools.isOpen())
+      ns.Settings.setTab("advanced", "more")
+      ns.Settings.buttonRowForTest("tryit").button._scripts.OnClick()
+      A.ok(ns.TestTools.isOpen(), "Try it out opens the window")
+      local win = ns.TestTools.windowForTest()
       local def = ns.Modules.get("testtools")
       A.eq(def.tier, "tools")
+      A.eq(#win.rows, #def.settings, "one row per tool")
+      A.eq(#def.settings, 15)
       for _, s in ipairs(def.settings) do A.eq(s.kind, "button"); A.ok(#s.info > 20, "an (i) for " .. s.key) end
       A.ok(ns.Modules.isEnabled("testtools"))
       ns.Modules.setEnabled("testtools", false)
       A.ok(ns.Modules.isEnabled("testtools"), "not a switch")
-      ns.Settings.rowForTest("testtools", "fake").button._scripts.OnClick()
-      A.eq(#ns.roster:testNames(), 3, "the button works")
+      win.rows[1].button._scripts.OnClick()
+      A.eq(#ns.roster:testNames(), 3, "the first button (Fake friends) works")
+      ns.TestTools.close()
+      A.no(ns.TestTools.isOpen())
+      A.eq(ns.Log.errors(10), {})
     end,
 
-    tc_test_help = function(ns, A, W)
+    tc_test_opens_the_window_and_help_lists_the_tools = function(ns, A, W)
       boot(W)
       tc(W, "test")
+      A.ok(ns.TestTools.isOpen(), "/tc test alone opens the window")
+      tc(W, "test help")
       for _, sub in ipairs({ "fake", "copy", "ding", "death", "layer", "roast", "update reload", "update restart",
         "clear" }) do
         A.ok(printedLike(W, "/tc test " .. sub), "help lists " .. sub)
       end
-      tc(W, "help")
-      A.ok(printedLike(W, "/tc test - "), "/tc help mentions /tc test")
+      tc(W, "help more")
+      A.ok(printedLike(W, "/tc test - "), "/tc help more mentions /tc test")
     end,
 
     report_says_what_is_fake = function(ns, A, W)

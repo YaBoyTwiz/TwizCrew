@@ -15,42 +15,34 @@ local HEADER = 84 -- title, version line and the Basics / Advanced tabs
 local SUBTAB_ROW = 24 -- the Advanced tab's own row of sub-tabs
 local FOOTER, CONFIRM = 40, 58
 local ROW, MODULE_ROW, BROKEN_ROW, SECTION_ROW = 24, 26, 38, 26
-local INDENT = { setting = 14, child = 32 }
+local INDENT = { child = 32 } -- a setting under its parent switch
 local WHEEL_STEP = 40
-local SECTIONS = {
-  { tier = "essential", title = "Essentials", note = "always on, these make the rest work" },
-  { tier = "module", title = "Modules", note = "turn on or off" },
-  { tier = "extra", title = "Extras", note = "fun stuff, added over time" },
-  { tier = "tools", title = "Try it out", note = "pretend friends and pop-ups, only on your screen" },
-}
--- The Basics tab: a few everyday options. Everything (these too) is on the Advanced tab.
--- { module = id } is that module's on/off switch; { id, key } one of its settings.
+local RARE = { title = "Rarely needed", note = "most people never change these" }
+-- The Basics tab: the few things people really change (each also on an Advanced sub-tab), then the two help buttons.
+-- Items: { module = id } is that module's on/off switch; { id, key } one of its settings; { title, note } a heading;
+-- { button = key } a button of this window (BUTTONS below).
 local BASICS = {
-  { title = "Look", note = "how the crew panel looks" },
-  { id = "panel", key = "bgAlpha" },
-  { id = "panel", key = "scale" },
-  { id = "panel", key = "rowStyle" },
-  { id = "panel", key = "idleAlpha" },
-  { title = "Handy", note = "the things people change most" },
-  { module = "panel" },
-  { id = "panel", key = "showOffline" },
-  { id = "panel", key = "locked" },
-  { id = "panel", key = "hideInCombat" },
+  { title = "The panel", note = "the crew list and its tab" },
   { id = "panel", key = "keepOpen" },
-  { id = "panel", key = "peek" },
-  { id = "activity", key = "chat" },
+  { id = "panel", key = "scale" },
+  { id = "panel", key = "idleAlpha" },
+  { title = "News", note = "pop-ups, chat lines and sounds" },
+  { id = "panel", key = "noticeScope" },
   { module = "popups" },
+  { id = "activity", key = "chatNews" },
+  { id = "popups", key = "sounds" },
+  { title = "Me", note = "what your crew sees" },
   { id = "tags", key = "autoAway" },
-  { id = "tags", key = "awayMinutes" },
-  { id = "roasts", key = "editMocks" },
-  { id = "popups", key = "online" },
-  { id = "minimap", key = "show" },
-  { id = "panel", key = "whatsNew" },
+  { title = "Help" },
   { id = "panel", key = "about" },
-  { title = "Find the crew", note = "arrows to your group and meet-ups" },
-  { id = "find", key = "rowArrows" },
-  { id = "find", key = "meetups" },
-  { id = "find", key = "sharePosition" },
+  { id = "panel", key = "whatsNew" },
+}
+-- Buttons that belong to this window rather than to a module.
+local BUTTONS = {
+  tryit = { label = "Try it out\226\128\166", icon = "Interface\\Icons\\Trade_Engineering",
+    info = "Opens a small window with pretend friends and pop-ups, so you can see how TwizCrew looks without waiting "
+      .. "for your crew. Only on your screen. Also: /tc test.",
+    onClick = function() if ns.TestTools and ns.TestTools.open then ns.TestTools.open() end end },
 }
 local TABS = { { id = "basic", label = "Basics", tip = "setBasics" }, { id = "advanced", label = "Advanced", tip = "setAdvanced" } }
 
@@ -62,18 +54,17 @@ local MODULE_ICONS = {
   rankup = "Interface\\Icons\\Spell_Holy_SealOfWisdom", tags = "Interface\\Icons\\INV_Misc_Note_01",
   layer = "Interface\\Icons\\Spell_Arcane_Blink", comm = "Interface\\Icons\\Spell_Holy_PrayerOfFortitude",
   version = "Interface\\Icons\\INV_Misc_Book_09", updates = "Interface\\Icons\\INV_Misc_Book_09",
-  minimap = "Interface\\Icons\\INV_Misc_Map_01", testtools = "Interface\\Icons\\Trade_Engineering",
-  pokes = "Interface\\Icons\\INV_Misc_Gift_01", races = "Interface\\Icons\\Ability_Mount_RidingHorse",
+  minimap = "Interface\\Icons\\INV_Misc_Map_01",
 }
 local SETTING_ICONS = {
   ["panel:bgAlpha"] = "Interface\\Icons\\Spell_Shadow_Twilight", ["panel:scale"] = "Interface\\Icons\\INV_Misc_Spyglass_03",
   ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:idleAlpha"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
   ["panel:keepOpen"] = "Interface\\Icons\\INV_Misc_Spyglass_03", ["panel:peek"] = "Interface\\Icons\\Spell_Holy_MindVision",
-  ["activity:chat"] = "Interface\\Icons\\INV_Misc_Note_02",
-  ["panel:showOffline"] = "Interface\\Icons\\Ability_Stealth", ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",
+  ["activity:chatNews"] = "Interface\\Icons\\INV_Misc_Note_02",
+  ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",
   ["panel:hideInCombat"] = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
-  ["panel:showQuest"] = "Interface\\Icons\\INV_Misc_Note_02", ["panel:questRequests"] = "Interface\\Icons\\Spell_ChargePositive",
-  ["panel:showXP"] = "Interface\\Icons\\Spell_Holy_PowerInfusion", ["panel:whatsNew"] = "Interface\\Icons\\INV_Misc_Book_09",
+  ["panel:shareQuest"] = "Interface\\Icons\\INV_Misc_Note_02", ["panel:questHeadsUp"] = "Interface\\Icons\\Spell_ChargePositive",
+  ["panel:whatsNew"] = "Interface\\Icons\\INV_Misc_Book_09",
   ["panel:about"] = "Interface\\Icons\\INV_Misc_QuestionMark",
   ["tags:autoAway"] = "AFK_TAG", ["roasts:editMocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
   ["roasts:cheers"] = "Interface\\Icons\\INV_Misc_Gift_01", ["roasts:mocks"] = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
@@ -81,8 +72,8 @@ local SETTING_ICONS = {
   ["popups:levelUp"] = "Interface\\Icons\\Spell_Holy_PowerInfusion", ["popups:layerDiff"] = "Interface\\Icons\\Spell_Arcane_Blink",
   ["minimap:show"] = "Interface\\Icons\\INV_Misc_Map_01", ["find:rowArrows"] = "Interface\\Icons\\Ability_Hunter_Pathfinding",
   ["find:meetups"] = "Interface\\Icons\\INV_Misc_Map_01", ["find:sharePosition"] = "Interface\\Icons\\Spell_Holy_MindVision",
-  ["calendar:open"] = "Interface\\Icons\\INV_Scroll_03", ["calendar:share"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
-  ["rankup:update"] = "Interface\\Icons\\Spell_Holy_SealOfWisdom", ["rankup:auto"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+  ["calendar:share"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
+  ["rankup:auto"] = "Interface\\Icons\\INV_Misc_PocketWatch_01",
   ["rankup:showButton"] = "Interface\\Icons\\INV_Misc_Rune_01",
 }
 
@@ -103,17 +94,65 @@ local function decorate(r, tex)
   ic:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   r.tcIcon = ic
 end
--- The Advanced tab's sub-tabs: which modules each shows, in that order. A module not listed lands on Crew.
--- "all" is the old single page with every section.
+-- The Advanced tab's sub-tabs, each a list of items like BASICS (everyday first, then the rarely needed ones). A
+-- module that is on no page (a new one) lands at the end of More with its switch and all its settings.
 local SUBTABS = {
-  { id = "panel", label = "Panel", modules = { "panel", "activity", "tags", "layer" } },
-  { id = "roasts", label = "Roasts", modules = { "roasts", "stats" } },
-  { id = "popups", label = "Pop-ups", modules = { "popups", "updates" } },
-  { id = "find", label = "Find", modules = { "find" } },
-  { id = "crew", label = "Crew", modules = { "comm", "version", "minimap", "pokes", "races" } },
-  { id = "tools", label = "Tools", modules = { "rankup" } },
-  { id = "test", label = "Test", modules = { "testtools" } },
-  { id = "all", label = "All" },
+  { id = "panel", label = "Panel", items = {
+    { module = "panel" },
+    { title = "Look" },
+    { id = "panel", key = "scale" }, { id = "panel", key = "idleAlpha" }, { id = "panel", key = "bgAlpha" },
+    { id = "panel", key = "rowStyle" }, { id = "panel", key = "sort" },
+    { title = "The tab" },
+    { id = "panel", key = "keepOpen" }, { id = "panel", key = "peek" }, { id = "panel", key = "barHover" },
+    { id = "panel", key = "locked" },
+    { title = "Hiding" },
+    { id = "panel", key = "hideInCombat" }, { id = "panel", key = "hideInInstance" },
+    { title = "Me", note = "what your crew sees" },
+    { id = "tags", key = "autoAway" }, { id = "panel", key = "shareQuest" },
+    RARE,
+    { id = "panel", key = "hideWhenAlone" }, { id = "panel", key = "showNoAddon" }, { id = "panel", key = "showSelf" },
+    { id = "panel", key = "barInstead" }, { id = "tags", key = "awayMinutes" }, { module = "tags" }, { module = "layer" },
+  } },
+  { id = "alerts", label = "Alerts", items = {
+    { id = "panel", key = "noticeScope" },
+    { module = "popups" },
+    { id = "popups", key = "online" }, { id = "popups", key = "death" }, { id = "popups", key = "levelUp" },
+    { id = "popups", key = "layerDiff" }, { id = "popups", key = "newMember" }, { id = "panel", key = "questHeadsUp" },
+    { title = "Chat and sounds" },
+    { id = "activity", key = "chatNews" }, { id = "popups", key = "sounds" },
+    RARE,
+    { module = "activity" },
+  } },
+  { id = "fun", label = "Fun", items = {
+    { module = "roasts" },
+    { id = "roasts", key = "aboutMe" }, { id = "roasts", key = "mocks" }, { id = "roasts", key = "editMocks" },
+    { id = "roasts", key = "cheers" },
+    { module = "stats" },
+    { id = "stats", key = "titles" }, { id = "roasts", key = "stealPopups" }, { id = "stats", key = "crewShow" },
+    RARE,
+    { id = "roasts", key = "mockModel" }, { id = "stats", key = "countSteps" },
+  } },
+  { id = "find", label = "Find", items = {
+    { module = "find" },
+    { id = "find", key = "rowArrows" }, { id = "find", key = "sharePosition" }, { id = "find", key = "runaway" },
+    { id = "find", key = "meetups" },
+    RARE,
+    { id = "find", key = "arrowScale" },
+  } },
+  { id = "more", label = "More", items = {
+    { title = "Calendar" },
+    { module = "calendar" }, { id = "calendar", key = "share" },
+    { title = "Recap cards" },
+    { module = "recap" }, { id = "recap", key = "onLogout" }, { id = "recap", key = "awayCard" },
+    { title = "Spell ranks" },
+    { module = "rankup" }, { id = "rankup", key = "auto" }, { id = "rankup", key = "showButton" },
+    { title = "Updates" },
+    { module = "updates" }, { id = "version", key = "versions" }, { id = "version", key = "tellCrew" },
+    { title = "Other" },
+    { id = "minimap", key = "show" }, { button = "tryit" },
+    RARE,
+    { id = "calendar", key = "size" },
+  } },
 }
 Win.BROKEN_TEXT = "turned off after errors, /reload to try again"
 local RESET_QUESTION = "Reset all TwizCrew settings and the panel position?"
@@ -219,21 +258,6 @@ local function moduleRow(def, broken)
     return cached("module:" .. def.id .. ":always", function() return noteRow(def, "always on") end), "always on",
       MODULE_ROW
   end
-  if def.comingSoon then
-    return cached("module:" .. def.id .. ":soon", function()
-      local r = Widgets.toggle(content, def.name, def.info, function() return false end, function() end)
-      r.label:SetFontObject(T.FONT.normal)
-      local note = T.text(r, T.FONT.small, C.muted)
-      note:SetPoint("RIGHT", r, "RIGHT", -42, 0)
-      note:SetText("coming later")
-      r:SetActive(false)
-      return r
-    end), "coming later", MODULE_ROW
-  end
-  if def.tier == "tools" and not broken then
-    return cached("module:" .. def.id .. ":tools", function() return noteRow(def, "only on your screen") end), "tools",
-      MODULE_ROW
-  end
   if broken then
     return cached("module:" .. def.id .. ":broken", function() return noteRow(def, Win.BROKEN_TEXT, true) end),
       "broken", BROKEN_ROW
@@ -306,6 +330,36 @@ local function fit()
   setScroll(scrollOffset)
 end
 
+-- A row for one of this window's own buttons (BUTTONS).
+local function buttonRow(key)
+  local b = BUTTONS[key]
+  if not b then return nil end
+  return cached("button:" .. key, function()
+    local r = Widgets.action(content, b.label, b.info, b.onClick, FEATURE)
+    decorate(r, b.icon)
+    return r
+  end)
+end
+
+-- The modules no page mentions (a new module): they land at the end of More, switch and settings.
+local function unlisted()
+  local listed = {}
+  local function note(list)
+    for _, item in ipairs(list) do
+      if item.module then listed[item.module] = true elseif item.id then listed[item.id] = true end
+    end
+  end
+  note(BASICS)
+  for _, st in ipairs(SUBTABS) do note(st.items) end
+  local out = {}
+  for _, def in ipairs(ns.Modules.list()) do
+    if not listed[def.id] and def.tier ~= "essential" and def.tier ~= "tools" and not def.comingSoon then
+      out[#out + 1] = def
+    end
+  end
+  return out
+end
+
 local function layout()
   dirty = false
   layouts = layouts + 1
@@ -314,6 +368,7 @@ local function layout()
   local broken = {}
   for _, id in ipairs(ns.Modules.broken()) do broken[id] = true end
   local y = 0
+  local first = true
   local function place(r, x, height, what)
     r:ClearAllPoints()
     r:SetPoint("TOPLEFT", content, "TOPLEFT", x, -y)
@@ -322,78 +377,52 @@ local function layout()
     placed[#placed + 1] = r
     described[#described + 1] = what
     y = y + height
-  end
-  if tab == "basic" then
-    local first = true
-    for _, item in ipairs(BASICS) do
-      if item.title then
-        if not first then y = y + 10 end
-        first = false
-        place(sectionRow({ tier = "basic:" .. item.title, title = item.title, note = item.note }), 0, SECTION_ROW + 4,
-          "section:" .. item.title)
-      elseif item.module then
-        local def = ns.Modules.get(item.module)
-        if def then
-          local r, state, height = moduleRow(def, broken[def.id])
-          place(r, 0, height, "module:" .. def.id .. ":" .. state)
-        end
-      else
-        local def, sdef = ns.Modules.get(item.id), settingDef(item.id, item.key)
-        if def and sdef then
-          local sr = settingRow(def, sdef)
-          sr.tcModule, sr.tcParent = def.id, sdef.parent or false
-          place(sr, sdef.parent and INDENT.child or 0, ROW, (sdef.parent and "child:" or "setting:") .. def.id .. ":"
-            .. sdef.key)
-        end
-      end
-    end
-    y = y + 12
-    place(sectionRow({ tier = "basic:more", title = "", note = "More options are on the Advanced tab." }), 0,
-      SECTION_ROW, "note:advanced")
-    contentHeight = y
-    content:SetSize(CONTENT_WIDTH, math.max(1, y))
-    fit()
-    return
+    first = false
   end
   local function placeModule(def)
     local r, state, height = moduleRow(def, broken[def.id])
     place(r, 0, height, "module:" .. def.id .. ":" .. state)
-    if not def.comingSoon then
-      for _, s in ipairs(def.settings) do
-        local sr = settingRow(def, s)
-        sr.tcModule, sr.tcParent = def.id, s.parent or false
-        if sr.tcList then sr.Refresh() end -- a list: its height depends on its lines
-        place(sr, s.parent and INDENT.child or INDENT.setting, sr.tcList and sr.Height() or ROW,
-          (s.parent and "child:" or "setting:") .. def.id .. ":" .. s.key)
-      end
-    end
-    y = y + 4
   end
-  if sub ~= "all" then
-    local listed, chosen = {}, nil
-    for _, st in ipairs(SUBTABS) do
-      for _, id in ipairs(st.modules or {}) do listed[id] = st.id end
-      if st.id == sub then chosen = st end
-    end
-    local ids = {}
-    for _, id in ipairs(chosen and chosen.modules or {}) do ids[#ids + 1] = id end
-    if sub == "crew" then -- anything not listed anywhere
-      for _, def in ipairs(ns.Modules.list()) do
-        if not listed[def.id] then ids[#ids + 1] = def.id end
+  local function placeSetting(def, sdef)
+    local sr = settingRow(def, sdef)
+    sr.tcModule, sr.tcParent = def.id, sdef.parent or false
+    if sr.tcList then sr.Refresh() end -- a list: its height depends on its lines
+    place(sr, sdef.parent and INDENT.child or 0, sr.tcList and sr.Height() or ROW,
+      (sdef.parent and "child:" or "setting:") .. def.id .. ":" .. sdef.key)
+  end
+  local function placeItems(list)
+    for _, item in ipairs(list) do
+      if item.title then
+        if not first then y = y + 10 end
+        place(sectionRow({ tier = "page:" .. item.title, title = item.title, note = item.note or "" }), 0,
+          SECTION_ROW + 4, "section:" .. item.title)
+      elseif item.module then
+        local def = ns.Modules.get(item.module)
+        if def then placeModule(def) end
+      elseif item.button then
+        local r = buttonRow(item.button)
+        if r then place(r, 0, ROW, "button:" .. item.button) end
+      else
+        local def, sdef = ns.Modules.get(item.id), settingDef(item.id, item.key)
+        if def and sdef then placeSetting(def, sdef) end
       end
     end
-    for i, id in ipairs(ids) do
-      local def = ns.Modules.get(id)
-      if def then
-        if i > 1 then y = y + 8 end
-        placeModule(def)
-      end
-    end
+  end
+  if tab == "basic" then
+    placeItems(BASICS)
+    y = y + 12
+    place(sectionRow({ tier = "basic:more", title = "", note = "More options are on the Advanced tab." }), 0,
+      SECTION_ROW, "note:advanced")
   else
-    for i, sec in ipairs(SECTIONS) do
-      if i > 1 then y = y + 10 end
-      place(sectionRow(sec), 0, SECTION_ROW + 4, "section:" .. sec.title)
-      for _, def in ipairs(ns.Modules.list(sec.tier)) do placeModule(def) end
+    local chosen = SUBTABS[1]
+    for _, st in ipairs(SUBTABS) do if st.id == sub then chosen = st end end
+    placeItems(chosen.items)
+    if chosen.id == "more" then
+      for _, def in ipairs(unlisted()) do
+        y = y + 8
+        placeModule(def)
+        for _, sdef in ipairs(def.settings) do placeSetting(def, sdef) end
+      end
     end
   end
   contentHeight = y
@@ -428,7 +457,7 @@ local function drawTabs()
 end
 
 -- Shows the "basic" or "advanced" tab (anything else counts as basic); subId picks the Advanced sub-tab
--- ("panel", "roasts", "popups", "find", "crew", "test" or "all"; nil keeps the last one).
+-- ("panel", "alerts", "fun", "find" or "more"; nil keeps the last one).
 function Win.setTab(id, subId)
   local want = id == "advanced" and "advanced" or "basic"
   local wantSub = sub
@@ -601,6 +630,7 @@ end
 
 function Win.isOpen() return isOpen end
 function Win.rowForTest(id, key) return rows["setting:" .. id .. ":" .. key] end
+function Win.buttonRowForTest(key) return rows["button:" .. key] end
 function Win.isConfirming() return confirming end
 function Win.describeForTest() return described end
 function Win.layoutCountForTest() return layouts end

@@ -217,7 +217,7 @@ function ACTIONS.death()
   end)
 end
 
--- Offbuddy comes online (through the real path: the pop-up, the activity feed, the bar notice and the chat line).
+-- Offbuddy comes online (through the real path: the pop-up, the activity feed, the news on the crew tab and the chat line).
 function ACTIONS.online()
   ensureFakes()
   popupHint("online", "Friends coming online")
@@ -230,7 +230,7 @@ function ACTIONS.online()
 end
 
 -- Testbuddy congratulates you: the message a friend's Congrats button sends, through the real path (your character
--- cheers, and the activity feed, the bar notice and the chat line show the words).
+-- cheers, and the activity feed, the crew tab and the chat line show the words).
 function ACTIONS.congratsIn()
   ensureFakes()
   local me = ns.playerName()
@@ -434,7 +434,7 @@ TestTools.HELP = {
   "/tc test copy - a pretend friend made from your own numbers, to compare with your XP bar (again: removes it)",
   "/tc test ding - Testbuddy levels up: the level-up pop-up",
   "/tc test death - Testbuddy dies: the death pop-up",
-  "/tc test online - Offbuddy comes online: the online pop-up (or the bar notice while minimized) and a chat line",
+  "/tc test online - Offbuddy comes online: the online pop-up (or the news on the crew tab) and a chat line",
   "/tc test congrats in - Testbuddy congratulates you: your character cheers, and the words show in the feed",
   "/tc test layer - Testbuddy changes layer: the layer pop-up",
   "/tc test roast - a roast about Testbuddy",
@@ -478,11 +478,11 @@ ns.Modules.register({
       .. "pop-up, even right after logging in."),
     button("death", "Death pop-up", "Testbuddy dies: the death pop-up with the place, and a DEAD tag on the row for "
       .. "15 seconds."),
-    button("online", "Friend comes online", "Offbuddy comes online: the \"is online\" pop-up, or the notice on the "
-      .. "bar while the panel is minimized (with a peek at its row), the line in Recent activity and, if you turned "
-      .. "it on, the chat line. Press again to go offline and online again."),
+    button("online", "Friend comes online", "Offbuddy comes online: the \"is online\" pop-up, the news sliding out "
+      .. "of the crew tab with its row (while the panel is tucked away), the line in Recent activity and, if you "
+      .. "turned it on, the chat line. Press again to go offline and online again."),
     button("congratsIn", "Congrats from a friend", "Testbuddy congratulates you, the way a friend's Congrats button "
-      .. "does: your character cheers, and what was said shows on the minimized bar, in Recent activity and in chat."),
+      .. "does: your character cheers, and what was said slides out of the crew tab, shows in Recent activity and in chat."),
     button("layer", "Layer pop-up", "Testbuddy moves to the other layer: \"back on your layer\" or \"on a different "
       .. "layer\", taking turns. Clicking the pop-up invites nobody."),
     button("roast", "Roast pop-up", "An orange roast about Testbuddy, a different one each press. Roasts about the "

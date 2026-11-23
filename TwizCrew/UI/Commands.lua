@@ -13,7 +13,7 @@ local HELP = {
   "/tc help - that page, and this list of commands",
   "/tc show - show the crew panel",
   "/tc hide - hide the crew panel",
-  "/tc mini - minimize the panel to its title bar (again to restore it)",
+  "/tc mini - keep the panel open, or let it tuck away into its tab",
   "/tc recent - the list of recent happenings: friends online, deaths, level-ups, congrats and mocks",
   "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
@@ -25,7 +25,7 @@ local HELP = {
   "/tc rankup - put the highest rank of every spell on your action bars",
   "/tc cal - the crew calendar: who played when, and the best time to play together",
   "/tc recap - today's recap: time played, levels, quests, deaths, gold and who was on",
-  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, minimize, calendar, notes, AFK, ranks, mock, recap)",
+  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, keep open, calendar, notes, AFK, ranks, mock, recap)",
   "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
   "/tc reset - put every setting back to normal (asks first)",
@@ -247,7 +247,7 @@ Commands.setPanel = setPanel
 -- Bindings.xml names these (Esc > Options > Keybindings > AddOns > TwizCrew).
 BINDING_HEADER_TWIZCREW = "TwizCrew"
 BINDING_NAME_TWIZCREW_PANEL = "Show or hide the crew panel"
-BINDING_NAME_TWIZCREW_MINI = "Minimize or restore the crew panel"
+BINDING_NAME_TWIZCREW_MINI = "Keep the crew panel open, or let it tuck away"
 BINDING_NAME_TWIZCREW_CALENDAR = "Open the crew calendar"
 BINDING_NAME_TWIZCREW_NOTE = "Create a calendar note"
 BINDING_NAME_TWIZCREW_AFK = "Go AFK / I'm back"
@@ -278,13 +278,14 @@ function Commands.binding(what)
   end
 end
 
--- /tc mini and its key binding: minimize or restore the panel. A hidden panel is only shown (as it was left).
--- quiet: no chat line.
+-- /tc mini (also /tc minimize, the old words) and its key binding: Keep open on or off. A hidden panel is only
+-- shown (as it was left). quiet: no chat line.
 function Commands.toggleMini(quiet)
   if not ns.Modules.isEnabled("panel") then setPanel(true, quiet) return end
-  local now = ns.Panel.toggleMinimized()
+  local now = ns.Panel.toggleKeepOpen()
   if not quiet then
-    say(now and "panel minimized to its title bar. Type /tc mini to bring it back." or "panel restored.")
+    say(now and "the panel stays open. Type /tc mini to let it tuck away into its tab."
+      or "the panel tucks away into its tab. Mouse over the tab to see it.")
   end
 end
 

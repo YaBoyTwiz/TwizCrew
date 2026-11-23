@@ -44,7 +44,7 @@ UI\Panel.lua
 UI\PanelRows.lua
 UI\PanelHeader.lua
 UI\PanelMenus.lua
-UI\PanelMini.lua
+UI\PanelTab.lua
 UI\Changelog.lua
 UI\About.lua
 UI\PopupLogic.lua

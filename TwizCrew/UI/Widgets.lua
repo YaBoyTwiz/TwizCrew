@@ -417,8 +417,12 @@ local function menuButton(i)
   return b
 end
 
--- items = { { label, checked = fn|nil, onClick = fn, icon = texture path|nil } }. Opens under `anchor`.
-function Widgets.menu(anchor, items)
+-- The shared menu frame (nil until the first menu opens).
+function Widgets.menuFrame() return menu end
+
+-- items = { { label, checked = fn|nil, onClick = fn, icon = texture path|nil } }. Opens under `anchor`, from its
+-- left edge to the right (toLeft: from its right edge to the left, for a frame on the right of the screen).
+function Widgets.menu(anchor, items, toLeft)
   if not menu then buildMenu() end
   local width = 160
   for i, item in ipairs(items) do
@@ -447,7 +451,8 @@ function Widgets.menu(anchor, items)
   for i = #items + 1, #menuButtons do menuButtons[i]:Hide() end
   menu:SetSize(width, #items * MENU_ROW + 8)
   menu:ClearAllPoints()
-  menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+  if toLeft then menu:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
+  else menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2) end
   catcher:Show()
   menu:Show()
   if menu.Raise then menu:Raise() end

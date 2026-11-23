@@ -1330,6 +1330,7 @@ return {
     end,
     calendar_button_next_to_the_tabs = function(ns, A, W)
       start(ns, W)
+      ns.Modules.set("panel", "keepOpen", true) -- (the button pulses only while the panel is on screen)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
       W:advance(1)
       local N, L, PL = ns.Notes, ns.CalendarLogic, ns.PanelLogic
@@ -1360,14 +1361,16 @@ return {
       W:advance(1)
       A.ok(ns.Panel.calPulseForTest(), "it pulses")
       A.ok(t.cal.glow:GetAlpha() > 0, "the glow is lit")
-      -- minimized: no bar, no pulse; back when restored
-      ns.Modules.set("panel", "minimized", true)
+      -- tucked into the crew tab: nothing pulses behind the closed tab; again while the panel is out
+      ns.Modules.set("panel", "keepOpen", false)
       W:advance(1)
-      A.no(ns.Panel.calPulseForTest(), "no pulse on the minimized bar")
-      A.no(t.bar:IsShown())
-      ns.Modules.set("panel", "minimized", false)
+      A.no(ns.Panel.calPulseForTest(), "no pulse while the panel is tucked away")
+      ns.Panel.openTab("click")
       W:advance(1)
-      A.ok(ns.Panel.calPulseForTest(), "it pulses again when the panel is back")
+      A.ok(ns.Panel.calPulseForTest(), "it pulses while the panel is slid out")
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(1)
+      A.ok(ns.Panel.calPulseForTest(), "and kept open")
       -- the panel hidden: nothing ticks
       ns.Modules.setEnabled("panel", false)
       W:advance(1)

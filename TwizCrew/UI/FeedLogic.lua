@@ -1,6 +1,6 @@
 -- Pure rules of the activity feed (module "activity"): the words of every kind of event, which events are worth
 -- recording (the same quiet time and "quick /reload is not news" rules the pop-ups use), the capped list, the
--- queue of notices on a minimized panel's bar, the missed counter, and which events print a line in chat.
+-- queue of news the crew tab slides out, the missed counter, and which events print a line in chat.
 -- No frames and no game calls here (Feed.lua owns those).
 local _, ns = ...
 
@@ -80,6 +80,17 @@ function FeedLogic.line(kind, who, extra, colorName)
     return colorName(who) .. " " .. verb .. " " .. (other and colorName(other) or "a friend") .. words
   elseif kind == "roast" then
     return type(extra.text) == "string" and extra.text or (colorName(who) .. " got roasted")
+  elseif kind == "otherlayer" then
+    return colorName(who) .. " is on another layer"
+  elseif kind == "samelayer" then
+    return colorName(who) .. " is back on your layer"
+  elseif kind == "runaway" then
+    local dist = (type(extra.zone) == "string" and extra.zone ~= "") and (" (" .. extra.zone .. ")") or ""
+    return colorName(who) .. " is running off" .. dist
+  elseif kind == "calnote" then
+    return "New calendar note from " .. colorName(who)
+  elseif kind == "calreply" then
+    return colorName(who) .. " answered your calendar note"
   end
   return colorName(who)
 end
@@ -103,7 +114,21 @@ function FeedLogic.entry(kind, who, extra, at, class)
   return e
 end
 
--- The entry's line with the names coloured (for the bar and chat).
+-- News only the crew tab shows (never recorded in the list, never in chat): a layer change, a group member running
+-- off, a new calendar note or an answer on mine. Same shape as an entry. extra.zone: the distance of a run-off.
+local NEWS_ONLY = { otherlayer = true, samelayer = true, runaway = true, calnote = true, calreply = true }
+FeedLogic.NEWS_ONLY = NEWS_ONLY
+function FeedLogic.newsEntry(kind, who, extra, at, class)
+  if not NEWS_ONLY[kind] then return nil end
+  extra = extra or {}
+  local e = { kind = kind, who = FeedLogic.safe(who, 40), at = tonumber(at) or 0,
+    zone = extra.zone and FeedLogic.safe(extra.zone, 60) or nil,
+    class = type(class) == "string" and class ~= "" and FeedLogic.clean(class, 20) or nil, news = true }
+  e.line = FeedLogic.line(kind, e.who, e)
+  return e
+end
+
+-- The entry's line with the names coloured (for the tab's news line and chat).
 function FeedLogic.coloredLine(e, colorName)
   return FeedLogic.line(e.kind, e.who, e, colorName)
 end
@@ -222,53 +247,76 @@ function FeedLogic.keyOf(e)
   return (tostring(type(e) == "table" and e.who or ""):gsub("||", "|"))
 end
 
----------------------------------------------------------------------------------------------------------- bar notices
--- The events a minimized panel's bar shows: online, died, level-up, and congrats / mocks that came to ME.
+---------------------------------------------------------------------------------------------------------- tab news
+-- The recorded events the crew tab slides out: online, died, level-up, and congrats / mocks that came to ME (plus the
+-- news-only kinds above, which the panel makes itself).
 function FeedLogic.isNoticeKind(e)
   if type(e) ~= "table" then return false end
   local k = e.kind
-  if k == "online" or k == "died" or k == "levelup" then return true end
+  if k == "online" or k == "died" or k == "levelup" or NEWS_ONLY[k] then return true end
   return (k == "congrats" or k == "mock") and e.dir == "in"
 end
 
--- Is the pop-up of this kind (the pop-ups module's own names) replaced by the bar right now?
--- ctx: { minimized, barShown (the bar is on screen and shows notices), setting (the "show these on the bar instead
--- of pop-ups" switch), feedTakes (the activity feed will record this event, so the bar will have it) }. Only the pop-ups the bar shows (online, death, levelup) are suppressed.
+-- Is the pop-up of this kind (the pop-ups module's own names) replaced by the crew tab right now?
+-- ctx: { tucked (the panel is tucked into its tab, not kept open), tabShown (the tab is on screen and slides news
+-- out), setting (the "show news on the tab, not as pop-ups" switch), takes (the tab will have this news: the
+-- activity feed records it, or the tab takes it itself) }. Only the pop-ups the tab shows are suppressed: online,
+-- death, level-up, the two layer pop-ups and running off.
 local POPUP_FEED = { online = "online", death = "died", levelup = "levelup" }
+local POPUP_TAB = { online = true, death = true, levelup = true, layer_diff = true, layer_same = true, runaway = true }
 function FeedLogic.suppressesPopup(popupKind, ctx)
   ctx = ctx or {}
-  if not POPUP_FEED[popupKind] then return false end
-  return ctx.minimized == true and ctx.barShown == true and ctx.setting == true and ctx.feedTakes == true
+  if not POPUP_TAB[popupKind] then return false end
+  return ctx.tucked == true and ctx.tabShown == true and ctx.setting == true and ctx.takes == true
 end
 FeedLogic.POPUP_FEED = POPUP_FEED
 
--- The notice queue and the "missed" counter of a minimized bar.
--- opts: seconds (a notice stays), short (it stays only this long when several wait behind it), max (waiting at most;
--- the oldest waiting one is dropped past that).
+-- The news queue of the crew tab and its "missed" counter.
+-- opts: seconds (a piece of news stays), short (it stays only this long when several wait behind it), max (waiting at
+-- most; the oldest waiting one is dropped past that), lengths (optional fn(entry) -> len, busyLen: that entry's own
+-- times, asked when it starts showing).
 local Bar = {}
 Bar.__index = Bar
 
 function FeedLogic.newBar(opts)
   opts = opts or {}
   return setmetatable({
-    seconds = opts.seconds or 6, short = opts.short or 3, max = opts.max or 8,
+    seconds = opts.seconds or 6, short = opts.short or 3, max = opts.max or 8, lengths = opts.lengths,
     queue = {}, active = nil, missed = 0,
   }, Bar)
 end
 
 local function start(self, entry, now)
-  self.active = { entry = entry, from = now, flashFrom = now }
+  local len, busy = self.seconds, math.min(self.seconds, self.short)
+  if self.lengths then
+    local l, b = self.lengths(entry)
+    if tonumber(l) then len = tonumber(l); busy = tonumber(b) or math.min(len, self.short) end
+  end
+  self.active = { entry = entry, from = now, flashFrom = now, len = len, busy = busy }
 end
 
 function Bar:endsAt()
   local a = self.active
   if not a then return nil end
-  local len = #self.queue >= 2 and math.min(self.seconds, self.short) or self.seconds
-  return a.from + len
+  return a.from + (#self.queue >= 2 and a.busy or a.len)
 end
 
--- A new notice: shows at once when the bar is free, else waits its turn. Returns whether it started now, and the
--- waiting notice that took over (if any) while the bar caught up with the clock first.
+-- The mouse just left the slid-out news it was holding: it goes `seconds` from now.
+function Bar:endAfter(now, seconds)
+  local a = self.active
+  if not a then return end
+  a.from = a.from + ((tonumber(now) or 0) + (tonumber(seconds) or 0) - self:endsAt())
+end
+
+-- Is a waiting or shown entry of this kind already there? (A sync that brings many calendar notes says it once.)
+function Bar:has(kind)
+  if self.active and self.active.entry.kind == kind then return true end
+  for _, e in ipairs(self.queue) do if e.kind == kind then return true end end
+  return false
+end
+
+-- A new piece of news: shows at once when the queue is free, else waits its turn. Returns whether it started now, and the
+-- waiting one that took over (if any) while the queue caught up with the clock first.
 function Bar:push(entry, now)
   local took, moved = self:tick(now)
   local promoted = moved and took or nil

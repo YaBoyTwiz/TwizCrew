@@ -58,7 +58,7 @@ local function createRow()
     local m = self:GetParent().tcModel
     if not GameTooltip or not m then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("Mock " .. tostring(m.name))
+    GameTooltip:SetText((m.mockBack and "Mock back " or "Mock ") .. tostring(m.name))
     GameTooltip:AddLine("Sends a random roast the whole crew sees. Add your own with /tc mock add <text>.", 1, 1, 1,
       true)
     GameTooltip:Show()
@@ -114,7 +114,7 @@ local function createRow()
     local m = self:GetParent().tcModel
     local a = rawget(self:GetParent(), "tcArrow")
     if not GameTooltip or not m then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(self, P.sideAnchor())
     GameTooltip:SetText("Point the way to " .. tostring(m.name))
     if a and a.still and a.zone then GameTooltip:AddLine("In " .. tostring(a.zone), 1, 1, 1) end
     GameTooltip:AddLine("Click for a big arrow that leads you there (click again to close it).", 1, 1, 1, true)
@@ -471,8 +471,13 @@ local function layoutRow(r, m, style, s, width)
   if away and not m.offline then r.afk:Show() else r.afk:Hide() end
   local dead = false
   for _, id in ipairs(m.tags or {}) do if id == "DEAD" then dead = true end end
-  local mockOn = dead and not m.offline and ns.Roasts and ns.Roasts.canMock(m.key or m.name)
+  -- the Mock button: on a dead friend's row, and "Mock back" on news of a mock or congrats aimed at me
+  local mockOn = (dead or m.mockBack) and not m.offline and ns.Roasts and ns.Roasts.canMock(m.key or m.name)
+  r.tcMock = mockOn and true or nil
   if mockOn then
+    local back = m.mockBack and not dead
+    r.mock.text:SetText(back and "Mock back" or "Mock")
+    r.mock:SetWidth(back and 80 or 54)
     r.mock:ClearAllPoints()
     r.mock:SetPoint("RIGHT", r, "RIGHT", -6, style == "full" and 0 or -2)
     r.mock:Show()
@@ -525,7 +530,7 @@ Panel.explainLinesForTest = explainLines
 function Panel.showRowTip(r)
   local m = r and r.tcModel
   if not GameTooltip or type(m) ~= "table" then return end
-  GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
+  GameTooltip:SetOwner(r, P.sideAnchor()) -- (toward the middle of the screen)
   GameTooltip:SetText(m.name, T.classColor(m.class))
   local cr, cg, cb = T.rgb(C.text)
   for _, line in ipairs(m.tip or {}) do GameTooltip:AddLine(line, cr, cg, cb) end
@@ -630,6 +635,10 @@ function Panel.arrowClicked(r)
 end
 
 function Panel.rowFrameForTest(i) return rowFrames[i] end
+function Panel.rowMockShownForTest(i)
+  local r = rowFrames[i]
+  return r ~= nil and i <= P.visibleRows and rawget(r, "tcMock") == true
+end
 -- The pin button of row i: nil when hidden, else its action ("pin" | "unpin") as drawn.
 function Panel.rowPinForTest(i)
   local r = rowFrames[i]

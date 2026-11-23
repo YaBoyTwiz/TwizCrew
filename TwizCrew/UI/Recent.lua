@@ -1,6 +1,6 @@
 -- The Recent window: the activity feed as a list, newest first, with a class icon (or a picture of the kind of
--- event), how long ago, and the line. The mouse wheel scrolls. Opened by the missed counter on the minimized
--- panel's bar, /tc recent, the wrench menu and the settings. The frame is built the first time it is opened, and
+-- event), how long ago, and the line. The mouse wheel scrolls. Opened by the crew tab's right-click menu,
+-- /tc recent, the wrench menu and the settings. The frame is built the first time it is opened, and
 -- not in combat (it then says so and does not open).
 local _, ns = ...
 

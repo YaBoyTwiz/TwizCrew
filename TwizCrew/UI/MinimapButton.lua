@@ -67,6 +67,11 @@ function MinimapButton.menuItems()
     { label = shown and "Hide the crew panel" or "Show the crew panel", icon = "Interface\\Icons\\Ability_Warrior_BattleShout",
       onClick = function() ns.Commands.setPanel(not ns.Modules.isEnabled("panel"), true) end },
   }
+  if shown and ns.Panel and ns.Panel.toggleKeepOpen then
+    local kept = ns.Panel.isKeptOpen()
+    items[#items + 1] = { label = ns.PanelLogic.keepLabel(kept), icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
+      onClick = function() ns.Panel.toggleKeepOpen() end }
+  end
   if ns.Calendar then
     items[#items + 1] = { label = "Create a calendar note", icon = "Interface\\Icons\\INV_Misc_Note_01",
       onClick = function() ns.Calendar.openMaker({}) end }

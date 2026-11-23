@@ -272,6 +272,7 @@ local function isComment(key) return key:find("|c|", 1, true) ~= nil end
 -- yesterday on (UTC days, so no time zone calls today "past"). Saved with the guild's calendar as
 -- db.calendar.fresh = the latest such day: opening the calendar clears it, and it runs out by itself once that day
 -- is past. Nothing is marked while the calendar is open. CALENDAR_FRESH fires when the answer of fresh() changes.
+-- Each piece of news also fires CALENDAR_NEWS ("note" | "reply", the author's name): the crew tab slides it out.
 local function freshFrom() return utcToday() - 1 end
 
 function Notes.fresh()
@@ -280,7 +281,7 @@ function Notes.fresh()
   return type(day) == "number" and day >= freshFrom()
 end
 
-local function markFresh(dateKey)
+local function markFresh(dateKey, kind, author)
   local day = dayOfKey(dateKey)
   local c = ns.db and ns.db.calendar
   if not day or day < freshFrom() or type(c) ~= "table" then return end
@@ -288,6 +289,7 @@ local function markFresh(dateKey)
   local was = Notes.fresh()
   if type(c.fresh) ~= "number" or c.fresh < day then c.fresh = day end
   if not was then ns.Bus.fire("CALENDAR_FRESH") end
+  if type(author) == "string" and author ~= "" and author ~= "?" then ns.Bus.fire("CALENDAR_NEWS", kind, author) end
 end
 
 function Notes.clearFresh()
@@ -673,7 +675,7 @@ function Notes.receiveReply(sender, f)
     and who ~= ns.Diary.myId() and (not old or old.x or old.v ~= v)
   s[f.r] = { n = noteKey, v = v, b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?",
     c = cleanClass(f.c), u = u, x = deleted or nil }
-  if news then markFresh(note.d) end
+  if news then markFresh(note.d, "reply", s[f.r].b) end
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 
@@ -764,7 +766,7 @@ function Notes.receive(sender, f)
     b = type(f.b) == "string" and cleanName(ns.Util.safeText(f.b)) or "?", c = class, u = u,
     x = deleted or nil, at = at, g = DUNGEON[f.g] and f.g or nil,
     z = (at and not deleted) and z or nil, zd = (at and not deleted and z) and zd or nil }
-  if not old and not deleted and not Notes.isMine({ key = key }) then markFresh(f.d) end -- news for me
+  if not old and not deleted and not Notes.isMine({ key = key }) then markFresh(f.d, "note", s[key].b) end -- news for me
   ns.Bus.fire("CALENDAR_CHANGED")
 end
 

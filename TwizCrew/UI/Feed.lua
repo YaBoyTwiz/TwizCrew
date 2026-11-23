@@ -1,7 +1,7 @@
 -- The activity feed (module "activity"): a list of the recent things this copy knows about (a friend came online,
 -- went offline, died, reached a level, a congrats or a mock sent or received with its words, a roast shown here),
 -- saved in the saved variables (newest 50). Each event also prints one line in the player's own chat window when
--- its switch is on, and is announced on the bus as FEED_ADDED so the panel's bar can show it while minimized.
+-- its switch is on, and is announced on the bus as FEED_ADDED so the crew tab can slide it out.
 -- It listens to what the pop-ups listen to (the roster's MEMBER_* events) and to MOCK_SEEN / ROAST_SHOWN, which
 -- the roasts module fires when a mock, a congrats or a roast is shown on this screen. Nothing is sent to anyone.
 -- The rules (words, gates, chat switches) are in FeedLogic.
@@ -101,8 +101,8 @@ function Feed.record(kind, who, extra, gateName)
   return e
 end
 
--- Will the feed take this event (the pop-ups module's kind: online, death, levelup)? The minimized panel's bar shows
--- what the feed records, so a pop-up is replaced only when this is true.
+-- Will the feed take this event (the pop-ups module's kind: online, death, levelup)? The crew tab shows what the feed
+-- records, so a pop-up is replaced only when this is true.
 function Feed.willTake(popupKind, name)
   local kind = FL.POPUP_FEED[popupKind]
   if not gate or not kind or type(name) ~= "string" then return false end
@@ -211,7 +211,7 @@ ns.Modules.register({
   id = FEATURE, name = "Activity feed", tier = "module",
   info = "Keeps a list of what happened lately with your crew: who came online or went offline, who died, who "
     .. "reached a level, the congrats and mocks (with the words) and the roasts you saw. Open it with /tc recent. "
-    .. "It can also write each event in your chat window, and it is what the minimized panel shows on its bar. "
+    .. "It can also write each event in your chat window, and it is the news the crew tab slides out. "
     .. "It stays on your computer: nothing is sent to anyone.",
   defaults = { chat = true, chatOnline = false, chatOffline = false, chatDied = true, chatLevel = true,
     chatCongrats = true, chatMock = true, chatRoast = false },
@@ -219,7 +219,7 @@ ns.Modules.register({
     { key = "chat", label = "Write events in my chat", kind = "toggle",
       info = "Writes one line in your own chat window for each event below, like \"TwizCrew: Frostie reached "
         .. "level 13\" or what someone said in a congrats. Only you see these lines, nobody else, and nothing is "
-        .. "typed for you. It works whether the panel is minimized or not. Turn it off to keep chat clean." },
+        .. "typed for you. It works whether the panel is tucked away or kept open. Turn it off to keep chat clean." },
     chatSetting("chatDied", "Deaths in chat", "Writes a line when a friend dies, with the place."),
     chatSetting("chatLevel", "Level-ups in chat", "Writes a line when a friend reaches a new level."),
     chatSetting("chatCongrats", "Congrats in chat", "Writes a line for every congrats you send or get, with the "
@@ -234,8 +234,8 @@ ns.Modules.register({
       .. "someone dying to a very low level mob). Off by default because there can be a lot of them."),
     { key = "openRecent", label = "Show recent activity", kind = "button",
       onClick = function() if ns.Recent then ns.Recent.open() end end,
-      info = "Opens a small window with the list of recent events, newest first. Also: /tc recent, or the wrench "
-        .. "menu on the panel, or the number on the minimized panel's bar." },
+      info = "Opens a small window with the list of recent events, newest first. Also: /tc recent, the wrench "
+        .. "menu on the panel, or the crew tab's right-click menu." },
     { key = "clearRecent", label = "Clear the list", kind = "button", onClick = function() Feed.clear() end,
       info = "Empties the list of recent events." },
   },

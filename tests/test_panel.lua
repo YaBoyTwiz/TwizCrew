@@ -276,7 +276,7 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "noticeScope", "minimized", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "questHeadsUp", "showXP",
+      A.eq(keys, { "noticeScope", "keepOpen", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "questHeadsUp", "showXP",
         "xpText", "xpTooltip",
         "fadeOut", "fadeAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "about", "tag_DEAD",
         "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
@@ -902,14 +902,14 @@ return {
       local items = ns.Panel.menuItems()
       local labels = {}
       for i, item in ipairs(items) do labels[i] = item.label end
-      A.eq(labels, { "Show offline friends", "Lock position", "Minimize the panel", "Row style: Full", "Hide during fights",
+      A.eq(labels, { "Show offline friends", "Lock position", "Keep open", "Row style: Full", "Hide during fights",
         "Set my status", "Go AFK", "Open settings", "Hide panel" })
       A.eq(items[1].checked(), false, "offline friends are behind the Offline bar by default")
       items[1].onClick(); A.eq(ns.Modules.setting("panel", "showOffline"), true)
       items[2].onClick(); A.eq(ns.Modules.setting("panel", "locked"), true)
-      items[3].onClick(); A.eq(ns.Modules.setting("panel", "minimized"), true, "Minimize the panel")
-      A.eq(ns.Panel.menuItems()[3].label, "Restore the panel")
-      items[3].onClick(); A.eq(ns.Modules.setting("panel", "minimized"), false, "and restore it")
+      items[3].onClick(); A.eq(ns.Modules.setting("panel", "keepOpen"), true, "Keep open")
+      A.eq(ns.Panel.menuItems()[3].label, "Tuck away")
+      items[3].onClick(); A.eq(ns.Modules.setting("panel", "keepOpen"), false, "and tuck it away again")
       items[4].onClick(); A.eq(ns.Modules.setting("panel", "rowStyle"), "compact")
       items[5].onClick(); A.eq(ns.Modules.setting("panel", "hideInCombat"), true)
       items[6].onClick()
@@ -968,6 +968,9 @@ return {
       local root = frames.TwizCrewPanel
       A.ok(root)
       A.eq(callsOf(calls, root, "SetDontSavePosition"), { true }, "the game does not save the panel position")
+      root:GetScript("OnDragStart")(root)
+      A.no(ns.Panel.isMovingForTest(), "tucked into the tab, the panel itself is not dragged (the tab is)")
+      ns.Modules.set("panel", "keepOpen", true)
       root:GetScript("OnDragStart")(root)
       A.ok(ns.Panel.isMovingForTest())
       root:GetScript("OnDragStop")(root)

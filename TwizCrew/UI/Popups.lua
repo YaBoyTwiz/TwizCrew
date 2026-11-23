@@ -86,8 +86,8 @@ local function inGroup(name)
   return (ns.Util.plain(UnitInParty, name) or ns.Util.plain(UnitInRaid, name)) and true or false
 end
 
--- What a click on a level-up pop-up (congratulate) or a single "online" pop-up (whisper them) does. The minimized
--- panel's bar notice calls the same (Popups.act). A fake (test tools) is never congratulated or whispered.
+-- What a click on a level-up pop-up (congratulate) or a single "online" pop-up (whisper them) does. The news line
+-- slid out of the crew tab calls the same (Popups.act). A fake (test tools) is never congratulated or whispered.
 local function act(kind, name)
   if type(name) ~= "string" or ns.isTestName(name) then return false end
   if kind == "levelup" then
@@ -333,7 +333,7 @@ local function push(kind, name, extra)
   if not ok then return end
   -- online, death and level-up pop-ups are only for people who are close, unless "Tell me about" says everyone
   if ns.Panel and ns.Panel.noticeInScope and not ns.Panel.noticeInScope(kind, name) then return end
-  -- A minimized panel shows online, died and level-up on its bar instead (when that setting is on): no pop-up then.
+  -- The crew tab shows online, died, level-up and layer news instead (when that setting is on): no pop-up then.
   if ns.Panel and ns.Panel.suppressesPopup and ns.Panel.suppressesPopup(kind, name) then return end
   logic:push(kind, name, ns.now(), extra, force)
 end
@@ -512,6 +512,7 @@ end
 -- next tick even in the login quiet time; needs this module on.
 function Popups.runaway(name, distText)
   if not logic or type(name) ~= "string" then return end
+  if ns.Panel and ns.Panel.suppressesPopup and ns.Panel.suppressesPopup("runaway", name) then return end
   logic:push("runaway", name, ns.now(), { zone = distText }, true)
 end
 

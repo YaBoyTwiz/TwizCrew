@@ -5,6 +5,7 @@ local function boot(W)
   W:fire("ADDON_LOADED", "TwizCrew")
   W:fire("PLAYER_LOGIN")
   W.env.TwizCrewDB.modules.panel.settings.showNoAddon = false -- these tests are about friends who talk, not "no addon" rows
+  W.env.TwizCrewDB.modules.panel.settings.keepOpen = true -- the row arrows turn only while the panel is on screen
   W:fire("PLAYER_ENTERING_WORLD")
   W:advance(6)
 end

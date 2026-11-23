@@ -7,9 +7,14 @@
 -- "Calendar" button sits next to them: it opens the crew calendar's own window (not a tab), and a gold glow pulses
 -- behind it while the calendar has something new (ns.Notes.fresh). Either module alone keeps the bar. A gold "?" at
 -- the end (when it fits) opens "How to use TwizCrew" (UI/About.lua; the wrench menu has it too).
+-- The crew tab (2026-11-23): unless "Keep open" is on, the panel is tucked away into a small tab on the left or right
+-- screen edge; resting the mouse on the tab (or a click) slides the whole panel out, and news slides out one row at a
+-- time. While tucked, the panel frame is the child of a holder that clips it (UI/PanelTab.lua); with Keep open on it
+-- is the ordinary movable window it always was.
 -- This file: settings, the frame, look and position, the redraw, enable / disable. The rest, loaded right after it:
--- UI/PanelRows.lua (rows, row arrows, row tooltips), UI/PanelHeader.lua (the header bar, the update and What's new
--- lines), UI/PanelMenus.lua (the menus and the status box) and UI/PanelMini.lua (minimize, bar notices, peek).
+-- UI/PanelRows.lua (rows, row arrows, row tooltips), UI/PanelHeader.lua (the header bar, the Keep open switch, the
+-- update and What's new lines), UI/PanelMenus.lua (the menus and the status box) and UI/PanelTab.lua (the crew tab,
+-- the slide, the news queue).
 -- What more than one of these files uses lives on ns.Panel._ (P).
 local _, ns = ...
 
@@ -42,7 +47,7 @@ P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD, P.LINE = ROW_WIDTH, HEADER_HEIGHT, PAD, LIN
 -- Functions and constants on P are set once, at load, in this file; later files may copy them into locals; state
 -- that changes is always read as P.x.
 P.root = nil           -- the panel frame (made in build)
-P.countText = nil      -- the count in the header ("2 of 3 online"), or the notice while minimized
+P.countText = nil      -- the count in the header ("2 here · 3 online"), or the news line while news is slid out
 P.header, P.headerShort = "", nil -- the count's text; the short count ("1/3") when room is tight
 P.tabBar = nil         -- the Crew / Hall of Shame tabs and the Calendar button (only made when ns.Board exists)
 P.visibleRows = 0      -- rows drawn by the last redraw
@@ -50,13 +55,13 @@ P.enabled, P.shown, P.inCombat = false, false, false
 P.tipRow = nil         -- the row whose tooltip is showing (redraws refresh it)
 P.tipKey = nil         -- whose row it was (a redraw can put someone else in that row)
 P.menuAnchor = nil     -- the frame the panel's last menu hangs from (see openMenu)
-P.noticeShown = nil    -- the entry the bar shows now (test hook)
-P.flashTex = nil       -- a soft glow over the bar that flashes when a notice arrives while minimized
--- Minimize (the header bar alone), the notices on that bar, and the peek. See PanelLogic.view and FeedLogic.newBar.
-P.bar = nil            -- the notice queue and the missed counter (FeedLogic.newBar), made when the panel starts
-P.hoverOpen = false    -- the mouse is on the minimized bar and "open while my mouse is on the bar" is on
-P.peek = nil           -- { name, untilT, held } while a friend's row is dropped open below the bar
-P.curView = "full"     -- see settle()
+P.noticeShown = nil    -- the news entry the header line shows now (test hook)
+-- The crew tab (UI/PanelTab.lua). See PanelLogic.view and FeedLogic.newBar.
+P.bar = nil            -- the news queue and the missed counter (FeedLogic.newBar), made when the panel starts
+P.open = nil           -- { by = "hover" | "click", leftAt } while the whole panel is slid out of the tab
+P.curView = "full"     -- "full", "peek" or "tab" (PanelLogic.view), set by every redraw
+P.marks = { dead = false, layer = false } -- the tab's steady marks (PanelLogic.tabMarks)
+P.here = 0             -- the header's "here" count (the tab shows it)
 
 local noteText
 local offBar, guildBar -- the "Offline (N)" and "Guild online (N)" bars
@@ -81,18 +86,36 @@ local ticker
 local redraws = 0
 local fadeElapsed = 0
 local FL = ns.FeedLogic
-local NOTICE_SECONDS, NOTICE_SHORT, NOTICE_QUEUE = 6, 3, 8 -- a notice stays 6 s (3 s when others wait), 8 wait at most
-local fullHeight, curHeight = nil, HEADER_HEIGHT -- see settle()
+local NOTICE_SHORT, NOTICE_QUEUE = 3, 8 -- news stays 3 s when two or more wait, 8 wait at most
 
 local function setting(key) return ns.Modules.setting(FEATURE, key) end
 local function set(key, value) return ns.Modules.set(FEATURE, key, value) end
-local function minimized() return setting("minimized") == true end
+local function keepOpen() return setting("keepOpen") == true end
+
+-- Is the panel on the right half of the screen (the tab on the right edge, or a kept-open panel there)? Tooltips and
+-- menus then open toward the middle of the screen.
+local function onRight()
+  if not keepOpen() then return setting("tabSide") == "right" end
+  if not P.root then return false end
+  local ok, cx = pcall(P.root.GetCenter, P.root)
+  local okW, w = pcall(UIParent.GetWidth, UIParent)
+  local s = P.root.GetEffectiveScale and P.root:GetEffectiveScale() or 1
+  local u = UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
+  if not ok or not okW or type(cx) ~= "number" or type(w) ~= "number" or w <= 0 or type(s) ~= "number"
+    or type(u) ~= "number" or u <= 0 then
+    return false
+  end
+  return cx * s / u > w / 2
+end
+P.onRight = onRight
+-- "ANCHOR_RIGHT" for a tooltip beside the panel, "ANCHOR_LEFT" when the panel is on the right.
+function P.sideAnchor() return onRight() and "ANCHOR_LEFT" or "ANCHOR_RIGHT" end
 
 -- The panel's own menus go through here, so we know which frame the shared menu (the minimap button, the calendar and
--- the meet map use it too) hangs from.
+-- the meet map use it too) hangs from. On the right half of the screen they open toward the middle.
 local function openMenu(anchor, items)
   P.menuAnchor = anchor
-  return Widgets.menu(anchor, items)
+  return Widgets.menu(anchor, items, onRight())
 end
 local function script(frame, name, fn) Widgets.script(frame, name, fn, FEATURE) end
 
@@ -104,7 +127,7 @@ local function clamp(v, lo, hi, fallback)
 end
 
 local function round(v) return math.floor(v * 10 + 0.5) / 10 end
-P.setting, P.set, P.minimized, P.openMenu, P.script, P.clamp = setting, set, minimized, openMenu, script, clamp
+P.setting, P.set, P.keepOpen, P.openMenu, P.script, P.clamp = setting, set, keepOpen, openMenu, script, clamp
 
 local function allSettings()
   local out = {}
@@ -234,18 +257,18 @@ local function inDungeon()
   local _, kind = ns.Util.plain(IsInInstance)
   return kind == "party" or kind == "raid"
 end
+P.inDungeon = inDungeon
 
 ---------------------------------------------------------------------------------------------------------- position
 local function applyPosition()
   if moving then return end -- never re-anchor while the player is dragging it
+  if not keepOpen() then return P.placeTab() end -- tucked: the tab has the place, the panel hangs from it
   local p = setting("position")
   if type(p) ~= "table" or not POINTS[p.point] then p = ns.Modules.get(FEATURE).defaults.position end
-  local y = tonumber(p.y) or 0
-  -- a panel that grows up and is minimized keeps its bar still while a peek or the mouse opens it taller
-  if p.point == "BOTTOMLEFT" and p.mini == true and minimized() then y = Logic.barFixedY(y, curHeight, HEADER_HEIGHT) end
   P.root:ClearAllPoints()
-  P.root:SetPoint(p.point, UIParent, p.point, tonumber(p.x) or 0, y)
+  P.root:SetPoint(p.point, UIParent, p.point, tonumber(p.x) or 0, tonumber(p.y) or 0)
 end
+P.applyPosition = applyPosition
 
 -- Where the panel is now, anchored at the corner that matches the grow direction (top-left for down,
 -- bottom-left for up), so the panel grows away from that corner. nil if the game has not placed it yet.
@@ -256,29 +279,26 @@ local function currentPosition()
     if type(v) ~= "number" or v ~= v then return nil end
   end
   if s <= 0 or u <= 0 then return nil end
-  if setting("grow") == "up" then
-    -- minimized, the saved y is the bar's (the bottom of a bar-sized panel), whatever view is open now
-    local y = minimized() and Logic.barSavedY(bottom, curHeight, HEADER_HEIGHT) or bottom
-    return { point = "BOTTOMLEFT", x = round(left), y = round(y), mini = minimized() or nil }
-  end
+  if setting("grow") == "up" then return { point = "BOTTOMLEFT", x = round(left), y = round(bottom) } end
   return { point = "TOPLEFT", x = round(left), y = round(top - uiTop * u / s) }
 end
 
 local function savePosition()
+  if not keepOpen() then return end -- (tucked, the panel hangs from the tab: its own place is kept for Keep open)
   local p = currentPosition()
   if p then set("position", p) end
 end
 
 -- After a reset or a grow change the saved corner may not match; convert it without moving the panel.
 local function normalizeAnchor()
-  if moving then return end
+  if moving or not keepOpen() then return end
   local p = setting("position")
   local want = setting("grow") == "up" and "BOTTOMLEFT" or "TOPLEFT"
   if type(p) ~= "table" or p.point ~= want then savePosition() end
 end
 
 local function startDrag()
-  if setting("locked") or not P.root.StartMoving then return end
+  if setting("locked") or not keepOpen() or not P.root.StartMoving then return end
   moving = true
   P.root:StartMoving()
 end
@@ -305,7 +325,7 @@ local function fadeStep()
   local over = false
   if P.root.IsMouseOver then over = P.root:IsMouseOver()
   elseif type(MouseIsOver) == "function" then over = MouseIsOver(P.root) end
-  if P.bar and (P.bar:current() or P.peek or P.hoverOpen) then over = true end -- a notice or a peek must be seen
+
   P.root:SetAlpha(over and 1 or clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
 end
 
@@ -318,6 +338,7 @@ local function fadeTick(_, elapsed)
 end
 
 local appliedScale -- the scale the panel has now, to keep its corner still when the scale changes
+P.appliedScale = function() return appliedScale or 1 end
 
 -- Only the player changing the scale setting moves the saved corner (a reset brings its own position).
 -- Reset relies on Modules.resetAll running the setting hooks in alphabetical key order: "position" is put back
@@ -334,6 +355,12 @@ local function rescaleSavedPosition()
       appliedScale = newScale -- (saving runs applyLook, which must not rescale again)
       set("position", moved)
     end
+    -- the tab's height is in its own scaled units too
+    local ty = tonumber(setting("tabY"))
+    if ty then
+      local _, y2 = Logic.rescalePosition(0, ty, oldScale, newScale)
+      if y2 and y2 ~= ty then appliedScale = newScale; set("tabY", round(y2)) end
+    end
   end
 end
 
@@ -344,8 +371,9 @@ local function applyLook()
   local alpha = clamp(setting("bgAlpha"), 0, 1, 0.8)
   T.setBackgroundAlpha(P.root, alpha)
   for _, r in ipairs(rowFrames) do T.setBackgroundAlpha(r, alpha) end
+  if P.tab then P.tab:SetScale(newScale) end
   applyPosition()
-  if setting("fadeOut") then
+  if setting("fadeOut") and keepOpen() then -- (a tucked panel only shows while it is looked at)
     P.root:SetScript("OnUpdate", fadeTick)
     P.root:SetAlpha(clamp(setting("fadeAlpha"), 0.1, 1, 0.3))
   else
@@ -353,6 +381,7 @@ local function applyLook()
     P.root:SetAlpha(1)
   end
 end
+P.applyLook = applyLook
 
 ---------------------------------------------------------------------------------------------------------- redraw
 local function hide()
@@ -360,43 +389,26 @@ local function hide()
     stopDrag() -- a drag cut short by hiding must not leave the panel "moving"
     P.root:Hide()
   end
+  P.hideTab()
   if P.tipRow then Panel.hideRowTip(P.tipRow) end
   P.shown = false
   if ns.Guild then ns.Guild.setWatched(false) end
   P.syncBarTicker()
   note = nil
+  P.curView = "tab"
   P.stopArrowTicker()
   stopCalPulse()
   Widgets.closeMenu()
 end
 
--- After every resize. Remembers the height. A panel that grows up is anchored at its bottom corner, which is the bar's
--- bottom only while minimized. The saved position says which of the two its y means (`mini = true` = the bar's), so
--- whatever happened while the panel was off, the next draw converts it once and nothing drifts. The full panel's last
--- height is kept in ns.db.panelFullHeight (it survives a /reload) for the conversion to the bar.
-local function settle(height)
-  curHeight = height
-  local now = minimized() and "mini" or "full"
-  if ns.Guild then ns.Guild.setWatched(now == "full") end -- the list is read often only while the panel is open
-  if now == "full" then
-    fullHeight = height
-    if ns.db then ns.db.panelFullHeight = height end
-  end
-  if setting("grow") ~= "up" then return end
-  local p = setting("position")
-  if type(p) ~= "table" or p.point ~= "BOTTOMLEFT" or moving then return end
-  local savedMini = p.mini == true
-  if savedMini ~= (now == "mini") then
-    local y = tonumber(p.y) or 0
-    if now == "mini" then
-      local fh = fullHeight or (ns.db and tonumber(ns.db.panelFullHeight))
-      if fh then y = Logic.yAfterMinimize(y, fh, HEADER_HEIGHT) end
-    else
-      y = Logic.yAfterRestore(y, height, HEADER_HEIGHT)
-    end
-    set("position", { point = p.point, x = p.x, y = round(y), mini = (now == "mini") or nil })
-  end
-  if now == "mini" then applyPosition() end
+-- After every resize: remembers the height, reads the guild list often while the panel or its tab is on screen
+-- (the tab shows the count too), and fits the tab's holder to the panel. The full panel's last height is kept in ns.db.panelFullHeight (the first run of the crew
+-- tab uses it to place the tab).
+local function settle(width, height, view)
+  P.rootW, P.rootH = width, height
+  if ns.Guild then ns.Guild.setWatched(true) end
+  if view == "full" and ns.db then ns.db.panelFullHeight = height end
+  P.fitClip()
 end
 
 ---------------------------------------------------------------------------------------------------------- who is shown
@@ -475,37 +487,60 @@ local function redraw()
     return
   end
 
-  -- minimized: just the bar ("mini"), the bar and one friend's row ("peek"), or all of it while the mouse is on the
-  -- bar and that is allowed ("full")
-  local peekMember = P.peek and ns.roster and ns.roster:get(P.peek.name) or nil
-  local view = Logic.view({ minimized = minimized(), hover = P.hoverOpen and s.barHover == true,
-    peek = peekMember ~= nil and P.bar ~= nil, inCombat = P.inCombat })
+  -- kept open: everything ("full"). Tucked into the tab: the tab alone ("tab"), one piece of news slid out ("peek"),
+  -- or everything while the mouse or a click opened it ("full"). While tucked, the panel is laid out as the full
+  -- panel behind the closed holder, so it is ready to slide out.
+  local kept = s.keepOpen == true
+  local news = (not kept) and P.newsNow() or nil
+  local view = Logic.view({ keepOpen = kept, open = P.open ~= nil, news = news ~= nil, inCombat = P.inCombat })
   P.curView = view
   local active = ns.Guild ~= nil and ns.Guild.active()
   local members, extra, ctx, grouped = crewOf(s, active)
   -- the header: people in the main view (party and pinned, and me), guild members online (the count follows the
   -- no-addon setting)
   local here, onlineAll = Logic.hereCount(members, ctx, s.showNoAddon, active), 0
-  if view ~= "peek" and s.showSelf and ns.Self and active then
+  P.here = here
+  if s.showSelf and ns.Self and active then
     table.insert(members, 1, Logic.selfMember(ns.myKey(), ns.Self.lastSent()))
   end
   local hidden
-  if view ~= "peek" then
-    models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
-      titleOf(), ns.maxLevel(), ctx)
-  end
+  models, hidden = Logic.rows(members, s, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
+    titleOf(), ns.maxLevel(), ctx)
+  P.marks = Logic.tabMarks(models)
   if active then
     onlineAll = Logic.guildOnline((ns.Guild.count()), extra, s.showNoAddon)
     for _, m in ipairs(members) do if m.online and ns.isTestName(m.name) then onlineAll = onlineAll + 1 end end
   else
     onlineAll = online
   end
-  if view == "peek" then
+  P.header = Logic.headerCount(here, onlineAll)
+  P.headerShort = Logic.headerCount(here, onlineAll, true)
+  P.countText:SetText(P.header)
+  P.shown = true
+  P.showTab(not kept)
+  -- tucked and the holder is still out (or sliding in): only slide it in; the content stays as it is until it is in
+  if view == "tab" and P.clipOut() then
+    P.slideTo(0)
+    if P.tipRow then Panel.hideRowTip(P.tipRow) end
+    P.stopArrowTicker()
+    stopCalPulse()
+    P.syncBarTicker()
+    return
+  end
+  local layout = view == "tab" and "full" or view
+  local peekMember
+  if layout == "peek" then
+    -- the news's friend (a calendar note has no row)
+    local key = (news.kind ~= "calnote" and news.kind ~= "calreply") and FL.keyOf(news) or nil
+    peekMember = type(key) == "string" and ns.roster and ns.roster:get(key) or nil
     local rowSettings = {}
     for k, v in pairs(s) do rowSettings[k] = v end
     rowSettings.showOffline = true
-    models = Logic.rows({ peekMember }, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(), ns.wallclock(),
-      titleOf(), ns.maxLevel(), ctx)
+    models = peekMember and Logic.rows({ peekMember }, rowSettings, relationOf, ns.Modules.isEnabled("tags"), ns.now(),
+      ns.wallclock(), titleOf(), ns.maxLevel(), ctx) or {}
+    for _, m in ipairs(models) do
+      if (news.kind == "mock" or news.kind == "congrats") and news.dir == "in" then m.mockBack = true end
+    end
   end
   local now = ns.now()
   for _, m in ipairs(models) do
@@ -521,45 +556,26 @@ local function redraw()
       end
     end
   end
-  entries = view == "peek" and models or Logic.entries(models, { inGroup = grouped, guildOpen = s.showGuildOnline == true,
+  entries = layout == "peek" and models or Logic.entries(models, { inGroup = grouped, guildOpen = s.showGuildOnline == true,
     offlineOpen = s.showOffline ~= false, hiddenOffline = hidden, flat = not active })
-  P.header = Logic.headerCount(here, onlineAll)
-  P.headerShort = Logic.headerCount(here, onlineAll, true)
-  P.countText:SetText(P.header)
   local G = ns.Guild
   local stateLine = Logic.stateLine({ inGuild = G ~= nil and G.inGuild(), known = G ~= nil and G.known(),
     active = active, needsReload = G ~= nil and G.needsReload(), guildName = G and (G.name() or G.id()),
     reason = G and G.quietReason() })
 
-  local top = P.drawHeader(s, view)
-  if view == "mini" then
-    for _, r in ipairs(rowFrames) do r:Hide() end
-    if P.tipRow then Panel.hideRowTip(P.tipRow) end
-    hideChrome()
-    noteText:Hide(); note = nil
-    if ns.Board then ns.Log.safe("board", ns.Board.hide) end
-    if P.tabBar then P.tabBar:Hide() end
-    stopCalPulse()
-    P.visibleRows = 0
-    P.stopArrowTicker()
-    P.root:SetSize(ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"] + 2 * PAD, HEADER_HEIGHT)
-    P.root:Show()
-    P.shown = true
-    P.syncBarTicker()
-    settle(HEADER_HEIGHT)
-    normalizeAnchor()
-    return
-  end
-  if view ~= "peek" and (statsOn() or calOn()) then
-    local wide = tab == "shame" and view == "full"
+  local top = P.drawHeader(s, layout, news)
+  local live = view ~= "tab" -- on screen now (tucked and closed: laid out behind the holder)
+  if layout ~= "peek" and (statsOn() or calOn()) then
+    local wide = tab == "shame"
     drawTabs((wide and BOARD_WIDTH or ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"]) + 2 * PAD)
+    if not live then stopCalPulse() end
     top = top + TAB_HEIGHT
   else
     if P.tabBar then P.tabBar:Hide() end
     stopCalPulse()
   end
 
-  if tab == "shame" and view == "full" then
+  if tab == "shame" and layout == "full" then
     for _, r in ipairs(rowFrames) do r:Hide() end
     hideChrome()
     if P.tipRow then Panel.hideRowTip(P.tipRow) end
@@ -581,17 +597,16 @@ local function redraw()
     end
     P.root:SetSize(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD)
     P.root:Show()
-    P.shown = true
     P.syncBarTicker()
-    settle(top + GAP + h + PAD)
+    settle(BOARD_WIDTH + 2 * PAD, top + GAP + h + PAD, view)
     normalizeAnchor()
     return
   end
   if ns.Board then ns.Log.safe("board", ns.Board.hide) end
 
   local max = ns.Config.PANEL_MAX_ROWS
-  local first, last = Logic.window(#entries, view == "peek" and 0 or offset, max)
-  if view ~= "peek" then offset = first - 1 end -- (a peek never moves the player's scroll)
+  local first, last = Logic.window(#entries, layout == "peek" and 0 or offset, max)
+  if layout ~= "peek" then offset = first - 1 end -- (a peek never moves the player's scroll)
   firstRow = first
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
   local width = ROW_WIDTH[style]
@@ -636,11 +651,11 @@ local function redraw()
   end
   P.visibleRows = used
   P.refreshRowTip()
-  P.updateArrowTicker()
+  if live then P.updateArrowTicker() else P.stopArrowTicker() end
 
   note = nil
-  if view == "peek" then
-    -- no note under a peeked row
+  if layout == "peek" then
+    -- no note under a slid-out row
   elseif stateLine then note = stateLine
   elseif #entries == 0 then note = "Nobody else is in the guild yet."
   elseif #entries == 1 and entries[1].bar == "offline" then note = "Nobody else is online right now."
@@ -656,11 +671,11 @@ local function redraw()
   else
     noteText:Hide()
   end
+  if used == 0 and layout == "peek" then y = top + 4 end -- (news with no row: the header line alone)
   P.root:SetSize(width + 2 * PAD, y + 2)
   P.root:Show()
-  P.shown = true
   P.syncBarTicker()
-  settle(y + 2)
+  settle(width + 2 * PAD, y + 2, view)
   normalizeAnchor()
 end
 
@@ -770,6 +785,7 @@ local function build()
     P.tabBar:Hide()
   end
   P.root:Hide()
+  P.buildTab() -- the crew tab and the holder the panel slides out of (UI/PanelTab.lua)
 end
 
 ---------------------------------------------------------------------------------------------------------- public
@@ -853,8 +869,56 @@ function Panel.firstRowForTest() return firstRow end
 function Panel.redrawCountForTest() return redraws end
 function Panel.isMovingForTest() return moving end
 
+-- The crew tab, once per account (db.panelTabSince): it is the default for everyone. An existing user (the older marks
+-- are there) gets the tab on the edge nearest to where the panel was, at about its height, "open when my mouse rests
+-- on the tab" turned on (saved settings keep their old values, so a new default alone would not reach them), Keep
+-- open off, and a one-time note. Their panel's place is kept for when they turn Keep open on.
+local TAB_NOTE = "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything. Want it always open? "
+  .. "Click Keep open at the top of the panel."
+local function migrateToTab(existing)
+  if not ns.db or ns.db.panelTabSince then return end
+  ns.db.panelTabSince = true
+  local saved = type(ns.db.modules) == "table" and type(ns.db.modules.panel) == "table" and ns.db.modules.panel.settings
+  if type(saved) == "table" then saved.minimized = nil end -- (the old minimize switch is gone)
+  if not existing then return end
+  local p = setting("position")
+  if type(p) == "table" and p.mini == true then -- a grow-up panel saved while minimized kept the bar's y
+    local fh = tonumber(ns.db.panelFullHeight)
+    local y = fh and Logic.yAfterRestore(p.y, fh, HEADER_HEIGHT) or tonumber(p.y) or 0
+    set("position", { point = p.point, x = p.x, y = round(y) })
+  end
+  if setting("keepOpen") ~= false then set("keepOpen", false) end
+  if setting("barHover") ~= true then set("barHover", true) end
+  local okW, w = pcall(UIParent.GetWidth, UIParent)
+  local okH, h = pcall(UIParent.GetHeight, UIParent)
+  local style = ROW_WIDTH[setting("rowStyle")] and setting("rowStyle") or "full"
+  local side, y = Logic.tabFromPosition(setting("position"), okW and w or nil, okH and h or nil,
+    ROW_WIDTH[style] + 2 * PAD, tonumber(ns.db.panelFullHeight) or 200, P.TAB_HEIGHT, clamp(setting("scale"), 0.5, 2, 1))
+  set("tabSide", side)
+  set("tabY", round(y))
+  ns.db.tabNoteDue = true
+end
+
+-- The one-time note: a chat line and a pop-up, never in a fight (it waits for the fight to end).
+local function showTabNote()
+  if not ns.db or not ns.db.tabNoteDue or not P.enabled then return end
+  if P.inCombat or ns.Util.plain(InCombatLockdown) then
+    if C_Timer and C_Timer.After then C_Timer.After(5, function() ns.Log.safe(FEATURE, showTabNote) end) end
+    return
+  end
+  ns.db.tabNoteDue = nil
+  print("|cffffd100TwizCrew:|r " .. TAB_NOTE)
+  if ns.Popups and ns.Popups.notice then
+    ns.Popups.notice("Interface\\Icons\\Ability_Warrior_BattleShout", "TwizCrew now tucks away into a small tab",
+      "Mouse over the tab to see everything.", function() Panel.openTab("click") end, 20)
+  end
+end
+Panel.TAB_NOTE = TAB_NOTE
+
 local function onEnable()
   P.enabled = true
+  -- an older install (these marks are set below on every start): the crew tab's first run moves its panel over
+  local existing = ns.db ~= nil and (ns.db.panelSince0112 == true or ns.db.fadeOnSince017 == true)
   if ns.Changelog then ns.Changelog.checkFresh() end -- before the marks below: a new install has no "new" line
   if ns.db and ns.db.fadeOnSince017 and not ns.db.panelSince0112 then
     -- v0.1.12, once for copies that saved the old defaults: online friends only (offline behind the bar), my own
@@ -874,6 +938,10 @@ local function onEnable()
     if ns.Modules.setting(FEATURE, "fadeAlpha") == 0.3 then ns.Modules.set(FEATURE, "fadeAlpha", 0.35) end
   end
   if not P.root then build() end
+  migrateToTab(existing)
+  if ns.db and ns.db.tabNoteDue and C_Timer and C_Timer.After then
+    C_Timer.After(10, function() ns.Log.safe(FEATURE, showTabNote) end)
+  end
   P.inCombat = ns.Util.plain(InCombatLockdown) and true or false
   titleCache = nil
   for _, name in ipairs({ "STATS_CHANGED", "SESSION_CHANGED", "SETTINGS_RESET", "MODULE_TOGGLED", "CLOWN_CHANGED" }) do
@@ -889,15 +957,19 @@ local function onEnable()
     -- the button goes away by itself after a few minutes
     if C_Timer and C_Timer.After then C_Timer.After(CHEER_FOR + 1, function() ns.Log.safe(FEATURE, requestRedraw) end) end
   end)
-  P.bar = FL.newBar({ seconds = NOTICE_SECONDS, short = NOTICE_SHORT, max = NOTICE_QUEUE })
-  P.peek, P.hoverOpen = nil, false
+  P.bar = FL.newBar({ seconds = clamp(setting("peekSeconds"), 1, 30, 5), short = NOTICE_SHORT, max = NOTICE_QUEUE,
+    lengths = P.newsLengths })
+  P.open = nil
   ns.Bus.on(FEATURE, "FEED_ADDED", Panel.onFeed)
-  ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() P.inCombat = true; P.peek = nil; requestRedraw() end)
+  P.listenForNews() -- layer changes, running off, calendar notes (UI/PanelTab.lua)
+  -- a fight drops the news waiting to slide out (it is still counted as missed)
+  ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() P.inCombat = true; P.bar:clear(); requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_REGEN_ENABLED", function() P.inCombat = false; requestRedraw() end)
   ns.Events.on(FEATURE, "PLAYER_ENTERING_WORLD", requestRedraw)
   if C_Timer and C_Timer.NewTicker then
     ticker = C_Timer.NewTicker(TICK, function() ns.Log.safe(FEATURE, requestRedraw) end)
   end
+  P.applyMode()
   applyLook()
   redraw()
   P.startBarTicker()
@@ -906,7 +978,7 @@ end
 local function onDisable()
   P.enabled = false
   P.stopBarTicker()
-  P.peek, P.hoverOpen = nil, false
+  P.open = nil
   if ticker then ticker:Cancel(); ticker = nil end
   hide()
 end
@@ -918,7 +990,8 @@ end
 ns.Modules.register({
   id = FEATURE, name = "Crew panel", tier = "module",
   info = "The window that lists your crew: who is online, where they are, their level, XP and tags. "
-    .. "Drag it to move it; right-click its title for quick options.",
+    .. "It tucks away into a small tab on the edge of your screen: rest your mouse on the tab to see it all. "
+    .. "Right-click its title (or the tab) for quick options.",
   defaults = {
     scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
     showQuest = true, shareQuest = true, questRequests = true, questHeadsUp = true,
@@ -926,7 +999,7 @@ ns.Modules.register({
     fadeOut = true, fadeAlpha = 0.5, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
     showSelf = false, noticeScope = "close",
-    minimized = false, peek = true, peekSeconds = 5, barHover = false, barInstead = false,
+    keepOpen = false, peek = true, peekSeconds = 5, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
     tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
     position = { point = "LEFT", x = 40, y = 100 },
   },
@@ -937,24 +1010,28 @@ ns.Modules.register({
         .. "My party and pinned: only people in your party or raid and the ones you pinned. Everyone in the guild: "
         .. "every guild member. The Recent list keeps everyone either way, and mocks and congrats aimed at you "
         .. "always show. The Congrats button on a row stays for everyone." },
-    { key = "minimized", label = "Minimize the panel", kind = "toggle",
-      info = "Shrinks the panel to just its title bar, so it takes almost no room on your screen. News from your "
-        .. "crew (someone comes online, dies, levels up, congratulates or mocks you) shows on the bar for a few "
-        .. "seconds, and a small number counts what you missed. Click the minus button on the bar, its title, or "
-        .. "type /tc mini to bring the whole panel back. Resetting settings also brings it back." },
-    { key = "peek", label = "Peek at the friend", kind = "toggle",
-      info = "While the panel is minimized, when news comes in, the panel drops open under the bar for a few "
-        .. "seconds and shows only that friend's row (with the Congrats button after a level-up), then closes "
-        .. "again. Keep your mouse on it to keep it open. It never opens during a fight." },
-    { key = "peekSeconds", label = "How long to peek", kind = "slider", min = 2, max = 15, step = 1, parent = "peek",
-      info = "How many seconds the friend's row stays open under the bar." },
-    { key = "barHover", label = "Open while my mouse is on the bar", kind = "toggle",
-      info = "While the panel is minimized, holding your mouse on the title bar opens the whole panel, and it "
-        .. "shrinks back when the mouse leaves. Off by default so the panel never opens by accident." },
-    { key = "barInstead", label = "Show news on the bar, not as pop-ups", kind = "toggle",
-      info = "Pop-ups keep showing unless this is on. Turn it on and, while the panel is minimized, the pop-ups for "
-        .. "friends coming online, dying and leveling up are not shown, because the bar already tells you. "
-        .. "Pop-ups work as always while the panel is not minimized." },
+    { key = "keepOpen", label = "Keep open", kind = "toggle",
+      info = "Off (the normal way): the panel tucks away into a small tab on the edge of your screen. Rest your mouse "
+        .. "on the tab, or click it, to see everything; news slides out from it for a few seconds. On: the panel stays "
+        .. "on screen like before and you can drag it anywhere. The Keep open switch at the top of the panel and "
+        .. "/tc mini do the same." },
+    { key = "peek", label = "Slide out news", kind = "toggle",
+      info = "While the panel is tucked into its tab, news from your crew slides out from the tab for a few seconds "
+        .. "with that friend's row, then slides back: someone comes online, dies, levels up, changes layer or runs "
+        .. "off, a new calendar note, a congrats or mock for you. News with a Congrats or Mock button stays about 12 "
+        .. "seconds. Keep your mouse on it to keep it out. Never during a fight." },
+    { key = "peekSeconds", label = "How long news stays out", kind = "slider", min = 2, max = 15, step = 1,
+      parent = "peek",
+      info = "How many seconds plain news stays out from the tab. News with a Congrats or Mock button on it stays "
+        .. "about 12 seconds." },
+    { key = "barHover", label = "Open when my mouse rests on the tab", kind = "toggle",
+      info = "Rest your mouse on the tab for a moment and the whole panel slides out. It slides back about a second "
+        .. "after your mouse leaves. Not while you turn the camera, in a fight, or in a dungeon or raid: a click on "
+        .. "the tab still opens it then. Off: only a click opens it." },
+    { key = "barInstead", label = "Show news on the tab, not as pop-ups", kind = "toggle",
+      info = "Pop-ups keep showing unless this is on. Turn it on and, while the panel is tucked into its tab and news "
+        .. "slides out, the pop-ups for friends coming online, dying, leveling up, changing layer and running off are "
+        .. "not shown, because the tab already tells you. With Keep open on, pop-ups work as always." },
     { key = "scale", label = "Scale", kind = "slider", min = 0.5, max = 2.0, step = 0.05, fmt = Widgets.percent,
       info = "Makes the whole panel bigger or smaller. 100% is the normal size." },
     { key = "bgAlpha", label = "Background opacity", kind = "slider", min = 0, max = 1, step = 0.05,
@@ -991,21 +1068,25 @@ ns.Modules.register({
         .. "and about how long until they level at their pace this session (shown once there is a steady pace)." },
     { key = "fadeOut", label = "Fade when the mouse is not over it", kind = "toggle",
       info = "Makes the panel see-through while your mouse is somewhere else, so it gets in the way less. "
-        .. "Important things, like the Mock button and the update line, stay fully visible." },
+        .. "Important things, like the Mock button and the update line, stay fully visible. Only with Keep open on: "
+        .. "a tucked panel only slides out while you look at it." },
     { key = "fadeAlpha", label = "How much to fade", kind = "slider", min = 0.1, max = 1, step = 0.05,
       fmt = Widgets.percent, parent = "fadeOut",
       info = "How visible the panel stays while it is faded. Lower means more see-through." },
     { key = "locked", label = "Lock position", kind = "toggle",
-      info = "Stops the panel from being dragged by accident. Turn it off to move the panel again." },
+      info = "Stops the panel (with Keep open on) and the crew tab from being dragged by accident. Turn it off to "
+        .. "move them again." },
     { key = "grow", label = "Grow direction", kind = "choice", choices = { { "down", "Down" }, { "up", "Up" } },
       info = "Whether the panel gets longer downward or upward when more friends come online. "
-        .. "Pick Up if the panel sits near the bottom of your screen." },
+        .. "Pick Up if the panel sits near the bottom of your screen. Only with Keep open on." },
     { key = "hideInCombat", label = "Hide during fights", kind = "toggle",
-      info = "Hides the panel while you are in a fight and brings it back when the fight is over." },
+      info = "Hides the panel (and the crew tab) while you are in a fight and brings it back when the fight is over." },
     { key = "hideInInstance", label = "Hide in dungeons and raids", kind = "toggle",
-      info = "Hides the panel while you are inside a dungeon or raid, and shows it again when you leave." },
+      info = "Hides the panel (and the crew tab) while you are inside a dungeon or raid, and shows it again when you "
+        .. "leave." },
     { key = "hideWhenAlone", label = "Hide when no crew is online", kind = "toggle",
-      info = "Hides the panel while none of your friends are playing, and shows it when one logs in." },
+      info = "Hides the panel (and the crew tab) while none of your friends are playing, and shows it when one logs "
+        .. "in." },
     { key = "showGuildOnline", label = "Show the guild online list", kind = "toggle",
       info = "Opens the list of guild members who are online but not in your party or pinned. Off: only your party "
         .. "and the members you pinned show, and a \"Guild online\" bar opens the rest. Clicking that bar does the "
@@ -1045,11 +1126,9 @@ ns.Modules.register({
   onSettingChanged = function(key)
     if P.root and key == "scale" then rescaleSavedPosition() end
     if P.root and LOOK_KEYS[key] then applyLook() end
-    if key == "minimized" then Panel.minimizedChanged() end
-    if key == "barHover" and P.enabled then
-      if not setting("barHover") then P.hoverOpen = false end
-      P.startBarTicker()
-      requestRedraw()
-    end
+    if key == "keepOpen" then Panel.keepOpenChanged() end
+    if (key == "tabSide" or key == "tabY") and P.root and not moving then applyPosition() end
+    if key == "peekSeconds" and P.bar then P.bar.seconds = clamp(setting("peekSeconds"), 1, 30, 5) end
+    if key == "locked" and P.enabled then requestRedraw() end
   end,
 })

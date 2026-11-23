@@ -463,43 +463,133 @@ function PanelLogic.selfMember(name, fields)
   }
 end
 
----------------------------------------------------------------------------------------------------------- minimize
--- What the panel shows: "full" (everything), "mini" (just the header bar) or "peek" (the bar and one friend's row).
--- ctx: { minimized, hover (the mouse is on the bar and "open while my mouse is on the bar" is on), peek (a peek is
--- due), inCombat }. Never a peek in a fight.
+---------------------------------------------------------------------------------------------------------- crew tab
+-- What the panel shows: "full" (everything), "tab" (tucked away: only the small tab on the screen edge) or "peek"
+-- (one piece of news slid out from the tab: the header line and that friend's row).
+-- ctx: { keepOpen, open (the mouse or a click opened the tab), news (a piece of news is due), inCombat }.
+-- Never a peek in a fight.
 function PanelLogic.view(ctx)
   ctx = ctx or {}
-  if not ctx.minimized then return "full" end
-  if ctx.hover then return "full" end
-  if ctx.peek and not ctx.inCombat then return "peek" end
-  return "mini"
+  if ctx.keepOpen or ctx.open then return "full" end
+  if ctx.news and not ctx.inCombat then return "peek" end
+  return "tab"
 end
 
--- While minimized the saved position means "where the bar is". For a panel that grows up (anchored at its bottom
--- corner) the bar is the top of the panel, so a taller view (a peek, the full panel opened by the mouse) must sit
--- lower by its extra height for the bar not to jump. Returns the y of the bottom corner for a panel of `height`.
-function PanelLogic.barFixedY(savedY, height, barHeight)
-  savedY, height, barHeight = tonumber(savedY) or 0, tonumber(height) or 0, tonumber(barHeight) or 0
-  return savedY - math.max(0, height - barHeight)
+-- May resting the mouse on the tab open the panel now? ctx: { setting ("Open when my mouse rests on the tab"),
+-- restedFor (seconds the mouse has been on the tab), delay, mouselook (turning the camera), button (a mouse button
+-- is held), inCombat, inDungeon }. A click opens it whatever this says.
+function PanelLogic.hoverOpens(ctx)
+  ctx = ctx or {}
+  if not ctx.setting or ctx.mouselook or ctx.button or ctx.inCombat or ctx.inDungeon then return false end
+  return (tonumber(ctx.restedFor) or 0) >= (tonumber(ctx.delay) or 0.3)
 end
 
--- The saved bottom-corner y of a grow-up panel that is now `height` tall: when it is minimized the saved y is the
--- bar's, the bottom of the bar-sized panel.
-function PanelLogic.barSavedY(bottomY, height, barHeight)
-  bottomY, height, barHeight = tonumber(bottomY) or 0, tonumber(height) or 0, tonumber(barHeight) or 0
-  return bottomY + math.max(0, height - barHeight)
+-- The words on the tab: "CREW" over the number of people here (the header's "here" count).
+function PanelLogic.tabCount(here)
+  local n = math.max(0, math.floor(tonumber(here) or 0))
+  return n > 99 and "99+" or tostring(n)
 end
 
--- A switch between the full panel and the bar of a grow-up panel keeps the bar still: the saved bottom y after the
--- switch. `savedY` and `fullHeight` are the ones of the full panel; barHeight the bar's.
-function PanelLogic.yAfterMinimize(savedY, fullHeight, barHeight)
-  return (tonumber(savedY) or 0) + (tonumber(fullHeight) or 0) - (tonumber(barHeight) or 0)
+-- Keeps the tab's height on the screen: y is the offset of its middle from the screen's middle, in the tab's own
+-- (scaled) units; screenH the screen height in UIParent units; tabH the tab's height. Unknown screen: y as it is.
+function PanelLogic.clampTabY(y, screenH, tabH, scale)
+  y = tonumber(y) or 0
+  screenH, tabH, scale = tonumber(screenH), tonumber(tabH) or 0, tonumber(scale) or 1
+  if not screenH or screenH <= 0 or scale <= 0 then return y end
+  local most = math.max(0, (screenH / scale - tabH) / 2)
+  if y > most then return most elseif y < -most then return -most end
+  return y
 end
+
+-- Where a dragged tab lands: the nearer edge ("left" or "right") and its height. cx, cy: the tab's middle in
+-- UIParent units from the bottom-left corner; screenW, screenH: the screen; scale: the tab's scale.
+function PanelLogic.tabSnap(cx, cy, screenW, screenH, tabH, scale)
+  cx, cy, screenW, screenH = tonumber(cx), tonumber(cy), tonumber(screenW), tonumber(screenH)
+  scale = tonumber(scale) or 1
+  if not cx or not cy or not screenW or not screenH or screenW <= 0 or screenH <= 0 or scale <= 0 then return nil end
+  local side = cx < screenW / 2 and "left" or "right"
+  local y = (cy - screenH / 2) / scale
+  return side, PanelLogic.clampTabY(y, screenH, tabH, scale)
+end
+
+-- The tab for a panel saved at `pos` ({ point, x, y } on UIParent, in the panel's scaled units): the edge nearest to
+-- where the panel was (left or right half) and about the panel's height (its top part, where the header is).
+-- screenW, screenH in UIParent units; panelW, panelH the panel's size; tabH the tab's. Returns side, y.
+function PanelLogic.tabFromPosition(pos, screenW, screenH, panelW, panelH, tabH, scale)
+  scale = tonumber(scale) or 1
+  if scale <= 0 then scale = 1 end
+  screenW, screenH = tonumber(screenW), tonumber(screenH)
+  panelW, panelH = tonumber(panelW) or 246, tonumber(panelH) or 100
+  if type(pos) ~= "table" or not screenW or not screenH or screenW <= 0 or screenH <= 0 then return "left", 100 end
+  local point = type(pos.point) == "string" and pos.point or "LEFT"
+  local x, y = (tonumber(pos.x) or 0) * scale, (tonumber(pos.y) or 0) * scale
+  local w, h = panelW * scale, panelH * scale
+  -- the panel's left edge and top, in UIParent units from the bottom-left corner
+  local left
+  if point:find("LEFT") then left = x
+  elseif point:find("RIGHT") then left = screenW + x - w
+  else left = screenW / 2 + x - w / 2 end
+  local top
+  if point:find("^TOP") then top = screenH + y
+  elseif point:find("^BOTTOM") then top = y + h
+  else top = screenH / 2 + y + h / 2 end
+  local side = (left + w / 2) < screenW / 2 and "left" or "right"
+  -- the tab's middle a little below the panel's top (where its header and first rows were)
+  local middle = top - math.min(h, 60 * scale)
+  return side, PanelLogic.clampTabY((middle - screenH / 2) / scale, screenH, tabH, scale)
+end
+
+-- The small steady marks on the tab: someone in my party or pinned (online) is DEAD, or on OTHER LAYER.
+-- models: PanelLogic.rows output.
+function PanelLogic.tabMarks(models)
+  local dead, layer = false, false
+  for _, m in ipairs(models or {}) do
+    if not m.offline and (m.section == "party" or m.section == "pinned") then
+      for _, id in ipairs(m.tags or {}) do
+        if id == "DEAD" then dead = true elseif id == "LAYER" then layer = true end
+      end
+    end
+  end
+  return { dead = dead, layer = layer }
+end
+
+-- News the player can react to (its row shows a button: Congrats after a level-up, Mock after a death, Mock back on
+-- a mock or congrats aimed at me) stays REACT_SECONDS; plain news stays the "How long" setting.
+PanelLogic.REACT_SECONDS = 12
+-- can: { cheer (the Congrats button may show for them now), mock (the Mock button may show) }.
+function PanelLogic.newsReactable(kind, dir, can)
+  can = can or {}
+  if kind == "levelup" then return can.cheer == true end
+  if kind == "died" then return can.mock == true end
+  if (kind == "mock" or kind == "congrats") and dir == "in" then return can.mock == true end
+  return false
+end
+
+-- How long a piece of news stays out: len (normally), busyLen (while two or more wait behind it).
+function PanelLogic.newsSeconds(reactable, plainSeconds, short)
+  plainSeconds = tonumber(plainSeconds) or 5
+  short = tonumber(short) or 3
+  if reactable then return PanelLogic.REACT_SECONDS, math.max(plainSeconds, short) end
+  return plainSeconds, math.min(plainSeconds, short)
+end
+
+-- The slide: the width of the holder at time t of a slide from `from` to `to` that started at t0 and lasts dur
+-- seconds (eased out). Returns the width and whether the slide is over.
+function PanelLogic.slideWidth(from, to, t0, dur, t)
+  from, to, t0, dur, t = tonumber(from) or 0, tonumber(to) or 0, tonumber(t0) or 0, tonumber(dur) or 0, tonumber(t) or 0
+  if dur <= 0 or t >= t0 + dur then return to, true end
+  local k = math.max(0, (t - t0) / dur)
+  k = 1 - (1 - k) * (1 - k)
+  return from + (to - from) * k, false
+end
+
+-- A grow-up panel saved by an older version while minimized kept the bar's y (`mini = true`): the y of the whole
+-- panel's bottom corner again.
 function PanelLogic.yAfterRestore(barSavedY, fullHeight, barHeight)
   return (tonumber(barSavedY) or 0) + (tonumber(barHeight) or 0) - (tonumber(fullHeight) or 0)
 end
 
--- The count text on the bar: the notice line while one shows, else "2 of 3 online" (or the short "2/3").
+-- The header's count spot: the news line while one is slid out, else "2 here · 3 online" (or the short "2/3").
 function PanelLogic.barText(noticeLine, count)
   if type(noticeLine) == "string" and noticeLine ~= "" then return noticeLine end
   return count
@@ -521,7 +611,21 @@ function PanelLogic.missedText(n)
   return tostring(math.floor(n))
 end
 
--- The toggle's words in the menu and chat.
-function PanelLogic.miniLabel(minimized)
-  return minimized and "Restore the panel" or "Minimize the panel"
+-- The tip on the slid-out news line: what a click on it does.
+local NOTICE_CLICK = { levelup = "Click to congratulate them", online = "Click to whisper them",
+  calnote = "Click to open the calendar", calreply = "Click to open the calendar",
+  runaway = "Click for a big arrow to them", otherlayer = "Click to see the whole panel",
+  samelayer = "Click to see the whole panel" }
+function PanelLogic.noticeClickText(kind)
+  return NOTICE_CLICK[kind] or "Click to open the recent activity list"
+end
+
+-- The Keep open entry's words in the menus.
+function PanelLogic.keepLabel(keepOpen)
+  return keepOpen and "Tuck away" or "Keep open"
+end
+
+-- The Keep open switch at the top of the panel: "Keep open: ON" / "Keep open: OFF" ("Keep: ON" in tiny rows).
+function PanelLogic.keepSwitchText(keepOpen, style)
+  return (style == "tiny" and "Keep: " or "Keep open: ") .. (keepOpen and "ON" or "OFF")
 end

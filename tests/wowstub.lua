@@ -32,7 +32,7 @@ local FRAME = union(REGION, names([[SetFrameStrata GetFrameStrata SetFrameLevel 
   RegisterUnitEvent SetScript GetScript HookScript HasScript CreateTexture CreateFontString CreateAnimationGroup
   SetPropagateKeyboardInput GetChildren GetRegions GetNumChildren GetNumRegions SetHitRectInsets SetAttribute
   GetAttribute SetFixedFrameStrata SetFixedFrameLevel SetMouseClickEnabled SetMouseMotionEnabled
-  SetPassThroughButtons GetBoundsRect]]))
+  SetPassThroughButtons GetBoundsRect SetClipsChildren DoesClipChildren]]))
 local BACKDROP = names("SetBackdrop GetBackdrop SetBackdropColor GetBackdropColor SetBackdropBorderColor GetBackdropBorderColor ClearBackdrop")
 local TEXTURE = union(REGION, names([[SetTexture GetTexture SetTexCoord GetTexCoord SetVertexColor GetVertexColor
   SetColorTexture SetBlendMode GetBlendMode SetDrawLayer GetDrawLayer SetDesaturated IsDesaturated SetAtlas GetAtlas
@@ -560,6 +560,11 @@ local function build(W)
     return m.name, 30000, 60000, -1, m.paused or 0, "Breath"
   end
   fakes.GetMoney = function() return st.money end
+  -- the crew tab: turning the camera (st.mouselook) and a held mouse button (st.mouseDown[button]); both hideable
+  -- through st.missing ("IsMouselooking", "IsMouseButtonDown")
+  st.mouseDown = {}
+  fakes.IsMouselooking = function() return st.mouselook == true end
+  fakes.IsMouseButtonDown = function(button) return st.mouseDown[button or "LeftButton"] == true end
   fakes.RollOnLoot = function() end -- hideable through st.missing
   fakes.GetLootRollItemLink = function() return nil end
 

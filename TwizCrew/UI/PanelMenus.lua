@@ -9,7 +9,7 @@ local P = Panel._
 local FEATURE = "panel"
 local T, Widgets, Logic = ns.Theme, ns.Widgets, ns.PanelLogic
 local C = T.COLOR
-local setting, set, minimized, script = P.setting, P.set, P.minimized, P.script
+local setting, set, keepOpen, script = P.setting, P.set, P.keepOpen, P.script
 local requestRedraw, rowFrames, cheered = P.requestRedraw, P.rowFrames, P.cheered
 -- Menu pictures by the start of an entry's words (entries that bring their own icon keep it).
 local MENU_ICONS = {
@@ -32,8 +32,8 @@ local MENU_ICONS = {
   { "spell ranks", "Interface\\Icons\\Spell_Holy_SealOfWisdom" },
   { "^Show offline", "Interface\\Icons\\Ability_Stealth" },
   { "^Lock position", "Interface\\Icons\\INV_Misc_Key_03" },
-  { "^Minimize", "Interface\\Icons\\INV_Misc_Spyglass_03" },
-  { "^Restore", "Interface\\Icons\\INV_Misc_Spyglass_03" },
+  { "^Keep open", "Interface\\Icons\\INV_Misc_Spyglass_03" },
+  { "^Tuck away", "Interface\\Icons\\INV_Misc_Spyglass_03" },
   { "^Recent activity", "Interface\\Icons\\INV_Misc_Note_02" },
   { "^Row style", "Interface\\Icons\\INV_Fabric_Linen_01" },
   { "^Hide during fights", "Interface\\Icons\\Ability_Warrior_DefensiveStance" },
@@ -120,12 +120,32 @@ function Panel.menuItems()
   return compact {
     { label = "Show offline friends", checked = isOn("showOffline"), onClick = flip("showOffline") },
     { label = "Lock position", checked = isOn("locked"), onClick = flip("locked") },
-    { label = Logic.miniLabel(minimized()), onClick = function() Panel.toggleMinimized() end },
+    { label = Logic.keepLabel(keepOpen()), onClick = function() Panel.toggleKeepOpen() end },
     { label = "Row style: " .. choiceLabel("rowStyle", setting("rowStyle")),
       onClick = function() set("rowStyle", NEXT_STYLE[setting("rowStyle")] or "full") end },
     { label = "Hide during fights", checked = isOn("hideInCombat"), onClick = flip("hideInCombat") },
     { label = "Set my status", onClick = function() Panel.openStatusBox() end },
     { label = (ns.Away and ns.Away.isAway()) and "I'm back" or "Go AFK", onClick = function() Panel.toggleAway() end },
+    { label = "Open settings", onClick = function()
+      if ns.Settings and ns.Settings.open then ns.Settings.open() end
+    end },
+    { label = "Hide panel", onClick = function()
+      ns.Modules.setEnabled(FEATURE, false)
+      print("TwizCrew: panel hidden. Type /tc show to bring it back.")
+    end },
+  }
+end
+
+-- The crew tab's right-click menu: Keep open, what happened lately, lock, settings, hide.
+function Panel.tabMenuItems()
+  local missed = P.bar and P.bar.missed or 0
+  return compact {
+    { label = Logic.keepLabel(keepOpen()), onClick = function() Panel.toggleKeepOpen() end },
+    ns.Recent and { label = "Recent activity" .. (missed > 0 and (" (" .. missed .. " new)") or ""),
+      onClick = function()
+        if ns.Recent.open() and P.bar then P.bar:clearMissed(); requestRedraw() end
+      end } or nil,
+    { label = "Lock position", checked = isOn("locked"), onClick = flip("locked") },
     { label = "Open settings", onClick = function()
       if ns.Settings and ns.Settings.open then ns.Settings.open() end
     end },

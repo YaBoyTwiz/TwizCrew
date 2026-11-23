@@ -212,17 +212,17 @@ return {
       A.eq(ns.PanelLogic.missedText(0), ""); A.eq(ns.PanelLogic.missedText(3), "3"); A.eq(ns.PanelLogic.missedText(12), "9+")
     end,
 
-    suppress_popups_only_when_the_bar_shows_them = function(ns, A)
+    suppress_popups_only_when_the_tab_shows_them = function(ns, A)
       local S = ns.FeedLogic.suppressesPopup
-      local on = { minimized = true, barShown = true, setting = true, feedTakes = true }
+      local on = { tucked = true, tabShown = true, setting = true, takes = true }
       A.ok(S("online", on)); A.ok(S("death", on)); A.ok(S("levelup", on))
-      A.no(S("layer_diff", on), "layer pop-ups are not on the bar")
-      A.no(S("roast", on)); A.no(S("meet", on)); A.no(S("qshare", on))
-      A.no(S("death", { minimized = false, barShown = true, setting = true }), "not minimized: pop-ups as today")
-      A.no(S("death", { minimized = true, barShown = false, setting = true }), "the bar is not on screen")
-      A.no(S("death", { minimized = true, barShown = true, setting = false }), "the player wants both")
-      A.no(S("death", { minimized = true, barShown = true, setting = true, feedTakes = false }),
-        "the feed will not take it (quiet time, switched off), so the pop-up stays")
+      A.ok(S("layer_diff", on), "the tab shows layer changes too"); A.ok(S("layer_same", on)); A.ok(S("runaway", on))
+      A.no(S("roast", on)); A.no(S("meet", on)); A.no(S("qshare", on)); A.no(S("notice", on))
+      A.no(S("death", { tucked = false, tabShown = true, setting = true, takes = true }), "kept open: pop-ups as today")
+      A.no(S("death", { tucked = true, tabShown = false, setting = true, takes = true }), "the tab is not on screen")
+      A.no(S("death", { tucked = true, tabShown = true, setting = false, takes = true }), "the player wants both")
+      A.no(S("death", { tucked = true, tabShown = true, setting = true, takes = false }),
+        "the tab will not have it (quiet time, switched off), so the pop-up stays")
       A.no(S("death", nil))
     end,
 
@@ -378,9 +378,9 @@ return {
       A.eq(lines(ns)[1], "Frostie reached level 13", "but it is still in the list")
     end,
 
-    chat_prints_whether_or_not_the_panel_is_minimized = function(ns, A, W)
+    chat_prints_whether_or_not_the_panel_is_tucked_away = function(ns, A, W)
       ready(W)
-      ns.Modules.set("panel", "minimized", true)
+      ns.Modules.set("panel", "keepOpen", false)
       friend(W, ns, "Frostie")
       receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
       A.ok(printedLike(W, "reached level 13"))
@@ -429,16 +429,17 @@ return {
       ns.Modules.set("activity", "chatOnline", true)
       ns.Modules.set("panel", "peek", false)
       ns.Modules.set("panel", "peekSeconds", 9)
-      ns.Modules.set("panel", "barHover", true)
-      ns.Modules.set("panel", "barInstead", false)
-      ns.Modules.set("panel", "minimized", true)
+      ns.Modules.set("panel", "barHover", false)
+      ns.Modules.set("panel", "barInstead", true)
+      ns.Modules.set("panel", "keepOpen", true)
       friend(W, ns, "Frostie")
       ns.Modules.resetAll()
       local d = ns.Modules.get("activity").defaults
       for key, value in pairs(d) do A.eq(ns.Modules.setting("activity", key), value, "activity." .. key) end
       A.eq(ns.Modules.setting("panel", "peek"), true); A.eq(ns.Modules.setting("panel", "peekSeconds"), 5)
-      A.eq(ns.Modules.setting("panel", "barHover"), false); A.eq(ns.Modules.setting("panel", "barInstead"), false, "pop-ups keep showing unless it is on")
-      A.eq(ns.Modules.setting("panel", "minimized"), false)
+      A.eq(ns.Modules.setting("panel", "barHover"), true, "the mouse resting on the tab opens it")
+      A.eq(ns.Modules.setting("panel", "barInstead"), false, "pop-ups keep showing unless it is on")
+      A.eq(ns.Modules.setting("panel", "keepOpen"), false, "the tab is the default")
       A.eq(#ns.Feed.entries(), 1, "the list is data, not a setting")
     end,
 

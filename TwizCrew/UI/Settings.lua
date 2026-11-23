@@ -37,7 +37,7 @@ local BASICS = {
   { id = "panel", key = "showOffline" },
   { id = "panel", key = "locked" },
   { id = "panel", key = "hideInCombat" },
-  { id = "panel", key = "minimized" },
+  { id = "panel", key = "keepOpen" },
   { id = "panel", key = "peek" },
   { id = "activity", key = "chat" },
   { module = "popups" },
@@ -69,7 +69,7 @@ local MODULE_ICONS = {
 local SETTING_ICONS = {
   ["panel:bgAlpha"] = "Interface\\Icons\\Spell_Shadow_Twilight", ["panel:scale"] = "Interface\\Icons\\INV_Misc_Spyglass_03",
   ["panel:rowStyle"] = "Interface\\Icons\\INV_Fabric_Linen_01", ["panel:fadeOut"] = "Interface\\Icons\\Spell_Nature_Invisibilty",
-  ["panel:minimized"] = "Interface\\Icons\\INV_Misc_Spyglass_03", ["panel:peek"] = "Interface\\Icons\\Spell_Holy_MindVision",
+  ["panel:keepOpen"] = "Interface\\Icons\\INV_Misc_Spyglass_03", ["panel:peek"] = "Interface\\Icons\\Spell_Holy_MindVision",
   ["activity:chat"] = "Interface\\Icons\\INV_Misc_Note_02",
   ["panel:showOffline"] = "Interface\\Icons\\Ability_Stealth", ["panel:locked"] = "Interface\\Icons\\INV_Misc_Key_03",
   ["panel:hideInCombat"] = "Interface\\Icons\\Ability_Warrior_DefensiveStance",

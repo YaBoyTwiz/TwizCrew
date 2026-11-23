@@ -1,6 +1,7 @@
--- The Crew panel's header: the bar at the top (move handle, title and version, the count, the buttons) and the gold
--- update line and the What's new line under it; drawHeader fits them to the panel's width. Part of the panel
--- (UI/Panel.lua); shared names live on ns.Panel._ (P).
+-- The Crew panel's header: the bar at the top (move handle, title and version, the count, the buttons), the Keep
+-- open switch under it, then the gold update line and the What's new line; drawHeader fits them to the panel's
+-- width. While one piece of news is slid out of the crew tab, the header is the title and the news line alone.
+-- Part of the panel (UI/Panel.lua); shared names live on ns.Panel._ (P).
 local _, ns = ...
 
 local Panel = ns.Panel
@@ -9,9 +10,10 @@ local P = Panel._
 local T, Logic = ns.Theme, ns.PanelLogic
 local C = T.COLOR
 local ROW_WIDTH, HEADER_HEIGHT, PAD = P.ROW_WIDTH, P.HEADER_HEIGHT, P.PAD
-local setting, minimized, openMenu, script, draggable = P.setting, P.minimized, P.openMenu, P.script, P.draggable
+local setting, keepOpen, openMenu, script, draggable = P.setting, P.keepOpen, P.openMenu, P.script, P.draggable
 
-local UPDATE_HEIGHT = 17 -- the gold "Update available: vX" line under the header
+local KEEP_HEIGHT = 20   -- the Keep open switch right under the header
+local UPDATE_HEIGHT = 17 -- the gold "Update available: vX" line under it
 local NEWS_HEIGHT = 18   -- the What's new line under it, always there (bright "New in vX!" until you've read it)
 
 local afkButton -- the "zzz" button in the header: go AFK / come back
@@ -22,7 +24,9 @@ local versionText, updateBar  -- the version after "TwizCrew"; the gold update l
 local newsBar, versionButton -- "New in vX" line; click the title for What's new
 local newsLine
 local titleVersion, updateLine = "", nil -- what they show now (for tests)
-local gearButton, miniButton, missedButton, noticeButton, updateHintButton
+local gearButton, noticeButton
+local keepBar -- the Keep open switch: "Keep open: OFF" (dim) / "Keep open: ON" (lit)
+local keepTextNow -- what it says now (test hook)
 local countButton -- a hover area over the count ("2 here · 9 online"): what the two numbers mean
 local rootHead
 local barTextNow = ""  -- the text on the bar's count spot now (test hook)
@@ -37,6 +41,7 @@ local function updateText()
   if ok and type(text) == "string" then return ns.Util.safeText(text) end
   return nil
 end
+P.updateText = updateText
 
 -- Title version and the update line; returns how far down the content starts.
 local function drawAfkButton()
@@ -55,9 +60,9 @@ local function headerWidth(fs, text)
   return w
 end
 
--- What gives way, in order, when the full header is too narrow: the version, the long count ("2 of 3 online" ->
+-- What gives way, in order, when the full header is too narrow: the version, the long count ("2 here · 3 online" ->
 -- "2/3"), then the buttons whose actions are also in the right-click menu: AFK, settings.
--- The minimize button, the wrench and the count always stay. (The calendar has its own button next to the tabs.)
+-- The wrench and the count always stay. (The calendar has its own button next to the tabs.)
 local FIT_STEPS = {
   { version = true, short = false, afk = true, gear = true },
   { version = false, short = false, afk = true, gear = true },
@@ -67,35 +72,15 @@ local FIT_STEPS = {
 }
 local fitNow = {} -- what the last full header kept (test hook)
 
-local function drawHeader(s, view)
+-- view: "full" or "peek" (one piece of news, `news`, slid out of the crew tab).
+local function drawHeader(s, view, news)
   view = view or "full"
   local mini = view ~= "full"
   drawAfkButton()
-  if grip then grip:SetAlpha(setting("locked") and 0.3 or 0.9) end
+  if grip then grip:SetAlpha((setting("locked") or not keepOpen()) and 0.3 or 0.9) end
   titleVersion = Logic.titleVersion(s.rowStyle, ns.VERSION)
   versionText:SetText(titleVersion)
-  if miniButton then
-    miniButton.icon:SetTexture(minimized() and "Interface\\Buttons\\UI-PlusButton-Up"
-      or "Interface\\Buttons\\UI-MinusButton-Up")
-  end
-  -- minimized, a small gold "!" says an update is waiting (the update line itself is hidden then)
-  local hintShown = mini and updateText() ~= nil
-  if updateHintButton then
-    if hintShown then updateHintButton:Show() else updateHintButton:Hide() end
-  end
-  local missed = mini and P.bar and P.bar.missed or 0
-  local missedShown = missed > 0
-  if missedButton then
-    missedButton:ClearAllPoints()
-    missedButton:SetPoint("RIGHT", hintShown and updateHintButton or miniButton, "LEFT", -4, 0)
-    if missedShown then
-      missedButton.text:SetText(Logic.missedText(missed))
-      missedButton:Show()
-    else
-      missedButton:Hide()
-    end
-  end
-  local notice = mini and P.bar and P.bar:current() or nil
+  local notice = mini and news or nil
   P.noticeShown = notice
   local noticeLine = notice and ns.Feed and ns.Feed.coloredLine(notice) or nil
   local style = ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"
@@ -104,31 +89,16 @@ local function drawHeader(s, view)
   local count = P.header
   local step
   if mini then
-    -- the bar alone keeps the title, the count (or the notice), the missed number, the "!" and the minimize button
+    -- one piece of news: the title and the news line (the count when there is no line)
     for _, b in ipairs({ gearButton, toolsButton, afkButton }) do if b then b:Hide() end end
-    local right = (PAD - 2) + B + 6 + (hintShown and (B + 4) or 0) + (missedShown and (T.icon(18) + 4) or 0) + 6
-    local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
-    local function fitsMini(c, withVersion)
-      local used = left + right + headerWidth(P.countText, c)
-      if withVersion and titleVersion ~= "" then used = used + 4 + headerWidth(versionText, titleVersion) end
-      return used <= width
-    end
-    if noticeLine then
-      versionText:Hide() -- the notice needs the room
-    elseif fitsMini(P.header, true) then
-      versionText:Show()
-    else
-      versionText:Hide()
-      if not fitsMini(P.header, false) and P.headerShort then count = P.headerShort end
-    end
+    versionText:Hide()
     P.countText:ClearAllPoints()
-    P.countText:SetPoint("RIGHT", missedShown and missedButton or (hintShown and updateHintButton or miniButton), "LEFT",
-      -6, 0)
+    P.countText:SetPoint("RIGHT", rootHead, "RIGHT", -(PAD - 2), 0)
     if noticeLine then P.countText:SetPoint("LEFT", titleText, "RIGHT", 8, 0) end
   else
     -- the full header: take the first step that fits, measured with the buttons' real size
     local function used(st, c)
-      local right = (PAD - 2) + B + 4 + (st.gear and (B + 4) or 0) + B + 6
+      local right = (PAD - 2) + (st.gear and (B + 4) or 0) + B + 6
         + headerWidth(P.countText, c) + (st.afk and (6 + B) or 0)
       local left = (PAD - 2) + B + 4 + headerWidth(titleText, "TwizCrew") + 6
         + ((st.version and titleVersion ~= "") and (4 + headerWidth(versionText, titleVersion)) or 0)
@@ -146,9 +116,13 @@ local function drawHeader(s, view)
     local function vis(b, on) if b then if on then b:Show() else b:Hide() end end end
     vis(gearButton, step.gear); vis(afkButton, step.afk); vis(toolsButton, true)
     fitNow.afk, fitNow.gear = step.afk, step.gear
-    -- the chain from the right: minimize, settings, wrench, count, AFK (a hidden one is skipped)
+    -- the chain from the right: settings, wrench, count, AFK (a hidden one is skipped)
     toolsButton:ClearAllPoints()
-    toolsButton:SetPoint("RIGHT", step.gear and gearButton or miniButton, "LEFT", -4, 0)
+    if step.gear then
+      toolsButton:SetPoint("RIGHT", gearButton, "LEFT", -4, 0)
+    else
+      toolsButton:SetPoint("RIGHT", rootHead, "RIGHT", -PAD + 2, -2)
+    end
     P.countText:ClearAllPoints()
     P.countText:SetPoint("RIGHT", toolsButton, "LEFT", -6, 0)
   end
@@ -186,15 +160,31 @@ local function drawHeader(s, view)
   end
   local top = HEADER_HEIGHT
   if mini then
-    updateLine, newsLine = nil, nil
+    updateLine, newsLine, keepTextNow = nil, nil, nil
+    keepBar:Hide()
     updateBar:Hide()
     newsBar:Hide()
     if P.tabBar then P.tabBar:Hide() end
     return top
   end
+  -- Keep open: a wide switch, easy to see and to hit, in both modes (owner: "extremely easy and visible")
+  local kept = keepOpen()
+  keepTextNow = Logic.keepSwitchText(kept, style)
+  keepBar.text:SetText(keepTextNow)
+  T.textColor(keepBar.text, kept and C.title or C.muted)
+  keepBar.glow:SetAlpha(kept and 0.35 or 0.06)
+  keepBar.dot:SetAlpha(kept and 1 or 0.35)
+  keepBar:ClearAllPoints()
+  keepBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 2, -(top - 2))
+  keepBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", -2, -(top - 2))
+  keepBar:Show()
+  top = top + KEEP_HEIGHT
   updateLine = updateText()
   if updateLine then
     updateBar.text:SetText(updateLine)
+    updateBar:ClearAllPoints()
+    updateBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 2, -(top - 2))
+    updateBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", -2, -(top - 2))
     updateBar:Show()
     top = top + UPDATE_HEIGHT
   else
@@ -249,11 +239,16 @@ function P.buildHeader()
   grip:SetPoint("LEFT", head, "LEFT", PAD - 2, -2)
   script(head, "OnEnter", function(self)
     local locked = setting("locked")
-    if not locked and type(SetCursor) == "function" then pcall(SetCursor, "Interface\\CURSOR\\UI-Cursor-Move") end
+    local movable = not locked and keepOpen()
+    if movable and type(SetCursor) == "function" then pcall(SetCursor, "Interface\\CURSOR\\UI-Cursor-Move") end
     if not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:SetText("TwizCrew")
-    GameTooltip:AddLine(locked and "Locked in place (unlock it with the right-click menu)" or "Drag to move", 1, 1, 1)
+    if not keepOpen() then
+      GameTooltip:AddLine("Tucked into its tab: drag the tab to move it", 1, 1, 1)
+    else
+      GameTooltip:AddLine(locked and "Locked in place (unlock it with the right-click menu)" or "Drag to move", 1, 1, 1)
+    end
     GameTooltip:AddLine("Right-click for options", 1, 1, 1)
     GameTooltip:Show()
   end)
@@ -275,88 +270,19 @@ function P.buildHeader()
   script(versionButton, "OnMouseUp", function(_, button)
     if button == "RightButton" then openMenu(head, Panel.menuItems()) end
   end)
-  -- (minimized, the title brings the panel back instead: the What's new line is hidden then)
-  script(versionButton, "OnClick", function()
-    if minimized() then Panel.toggleMinimized() elseif ns.Changelog then ns.Changelog.toggle() end
-  end)
+  script(versionButton, "OnClick", function() if ns.Changelog then ns.Changelog.toggle() end end)
   script(versionButton, "OnEnter", function(self)
     if not GameTooltip then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:SetText("TwizCrew v" .. tostring(ns.VERSION))
-    GameTooltip:AddLine(minimized() and "Click to bring the whole panel back" or "Click to see what's new in each version",
-      1, 1, 1)
+    GameTooltip:AddLine("Click to see what's new in each version", 1, 1, 1)
     GameTooltip:Show()
   end)
   script(versionButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  -- a soft glow over the bar that flashes when a notice arrives while minimized
-  P.flashTex = head:CreateTexture(nil, "BACKGROUND")
-  P.flashTex:SetAllPoints(head)
-  T.color(P.flashTex, C.title, 1)
-  P.flashTex:SetAlpha(0)
-  -- the minimize button, at the far right of the bar: minus = minimize, plus = restore
-  miniButton = CreateFrame("Button", nil, head)
-  miniButton:SetSize(T.icon(16), T.icon(16))
-  miniButton:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
-  miniButton.icon = miniButton:CreateTexture(nil, "ARTWORK")
-  miniButton.icon:SetAllPoints(miniButton)
-  miniButton.icon:SetTexture("Interface\\Buttons\\UI-MinusButton-Up")
-  local miniHl = miniButton:CreateTexture(nil, "HIGHLIGHT")
-  miniHl:SetAllPoints(miniButton)
-  T.color(miniHl, C.white, 0.25)
-  script(miniButton, "OnClick", function() Panel.toggleMinimized() end)
-  script(miniButton, "OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText(Logic.miniLabel(minimized()))
-    GameTooltip:AddLine(minimized() and "Click to bring the whole panel back (or /tc mini)."
-      or "Click to shrink the panel to just this bar (or /tc mini). It tells you about news on the bar.", 1, 1, 1, true)
-    GameTooltip:Show()
-  end)
-  script(miniButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  -- a small gold "!" while minimized and an update is waiting: click = how to update
-  updateHintButton = CreateFrame("Button", nil, head)
-  updateHintButton:SetSize(T.icon(12), T.icon(16))
-  updateHintButton:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
-  updateHintButton.text = T.readable(T.text(updateHintButton, T.FONT.normal, C.title))
-  updateHintButton.text:SetPoint("CENTER", updateHintButton, "CENTER", 0, 0)
-  updateHintButton.text:SetText("!")
-  script(updateHintButton, "OnClick", function() ns.Log.safe("updates", ns.Updates.showHowTo) end)
-  script(updateHintButton, "OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("An update is waiting", T.rgb(C.title))
-    GameTooltip:AddLine("Click for how to update. The update line is hidden while the panel is minimized.", 1, 1, 1, true)
-    GameTooltip:Show()
-  end)
-  script(updateHintButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  updateHintButton:Hide()
-  -- the number of news items missed while minimized: click = the recent activity list
-  missedButton = CreateFrame("Button", nil, head)
-  missedButton:SetSize(T.icon(18), T.icon(14))
-  missedButton:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
-  missedButton.bg = missedButton:CreateTexture(nil, "BACKGROUND")
-  missedButton.bg:SetAllPoints(missedButton)
-  T.color(missedButton.bg, "b3261e", 0.9)
-  missedButton.text = T.readable(T.text(missedButton, T.FONT.small, C.white))
-  missedButton.text:SetPoint("CENTER", missedButton, "CENTER", 0, 0)
-  local missedHl = missedButton:CreateTexture(nil, "HIGHLIGHT")
-  missedHl:SetAllPoints(missedButton)
-  T.color(missedHl, C.white, 0.25)
-  script(missedButton, "OnClick", function() Panel.missedClicked() end)
-  script(missedButton, "OnEnter", function(self)
-    if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:SetText("Missed while minimized")
-    GameTooltip:AddLine("Click to see what happened (or /tc recent). Opening the panel clears this number.", 1, 1, 1,
-      true)
-    GameTooltip:Show()
-  end)
-  script(missedButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-  missedButton:Hide()
   local gear = CreateFrame("Button", nil, head)
   gearButton = gear
   gear:SetSize(T.icon(16), T.icon(16))
-  gear:SetPoint("RIGHT", miniButton, "LEFT", -4, 0)
+  gear:SetPoint("RIGHT", head, "RIGHT", -PAD + 2, -2)
   local gearIcon = gear:CreateTexture(nil, "ARTWORK")
   gearIcon:SetAllPoints(gear)
   gearIcon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
@@ -421,7 +347,8 @@ function P.buildHeader()
   end)
   script(afkButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   drawAfkButton()
-  -- the news on a minimized bar: click = what clicking that pop-up would do (congratulate, whisper)
+  -- the news line while news is slid out of the tab: click = what clicking that pop-up would do (congratulate,
+  -- whisper, open the calendar)
   noticeButton = CreateFrame("Button", nil, head)
   draggable(noticeButton)
   script(noticeButton, "OnClick", function() Panel.noticeClicked() end)
@@ -431,8 +358,7 @@ function P.buildHeader()
   script(noticeButton, "OnEnter", function(self)
     if not GameTooltip or not P.noticeShown then return end
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-    GameTooltip:SetText(P.noticeShown.kind == "levelup" and "Click to congratulate them"
-      or P.noticeShown.kind == "online" and "Click to whisper them" or "Click to open the recent activity list")
+    GameTooltip:SetText(Logic.noticeClickText(P.noticeShown.kind))
     GameTooltip:Show()
   end)
   script(noticeButton, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -444,6 +370,29 @@ function P.buildHeader()
     if button == "RightButton" then openMenu(head, Panel.menuItems()) end
   end)
   ns.Widgets.helpTip(countButton, "count", "panel", "ANCHOR_BOTTOM")
+
+  -- the Keep open switch: a wide button right under the header, lit while on (owner: "extremely easy and visible")
+  keepBar = CreateFrame("Button", nil, P.root)
+  if keepBar.SetIgnoreParentAlpha then keepBar:SetIgnoreParentAlpha(true) end -- never faded
+  keepBar:SetHeight(KEEP_HEIGHT)
+  T.paint(keepBar, C.row, 0.7, C.border, 1)
+  keepBar.glow = keepBar:CreateTexture(nil, "ARTWORK")
+  keepBar.glow:SetPoint("TOPLEFT", keepBar, "TOPLEFT", 1, -1)
+  keepBar.glow:SetPoint("BOTTOMRIGHT", keepBar, "BOTTOMRIGHT", -1, 1)
+  T.color(keepBar.glow, C.title, 1)
+  keepBar.glow:SetAlpha(0.06)
+  local keepHl = keepBar:CreateTexture(nil, "HIGHLIGHT")
+  keepHl:SetAllPoints(keepBar)
+  T.color(keepHl, C.white, 0.15)
+  keepBar.text = T.readable(T.text(keepBar, T.FONT.normal, C.muted))
+  keepBar.text:SetPoint("CENTER", keepBar, "CENTER", 6, 0)
+  keepBar.dot = keepBar:CreateTexture(nil, "OVERLAY") -- a check mark before the words, lit while on
+  keepBar.dot:SetSize(T.icon(14), T.icon(14))
+  keepBar.dot:SetPoint("RIGHT", keepBar.text, "LEFT", -4, 0)
+  keepBar.dot:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  script(keepBar, "OnClick", function() Panel.toggleKeepOpen() end)
+  ns.Widgets.helpTip(keepBar, "keepOpen", "panel", "ANCHOR_TOP")
+  keepBar:Hide()
 
   updateBar = CreateFrame("Button", nil, P.root)
   if updateBar.SetIgnoreParentAlpha then updateBar:SetIgnoreParentAlpha(true) end -- important: never faded
@@ -463,7 +412,7 @@ function P.buildHeader()
   script(updateBar, "OnClick", function() ns.Log.safe("updates", ns.Updates.showHowTo) end)
   script(updateBar, "OnEnter", function(self)
     if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(self, P.sideAnchor())
     GameTooltip:SetText("Click for how to update", T.rgb(C.title))
     GameTooltip:Show()
   end)
@@ -491,7 +440,7 @@ function P.buildHeader()
   script(newsBar, "OnClick", function() if ns.Changelog then ns.Changelog.toggle() end end)
   script(newsBar, "OnEnter", function(self)
     if not GameTooltip then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(self, P.sideAnchor())
     GameTooltip:SetText("What's new", T.rgb("8fd0ff"))
     GameTooltip:AddLine("Click to see every TwizCrew version and what changed (or type /tc new).", 1, 1, 1, true)
     GameTooltip:Show()
@@ -510,10 +459,10 @@ function Panel.barTextForTest() return barTextNow end
 function Panel.titleButtonForTest() return versionButton end
 function Panel.headerFitForTest() return fitNow end
 function Panel.headerButtonsForTest()
-  return { mini = miniButton, gear = gearButton, tools = toolsButton, afk = afkButton,
-    hint = updateHintButton, title = versionButton, notice = noticeButton, head = rootHead }
+  return { keep = keepBar, gear = gearButton, tools = toolsButton, afk = afkButton,
+    title = versionButton, notice = noticeButton, head = rootHead }
 end
-function Panel.miniButtonForTest() return miniButton end
-function Panel.missedButtonForTest() return missedButton end
+function Panel.keepSwitchForTest() return keepBar end
+function Panel.keepTextForTest() return keepTextNow end
 function Panel.noticeButtonForTest() return noticeButton end
 function Panel.countButtonForTest() return countButton end

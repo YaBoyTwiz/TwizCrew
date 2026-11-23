@@ -516,10 +516,6 @@ ns.Modules.register({
     .. "Calendar button on the panel or /tc cal.",
   defaults = { share = true, size = 1.25 },
   settings = {
-    { key = "open", label = "Open the crew calendar", kind = "button",
-      onClick = function() if ns.Calendar then ns.Calendar.open() end end,
-      info = "The crew's events and notes, and on its second tab who played on each day, a day's timeline, and "
-        .. "the times most of the crew usually plays." },
     { key = "size", label = "Calendar size", kind = "slider", min = 0.7, max = 1.8, step = 0.05,
       fmt = ns.Widgets and ns.Widgets.percent or nil,
       info = "How big the calendar window is on your screen. 125% is the usual size." },

@@ -171,7 +171,7 @@ function Layer.relationOf(name)
 end
 
 ns.Modules.register({
-  id = "layer", name = "Layer tracker", tier = "module",
+  id = "layer", name = "Other-layer warnings", tier = "module",
   info = "Tells you when a friend is on a different layer (they are close by on the map but the game hides them).",
   onEnable = function()
     running = true

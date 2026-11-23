@@ -132,7 +132,7 @@ end
 
 local function lowerFirst(s) return (s:gsub("^%u", string.lower)) end
 
--- view: "session" | "all"; awardsList from StatsLogic.awards; ctx = { tab, session, starter, timeText, wipeLine,
+-- view: "session" | "all"; awardsList from StatsLogic.awards; ctx = { tab, session, starter, timeText,
 -- entries = { [name] = entry }, online = fn(name) -> bool, wall }. Returns { subtitle, rows, footer, tabs }: the
 -- rows of the chosen tab only (unknown tab: the first), tabs = { { id, label, active } } in order.
 function BoardLogic.model(view, awardsList, ctx)
@@ -162,11 +162,9 @@ function BoardLogic.model(view, awardsList, ctx)
   for _, a in ipairs(awardsList or {}) do
     if a.def.tab == tab.id then out.rows[#out.rows + 1] = row(a, ctx) end
   end
-  if ctx.wipeLine then
-    local n = wipes(ctx)
-    if n > 0 then
-      out.footer = "Wipe Squad: " .. n .. (n == 1 and " wipe" or " wipes") .. (session and " tonight" or "")
-    end
+  local n = wipes(ctx)
+  if n > 0 then
+    out.footer = "Wipe Squad: " .. n .. (n == 1 and " wipe" or " wipes") .. (session and " tonight" or "")
   end
   return out
 end

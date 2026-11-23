@@ -285,11 +285,7 @@ ns.Modules.register({
   id = "comm", name = "Crew connection", tier = "essential",
   info = "How your copy of TwizCrew talks to the copies of your guild mates: through the guild, never in guild chat "
     .. "you can see. Only guild members are listened to.",
-  defaults = { debug = false },
-  settings = {
-    { key = "debug", label = "Show technical messages", kind = "toggle",
-      info = "Prints what TwizCrew sends and receives in your chat window. Only useful when fixing problems." },
-  },
+  defaults = { debug = false }, -- /tc debug switches it (not in the settings window)
   onEnable = function() Comm.start() end,
   onSettingChanged = function(key)
     if key == "debug" then applyDebug() end

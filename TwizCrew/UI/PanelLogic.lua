@@ -42,7 +42,7 @@ local function tagList(m, settings, relationOf, tagsOn)
   if relationOf and relationOf(m.name) == "different" then set.LAYER = true end
   local list = {}
   for _, id in ipairs(ns.Tags.ORDER) do
-    if set[id] and settings["tag_" .. id] ~= false then list[#list + 1] = id end
+    if set[id] then list[#list + 1] = id end
   end
   return list
 end
@@ -275,10 +275,10 @@ function PanelLogic.rows(members, settings, relationOf, tagsOn, now, wall, title
         end
         row.questDone = m.questComplete and true or false
         row.atMax = PanelLogic.isMaxLevel(m, maxLevel)
-        if settings.xpText ~= false then row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax) end
+        row.xpText = PanelLogic.xpText(style, m.level, m.xp, row.atMax)
       end
       if not m.noAddon then
-        local tip = settings.xpTooltip ~= false and PanelLogic.tooltipLines(m, now, maxLevel) or {}
+        local tip = PanelLogic.tooltipLines(m, now, maxLevel)
         if not offline then row.info = PanelLogic.infoLines(m) end
         local ver = PanelLogic.versionLine(m.ver)
         if ver then tip[#tip + 1] = ver end
@@ -553,9 +553,18 @@ function PanelLogic.tabMarks(models)
   return { dead = dead, layer = layer }
 end
 
+-- The kept-open panel grows away from the screen edge it is nearer to: up when its middle is in the bottom half of
+-- the screen. top and bottom are in the panel's units (scale), uiTop in the screen's (uiScale). false when unsure.
+function PanelLogic.growsUp(top, bottom, scale, uiTop, uiScale)
+  top, bottom, scale, uiTop, uiScale = tonumber(top), tonumber(bottom), tonumber(scale), tonumber(uiTop), tonumber(uiScale)
+  if not (top and bottom and scale and uiTop and uiScale) or scale <= 0 or uiScale <= 0 or uiTop <= 0 then return false end
+  return (top + bottom) / 2 * scale < uiTop * uiScale / 2
+end
+
 -- News the player can react to (its row shows a button: Congrats after a level-up, Mock after a death, Mock back on
--- a mock or congrats aimed at me) stays REACT_SECONDS; plain news stays the "How long" setting.
+-- a mock or congrats aimed at me) stays REACT_SECONDS; plain news stays NEWS_SECONDS.
 PanelLogic.REACT_SECONDS = 12
+PanelLogic.NEWS_SECONDS = 5
 -- can: { cheer (the Congrats button may show for them now), mock (the Mock button may show) }.
 function PanelLogic.newsReactable(kind, dir, can)
   can = can or {}
@@ -566,7 +575,7 @@ function PanelLogic.newsReactable(kind, dir, can)
 end
 
 -- How long a piece of news stays out: len (normally), busyLen (while two or more wait behind it). News with a button
--- is never shorter than plain news (a "How long" setting above 12 s counts for it too).
+-- is never shorter than plain news.
 function PanelLogic.newsSeconds(reactable, plainSeconds, short)
   plainSeconds = tonumber(plainSeconds) or 5
   short = tonumber(short) or 3

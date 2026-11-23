@@ -304,8 +304,8 @@ local function applyPosition()
 end
 P.applyPosition = applyPosition
 
--- Where the panel is now, anchored at the corner that matches the grow direction (top-left for down,
--- bottom-left for up), so the panel grows away from that corner. nil if the game has not placed it yet.
+-- Where the panel is now, anchored at the corner it should grow away from: top-left (grows down) in the top half of
+-- the screen, bottom-left (grows up) in the bottom half (PanelLogic.growsUp). nil if the game has not placed it yet.
 local function currentPosition()
   local left, top, bottom = P.root:GetLeft(), P.root:GetTop(), P.root:GetBottom()
   local s, u, uiTop = P.root:GetEffectiveScale(), UIParent:GetEffectiveScale(), UIParent:GetTop()
@@ -313,7 +313,9 @@ local function currentPosition()
     if type(v) ~= "number" or v ~= v then return nil end
   end
   if s <= 0 or u <= 0 then return nil end
-  if setting("grow") == "up" then return { point = "BOTTOMLEFT", x = round(left), y = round(bottom) } end
+  if Logic.growsUp(top, bottom, s, uiTop, u) then
+    return { point = "BOTTOMLEFT", x = round(left), y = round(bottom) }
+  end
   return { point = "TOPLEFT", x = round(left), y = round(top - uiTop * u / s) }
 end
 
@@ -323,12 +325,12 @@ local function savePosition()
   if p then set("position", p) end
 end
 
--- After a reset or a grow change the saved corner may not match; convert it without moving the panel.
+-- After a reset the saved corner is not one of the two (the default is "LEFT"); convert it without moving the panel.
+-- A saved corner stays until the panel is dragged again, so the grow direction never flips while it grows.
 local function normalizeAnchor()
   if moving or not keepOpen() then return end
   local p = setting("position")
-  local want = setting("grow") == "up" and "BOTTOMLEFT" or "TOPLEFT"
-  if type(p) ~= "table" or p.point ~= want then savePosition() end
+  if type(p) ~= "table" or (p.point ~= "TOPLEFT" and p.point ~= "BOTTOMLEFT") then savePosition() end
 end
 
 local function startDrag()
@@ -456,7 +458,7 @@ function Panel.isClose(key)
   return ns.Where ~= nil and ns.Where.isGroupMember(key) == true
 end
 
--- Should a notice of this kind (feed or pop-up kind name) about this member be shown now? The "Tell me about" setting.
+-- Should a notice of this kind (feed or pop-up kind name) about this member be shown now? The "Whose news I get" setting.
 function Panel.noticeInScope(kind, key)
   if not ns.Modules.isEnabled(FEATURE) then return true end -- no panel: no pins and no setting to reach
   local scope = ns.Modules.setting(FEATURE, "noticeScope")
@@ -717,7 +719,7 @@ local function redraw()
       used = used + 1
       local r = rowFrames[used]
       if not r then r = P.createRow(); rowFrames[used] = r end
-      local h = P.layoutRow(r, e, style, s, width)
+      local h = P.layoutRow(r, e, style, width)
       r:ClearAllPoints()
       r:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -y)
       T.setBackgroundAlpha(r, alpha)
@@ -903,7 +905,7 @@ function Panel.tab()
   return "crew"
 end
 
--- A new entry in the activity feed: counted as new on the Activity tab's label (only what "Tell me about" covers),
+-- A new entry in the activity feed: counted as new on the Activity tab's label (only what "Whose news I get" covers),
 -- or drawn at once while the Activity tab is on screen.
 local function onFeedForActivity(e)
   if type(e) ~= "table" or not FL.isKind(e.kind) then return end
@@ -1067,7 +1069,7 @@ local function onEnable()
     -- the button goes away by itself after a few minutes
     if C_Timer and C_Timer.After then C_Timer.After(CHEER_FOR + 1, function() ns.Log.safe(FEATURE, requestRedraw) end) end
   end)
-  P.bar = FL.newBar({ seconds = clamp(setting("peekSeconds"), 1, 30, 5), short = NOTICE_SHORT, max = NOTICE_QUEUE,
+  P.bar = FL.newBar({ seconds = Logic.NEWS_SECONDS, short = NOTICE_SHORT, max = NOTICE_QUEUE,
     lengths = P.newsLengths })
   P.open = nil
   ns.Bus.on(FEATURE, "FEED_ADDED", Panel.onFeed)
@@ -1096,98 +1098,66 @@ local function onDisable()
   hide()
 end
 
-local function tagSetting(id, info)
-  return { key = "tag_" .. id, label = 'Show the "' .. ns.Tags.LABEL[id] .. '" tag', kind = "toggle", info = info }
-end
-
 ns.Modules.register({
   id = FEATURE, name = "Crew panel", tier = "module",
   info = "The window that lists your crew: who is online, where they are, their level, XP and tags. "
     .. "It tucks away into a small tab on the edge of your screen: rest your mouse on the tab to see it all. "
     .. "Right-click its title (or the tab) for quick options.",
+  -- showOffline and showGuildOnline are not in the settings window: the Offline and Guild online bars (and the
+  -- title menu) switch them. tabSide, tabY and position are where the tab and the kept-open panel sit.
   defaults = {
-    scale = 1.0, bgAlpha = 0.8, rowStyle = "full", showZone = true, showStatus = true, showXP = true,
-    showQuest = true, shareQuest = true, questRequests = true, questHeadsUp = true,
-    xpText = true, xpTooltip = true,
-    idleAlpha = 0.4, locked = false, grow = "down", hideInCombat = false, hideInInstance = false,
+    scale = 1.0, bgAlpha = 0.8, rowStyle = "full", shareQuest = true, questHeadsUp = true,
+    idleAlpha = 0.4, locked = false, hideInCombat = false, hideInInstance = false,
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
     showSelf = false, noticeScope = "close",
-    keepOpen = false, peek = true, peekSeconds = 5, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
-    tag_DEAD = true, tag_LAYER = true, tag_COMBAT = true, tag_DUNGEON = true, tag_TAXI = true, tag_AFK = true,
+    keepOpen = false, peek = true, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
     position = { point = "LEFT", x = 40, y = 100 },
   },
   settings = {
-    { key = "noticeScope", label = "Tell me about", kind = "choice",
-      choices = { { "close", "My party and pinned" }, { "guild", "Everyone in the guild" } },
-      info = "Who gets a pop-up, a bar notice or a chat line when they come online, go offline, die or level up. "
-        .. "My party and pinned: only people in your party or raid and the ones you pinned. Everyone in the guild: "
-        .. "every guild member. The Recent list keeps everyone either way, and mocks and congrats aimed at you "
-        .. "always show. The Congrats button on a row stays for everyone." },
-    { key = "keepOpen", label = "Keep open", kind = "toggle",
+    { key = "noticeScope", label = "Whose news I get", kind = "choice",
+      choices = { { "close", "My party and pins" }, { "guild", "Whole guild" } },
+      info = "Who gets a pop-up, a news line on the tab or a chat line when they come online, go offline, die or "
+        .. "level up. My party and pins: only people in your party or raid and the ones you pinned. Whole guild: "
+        .. "every guild member. The Activity list keeps everyone either way, and mocks and congrats aimed at you "
+        .. "always show." },
+    { key = "keepOpen", label = "Keep the panel open", kind = "toggle",
       info = "Off (the normal way): the panel tucks away into a small tab on the edge of your screen. Rest your mouse "
         .. "on the tab, or click it, to see everything; news slides out from it for a few seconds. On: the panel stays "
-        .. "on screen like before and you can drag it anywhere. The Keep open switch at the top of the panel and "
-        .. "/tc mini do the same." },
-    { key = "peek", label = "Slide out news", kind = "toggle",
+        .. "on screen and you can drag it anywhere. The Keep open switch at the top of the panel and /tc mini do the "
+        .. "same." },
+    { key = "peek", label = "Show news from the tab", kind = "toggle",
       info = "While the panel is tucked into its tab, news from your crew slides out from the tab for a few seconds "
-        .. "with that friend's row, then slides back: someone comes online, dies, levels up, changes layer or runs "
-        .. "off, a new calendar note, a congrats or mock for you. News with a Congrats or Mock button stays about 12 "
-        .. "seconds. Keep your mouse on it to keep it out. Never during a fight: what came during the fight slides "
-        .. "out a few seconds after it." },
-    { key = "peekSeconds", label = "How long news stays out", kind = "slider", min = 2, max = 15, step = 1,
-      parent = "peek",
-      info = "How many seconds plain news stays out from the tab. News with a Congrats or Mock button on it stays "
-        .. "about 12 seconds." },
-    { key = "barHover", label = "Open when my mouse rests on the tab", kind = "toggle",
+        .. "with that friend's row, then slides back. News with a Congrats or Mock button stays longer. Keep your "
+        .. "mouse on it to keep it out. Never during a fight: what came during the fight slides out after it." },
+    { key = "barHover", label = "Open on mouse-over", kind = "toggle",
       info = "Rest your mouse on the tab for a moment and the whole panel slides out. It slides back about a second "
         .. "after your mouse leaves. Not while you turn the camera, in a fight, or in a dungeon or raid: a click on "
         .. "the tab still opens it then. Off: only a click opens it." },
-    { key = "barInstead", label = "Show news on the tab, not as pop-ups", kind = "toggle",
-      info = "Pop-ups keep showing unless this is on. Turn it on and, while the panel is tucked into its tab and news "
-        .. "slides out, the pop-ups for friends coming online, dying, leveling up, changing layer and running off are "
-        .. "not shown, because the tab already tells you. With Keep open on, pop-ups work as always." },
-    { key = "scale", label = "Scale", kind = "slider", min = 0.5, max = 2.0, step = 0.05, fmt = Widgets.percent,
-      info = "Makes the whole panel bigger or smaller. 100% is the normal size." },
-    { key = "bgAlpha", label = "Background opacity", kind = "slider", min = 0, max = 1, step = 0.05,
+    { key = "barInstead", label = "No pop-ups for news the tab shows", kind = "toggle",
+      info = "Off: pop-ups show as usual. On: while the panel is tucked into its tab, the pop-ups for friends coming "
+        .. "online, dying, leveling up, changing layer and running off are skipped, because the tab already slides "
+        .. "that news out. With Keep open on, pop-ups work as always." },
+    { key = "scale", label = "Panel size", kind = "slider", min = 0.5, max = 2.0, step = 0.05, fmt = Widgets.percent,
+      info = "Makes the whole panel (and its tab) bigger or smaller. 100% is the normal size." },
+    { key = "bgAlpha", label = "Background darkness", kind = "slider", min = 0, max = 1, step = 0.05,
       fmt = Widgets.percent,
-      info = "How solid the dark background is. Lower it to see more of the game behind the panel." },
+      info = "How dark the panel's background is. Lower it to see more of the game behind the panel." },
     { key = "rowStyle", label = "Row style", kind = "choice",
       choices = { { "full", "Full" }, { "compact", "Compact" }, { "tiny", "Tiny" } },
-      info = "How much each friend's row shows. Full: zone, status and XP. Compact: name, level and tags. "
-        .. "Tiny: just the name and tags (and the XP percent, if level and XP numbers are on)." },
-    { key = "showZone", label = "Show zone line", kind = "toggle",
-      info = "Shows where each friend is, like \"Elwynn Forest, Goldshire\"." },
-    { key = "showStatus", label = "Show typed status", kind = "toggle",
-      info = "Shows the short note a friend typed with /tc status, like \"LF Deadmines\"." },
-    { key = "showQuest", label = "Show quests", kind = "toggle",
-      info = "Shows the quest each friend is on, like \"Kobold Camp Cleanup (3/8)\". Hover a row for all its "
-        .. "objectives." },
+      info = "How much each friend's row shows. Full: zone, typed status, quest and the XP bar. Compact: name, level "
+        .. "and tags. Tiny: just the name, tags and XP percent." },
     { key = "shareQuest", label = "Share my quests", kind = "toggle",
-      info = "Tells your crew which quest you're on (the one you made progress on last, or the one you track) and "
-        .. "its objectives, and lets them see the names of the other quests in your log, so they can ask you to "
-        .. "share one. Turn it off to keep them to yourself." },
-    { key = "questRequests", label = "Quest share requests", kind = "toggle",
-      info = "Lets friends ask you to share your quest (right-click your row, Ask to share). You get a pop-up; one "
-        .. "click on it shares the quest. Sharing only works in a group." },
-    { key = "questHeadsUp", label = "Tell me what my group can share", kind = "toggle",
+      info = "Tells your crew which quest you're on and lets them see the names of the other quests in your log, "
+        .. "so they can ask you to share one (you get a pop-up; one click on it shares the quest). Turn it off to "
+        .. "keep your quests to yourself; then nobody can ask." },
+    { key = "questHeadsUp", label = "Quests my group can share", kind = "toggle",
       info = "When someone in your group has quests you can get, one pop-up says how many. Click it to see them and "
         .. "ask. You can always see them yourself: right-click a friend's row, Their quests." },
-    { key = "showXP", label = "Show XP bar", kind = "toggle",
-      info = "Shows a gold bar with how close each friend is to their next level. It gets brighter as it fills." },
-    { key = "xpText", label = "Show level and XP numbers", kind = "toggle",
-      info = "Shows each friend's level and how far into it they are, like \"Lv 12 \194\183 63%\". Full rows show it "
-        .. "next to the XP bar, Compact rows in the top-right corner, Tiny rows just the percent." },
-    { key = "xpTooltip", label = "XP details on hover", kind = "toggle",
-      info = "Hover over a friend's row to see the exact XP they need for the next level, their rested XP, "
-        .. "and about how long until they level at their pace this session (shown once there is a steady pace)." },
-    { key = "idleAlpha", label = "See-through when idle", kind = "slider", min = 0.1, max = 1, step = 0.05,
+    { key = "idleAlpha", label = "Fade when I'm not using it", kind = "slider", min = 0.1, max = 1, step = 0.05,
       fmt = Widgets.percent, info = select(2, ns.Help.tip("idleAlpha")) },
     { key = "locked", label = "Lock position", kind = "toggle",
       info = "Stops the panel (with Keep open on) and the crew tab from being dragged by accident. Turn it off to "
         .. "move them again." },
-    { key = "grow", label = "Grow direction", kind = "choice", choices = { { "down", "Down" }, { "up", "Up" } },
-      info = "Whether the panel gets longer downward or upward when more friends come online. "
-        .. "Pick Up if the panel sits near the bottom of your screen. Only with Keep open on." },
     { key = "hideInCombat", label = "Hide during fights", kind = "toggle",
       info = "Hides the panel (and the crew tab) while you are in a fight and brings it back when the fight is over." },
     { key = "hideInInstance", label = "Hide in dungeons and raids", kind = "toggle",
@@ -1196,25 +1166,17 @@ ns.Modules.register({
     { key = "hideWhenAlone", label = "Hide when no crew is online", kind = "toggle",
       info = "Hides the panel (and the crew tab) while none of your friends are playing, and shows it when one logs "
         .. "in." },
-    { key = "showGuildOnline", label = "Show the guild online list", kind = "toggle",
-      info = "Opens the list of guild members who are online but not in your party or pinned. Off: only your party "
-        .. "and the members you pinned show, and a \"Guild online\" bar opens the rest. Clicking that bar does the "
-        .. "same as this switch. With nobody in your party and nobody pinned, the list is open anyway." },
     { key = "showNoAddon", label = "Show guild members without the addon", kind = "toggle",
       info = "Lists guild members who do not have TwizCrew, dimmed, with their name, class, level and zone from the "
         .. "guild list. Turn it off to show only the members who run TwizCrew." },
-    { key = "showOffline", label = "Show offline friends", kind = "toggle",
-      info = "Opens the list of guild members who are not playing (greyed out, with when they were last seen) at "
-        .. "the bottom of the panel. Off: an \"Offline\" bar opens them. Clicking that bar does the same as this "
-        .. "switch." },
-    { key = "sort", label = "Sort", kind = "choice",
+    { key = "sort", label = "Order", kind = "choice",
       choices = { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
         { "layer", "Same layer first" } },
       info = "The order friends are listed in. Same layer first puts the friends you can actually see "
         .. "in the world at the top." },
     { key = "showSelf", label = "Show myself in the list", kind = "toggle",
       info = "Adds a row for you at the top, so you can see what your friends see about you. Off by default: "
-        .. "your own options (status, AFK) are in the right-click menu of any row." },
+        .. "your own options (status, AFK) are in the title's right-click menu." },
     { key = "whatsNew", label = "What's new", kind = "button",
       onClick = function() if ns.Changelog then ns.Changelog.open() end end,
       info = "Shows every TwizCrew version and what changed. Also: click the panel's title, or /tc new." },
@@ -1222,13 +1184,6 @@ ns.Modules.register({
       onClick = function() if ns.About then ns.About.open() end end,
       info = "A short page about what TwizCrew does and how to use it. Also: the \"?\" next to the panel's tabs, "
         .. "the wrench menu, or /tc about." },
-    tagSetting("DEAD", "Shows DEAD on a friend who is dead or a ghost."),
-    tagSetting("LAYER", "Shows OTHER LAYER on a friend who is on a different copy of the world, "
-      .. "so you cannot see each other."),
-    tagSetting("COMBAT", "Shows FIGHTING on a friend who is in a fight."),
-    tagSetting("DUNGEON", "Shows DUNGEON on a friend who is inside a dungeon or raid."),
-    tagSetting("TAXI", "Shows FLYING on a friend who is riding a flight path."),
-    tagSetting("AFK", "Shows AFK on a friend who has marked themselves as away from the keyboard."),
   },
   onEnable = onEnable,
   onDisable = onDisable,
@@ -1237,7 +1192,6 @@ ns.Modules.register({
     if P.root and LOOK_KEYS[key] then applyLook() end
     if key == "keepOpen" then Panel.keepOpenChanged() end
     if (key == "tabSide" or key == "tabY") and P.root and not moving then applyPosition() end
-    if key == "peekSeconds" and P.bar then P.bar.seconds = clamp(setting("peekSeconds"), 1, 30, 5) end
     if key == "locked" and P.enabled then requestRedraw() end
   end,
 })

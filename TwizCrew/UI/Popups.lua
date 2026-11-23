@@ -17,6 +17,7 @@ local EDGE = { layer_diff = "b3261e", layer_same = "3fd34a", death = "888888", r
   meet = "3fa9f5", online = "33cc66", qshare = "f0c040", runaway = "ff3030", notice = "8a6cff" }
 local QSHARE_SECONDS = 20 -- a quest share request stays this long (it needs a click)
 local RELOG = 120 -- seconds: back online sooner than this (a /reload, a quick relog) is not news
+local SECONDS = 5 -- how long a pop-up stays before it fades
 local KIND_ICON = {
   layer_diff = "Interface\\Icons\\Spell_Arcane_Blink", layer_same = "Interface\\Icons\\Spell_Arcane_Blink",
   death = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01", roast = "Interface\\Icons\\Spell_Fire_Fire",
@@ -231,7 +232,7 @@ local function show(p)
   f:SetWidth(WIDTH)
   f.tcSeq, f.tcShown, f.tcPopup = seq, true, p
   f.tcText, f.tcSub = text, sub or false
-  f.tcExpires = ns.now() + (tonumber(setting("seconds")) or 5) + FADE
+  f.tcExpires = ns.now() + SECONDS + FADE
   T.color(f.edge, EDGE[p.kind] or EDGE.death, 1)
   f.icon:SetTexture(KIND_ICON[p.kind] or KIND_ICON.death)
   f.title:SetText(text)
@@ -314,11 +315,12 @@ local function tick()
     end
   end
   layout()
-  -- A ding plays only its own sound (its own switch), so the two never stack.
-  if shown > 0 and setting("sound") and type(PlaySound) == "function" and SOUNDKIT then
+  -- Only with Sounds on All. A ding plays only its own sound, so the two never stack.
+  local loud = ns.Popups.soundOn("all")
+  if shown > 0 and dings == 0 and loud and type(PlaySound) == "function" and SOUNDKIT then
     ns.Log.safe(FEATURE, PlaySound, SOUNDKIT.RAID_WARNING)
   end
-  if dings > 0 and setting("levelUpSound") and type(PlaySound) == "function" then
+  if dings > 0 and loud and type(PlaySound) == "function" then
     local kit = type(SOUNDKIT) == "table" and (SOUNDKIT.LEVELUP or SOUNDKIT.LEVEL_UP) or nil
     ns.Log.safe(FEATURE, PlaySound, kit or LEVEL_UP_SOUND)
   end
@@ -335,7 +337,7 @@ end
 local function push(kind, name, extra)
   local ok, force = gate(kind, name)
   if not ok then return end
-  -- online, death and level-up pop-ups are only for people who are close, unless "Tell me about" says everyone
+  -- online, death and level-up pop-ups are only for people who are close, unless "Whose news I get" says everyone
   if ns.Panel and ns.Panel.noticeInScope and not ns.Panel.noticeInScope(kind, name) then return end
   -- The crew tab shows online, died, level-up and layer news instead (when that setting is on): no pop-up then.
   if ns.Panel and ns.Panel.suppressesPopup and ns.Panel.suppressesPopup(kind, name) then return end
@@ -348,7 +350,7 @@ local function onRelation(name, old, new)
   elseif new == "same" then
     local wasAway = old == "different" or announced[name] == "different"
     sameSince[name] = true
-    if wasAway and setting("layerSame") then push("layer_same", name) end
+    if wasAway and setting("layerDiff") then push("layer_same", name) end
   end
 end
 
@@ -409,36 +411,28 @@ ns.Modules.register({
   id = FEATURE, name = "Pop-ups", tier = "module",
   info = "Small messages near the top of the screen when a friend comes online, changes layer, dies or reaches a "
     .. "new level. They are short and never pile up.",
-  defaults = { online = true, layerDiff = true, layerSame = true, death = true, levelUp = true, levelUpSound = false,
-    sound = false, seconds = 5, newMember = true },
+  defaults = { online = true, layerDiff = true, death = true, levelUp = true, newMember = true, sounds = "shows" },
   settings = {
     { key = "online", label = "Friends coming online", kind = "toggle",
       info = "Shows a pop-up like \"Frostie is online: Level 12 Mage in Elwynn Forest\" when a friend starts "
         .. "playing. Several at once share one pop-up. Not when you log in yourself, and not when a friend just did "
         .. "a /reload. Click it to whisper them." },
-    { key = "layerDiff", label = "Layer changes", kind = "toggle",
-      info = "Shows a pop-up when a friend ends up on a different layer than you. Click it to invite them." },
-    { key = "layerSame", label = "Back on my layer", kind = "toggle",
-      info = "Shows a pop-up when a friend who was on a different layer is back on yours." },
     { key = "death", label = "Deaths", kind = "toggle",
       info = "Shows a pop-up with the place when a friend dies." },
     { key = "levelUp", label = "Level-ups", kind = "toggle",
       info = "Shows a pop-up like \"Frostie reached level 13!\" when a friend levels up while you are both "
         .. "online. Never for your own level-up (the game shows that), and never for levels gained while you "
         .. "were offline." },
-    { key = "levelUpSound", label = "Level-up sound", kind = "toggle", parent = "levelUp",
-      info = "Plays the game's level-up sound with a friend's level-up pop-up. Off by default so streams stay "
-        .. "quiet." },
+    { key = "layerDiff", label = "Layer changes", kind = "toggle",
+      info = "Shows a pop-up when a friend ends up on a different layer than you (click it to invite them), and "
+        .. "another when they are back on yours." },
     { key = "newMember", label = "New guild members", kind = "toggle",
       info = "Shows a pop-up like \"Say hi to Sneakz\" when someone new joins the guild while you are online. Click "
-        .. "it to say hello in guild chat. It shows even when \"Tell me about\" is set to your party and pinned "
-        .. "friends, because someone brand new is in nobody's party or pins yet. Members who joined while you were "
-        .. "offline are on the \"While you were away\" card instead, if you were gone 12 hours or more (Today's "
-        .. "recap)." },
-    { key = "sound", label = "Play a sound", kind = "toggle",
-      info = "Plays a short sound when pop-ups appear. Off by default so streams stay quiet." },
-    { key = "seconds", label = "How long they stay", kind = "slider", min = 2, max = 15, step = 1,
-      info = "How many seconds a pop-up stays on screen before it fades away." },
+        .. "it to say hello in guild chat. It shows even when \"Whose news I get\" is set to your party and pins, "
+        .. "because someone brand new is in nobody's party or pins yet." },
+    { key = "sounds", label = "Sounds", kind = "choice",
+      choices = { { "off", "Off" }, { "shows", "Shows only" }, { "all", "All" } },
+      info = select(2, ns.Help.tip("sounds")) },
   },
   onEnable = onEnable,
   onDisable = onDisable,
@@ -452,6 +446,15 @@ Popups.act = act
 function Popups.shownSince(kind, name, since)
   local at = shownAt[kind] and shownAt[kind][name]
   return at ~= nil and at >= (tonumber(since) or 0)
+end
+
+-- The one Sounds setting: "off", "shows" (the default: the mock laugh and the awards show) or "all" (also pop-ups,
+-- level-ups and roasts). what: "show" (a mock or the awards show) or "all" (anything else). Works with pop-ups off.
+function Popups.soundOn(what)
+  local v = ns.Modules.setting(FEATURE, "sounds")
+  if v == "all" then return true end
+  if v == "off" then return false end
+  return what == "show"
 end
 
 -- Shows one roast line (already safe plain text) for `seconds` plus the fade, whether or not this module is on.

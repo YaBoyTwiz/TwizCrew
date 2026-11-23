@@ -129,13 +129,13 @@ local function handle(sender, f, own)
     if not own and wipeRecent(now) then return end
     lastWipe = now
   end
-  if not ns.Modules.isEnabled(FEATURE) or not setting(kind) then return end
+  if not ns.Modules.isEnabled(FEATURE) then return end
   if kind ~= "wipe" and not showLimit:allow(sender, now) then return end
   local text = Roasts.text(kind, f.n, sender, v, cleanX(f.x))
   shown[#shown + 1] = text
   if #shown > SHOWN_MAX then table.remove(shown, 1) end
   if ns.Popups and ns.Popups.showRoast then ns.Popups.showRoast(text, ns.Config.ROAST_SECONDS) end
-  if setting("sound") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
+  if ns.Popups.soundOn("all") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
   ns.Log.add("info", "roast shown: %s about %s", kind, sender)
   ns.Bus.fire("ROAST_SHOWN", sender, text) -- the activity feed records it (text is already safe to show)
 end
@@ -349,7 +349,7 @@ local function showMock(sender, f)
   shown[#shown + 1] = text
   if #shown > SHOWN_MAX then table.remove(shown, 1) end
   if ns.Popups and ns.Popups.showRoast then ns.Popups.showRoast(text, ns.Config.ROAST_SECONDS) end
-  if setting("sound") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
+  if ns.Popups.soundOn("all") and type(PlaySound) == "function" and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end
   ns.Log.add("info", "mock shown from %s", sender)
 end
 
@@ -472,70 +472,35 @@ end
 
 ns.Comm.on("MOCK", function(sender, fields) ns.Log.safe(FEATURE, showMock, sender, fields) end)
 
-local KIND_SETTINGS = {
-  { "weak", "Died to a weak mob", "Shows a roast when someone dies to a mob far below their level." },
-  { "fall", "Fall deaths", "Shows a roast when someone falls to their death." },
-  { "drown", "Drowning", "Shows a roast when someone drowns or swims too far out." },
-  { "again", "Died again right away", "Shows a roast when someone dies again soon after coming back to life." },
-  { "deaths", "Death count milestones", "Shows a roast when someone reaches 5, 10, 20 or 50 deaths in a session." },
-  { "wipe", "Wipes", "Shows a roast when the whole group dies in a dungeon." },
-  { "steps", "Step milestones", "Shows a roast when someone passes a big number of steps walked." },
-  { "jumps", "Jump milestones", "Shows a roast when someone passes a big number of jumps." },
-  { "quit", "Quests given up", "Shows a roast when someone gives up their third quest in a session." },
+-- ownOnly is switched in the My mocks window (UI/MockEditor.lua), not in the settings window.
+local defaults = { aboutMe = true, mocks = true, mockModel = true, ownOnly = false, cheers = true, stealPopups = true }
+local settings = {
+  { key = "aboutMe", label = "Let the crew roast me", kind = "toggle",
+    info = "Turning this off stops your copy from sending roasts about you. Your stats still count, and you "
+      .. "still see roasts about your friends." },
+  { key = "mocks", label = "Mock button", kind = "toggle",
+    info = "When a friend dies, a Mock button shows on their row. Click it to roast them in front of the crew. "
+      .. "This switch also decides whether you see the mocks your friends send." },
+  { key = "cheers", label = "Congrats button", kind = "toggle",
+    info = "For a few minutes after a friend levels up, a Congrats button shows on their row (and clicking the "
+      .. "level-up pop-up does the same). It sends an encouraging line the crew sees; your friend sees your character "
+      .. "cheer for them in 3D with the level-up fanfare. This switch also decides whether you see congrats." },
+  { key = "stealPopups", label = "Stolen crown pop-ups", kind = "toggle",
+    info = "A pop-up when someone takes the lead in a Hall of Shame award this session, like \"Twiz just stole "
+      .. "Professional Corpse from Lurabe!\". Not in the first 15 minutes of a session, and at most one a minute." },
+  { key = "mockModel", label = "Show the mocker's character", kind = "toggle", parent = "mocks",
+    info = "When a friend mocks you, their character laughs at you with the roast in a speech bubble: their real "
+      .. "character if they're near you (or were earlier this session), otherwise their class icon. Off: the plain "
+      .. "orange roast line." },
+  { key = "editMocks", label = "My mocks", kind = "button", parent = "mocks",
+    onClick = function() if ns.MockEditor then ns.MockEditor.open() end end,
+    info = "Opens a window to write your own mocks, try them out and delete old ones. Also: /tc mock." },
 }
-
-local defaults = { aboutMe = true, sound = false, mocks = true, mockModel = true, mockSound = true, ownOnly = false,
-  addMock = "", cheers = true, stealPopups = true }
-local settings = {}
-for _, s in ipairs(KIND_SETTINGS) do
-  defaults[s[1]] = true
-  settings[#settings + 1] = { key = s[1], label = s[2], kind = "toggle", info = s[3] }
-end
-settings[#settings + 1] = { key = "aboutMe", label = "Roasts about me", kind = "toggle",
-  info = "Turning this off stops your copy from sending roasts about you. Your stats still count, and you "
-    .. "still see roasts about your friends." }
-settings[#settings + 1] = { key = "sound", label = "Play a sound", kind = "toggle",
-  info = "Plays a short sound when a roast appears. Off by default so streams stay quiet." }
-settings[#settings + 1] = { key = "mocks", label = "Mock button roasts", kind = "toggle",
-  info = "When a friend dies, a Mock button shows on their row. Click it to roast them in front of the crew. "
-    .. "This switch also decides whether you see the mocks your friends send." }
-settings[#settings + 1] = { key = "cheers", label = "Congrats button", kind = "toggle",
-  info = "For a few minutes after a friend levels up, a Congrats button shows on their row (and clicking the "
-    .. "level-up pop-up does the same). It sends an encouraging line the crew sees; your friend sees your character "
-    .. "cheer for them in 3D with the level-up fanfare. This switch also decides whether you see congrats." }
-settings[#settings + 1] = { key = "stealPopups", label = "Stolen crown pop-ups", kind = "toggle",
-  info = "A pop-up when someone takes the lead in a Hall of Shame award this session, like \"Twiz just stole "
-    .. "Professional Corpse from Lurabe!\". Not in the first 15 minutes of a session, and at most one a minute." }
-settings[#settings + 1] = { key = "mockModel", label = "Show who mocked me (3D)", kind = "toggle", parent = "mocks",
-  info = "When a friend mocks you, their character laughs at you with the roast in a speech bubble: their real "
-    .. "character if they're near you (or were earlier this session), otherwise their class icon. Off: the plain "
-    .. "orange roast line. Try it with the Try a mock buttons on the Test tab." }
-settings[#settings + 1] = { key = "mockSound", label = "Their laugh sound", kind = "toggle", parent = "mocks",
-  info = "Plays the laugh of the mocker's race and gender with the 3D mock." }
-settings[#settings + 1] = { key = "editMocks", label = "My mocks", kind = "button", parent = "mocks",
-  onClick = function() if ns.MockEditor then ns.MockEditor.open() end end,
-  info = "Opens a window to write your own mocks, try them out and delete old ones. Also: /tc mock." }
-settings[#settings + 1] = { key = "ownOnly", label = "Only use my own roasts", kind = "toggle", parent = "mocks",
-  info = "The Mock button picks only from the roasts you added below (once you have at least one)." }
-settings[#settings + 1] = { key = "addMock", label = "Add a roast", kind = "text", parent = "mocks",
-  onSave = function(v)
-    if Roasts.addMock(v) then print("TwizCrew: roast added. It's in the rotation now.") end
-  end,
-  info = "Type a roast and press Enter to add it to the Mock button's rotation, like \"{name} tripped over a "
-    .. "flower in {zone}.\" " .. Roasts.MOCK_HELP .. ". Also: /tc mock add <text>." }
-settings[#settings + 1] = { key = "myMocks", label = "My roasts", kind = "list", parent = "mocks",
-  lines = function()
-    local out = {}
-    for i, l in ipairs(Roasts.myMocks()) do out[#out + 1] = i .. ". " .. l end
-    if #out == 0 then out[1] = "None yet. Add one above." end
-    return out
-  end,
-  info = "The roasts you added. Remove one with /tc mock remove <number>." }
 
 ns.Modules.register({
   id = FEATURE, name = "Live roasts", tier = "module",
   info = "Short funny pop-ups for everyone in the crew when someone does something silly in the game, like "
-    .. "falling off a cliff or dying to a very low level mob. The switches below choose which ones you see.",
+    .. "falling off a cliff or dying to a very low level mob, wiping in a dungeon or passing a big number of steps.",
   defaults = defaults,
   settings = settings,
 })

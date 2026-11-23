@@ -302,7 +302,7 @@ local SHARE_PIC = {
   same = { "Interface\\RaidFrame\\ReadyCheck-Ready", false },
 }
 
-local function layoutRow(r, m, style, s, width)
+local function layoutRow(r, m, style, width)
   r:SetWidth(width)
   local icon = ICON_SIZE[style]
   r.icon:ClearAllPoints()
@@ -393,16 +393,16 @@ local function layoutRow(r, m, style, s, width)
   r.xpGloss:Hide(); r.xpSpark:Hide()
   r.tcBarText = nil
   if style == "full" then
-    local line = m.offline and m.offlineText or (s.showZone and m.zoneText ~= "" and m.zoneText)
+    local line = m.offline and m.offlineText or (m.zoneText ~= "" and m.zoneText)
     if m.noAddon then -- the guild list's zone (or last seen) and the words "no addon"
       line = (line or "") .. ((line and line ~= "") and "  " .. DOT .. "  " or "") .. "no addon"
     end
     if line then placeLine(r, r.zone, line, y, width); y = y + LINE end
-    if not m.offline and s.showStatus and m.status ~= "" then
+    if not m.offline and m.status ~= "" then
       placeLine(r, r.status, '"' .. m.status .. '"', y, width)
       y = y + LINE
     end
-    if not m.offline and s.showQuest ~= false and m.quest then
+    if not m.offline and m.quest then
       r.questIcon:ClearAllPoints()
       r.questIcon:SetPoint("TOPLEFT", r, "TOPLEFT", 7, -y)
       r.questIcon:SetTexture(m.questDone and "Interface\\GossipFrame\\ActiveQuestIcon"
@@ -426,7 +426,7 @@ local function layoutRow(r, m, style, s, width)
       y = y + LINE
     end
     -- XP line: the bar (none at max level) with "Lv 12 · 63%" on its right, or the text alone.
-    local bar = not m.offline and s.showXP and m.xp and not m.atMax
+    local bar = not m.offline and m.xp and not m.atMax
     local label = not m.offline and m.xpText
     local barWidth = width - 16
     if label then

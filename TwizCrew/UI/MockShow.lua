@@ -394,12 +394,12 @@ function MockShow.show(name, text, opts)
   frame:SetHeight(bubbleH + 4 + MODEL_H)
   MockShow.lastSound = nil
   if opts.cheer then
-    if ns.Modules.setting(MODULE, "mockSound") ~= false and type(PlaySound) == "function" then
+    if ns.Popups.soundOn("show") and type(PlaySound) == "function" then
       local kit = type(SOUNDKIT) == "table" and (SOUNDKIT.LEVELUP or SOUNDKIT.LEVEL_UP) or nil
       pcall(PlaySound, kit or CHEER_SOUND, "Master")
       MockShow.lastSound = kit or CHEER_SOUND
     end
-  elseif ns.Modules.setting(MODULE, "mockSound") ~= false then
+  elseif ns.Popups.soundOn("show") then
     local race, sex
     local unit = (mode == "live") and (opts.unit or liveUnit(name)) or nil
     if unit then

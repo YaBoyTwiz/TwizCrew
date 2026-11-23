@@ -187,8 +187,6 @@ ns.Modules.register({
     .. "\"While you were away\" card after a long break.",
   defaults = { onLogout = true, awayCard = true },
   settings = {
-    { key = "show", label = "Show today's recap now", kind = "button", onClick = function() Recap.show() end,
-      info = "Opens the card for this play session so far." },
     { key = "onLogout", label = "Show it when I log out", kind = "toggle",
       info = "The card shows by itself while the game counts down to log out or quit." },
     { key = "awayCard", label = "Show what changed while I was away", kind = "toggle",

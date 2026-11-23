@@ -203,41 +203,17 @@ local function onDisable()
   gate = nil
 end
 
-local function chatSetting(key, label, info)
-  return { key = key, label = label, kind = "toggle", parent = "chat", info = info }
-end
-
 ns.Modules.register({
-  id = FEATURE, name = "Activity feed", tier = "module",
+  id = FEATURE, name = "Activity list", tier = "module",
   info = "Keeps a list of what happened lately with your crew: who came online or went offline, who died, who "
     .. "reached a level, the congrats and mocks (with the words) and the roasts you saw. Open it with /tc recent. "
     .. "It can also write each event in your chat window, and it is the news the crew tab slides out. "
     .. "It stays on your computer: nothing is sent to anyone.",
-  defaults = { chat = true, chatOnline = false, chatOffline = false, chatDied = true, chatLevel = true,
-    chatCongrats = true, chatMock = true, chatRoast = false },
+  defaults = { chatNews = "important" },
   settings = {
-    { key = "chat", label = "Write events in my chat", kind = "toggle",
-      info = "Writes one line in your own chat window for each event below, like \"TwizCrew: Frostie reached "
-        .. "level 13\" or what someone said in a congrats. Only you see these lines, nobody else, and nothing is "
-        .. "typed for you. It works whether the panel is tucked away or kept open. Turn it off to keep chat clean." },
-    chatSetting("chatDied", "Deaths in chat", "Writes a line when a friend dies, with the place."),
-    chatSetting("chatLevel", "Level-ups in chat", "Writes a line when a friend reaches a new level."),
-    chatSetting("chatCongrats", "Congrats in chat", "Writes a line for every congrats you send or get, with the "
-      .. "words that were said."),
-    chatSetting("chatMock", "Mocks in chat", "Writes a line for every mock you send or get, with the words that "
-      .. "were said."),
-    chatSetting("chatOnline", "Friends coming online in chat", "Writes a line when a friend starts playing. Off by "
-      .. "default because the game already tells you when your friends log in."),
-    chatSetting("chatOffline", "Friends going offline in chat", "Writes a line when a friend stops playing. Off by "
-      .. "default so chat stays quiet."),
-    chatSetting("chatRoast", "Roasts in chat", "Writes a line for every roast that pops up on your screen (like "
-      .. "someone dying to a very low level mob). Off by default because there can be a lot of them."),
-    { key = "openRecent", label = "Show recent activity", kind = "button",
-      onClick = function() if ns.Recent then ns.Recent.open() end end,
-      info = "Opens a small window with the list of recent events, newest first. Also: /tc recent, the wrench "
-        .. "menu on the panel, the crew tab's right-click menu, or the Activity tab on the panel." },
-    { key = "clearRecent", label = "Clear the list", kind = "button", onClick = function() Feed.clear() end,
-      info = "Empties the list of recent events." },
+    { key = "chatNews", label = "News in my chat", kind = "choice",
+      choices = { { "off", "Off" }, { "important", "Important" }, { "all", "Everything" } },
+      info = select(2, ns.Help.tip("chatNews")) },
   },
   onEnable = onEnable,
   onDisable = onDisable,

@@ -26,9 +26,9 @@ return {
       A.eq(ns.Version.summary(), "Frostie has v0.3.0, you have v0.1.0. Update in WowUp.")
       A.eq(fired, { "Ginkan0.2.0", "Frostie0.3.0" })
     end,
-    chatNotice_off_still_summarizes = function(ns, A, W)
+    update_reminders_off_no_chat_line_but_still_summarizes = function(ns, A, W)
       start(ns)
-      ns.Modules.set("version", "chatNotice", false)
+      ns.Modules.setEnabled("updates", false)
       ns.Version.seen("Ginkan", "0.2.0")
       A.eq(W.printed, {})
       A.eq(ns.Version.summary(), "Ginkan has v0.2.0, you have v0.1.0. Update in WowUp.")
@@ -74,7 +74,7 @@ return {
     version_module_is_registered = function(ns, A)
       local d = ns.Modules.get("version")
       A.ok(d); A.eq(d.name, "Version check"); A.eq(d.tier, "essential")
-      A.eq(d.defaults.chatNotice, true)
+      A.eq(d.defaults.chatNotice, nil, "the chat line follows Remind me to update")
     end,
   },
 }

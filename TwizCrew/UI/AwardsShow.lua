@@ -88,7 +88,7 @@ local function hex(r, g, b)
 end
 
 local function playSound(which)
-  if ns.Modules.setting("stats", "showSound") == false then return end
+  if not ns.Popups.soundOn("show") then return end
   local s = ns.StatsDefs.SOUNDS[which]
   if not s or type(PlaySound) ~= "function" then return end
   local id = type(SOUNDKIT) == "table" and SOUNDKIT[s.kit] or nil
@@ -762,7 +762,7 @@ end
 -- view: "session" | "all". Refuses (with a chat line) while stats is off or during a fight.
 function Show.start(v)
   if not ns.Modules.isEnabled("stats") then
-    say("turn on Stats & Hall of Shame in /tc first.")
+    say("turn on Hall of Shame in /tc first.")
     return false
   end
   if inCombat() then

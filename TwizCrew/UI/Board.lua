@@ -61,7 +61,6 @@ local function buildModel()
     session = session,
     starter = session and ns.Session.starter(session) or nil,
     timeText = session and ns.BoardLogic.timeText(session.start) or "",
-    wipeLine = ns.Modules.setting("stats", "wipeLine") and true or false,
     tab = Board.tab(),
     trophies = ns.Trophies and ns.Trophies.summary() or {},
     entries = map,

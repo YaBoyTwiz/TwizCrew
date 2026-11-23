@@ -168,7 +168,7 @@ return {
       W.env.InCombatLockdown = function() return false end
       ns.Modules.setEnabled("stats", false)
       ns.AwardsShow.start("all")
-      A.ok(printedLine(W, "TwizCrew: turn on Stats & Hall of Shame in /tc first."))
+      A.ok(printedLine(W, "TwizCrew: turn on Hall of Shame in /tc first."))
       A.no(ns.AwardsShow.isOpen())
       ns.Modules.setEnabled("stats", true)
       ns.AwardsShow.start("all")
@@ -205,12 +205,18 @@ return {
       A.eq(W.sounds[#W.sounds], 8959, "reveal sound from SOUNDKIT")
       A.eq(#W.sounds - before, 2)
       ns.AwardsShow.close()
-      ns.Modules.set("stats", "showSound", false)
+      ns.Modules.set("popups", "sounds", "off")
       before = #W.sounds
       ns.AwardsShow.start("session")
       W:advance(10)
       A.eq(state(ns).phase, "reveal")
-      A.eq(#W.sounds, before, "no sounds with the setting off")
+      A.eq(#W.sounds, before, "no sounds with Sounds: Off")
+      ns.AwardsShow.close()
+      ns.Modules.set("popups", "sounds", "all")
+      before = #W.sounds
+      ns.AwardsShow.start("session")
+      W:advance(10)
+      A.ok(#W.sounds > before, "Sounds: All plays them too")
     end,
 
     key_in_combat_lockdown_closes_the_show = function(ns, A, W)

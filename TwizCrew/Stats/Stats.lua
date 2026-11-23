@@ -237,23 +237,18 @@ local function onSession(new, old, keep)
 end
 
 ns.Modules.register({
-  id = FEATURE, name = "Stats & Hall of Shame", tier = "module",
+  id = FEATURE, name = "Hall of Shame", tier = "module",
   info = "Counts the funny things you do while playing, like deaths, falls, jumps and steps, for the Hall of Shame "
     .. "and the awards show. Turning it off stops counting and sharing your own numbers; what you already have "
     .. "is kept.",
-  defaults = { titles = "session", countSteps = true, wipeLine = true, showSound = true, crewShow = true,
-    boardTab = "deaths" },
+  defaults = { titles = "session", countSteps = true, crewShow = true, boardTab = "deaths" },
   settings = {
-    { key = "titles", label = "Award titles on the Crew panel", kind = "choice",
+    { key = "titles", label = "Award titles under names", kind = "choice",
       choices = { { "session", "This session" }, { "all", "All time" }, { "off", "Off" } },
       info = "Shows each award winner's title under their name on the Crew tab, for this session or for all time." },
-    { key = "countSteps", label = "Count steps", kind = "toggle",
+    { key = "countSteps", label = "Count my steps", kind = "toggle",
       info = "Counts how far you walk, ride and swim. Turn it off if you don't want your steps counted." },
-    { key = "wipeLine", label = "Show the Wipe Squad line", kind = "toggle",
-      info = "Shows how many times the crew wiped in a dungeon at the bottom of the Hall of Shame." },
-    { key = "showSound", label = "Sound in the awards show", kind = "toggle",
-      info = "Plays a short sound for each award in the awards show." },
-    { key = "crewShow", label = "Show the crew's awards show on my screen", kind = "toggle",
+    { key = "crewShow", label = "Watch the crew's awards show", kind = "toggle",
       info = "When a friend starts the awards show (/tc awards), it plays on your screen too and follows their "
         .. "clicks. Escape closes it for you." },
   },

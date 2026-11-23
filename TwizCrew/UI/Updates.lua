@@ -1,7 +1,7 @@
 -- "Tell crew to update": the request (UPDREQ) out and in, the small window with Reload now, and the line after a
 -- reload. Also the update notice: the same window, once per new version, when any crew member runs a newer
 -- version (heard in HELLO / STATE), plus Updates.available() for the minimap badge and the panel line.
--- Registers the module "updates" (Update reminders): what you see. Sending works whether it is on or not.
+-- Registers the module "updates" (Remind me to update): what you see. Sending works whether it is on or not.
 -- The rules live in Core/UpdateLogic.lua.
 local _, ns = ...
 
@@ -209,7 +209,7 @@ end
 ns.Comm.on("UPDREQ", function(sender, fields) ns.Log.safe(FEATURE, handleRequest, sender, fields) end)
 
 ---------------------------------------------------------------------------------------------------- update notice
--- The newest version heard ({ name, ver, rs }) while it is newer than ours and Update reminders is on, else nil.
+-- The newest version heard ({ name, ver, rs }) while it is newer than ours and Remind me to update is on, else nil.
 -- The minimap badge and the panel line ask this (inside their own ns.Log.safe).
 function Updates.available()
   local newest = ns.Version and ns.Version.newest and ns.Version.newest() or nil
@@ -284,9 +284,9 @@ ns.Events.on(LOGIN_FEATURE, "PLAYER_LOGIN", checkAfterLogin)
 
 ---------------------------------------------------------------------------------------------------- module
 ns.Modules.register({
-  id = FEATURE, name = "Update reminders", tier = "module",
-  info = "Tells you when a friend has a newer TwizCrew: a gold ! on the minimap button, a gold line on the Crew "
-    .. "panel, and once per new version a small window that says how to update (with a Reload button when that "
+  id = FEATURE, name = "Remind me to update", tier = "module",
+  info = "Tells you when a friend has a newer TwizCrew: a line in chat, a gold ! on the minimap button, a gold line "
+    .. "on the Crew panel, and once per new version a small window that says how to update (with a Reload button when that "
     .. "is enough). Also the window you get when a friend presses \"Tell crew to update\", and a reminder after "
     .. "a reload if you are still on the old version. Turn off to never get these. The version number stays.",
   onEnable = function()

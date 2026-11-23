@@ -1,6 +1,6 @@
 -- Spell rank updater (module "rankup", a handy tool): one click swaps old spell ranks on your action bars for the
--- highest rank you know. From the panel's wrench (Tools) button, the row menus, /tc rankup, its own button, or the
--- Tools tab in the settings.
+-- highest rank you know. From the panel's wrench (Tools) button, /tc rankup, a key binding or its own button; its
+-- switches are on the More page in the settings.
 -- Only spells are touched: macros, items and empty slots stay as they are. Never in combat (the game forbids it).
 local _, ns = ...
 
@@ -263,9 +263,6 @@ ns.Modules.register({
     .. "in the same slot. Macros and items are left alone. Also: the wrench button on the crew panel, /tc rankup.",
   defaults = { auto = false, showButton = false, buttonPos = false },
   settings = {
-    { key = "update", label = "Update my spell ranks now", kind = "button", onClick = function() RankUp.run() end,
-      info = "Looks at every action bar slot (also your form and stance bars) and puts the highest rank of each "
-        .. "spell there. Not during a fight." },
     { key = "auto", label = "Update by itself when I learn a spell", kind = "toggle",
       info = "After you learn a new rank from a trainer, your bars get it a second later (after the fight, if "
         .. "you're in one). Note: this also replaces low ranks you keep on purpose, like a cheap Rank 1 heal." },

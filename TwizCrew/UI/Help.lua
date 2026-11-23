@@ -32,8 +32,12 @@ Help.TIPS = {
   about = { "How to use TwizCrew", "A short page about what TwizCrew does and how to use it." },
   crewTab = { "Crew tab",
     "Rest your mouse here or click to see the whole panel. News slides out from here for a few seconds." },
-  idleAlpha = { "See-through when idle",
+  idleAlpha = { "Fade when I'm not using it",
     "How visible the tab, or the panel when kept open, stays while your mouse is away. News and menus make it solid; 100% is off." },
+  sounds = { "Sounds",
+    "Shows only: just the mock laugh and the awards show. All: also pop-ups, level-ups and roasts (Off: none)." },
+  chatNews = { "News in my chat", "Lines only you see. Important: deaths, level-ups, congrats and mocks; "
+    .. "Everything: also friends coming online, going offline, and roasts." },
   keepOpen = { "Keep open",
     "ON: the panel stays on screen. OFF: it tucks away into its small tab and slides out when you mouse over it." },
   ------------------------------------------------------------------------------------------------- Hall of Shame
@@ -49,7 +53,7 @@ Help.TIPS = {
   tab_trophies = { "Trophies",
     "Awards won in every session the crew played. Hover a name for every award and streak." },
   wipe = { "Wipe Squad",
-    "How many times the crew in a dungeon or raid all died together. You can hide this line in the settings." },
+    "How many times the crew in a dungeon or raid all died together. It shows only when there were wipes." },
   ------------------------------------------------------------------------------------------------ awards show
   vote = { "Clown of the Night",
     "Vote for tonight's biggest clown: one vote each, 30 seconds. The winner gets a title on the panel and a trophy." },
@@ -93,7 +97,8 @@ Help.TIPS = {
   bigArrow = { "Big arrow",
     "Points the way to a friend or a meet-up. Drag it to move it (unless the panel is locked)." },
   setBasics = { "Basics", "A few everyday options. Every option is also on the Advanced tab." },
-  setAdvanced = { "Advanced", "Every option, sorted by part of TwizCrew. Whole parts can be turned on or off here." },
+  setAdvanced = { "Advanced",
+    "Every option on five pages: Panel, Alerts, Fun, Find and More. The rarely needed ones are last on each page." },
   setReset = { "Reset everything",
     "Every setting and the panel's place go back to the start (you are asked first). Stats, notes and friends stay." },
   setAbout = { "How to use TwizCrew", "A short page about what TwizCrew does and how to use it. Also /tc about." },
@@ -183,7 +188,7 @@ Help.ABOUT = {
   "/tc cal  -  the calendar",
   "/tc recent  -  what happened lately",
   "/tc report  -  a health check to copy to Discord",
-  "/tc help  -  this page, and every command in chat",
+  "/tc help  -  this page, and the everyday commands in chat (/tc help more: the rest)",
   "",
   Help.ABOUT_CLOSING,
 }

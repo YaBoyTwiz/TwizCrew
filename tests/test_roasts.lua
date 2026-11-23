@@ -392,9 +392,9 @@ return {
 
     receiver_side_switches = function(ns, A, W)
       start(ns, W)
-      ns.Modules.set("roasts", "fall", false)
-      receive(ns, W, "Frostie", "ROAST", { k = "fall", n = "1" })
-      A.eq(shown(ns), {})
+      A.no(ns.Modules.set("roasts", "fall", false), "no per-kind switches any more")
+      receive(ns, W, "Frostie", "ROAST", { k = "nonsense", n = "1" })
+      A.eq(shown(ns), {}, "an unknown kind is still dropped")
       receive(ns, W, "Frostie", "ROAST", { k = "weak", v = "3", x = "Kobold", n = "1" })
       A.eq(shown(ns), { "Frostie died to a level 3 Kobold. Embarrassing." })
       ns.Modules.setEnabled("roasts", false)
@@ -412,10 +412,10 @@ return {
       start(ns, W)
       receive(ns, W, "Frostie", "ROAST", { k = "fall", n = "1" })
       A.eq(#shown(ns), 1)
-      A.eq(W.sounds, {})
-      ns.Modules.set("roasts", "sound", true)
+      A.eq(W.sounds, {}, "Sounds: Shows only (the default) has no roast sound")
+      ns.Modules.set("popups", "sounds", "all")
       receive(ns, W, "Ginkan", "ROAST", { k = "fall", n = "1" })
-      A.eq(W.sounds, { 8959 })
+      A.eq(W.sounds, { 8959 }, "Sounds: All")
     end,
 
     roast_popup_closes_itself = function(ns, A, W)
@@ -449,14 +449,13 @@ return {
       A.eq(d.name, "Live roasts")
       A.eq(d.tier, "module")
       A.ok(ns.Modules.isEnabled("roasts"))
-      local keys = {}
-      for _, s in ipairs(d.settings) do keys[s.key] = s end
-      for _, kind in ipairs(ns.StatsDefs.ROAST_KINDS) do
-        A.ok(keys[kind] ~= nil, "a switch for " .. kind)
-        A.eq(ns.Modules.setting("roasts", kind), true)
-      end
+      local keys, order = {}, {}
+      for _, s in ipairs(d.settings) do keys[s.key] = s; order[#order + 1] = s.key end
+      A.eq(order, { "aboutMe", "mocks", "cheers", "stealPopups", "mockModel", "editMocks" })
+      for _, kind in ipairs(ns.StatsDefs.ROAST_KINDS) do A.eq(keys[kind], nil, "no switch for " .. kind) end
+      for _, s in ipairs(d.settings) do A.ok(#s.info > 20, "an (i) for " .. s.key) end
       A.eq(ns.Modules.setting("roasts", "aboutMe"), true)
-      A.eq(ns.Modules.setting("roasts", "sound"), false)
+      A.eq(ns.Modules.setting("roasts", "ownOnly"), false, "kept: the My mocks window switches it")
       A.ok(keys.aboutMe.info:find("about you", 1, true) ~= nil)
     end,
 

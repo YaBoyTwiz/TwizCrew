@@ -4,7 +4,7 @@
 -- (one bar per friend, AFK lighter, their times written on it, hover for who was on at that moment, the timed notes
 -- as small marks under it) and Usual times (when the crew is usually on, the best time to play together, everyone's
 -- habits); a small Month / Usual times switch sits next to the tabs while this tab is open.
--- Opened by the Calendar button next to the panel's tabs, the wrench menu, /tc cal, or the button in the settings.
+-- Opened by the Calendar button next to the panel's tabs, the wrench menu, /tc cal or its key binding.
 -- This file: the window, moving between the views and the helpers they share. Each view, loaded right after it:
 -- Calendar/CalendarEvents.lua (the Events month and day), Calendar/CalendarMonth.lua (the Play times month),
 -- Calendar/CalendarDay.lua (the day timeline), Calendar/CalendarUsual.lua (usual times and the real-week grid) and

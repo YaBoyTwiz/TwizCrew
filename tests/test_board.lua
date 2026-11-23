@@ -331,7 +331,8 @@ return {
       }
       A.eq(model(ns, "session", list).footer, "Wipe Squad: 2 wipes tonight")
       A.eq(model(ns, "all", list).footer, "Wipe Squad: 2 wipes")
-      A.eq(model(ns, "session", list, { wipeLine = false }).footer, nil)
+      A.eq(model(ns, "session", list, { wipeLine = false }).footer, "Wipe Squad: 2 wipes tonight",
+        "no switch any more: the line always shows when there were wipes")
       list[1].stats.wp = 0
       A.eq(model(ns, "session", list).footer, "Wipe Squad: 1 wipe tonight")
       list[2].stats.wp = 0
@@ -459,9 +460,7 @@ return {
       ns.Board.setView("session")
       ns.Bus.fire("STATS_CHANGED")
       W:advance(1)
-      ns.Modules.set("stats", "wipeLine", false)
-      W:advance(1)
-      A.eq(ns.Board.modelForTest().footer, nil)
+      A.eq(ns.Board.modelForTest().footer, "Wipe Squad: 2 wipes tonight", "always there (no switch)")
       ns.Modules.resetAll()
       W:advance(31)
       A.eq(ns.Log.errors(10), {})

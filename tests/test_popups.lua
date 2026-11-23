@@ -249,7 +249,7 @@ return {
       A.eq(#d, 2, "one pop-up each, right away")
       A.eq(d[1].kind, "levelup"); A.eq(d[1].names, { "Frostie" }); A.eq(d[1].extra.level, 14)
     end,
-    -- who the online, level-up and death pop-ups are for ("Tell me about")
+    -- who the online, level-up and death pop-ups are for ("Whose news I get")
     guildmate_level_up_is_recorded_but_not_popped = function(ns, A, W)
       ready(ns, W)
       ns.Modules.set("panel", "noticeScope", "close")
@@ -323,15 +323,15 @@ return {
       receive(ns, W, "Frostie", "UPDATE", { lv = "13" })
       W:advance(1)
       A.eq(ns.Popups.textsForTest(), { { text = "Frostie reached level 13!", subtext = "Only 47 to go." } })
-      A.eq(W.sounds, {}, "no sound by default")
-      ns.Modules.set("popups", "sound", true)
+      A.eq(W.sounds, {}, "no sound by default (Sounds: Shows only)")
+      ns.Modules.set("popups", "sounds", "off")
       receive(ns, W, "Frostie", "UPDATE", { lv = "14" })
       W:advance(1)
-      A.eq(W.sounds, {}, "the general pop-up sound is not the ding sound")
-      ns.Modules.set("popups", "levelUpSound", true)
+      A.eq(W.sounds, {}, "Sounds: Off")
+      ns.Modules.set("popups", "sounds", "all")
       receive(ns, W, "Frostie", "UPDATE", { lv = "15" })
       W:advance(1)
-      A.eq(W.sounds, { 888 }, "the game's level-up sound")
+      A.eq(W.sounds, { 888 }, "Sounds: All: the game's level-up sound, alone (the two never stack)")
       ns.Modules.set("popups", "levelUp", false)
       receive(ns, W, "Frostie", "UPDATE", { lv = "16" })
       W:advance(1)
@@ -349,21 +349,29 @@ return {
       local d = ns.Modules.get("popups")
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "online", "layerDiff", "layerSame", "death", "levelUp", "levelUpSound", "newMember", "sound",
-        "seconds" })
+      A.eq(keys, { "online", "death", "levelUp", "layerDiff", "newMember", "sounds" })
       A.eq(d.defaults.newMember, true, "new guild members: on")
+      A.eq(d.defaults.levelUp, true)
+      A.eq(d.defaults.sounds, "shows", "today's sounds: only the mock laugh and the awards show")
+      for _, gone in ipairs({ "layerSame", "levelUpSound", "sound", "seconds" }) do A.eq(d.defaults[gone], nil, gone) end
       for _, s in ipairs(d.settings) do
-        if s.key == "newMember" then A.contains(s.info, "if you were gone 12 hours or more", "when the away card shows") end
+        if s.key == "sounds" then
+          A.eq(s.label, "Sounds")
+          A.eq(s.choices, { { "off", "Off" }, { "shows", "Shows only" }, { "all", "All" } })
+        end
+        if s.key == "layerDiff" then A.contains(s.info, "back on yours", "one switch for both directions") end
       end
-      A.eq(d.defaults.levelUp, true); A.eq(d.defaults.levelUpSound, false)
-      for _, s in ipairs(d.settings) do if s.key == "levelUpSound" then A.eq(s.parent, "levelUp") end end
+
     end,
     sound_off_by_default = function(ns, A, W)
       ready(ns, W)
       ns.Bus.fire("MEMBER_DIED", "Frostie", "Westfall", "")
       W:advance(0.5)
       A.eq(W.sounds, {})
-      ns.Modules.set("popups", "sound", true)
+      local P = ns.Popups
+      A.ok(P.soundOn("show"), "Shows only: the shows"); A.no(P.soundOn("all"), "Shows only: not the rest")
+      ns.Modules.set("popups", "sounds", "off"); A.no(P.soundOn("show")); A.no(P.soundOn("all"))
+      ns.Modules.set("popups", "sounds", "all"); A.ok(P.soundOn("show")); A.ok(P.soundOn("all"))
       ns.Bus.fire("MEMBER_DIED", "Holyboi", "Westfall", "")
       ns.Bus.fire("MEMBER_DIED", "Pewpew", "Westfall", "")
       W:advance(0.5)

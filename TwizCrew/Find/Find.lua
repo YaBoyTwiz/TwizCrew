@@ -247,10 +247,8 @@ local function onMeet(sender, fields)
     audience = audience, expires = now + left,
   }
   changed()
-  if setting("meetPopup") and ns.Popups and ns.Popups.meet then
-    ns.Log.safe(FEATURE, ns.Popups.meet, sender, meet.place)
-  end
-  if setting("meetArrow") then pointToMeet() end
+  if ns.Popups and ns.Popups.meet then ns.Log.safe(FEATURE, ns.Popups.meet, sender, meet.place) end
+  pointToMeet()
 end
 
 ------------------------------------------------------------------------------------------------------- group
@@ -443,8 +441,7 @@ ns.Modules.register({
   info = "Arrows that point to the friends in your group, and meet-ups: Ctrl + right-click a spot on the world map "
     .. "to tell your party (or everyone) to meet there. Your position only goes to your group.",
   defaults = {
-    rowArrows = true, meetups = true, sharePosition = true, meetPopup = true, meetArrow = true, meetMinimap = true,
-    runaway = true,
+    rowArrows = true, meetups = true, sharePosition = true, runaway = true,
     arrowScale = 1.0, arrowPos = { point = "TOP", x = 230, y = -150 },
   },
   settings = {
@@ -457,17 +454,11 @@ ns.Modules.register({
         .. "it for the big arrow), and the big arrow flashes too if it points at them. No sound." },
     { key = "meetups", label = "Meet-ups", kind = "toggle",
       info = "Ctrl + right-click a spot on the world map to ask your party (or everyone) to meet there. They get a "
-        .. "pop-up, an arrow and an icon on their map. Off: you can't send them and you don't get them." },
+        .. "pop-up, the big arrow and an icon on their world map and minimap. Off: you can't send them and you "
+        .. "don't get them." },
     { key = "sharePosition", label = "Share my position with my group", kind = "toggle",
       info = "Lets the friends in your group see an arrow to you. Your position never goes to anyone outside your "
         .. "group, and nothing is sent while you're not in a group." },
-    { key = "meetPopup", label = "Meet-up pop-up", kind = "toggle", parent = "meetups",
-      info = "Shows a small pop-up when a friend asks to meet up. Click it for the big arrow." },
-    { key = "meetArrow", label = "Big arrow for a meet-up", kind = "toggle", parent = "meetups",
-      info = "Turns on the big arrow toward the spot when a friend asks to meet up. It goes away when you get there." },
-    { key = "meetMinimap", label = "Meet-up on the minimap", kind = "toggle", parent = "meetups",
-      info = "Shows the meet-up spot on your minimap too (on its edge when it's farther away), not only on the world "
-        .. "map." },
     { key = "arrowScale", label = "Big arrow size", kind = "slider", min = 0.5, max = 2.0, step = 0.1,
       fmt = ns.Widgets and ns.Widgets.percent or nil,
       info = "Makes the big arrow bigger or smaller. Drag the arrow to move it (unless the Crew panel is locked)." },

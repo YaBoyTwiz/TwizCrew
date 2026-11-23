@@ -102,7 +102,7 @@ function UpdateLogic.cooldownLeft(lastPress, now, cooldown)
 end
 
 ---------------------------------------------------------------------------------------------------- update notice
--- The newest version heard ({ name, ver, rs }) when it is newer than mine and Update reminders is on, else nil.
+-- The newest version heard ({ name, ver, rs }) when it is newer than mine and Remind me to update is on, else nil.
 function UpdateLogic.available(myVersion, newest, enabled)
   if not enabled or type(newest) ~= "table" or not isVersion(newest.ver) then return nil end
   if cmp(newest.ver, myVersion) <= 0 then return nil end

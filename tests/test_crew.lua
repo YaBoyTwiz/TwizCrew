@@ -54,7 +54,7 @@ return {
     end,
     tags_module_is_registered = function(ns, A)
       local d = ns.Modules.get("tags")
-      A.ok(d); A.eq(d.name, "Activity tags")
+      A.ok(d); A.eq(d.name, "Tags on rows")
       for _, id in ipairs(ns.Tags.ORDER) do
         A.ok(ns.Tags.LABEL[id]); A.ok(ns.Tags.COLOR[id]); A.ok(ns.Tags.INFO[id])
       end

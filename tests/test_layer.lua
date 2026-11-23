@@ -393,7 +393,7 @@ return {
     end,
     layer_module_is_registered = function(ns, A)
       local d = ns.Modules.get("layer")
-      A.ok(d); A.eq(d.name, "Layer tracker"); A.eq(d.tier, "module")
+      A.ok(d); A.eq(d.name, "Other-layer warnings"); A.eq(d.tier, "module")
     end,
   },
 }

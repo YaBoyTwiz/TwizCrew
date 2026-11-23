@@ -160,15 +160,15 @@ function Tags.decode(str)
 end
 
 ns.Modules.register({
-  id = "tags", name = "Activity tags", tier = "module",
+  id = "tags", name = "Tags on rows", tier = "module",
   info = "Shows small colored labels next to your friends: dead, fighting, in a dungeon, flying, away, or on another layer.",
   defaults = { autoAway = true, awayMinutes = 3 },
   settings = {
-    { key = "autoAway", label = "Show me as away when idle", kind = "toggle",
+    { key = "autoAway", label = "Mark me AFK when I stop playing", kind = "toggle",
       info = "Your friends see AFK next to your name when you haven't moved, cast, targeted or touched the mouse "
         .. "for a few minutes. It goes away as soon as you do something." },
-    { key = "awayMinutes", label = "Minutes before away", kind = "slider", min = 1, max = 15, step = 1,
+    { key = "awayMinutes", label = "Minutes before AFK", kind = "slider", min = 1, max = 15, step = 1,
       parent = "autoAway", fmt = function(v) return tostring(math.floor(v + 0.5)) .. " min" end,
-      info = "How long you can do nothing before you show as away." },
+      info = "How long you can do nothing before your friends see you as AFK." },
   },
 })

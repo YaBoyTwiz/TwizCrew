@@ -673,7 +673,7 @@ P.syncBarTicker = function()
 end
 
 ---------------------------------------------------------------------------------------------------------- news
--- The news slid out now (nil: none): the shown entry of the queue, while "Slide out news" is on, the tab is on
+-- The news slid out now (nil: none): the shown entry of the queue, while "Show news from the tab" is on, the tab is on
 -- screen, the panel is tucked and there is no fight.
 function P.newsNow()
   if not P.bar or keepOpen() or not setting("peek") or P.inCombat then return nil end
@@ -695,12 +695,12 @@ end
 -- always stays the longer time.
 function P.newsLengths(e)
   e.reactable = e.kind == "fight" or canReact(e)
-  return Logic.newsSeconds(e.reactable, clamp(setting("peekSeconds"), 1, 30, 5), 3)
+  return Logic.newsSeconds(e.reactable, Logic.NEWS_SECONDS, 3)
 end
 
 -- Which news the tab shows: the pop-up kinds follow the pop-up switches (no point in news you turned off).
 local POPUP_SWITCH = { online = "online", died = "death", levelup = "levelUp", otherlayer = "layerDiff",
-  samelayer = "layerSame" }
+  samelayer = "layerDiff" }
 local function noticeWanted(e)
   local key = POPUP_SWITCH[e.kind]
   if not key then return true end
@@ -714,7 +714,7 @@ local function copyOf(e)
 end
 
 -- The activity feed recorded something (FEED_ADDED), or the tab made its own news (Panel.news). While tucked: one
--- more missed (the tab glows) and, with "Slide out news" on and no fight, the news slides out in its turn.
+-- more missed (the tab glows) and, with "Show news from the tab" on and no fight, the news slides out in its turn.
 function Panel.onFeed(e)
   if not P.enabled or not P.bar or keepOpen() or type(e) ~= "table" then return end
   -- no tab on screen (hidden in a fight, when alone, in a dungeon) or the panel is out: the pop-up was shown, so the

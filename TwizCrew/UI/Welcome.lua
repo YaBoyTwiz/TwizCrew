@@ -1,7 +1,7 @@
 -- The welcome card. When someone new joins the guild, every member online gets a pop-up: "Say hi to Sneakz", "Level 8
 -- Mage just joined the guild - click to say hello"; the click posts a friendly line in guild chat (it has to happen
 -- inside the click: real chat needs a key press or a click). Switch: Pop-ups, "New guild members" (needs that module
--- on; never filtered by "Tell me about": a brand-new member is in nobody's party or pins).
+-- on; never filtered by "Whose news I get": a brand-new member is in nobody's party or pins).
 -- And the newcomer's own start card, once per guild on this account, the first time this copy uses a guild's data
 -- with nothing saved for it: who is online near their level, when the crew usually plays (only from data already on
 -- this copy), and a button to the About page.

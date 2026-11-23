@@ -44,7 +44,7 @@ local function place(angle)
   button:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
--- The update Update reminders knows about, asked inside its own guard: an error there means "none", never a broken
+-- The update Remind me to update knows about, asked inside its own guard: an error there means "none", never a broken
 -- button.
 local function availableUpdate()
   if not ns.Updates or not ns.Updates.available then return nil end

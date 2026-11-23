@@ -177,10 +177,10 @@ return {
       receive(ns, W, "Frostie", "MOCK", { t = "Twiz", x = "Rest in pieces, Twiz." })
       A.eq(played, { { 540268, "Master" } }, "a gnome female laugh for Frostie (from her shared race)")
       ns.MockShow.hide()
-      ns.Modules.set("roasts", "mockSound", false)
+      ns.Modules.set("popups", "sounds", "off")
       W:advance(5)
       receive(ns, W, "Frostie", "MOCK", { t = "Twiz", x = "Again." })
-      A.eq(#played, 1, "sound off: quiet")
+      A.eq(#played, 1, "Sounds: Off: quiet")
     end,
     sits_beside_the_middle_of_the_screen = function(ns, A, W)
       start(ns, W)

@@ -41,7 +41,7 @@ function Version.seen(name, ver, rs)
   if ns.isTestName(name) then -- test tools: shown by the update notice, never mixed with what friends really run
     if not ns.Util.isVersion(ver) then return end
     test = { name = name, ver = ver, rs = ns.Util.isVersion(rs) and rs or nil }
-    if ns.Modules.setting("version", "chatNotice") then print("TwizCrew: " .. line(test)) end
+    if ns.Modules.isEnabled("updates") then print("TwizCrew: " .. line(test)) end
     ns.Bus.fire("UPDATE_SEEN", test.name, test.ver, test.rs)
     return
   end
@@ -51,7 +51,7 @@ function Version.seen(name, ver, rs)
   ns.Bus.fire("VERSION_NEWER", name, ver)
   if not announced then
     announced = true
-    if ns.Modules.setting("version", "chatNotice") then print("TwizCrew: " .. line(best)) end
+    if ns.Modules.isEnabled("updates") then print("TwizCrew: " .. line(best)) end
   end
 end
 
@@ -105,14 +105,12 @@ end
 ns.Modules.register({
   id = "version", name = "Version check", tier = "essential",
   info = "Notices when a friend has a newer version of TwizCrew than you.",
-  defaults = { chatNotice = true },
+  defaults = {},
   settings = {
-    { key = "chatNotice", label = "Tell me in chat", kind = "toggle",
-      info = "Tells you in chat when a friend has a newer version of TwizCrew." },
     { key = "tellCrew", label = "Tell crew to update", kind = "button",
       info = "Press this after you updated TwizCrew yourself. Friends online who have an older version get a "
-        .. "small window with a Reload button, so they load the new version (unless they turned off Update "
-        .. "reminders, or their copy is too old to know this button). They still need to update in WowUp first. "
+        .. "small window with a Reload button, so they load the new version (unless they turned off Remind me "
+        .. "to update, or their copy is too old to know this button). They still need to update in WowUp first. "
         .. "You can press it again after 30 seconds.",
       onClick = function() ns.Updates.tellCrew() end },
     { key = "versions", label = "Crew versions", kind = "list",

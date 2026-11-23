@@ -363,21 +363,25 @@ return {
       A.ok(ns.Find.meet(), "the meet-up stays for the others")
     end,
 
-    no_big_arrow_for_a_meetup_when_switched_off = function(ns, A, W)
+    no_meetup_at_all_with_meetups_off = function(ns, A, W)
       boot(W)
-      ns.Modules.set("find", "meetArrow", false)
+      ns.Modules.set("find", "meetups", false)
       hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8500", y = "-1000", p = "Elwynn Forest",
         a = "all", l = "900" }, "WHISPER")
-      A.no(ns.BigArrow.stateForTest().shown)
-      A.ok(ns.Find.meet())
+      W:advance(1)
+      A.no(ns.BigArrow.stateForTest().shown, "no big arrow")
+      A.eq(#ns.Popups.textsForTest(), 0, "no pop-up")
+      A.no(ns.MeetMap.stateForTest().minimap, "no minimap icon: one switch for every part")
     end,
 
     clicking_the_meetup_popup_points_the_way = function(ns, A, W)
       boot(W)
-      ns.Modules.set("find", "meetArrow", false)
       hear(ns, W, "Frostie", "MEET", { id = "Frostie-1", c = "0", x = "-8500", y = "-1000", p = "Elwynn Forest",
         a = "all", l = "900" }, "WHISPER")
       W:advance(1)
+      A.eq(ns.BigArrow.stateForTest().kind, "meet", "the big arrow comes by itself")
+      ns.BigArrow.close()
+      A.no(ns.BigArrow.stateForTest().shown)
       ns.Popups.clickForTest(1)
       A.eq(ns.BigArrow.stateForTest().kind, "meet")
     end,
@@ -571,10 +575,6 @@ return {
       A.ok(v.minimap)
       A.ok(math.abs(v.miniX) < 0.01 and v.miniY > 0, "north is up")
       A.no(v.edge)
-      ns.Modules.set("find", "meetMinimap", false)
-      W:advance(0.3)
-      A.no(ns.MeetMap.stateForTest().minimap, "switched off")
-      ns.Modules.set("find", "meetMinimap", true)
       hear(ns, W, "Frostie", "MEET", { id = "Frostie-2", c = "0", x = "-11000", y = "-1000", p = "Westfall",
         a = "all", l = "900" }, "WHISPER")
       W:advance(0.3)

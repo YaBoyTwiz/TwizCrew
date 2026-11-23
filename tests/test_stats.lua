@@ -966,13 +966,13 @@ return {
     module_registered_with_settings = function(ns, A, W)
       start(ns, W)
       local d = ns.Modules.get("stats")
-      A.eq(d.name, "Stats & Hall of Shame")
+      A.eq(d.name, "Hall of Shame")
       A.eq(d.tier, "module")
       A.contains(d.info, "off")
       A.eq(ns.Modules.setting("stats", "titles"), "session")
       A.eq(ns.Modules.setting("stats", "countSteps"), true)
-      A.eq(ns.Modules.setting("stats", "wipeLine"), true)
-      A.eq(ns.Modules.setting("stats", "showSound"), true)
+      A.eq(ns.Modules.setting("stats", "wipeLine"), nil, "the Wipe Squad line always shows")
+      A.eq(ns.Modules.setting("stats", "showSound"), nil, "the awards show sound follows Sounds")
       local list = ns.Detectors.status()
       local ids = {}
       for i, s in ipairs(list) do ids[i] = s.id end

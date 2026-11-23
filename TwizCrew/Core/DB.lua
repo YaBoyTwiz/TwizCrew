@@ -444,6 +444,65 @@ local function markNamed(g)
   if isReal(n) and not n:find(" %(replaced[ %d]*%)$") and not n:find("#%d+$") then g.named = true end
 end
 
+---------------------------------------------------------------------------------------- simpler settings (2026-11-23)
+-- Settings that are gone: their keys are deleted from saved data at every start (cheap; also covers data an older
+-- copy wrote back after a roll-back). Most just took a fixed value; two groups became one choice each (below).
+DB.REMOVED_KEYS = {
+  panel = { "peekSeconds", "showZone", "showStatus", "showQuest", "showXP", "xpText", "xpTooltip", "grow",
+    "questRequests", "tag_DEAD", "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" },
+  activity = { "chat", "chatOnline", "chatOffline", "chatDied", "chatLevel", "chatCongrats", "chatMock", "chatRoast" },
+  popups = { "layerSame", "levelUpSound", "sound", "seconds" },
+  roasts = { "weak", "fall", "drown", "again", "deaths", "wipe", "steps", "jumps", "quit", "sound", "mockSound",
+    "addMock" },
+  stats = { "wipeLine", "showSound" },
+  find = { "meetPopup", "meetArrow", "meetMinimap" },
+  version = { "chatNotice" },
+}
+
+-- "News in my chat" from the old chat switches (the activity module's saved settings), or nil when there are none:
+-- the master switch off: "off"; any of the quiet kinds (online, offline, roasts) on: "all"; else "important".
+function DB.chatNewsFrom(a)
+  if type(a) ~= "table" or a.chat == nil then return nil end
+  if a.chat == false then return "off" end
+  if a.chatOnline == true or a.chatOffline == true or a.chatRoast == true then return "all" end
+  return "important"
+end
+
+-- "Sounds" from the five old sound switches, or nil when there are none: a pop-up, level-up or roast sound turned on:
+-- "all"; the mock laugh or the awards show sound turned off: "off"; else "shows" (the old defaults).
+function DB.soundsFrom(popups, roasts, stats)
+  local p = type(popups) == "table" and popups or {}
+  local r = type(roasts) == "table" and roasts or {}
+  local st = type(stats) == "table" and stats or {}
+  if p.sound == nil and p.levelUpSound == nil and r.sound == nil and r.mockSound == nil and st.showSound == nil then
+    return nil
+  end
+  if p.sound == true or p.levelUpSound == true or r.sound == true then return "all" end
+  if r.mockSound == false or st.showSound == false then return "off" end
+  return "shows"
+end
+
+local function savedSettings(db, id)
+  local e = type(db.modules) == "table" and db.modules[id]
+  return type(e) == "table" and type(e.settings) == "table" and e.settings or nil
+end
+
+-- Once per account (db.simpleSettings): the two new choices take the player's old switches. The defaults are already
+-- merged in, so the values are set here explicitly. Then the removed keys go.
+local function simplifySettings(db)
+  if not db.simpleSettings then
+    db.simpleSettings = true
+    local news = DB.chatNewsFrom(savedSettings(db, "activity"))
+    local sounds = DB.soundsFrom(savedSettings(db, "popups"), savedSettings(db, "roasts"), savedSettings(db, "stats"))
+    if news and savedSettings(db, "activity") then savedSettings(db, "activity").chatNews = news end
+    if sounds and savedSettings(db, "popups") then savedSettings(db, "popups").sounds = sounds end
+  end
+  for id, keys in pairs(DB.REMOVED_KEYS) do
+    local saved = savedSettings(db, id)
+    if saved then for _, key in ipairs(keys) do saved[key] = nil end end
+  end
+end
+
 -- Accepts nil or any type; returns a repaired table.
 function DB.init(saved, defs)
   local fresh = type(saved) ~= "table" or next(saved) == nil -- a new install: no saved TwizCrew data at all
@@ -460,7 +519,7 @@ function DB.init(saved, defs)
     myStatus = "",
     myMocks = {}, -- your own roasts for the Mock button (kept by Reset everything)
     stats = { chars = {} },
-    update = {}, -- the newest version a friend told us about (Update reminders); not a setting
+    update = {}, -- the newest version a friend told us about (Remind me to update); not a setting
     updateNotice = {}, -- { shown = newest version an update pop-up was shown for }: once per version; not a setting
   })
   for _, def in ipairs(defs or {}) do
@@ -469,6 +528,7 @@ function DB.init(saved, defs)
     ns.Util.mergeDefaults(e, moduleDefaults(def))
   end
   for id in pairs(REMOVED) do db.modules[id] = nil end
+  simplifySettings(db)
   -- the About page opens once by itself on a new install (UI/About.lua); data from an older version: never
   if fresh then db.aboutSeen = false elseif db.aboutSeen == nil then db.aboutSeen = true end
   return db

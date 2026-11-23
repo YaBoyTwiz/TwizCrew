@@ -650,13 +650,12 @@ return {
       ns.Modules.set("comm", "debug", false)
       A.eq(ns.Log.chatDebug, false)
     end,
-    comm_is_an_essential_module_with_only_the_debug_setting = function(ns, A)
+    comm_is_an_essential_module_with_debug_only_behind_tc_debug = function(ns, A)
       local d = ns.Modules.get("comm")
       A.eq(d.tier, "essential")
       A.eq(d.name, "Crew connection")
       A.eq(d.defaults, { debug = false })
-      A.eq(#d.settings, 1)
-      A.eq(d.settings[1].key, "debug")
+      A.eq(#d.settings, 0, "nothing in the settings window: /tc debug switches it")
     end,
     old_channel_settings_are_cleared_on_upgrade = function(ns, A, W)
       local db = boot(ns, W, function(w) w.state.channels.TwizCrewHQ = 6 end, {

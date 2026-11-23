@@ -559,7 +559,6 @@ return {
       A.eq(ns.Panel.viewForTest(), "tab")
       A.eq(ns.Panel.barForTest().missed, 1)
       ns.Modules.set("panel", "peek", true)
-      ns.Modules.set("panel", "peekSeconds", 2)
       receive(W, ns, "Frostie", "MOCK", { t = "Twiz", x = "Grats", k = "g", })
       W:advance(0.3)
       A.eq(ns.Panel.viewForTest(), "peek")

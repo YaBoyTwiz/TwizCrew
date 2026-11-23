@@ -394,7 +394,7 @@ local function onRequest(sender, f)
   if f.t and not ns.wireIsMe(f.t) then return end -- a group message meant for someone else
   if ns.isMe(sender) then return end
   if not (ns.roster and ns.roster:get(sender)) then return end -- crew only
-  if ns.Modules.setting("panel", "questRequests") == false then return end
+  if ns.Modules.setting("panel", "shareQuest") == false then return end -- (not sharing: nobody can ask)
   local now = ns.now()
   if heardAt[sender] and now - heardAt[sender] < REQUEST_GAP then return end
   heardAt[sender] = now

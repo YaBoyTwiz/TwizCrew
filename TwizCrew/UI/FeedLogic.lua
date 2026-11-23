@@ -17,9 +17,9 @@ local KNOWN = {}
 for _, k in ipairs(FeedLogic.KINDS) do KNOWN[k] = true end
 function FeedLogic.isKind(kind) return KNOWN[kind] == true end
 
--- The chat switch of each kind (setting keys of module "activity"); "chat" is the master switch.
-FeedLogic.CHAT_KEY = { online = "chatOnline", offline = "chatOffline", died = "chatDied", levelup = "chatLevel",
-  congrats = "chatCongrats", mock = "chatMock", roast = "chatRoast" }
+-- "News in my chat" (setting chatNews of module "activity"): "off", "important" (the default: these kinds) or "all"
+-- (every kind, also friends coming online, going offline and roasts).
+FeedLogic.CHAT_IMPORTANT = { died = true, levelup = true, congrats = true, mock = true }
 
 ---------------------------------------------------------------------------------------------------------- text
 local function secret(v) return ns.Util.isSecret(v) end
@@ -241,12 +241,15 @@ function Gate:allow(kind, name, now, testWanted)
 end
 
 ---------------------------------------------------------------------------------------------------------- chat
--- Does this kind print a line in chat? settings: the activity module's settings.
+-- Does this kind print a line in chat? settings: the activity module's settings. An unknown chatNews counts as
+-- "important" (the default).
 function FeedLogic.chatWanted(settings, kind)
   settings = settings or {}
-  local key = FeedLogic.CHAT_KEY[kind]
-  if not key then return false end
-  return settings.chat == true and settings[key] == true
+  if not KNOWN[kind] then return false end
+  local level = settings.chatNews
+  if level == "off" then return false end
+  if level == "all" then return true end
+  return FeedLogic.CHAT_IMPORTANT[kind] == true
 end
 
 -- "TwizCrew: " then the coloured line. The prefix colour is a plain hex like "ffd100".
@@ -297,7 +300,7 @@ FeedLogic.POPUP_FEED = POPUP_FEED
 -- After a fight: what slides out of the crew tab for the news that came during it (in a fight it is only counted).
 -- items: that news, oldest first, each with inScope (false: left out), popup (true: a pop-up already showed it in the
 -- fight, left out) and reactable (its row would show a button). ctx: { inCombat (a new fight started before the
--- wait was over), peek ("Slide out news" is on), sinceLogin (seconds) }.
+-- wait was over), peek ("Show news from the tab" is on), sinceLogin (seconds) }.
 -- Returns "wait" (keep the items for the end of the new fight), "none", or "push" and the entry to slide out: the one
 -- piece of news as it is, or a summary (kind "fight": count, items, `summary` = up to two short lines and "+N more",
 -- and `show` = the first item with a button, whose row is then shown with the count in the title line).

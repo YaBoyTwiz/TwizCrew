@@ -227,7 +227,7 @@ end
 
 local function placeMini(m)
   local mm = rawget(_G, "Minimap") or Minimap
-  if not setting("meetMinimap") or type(mm) ~= "table" then return hideMini() end
+  if type(mm) ~= "table" then return hideMini() end
   local me = ns.Where.me()
   local dist, bearing = ns.FindLogic.vector(me, m)
   if not dist then return hideMini() end

@@ -129,9 +129,9 @@ return {
     rows_add_layer_tag_and_filter = function(ns, A)
       local m = { member({ tags = { COMBAT = true } }) }
       A.eq(ns.PanelLogic.rows(m, {}, different, true, 0, WALL)[1].tags, { "LAYER", "COMBAT" })
-      A.eq(ns.PanelLogic.rows(m, { tag_COMBAT = false }, different, true, 0, WALL)[1].tags, { "LAYER" })
-      A.eq(ns.PanelLogic.rows(m, {}, different, false, 0, WALL)[1].tags, { "LAYER" })
-      A.eq(ns.PanelLogic.rows(m, { tag_LAYER = false }, different, true, 0, WALL)[1].tags, { "COMBAT" })
+      A.eq(ns.PanelLogic.rows(m, { tag_COMBAT = false }, different, true, 0, WALL)[1].tags, { "LAYER", "COMBAT" },
+        "no per-tag switches any more: an old saved one changes nothing")
+      A.eq(ns.PanelLogic.rows(m, {}, different, false, 0, WALL)[1].tags, { "LAYER" }, "the Tags switch still hides them")
       A.eq(ns.PanelLogic.rows(m, {}, never, true, 0, WALL)[1].tags, { "COMBAT" })
     end,
     rows_clamp_xp_and_ignore_peer_layer_tag = function(ns, A)
@@ -223,8 +223,8 @@ return {
       A.eq(rows[2].tip, { "Level 14" })
       A.eq(rows[3].xpText, "Lv 60 \194\183 max"); A.ok(rows[3].atMax)
       rows = L.rows(list, { rowStyle = "tiny", xpText = false, xpTooltip = false }, never, true, 0, WALL, nil, 60)
-      A.eq(rows[1].xpText, nil, "numbers switched off")
-      A.eq(rows[1].tip, nil, "hover detail switched off")
+      A.eq(rows[1].xpText, "62%", "no switch any more: tiny rows show the percent")
+      A.eq(rows[1].tip, { "Level 14 \194\183 62%", "380 XP to level 15" }, "the hover detail is always there")
       A.eq(L.rows(list, {}, never, true, 0, WALL)[1].xpText, "Lv 14 \194\183 62%", "full is the default style")
     end,
     self_member_carries_xp_numbers = function(ns, A)
@@ -276,13 +276,18 @@ return {
       A.ok(d); A.eq(d.name, "Crew panel"); A.eq(d.tier, "module"); A.eq(d.defaultEnabled, true)
       local keys = {}
       for i, s in ipairs(d.settings) do keys[i] = s.key end
-      A.eq(keys, { "noticeScope", "keepOpen", "peek", "peekSeconds", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle", "showZone", "showStatus", "showQuest", "shareQuest", "questRequests", "questHeadsUp", "showXP",
-        "xpText", "xpTooltip",
-        "idleAlpha", "locked", "grow", "hideInCombat", "hideInInstance", "hideWhenAlone", "showGuildOnline", "showNoAddon", "showOffline", "sort", "showSelf", "whatsNew", "about", "tag_DEAD",
-        "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" })
+      A.eq(keys, { "noticeScope", "keepOpen", "peek", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle",
+        "shareQuest", "questHeadsUp", "idleAlpha", "locked", "hideInCombat", "hideInInstance", "hideWhenAlone",
+        "showNoAddon", "sort", "showSelf", "whatsNew", "about" })
+      for _, gone in ipairs({ "peekSeconds", "showZone", "showStatus", "showQuest", "showXP", "xpText", "xpTooltip",
+        "grow", "questRequests", "tag_DEAD", "tag_AFK" }) do
+        A.eq(d.defaults[gone], nil, gone .. " is gone")
+      end
+      A.eq(d.defaults.showOffline, false, "kept: the Offline bar switches it")
+      A.eq(d.defaults.showGuildOnline, false, "kept: the Guild online bar switches it")
       A.eq(d.defaults.position, { point = "LEFT", x = 40, y = 100 })
       A.eq(d.defaults.scale, 1.0); A.eq(d.defaults.bgAlpha, 0.8); A.eq(d.defaults.rowStyle, "full")
-      A.eq(d.defaults.idleAlpha, 0.4); A.eq(d.defaults.showOffline, false); A.eq(d.defaults.showSelf, false); A.eq(d.defaults.grow, "down"); A.eq(d.defaults.sort, "online")
+      A.eq(d.defaults.idleAlpha, 0.4); A.eq(d.defaults.showOffline, false); A.eq(d.defaults.showSelf, false); A.eq(d.defaults.sort, "online")
       local sort
       for _, s in ipairs(d.settings) do if s.key == "sort" then sort = s end end
       A.eq(sort.choices, { { "name", "Name" }, { "level", "Level" }, { "online", "Online first" },
@@ -304,7 +309,6 @@ return {
       W:advance(1)
       ns.Modules.set("panel", "rowStyle", "tiny")
       ns.Modules.set("panel", "showSelf", true)
-      ns.Modules.set("panel", "grow", "up")
       W:advance(1)
       A.eq(#ns.Panel.models(), 13)
       A.eq(ns.Panel.models()[1].name, "Twiz")
@@ -675,15 +679,9 @@ return {
       A.eq(ns.Panel.rowTextsForTest(1), { corner = "Lv 12 " .. DOT .. " 63%" })
       ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
       A.eq(ns.Panel.rowTextsForTest(1), { corner = "63%" })
-      ns.Modules.set("panel", "xpText", false); W:advance(1)
-      A.eq(ns.Panel.rowTextsForTest(1), {}, "tiny without numbers: as before")
-      ns.Modules.set("panel", "rowStyle", "compact"); W:advance(1)
-      A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "compact without numbers: the level, as before")
-      ns.Modules.set("panel", "rowStyle", "full"); W:advance(1)
-      A.eq(ns.Panel.rowTextsForTest(1), { corner = "12" }, "full without numbers: as before")
+      A.no(ns.Modules.set("panel", "xpText", false), "no numbers switch any more: row style decides")
       ns.Modules.resetAll(); W:advance(1)
       ns.Modules.set("panel", "showNoAddon", false)
-      A.eq(ns.Modules.setting("panel", "xpText"), true)
       ns.Modules.set("panel", "showSelf", false)
       receive(ns, W, "Ginkan", "UPDATE", { lv = "60", xm = "0", xc = "0", xp = "0" }); W:advance(1)
       A.eq(ns.Panel.rowTextsForTest(1), { bar = "Lv 60 " .. DOT .. " max level" })
@@ -719,11 +717,7 @@ return {
       A.eq(tip.lines[3], "1,000 XP to level 13")
       r._scripts.OnLeave(r)
       A.no(tip.shown)
-      ns.Modules.set("panel", "xpTooltip", false); W:advance(1)
-      tip.lines = {}
-      r._scripts.OnEnter(r)
-      for _, l in ipairs(tip.lines) do A.no(l:find("XP to level", 1, true), "XP details switched off: " .. l) end
-      A.eq(tip.lines[2], "Where: Elwynn Forest", "the rest still shows")
+      A.no(ns.Modules.set("panel", "xpTooltip", false), "no switch for the XP details any more")
       A.eq(ns.Log.errors(10), {})
     end,
     panel_title_shows_the_version = function(ns, A, W)
@@ -810,10 +804,10 @@ return {
       A.eq(L.versionLine("99.0.0"), "TwizCrew v99.0.0 (newer than yours)")
       A.eq(L.versionLine("junk"), "TwizCrew vjunk")
       local rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50, ver = "0.0.1" } },
-        { xpTooltip = false }, nil, true, 0, 0)
-      A.eq(rows[1].tip, { "TwizCrew v0.0.1 (older than yours)" }, "shown even with XP details off")
-      rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50 } }, { xpTooltip = false }, nil, true, 0, 0)
-      A.eq(rows[1].tip, nil, "no version: no tip lines (the row still has a tooltip: its name and what its marks mean)")
+        {}, nil, true, 0, 0)
+      A.eq(rows[1].tip, { "Level 12 \194\183 50%", "TwizCrew v0.0.1 (older than yours)" }, "after the XP line")
+      rows = L.rows({ { name = "Frostie", online = true, level = 12, xp = 50 } }, {}, nil, true, 0, 0)
+      A.eq(rows[1].tip, { "Level 12 \194\183 50%" }, "no version: the XP line alone")
     end,
     away_after_idle_minutes = function(ns, A, W)
       start(ns, W)

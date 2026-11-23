@@ -986,6 +986,8 @@ local function migrateToTab(existing)
   ns.db.panelTabSince = true
   local saved = type(ns.db.modules) == "table" and type(ns.db.modules.panel) == "table" and ns.db.modules.panel.settings
   if type(saved) == "table" then saved.minimized = nil end -- (the old minimize switch is gone)
+  -- (the old fade settings are gone too: everyone gets the 40% "See-through when idle" default)
+  if type(saved) == "table" then saved.fadeOut, saved.fadeAlpha = nil, nil end
   if not existing then return end
   local p = setting("position")
   if type(p) == "table" and p.mini == true then -- a grow-up panel saved while minimized kept the bar's y

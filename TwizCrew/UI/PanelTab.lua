@@ -178,6 +178,7 @@ end
 stopSlideScript = function() if holder then holder:SetScript("OnUpdate", nil) end end
 
 local startBarTicker -- (below)
+local wakeSee -- (below)
 
 -- Slide the holder to `target` wide (0 = in, hidden at the end).
 function P.slideTo(target)
@@ -403,7 +404,7 @@ function P.buildTab()
   script(tab.badge, "OnClick", function() Panel.openActivity() end)
   script(tab.badge, "OnEnter", function()
     tabHover = true
-    startBarTicker()
+    wakeSee()
     tabTip(tab)
   end)
   script(tab.badge, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -437,7 +438,7 @@ function P.buildTab()
   end)
   script(tab, "OnEnter", function(self)
     tabHover = true
-    startBarTicker()
+    wakeSee()
     tabTip(self)
   end)
   script(tab, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
@@ -506,12 +507,14 @@ end
 -- being dragged. It goes back to idle SEE_DELAY seconds after the last of those. 100% = nothing but alpha 1.
 local function idleAlpha() return clamp(setting("idleAlpha"), 0.1, 1, 0.4) end
 
+-- Returns solid, and a second value true when the only reason is the mouse (that one rises over SEE_RISE; every other
+-- reason, news, an open panel, a slide, a drag, is solid at once so news never slides out faint).
 local function seeSolid(now)
   if dragging or (P.isMoving and P.isMoving()) then return true end
   if P.open ~= nil or P.slide ~= nil or P.curView == "peek" then return true end
   if P.bar and (P.bar:current() ~= nil or (flashAt ~= nil and now - flashAt < FLASH_SECONDS)) then return true end
-  if mouseOverTab() or mouseOverPanel() then return true end
-  if shownNow(holder) and over(holder) and focusOn(holder) then return true end
+  if mouseOverTab() or mouseOverPanel() then return true, true end
+  if shownNow(holder) and over(holder) and focusOn(holder) then return true, true end
   return false
 end
 
@@ -523,27 +526,35 @@ local function applyAlpha(a)
   if P.root then P.root:SetAlpha(kept and a or 1) end
 end
 
-local function stopSeeFrame() if seeFrame then seeFrame:SetScript("OnUpdate", nil) end end
+local function stopSeeFrame()
+  if seeFrame and seeFrame.seeSet then seeFrame.seeSet = nil; seeFrame:SetScript("OnUpdate", nil) end
+end
+
+local seeMove
+local function seeFrameStep() ns.Log.safe(FEATURE, seeMove, ns.now()) end
 
 -- Moves the alpha toward the target by the time since the last step; a frame's OnUpdate keeps it smooth until it
 -- arrives (then nothing runs).
-local function seeMove(now)
+seeMove = function(now)
   if seeTarget == nil then return end
-  local dt = seeAt and math.max(0, math.min(now - seeAt, 1)) or 0
+  -- (the first step of a fade counts one frame, so it starts moving at once)
+  local dt = seeAt and math.max(0, math.min(now - seeAt, 1)) or 0.02
   seeAt = now
   local nxt = Logic.seeStep(seeCur, seeTarget, dt, idleAlpha(), SEE_RISE, SEE_FALL)
   if nxt ~= seeCur then applyAlpha(nxt) end
   if nxt == seeTarget then seeAt = nil; stopSeeFrame(); return end
   if not seeFrame then seeFrame = CreateFrame("Frame") end
-  seeFrame:SetScript("OnUpdate", function() ns.Log.safe(FEATURE, seeMove, ns.now()) end)
+  if not seeFrame.seeSet then seeFrame.seeSet = true; seeFrame:SetScript("OnUpdate", seeFrameStep) end
 end
 
 -- Decides the target (every ticker tick, or at once with `snap`: a setting changed) and steps toward it.
 local function seeTick(now, snap)
   local idle = idleAlpha()
-  local solid = idle < 1 and seeSolid(now)
+  local solid, soft = false, false
+  if idle < 1 then solid, soft = seeSolid(now) end
   if solid then lastSolidAt = now end
   seeTarget = Logic.seeTarget(idle, solid, lastSolidAt and now - lastSolidAt or nil, SEE_DELAY)
+  if solid and not soft then snap = true end -- news, an open panel, a slide, a drag: solid at once, no rise
   if snap or seeCur == nil then applyAlpha(seeTarget); seeAt = nil; stopSeeFrame(); return end
   seeMove(now)
 end
@@ -556,12 +567,18 @@ local function seeBusy(now)
   return seeSolid(now)
 end
 
+-- Starts the ticker for a reason and applies the see-through level at once (the ticker's first fire is 0.1 s away).
+wakeSee = function()
+  startBarTicker()
+  if P.enabled and P.bar then seeTick(ns.now()) end
+end
+
 local seeWaited = 0
 local function seeWake(_, elapsed)
   seeWaited = seeWaited + (tonumber(elapsed) or 0)
   if seeWaited < 0.1 then return end
   seeWaited = 0
-  ns.Log.safe(FEATURE, function() if mouseOverPanel() then startBarTicker() end end)
+  ns.Log.safe(FEATURE, function() if mouseOverPanel() then wakeSee() end end)
 end
 
 -- The setting or the mode changed (applyLook): apply at once. A kept-open panel has no tab whose OnEnter wakes the
@@ -718,7 +735,7 @@ function Panel.onFeed(e)
     c.inScope, c.got = true, now
     fightNews[#fightNews + 1] = c
   end
-  startBarTicker()
+  wakeSee()
   requestRedraw()
 end
 

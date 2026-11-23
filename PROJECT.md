@@ -816,7 +816,12 @@ visible": a clearly labelled switch, not a small icon.
   `PanelLogic.seeTarget` / `seeStep`; the work is in `UI/PanelTab.lua` (the 0.1 s ticker decides the target, a frame's
   OnUpdate smooths the fade and runs only while it moves). The ticker stops when settled. A kept-open panel has no tab
   to wake the ticker, so it polls the mouse (an OnUpdate, 10 times a second) while it is see-through. The update "!"
-  and the missed glow do not hold it solid.
+  and the missed glow do not hold it solid. Only the mouse rises over 0.2 s; news, an open panel, a slide and a drag
+  go to solid at once (the ticker's first step runs the moment it starts, so news never slides out faint). Parts that
+  stay solid on purpose, whatever the panel's alpha (`SetIgnoreParentAlpha`): the update line, the news line, and the
+  Mock, Congrats and Share buttons (news and reactions are not see-through). The Keep open switch bar fades with the
+  panel. Old saved `fadeOut` / `fadeAlpha` are deleted once at the tab migration (no value is mapped; everyone gets
+  40%).
 - **Pop-ups:** they show as before, and the news slides out of the tab too. "Show news on the tab, not as pop-ups"
   (`barInstead`, default off) stops the online, death, level-up, layer and running-off pop-ups while the panel is
   tucked, the tab is on screen and news slides out, never in a fight (nothing slides out then, so the pop-up shows).
@@ -842,8 +847,9 @@ tack icon (the owner's later word).
 
 **How the old settings map.** `minimized` is gone (deleted from saved settings once); everyone gets the tab, whatever
 it was. `peek` is "Slide out news", `peekSeconds` "How long news stays out". `barHover` is "Open when my mouse rests on
-the tab", default **on**. `barInstead` keeps its meaning ("Show news on the tab, not as pop-ups"). Fade, grow direction
-and lock apply to Keep open mode (their help says so); lock also locks the tab. Saved settings hold every default
+the tab", default **on**. `barInstead` keeps its meaning ("Show news on the tab, not as pop-ups"). Grow direction
+and lock apply to Keep open mode (their help says so); lock also locks the tab. The old fade settings are gone:
+"See-through when idle" applies to the tab and the kept-open panel. Saved settings hold every default
 (`DB.init` merges them in), so a changed default never reaches an existing user by itself: the first run of this
 version (`db.panelTabSince`, account-wide) sets `keepOpen` off and `barHover` on for an existing user (one who has the
 older marks `panelSince0112` / `fadeOnSince017`), places the tab on the edge nearest to where the panel was, at about

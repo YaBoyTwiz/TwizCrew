@@ -373,7 +373,6 @@ function P.buildHeader()
 
   -- the Keep open switch: a wide button right under the header, lit while on (owner: "extremely easy and visible")
   keepBar = CreateFrame("Button", nil, P.root)
-  if keepBar.SetIgnoreParentAlpha then keepBar:SetIgnoreParentAlpha(true) end -- never faded
   keepBar:SetHeight(KEEP_HEIGHT)
   T.paint(keepBar, C.row, 0.7, C.border, 1)
   keepBar.glow = keepBar:CreateTexture(nil, "ARTWORK")

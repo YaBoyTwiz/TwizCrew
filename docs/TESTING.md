@@ -1024,8 +1024,8 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    smaller: the tab is still fully on screen.
 7. **Keep open and back.** Slide the panel out: right under the title bar is a wide **Keep open: OFF** switch, dim.
    Hover it: "Keep open", "ON: the panel stays on screen...". Click it: it reads **Keep open: ON** (gold, lit), the
-   tab disappears and the panel stays where you last left it as a normal window (drag, fade, grow direction and
-   lock work as before). Click it again: the panel tucks back into the tab. In Tiny rows it reads "Keep: ON" /
+   tab disappears and the panel stays where you last left it as a normal window (drag, grow direction and
+   lock work as before; it fades with **See-through when idle**). Click it again: the panel tucks back into the tab. In Tiny rows it reads "Keep: ON" /
    "Keep: OFF". `/tc mini`, the key binding (Keybindings > AddOns > TwizCrew > "Keep the crew panel open, or let it
    tuck away"), the title bar's right-click menu ("Keep open" / "Tuck away"), the tab's right-click menu and the
    minimap button's menu do the same.
@@ -1082,7 +1082,10 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    a second after it slides back. Right-click the tab: solid while the menu is open. Drag the tab: solid. Turn on
    **Keep open**: the whole panel is faint when the mouse is away and solid with the mouse on it (move between rows,
    the header and the tabs: no flicker). Settings, **See-through when idle**: moving the slider changes it at once;
-   100% means nothing is ever faint; hover its (i) for the tip. Fight with it faint: no errors.
+   100% means nothing is ever faint; hover its (i) for the tip. Fight with it faint: no errors. On purpose: the
+   **Keep open** switch bar under the title bar fades with the panel, but the update line, the news line and the
+   Mock, Congrats and Share buttons stay solid even when the panel is faint (news and reactions are not
+   see-through). News and an open panel are solid at once, never rising from faint.
 
 ## Server-side storage probes (2026-11-23)
 

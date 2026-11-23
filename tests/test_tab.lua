@@ -1672,6 +1672,71 @@ return {
       A.no(ns.Panel.barTickerForTest())
     end,
 
+    news_arriving_while_idle_is_solid_in_the_same_tick = function(ns, A, W)
+      ready(W)
+      A.eq(ns.Panel.seeForTest().tab, 0.4)
+      friend(W, ns, "Frostie")
+      A.eq(ns.Panel.seeForTest().tab, 1, "no rise, no wait for the ticker")
+      A.eq(ns.Panel.seeForTest().holder, 1)
+    end,
+
+    hovering_starts_the_rise_at_once = function(ns, A, W)
+      ready(W)
+      mouseTab(ns, true)
+      local v = ns.Panel.seeForTest().tab
+      A.ok(v > 0.4 and v < 1, "rising at once, not snapped: " .. tostring(v))
+      A.eq(ns.Panel.seeForTest().target, 1)
+    end,
+
+    keep_open_on_then_off_leaves_nothing_faded_twice = function(ns, A, W)
+      ready(W)
+      tc(W, "mini"); W:advance(1)
+      A.eq(ns.Panel.seeForTest().root, 0.4)
+      A.eq(ns.Panel.seeForTest().holder, 1)
+      tc(W, "mini"); W:advance(2)
+      A.eq(ns.Panel.isKeptOpen(), false)
+      local s = ns.Panel.seeForTest()
+      A.eq(s.root, 1, "the panel is whole again")
+      A.eq(s.tab, 0.4, "the tab is at the idle level")
+      A.eq(s.holder, 0.4, "the holder follows it once, not twice")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_module_off_and_on_while_faded_is_fine = function(ns, A, W)
+      ready(W)
+      ns.Modules.setEnabled("panel", false); W:advance(1)
+      ns.Modules.setEnabled("panel", true); W:advance(2)
+      local s = ns.Panel.seeForTest()
+      A.ok(s.tab and s.tab >= 0.4 and s.tab <= 1, "sane tab alpha: " .. tostring(s.tab))
+      A.ok(s.root == nil or (s.root >= 0.4 and s.root <= 1), "sane panel alpha")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    the_holder_is_solid_while_the_panel_is_open_by_hover_or_click = function(ns, A, W)
+      ready(W)
+      hoverOpen(W, ns)
+      A.eq(ns.Panel.seeForTest().holder, 1, "open by hover")
+      A.eq(ns.Panel.seeForTest().root, 1)
+      mouseTab(ns, false)
+      ns.Panel.closeTab(); W:advance(0.5); ns.Panel.finishSlideForTest(); W:advance(5)
+      ns.Panel.openTab("click"); W:advance(0.5); ns.Panel.finishSlideForTest()
+      A.eq(ns.Panel.seeForTest().holder, 1, "open by click")
+      mousePanel(ns, true); W:advance(5)
+      A.eq(ns.Panel.seeForTest().holder, 1, "mouse on it: still solid")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    old_fade_settings_are_cleared_once = function(ns, A, W)
+      W.env.TwizCrewDB = { panelSince0112 = true, panelSince0113 = true, fadeOnSince017 = true, myStatus = "",
+        modules = { panel = { enabled = true, settings = { fadeOut = true, fadeAlpha = 0.7 } } } }
+      W:fire("ADDON_LOADED", "TwizCrew"); W:fire("PLAYER_LOGIN"); W:fire("PLAYER_ENTERING_WORLD")
+      W:advance(1)
+      local s = W.env.TwizCrewDB.modules.panel.settings
+      A.eq(s.fadeOut, nil)
+      A.eq(s.fadeAlpha, nil)
+      A.eq(ns.Panel.seeForTest().tab, 0.4, "the default for everyone")
+    end,
+
     the_slider_applies_at_once_and_100_percent_is_off = function(ns, A, W)
       ready(W)
       ns.Modules.set("panel", "idleAlpha", 0.2)

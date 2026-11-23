@@ -912,7 +912,7 @@ hides all). Pop-ups: How long they stay (5 s). Roasts: the nine roast-kind switc
 (the My mocks window does both). Hall of Shame: the Wipe Squad line (shown when there were wipes). Find: the meet-up
 pop-up, big arrow and minimap parts (one Meet-ups switch). Buttons that only repeated another way in: Show recent
 activity, Open the crew calendar, Show today's recap now, Update my spell ranks now. Out of the window but still
-working from their own control: Show offline friends and Show the guild online list (the two bars, the title menu),
+working from their own control: Show offline friends and Show the guild online list (the guild online list opens from its bar; the title menu only has Show offline friends),
 Only use my own roasts (the My mocks window), Show technical messages (`/tc debug`). Clear the list moved to the
 Recent window (a red button next to Close).
 

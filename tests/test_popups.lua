@@ -315,6 +315,20 @@ return {
       A.no(ns.Panel.isClose("Ginkan"))
       A.ok(ns.Panel.noticeInScope("mock", "Ginkan"), "other kinds are never scoped")
     end,
+    quest_request_sound_follows_sounds = function(ns, A, W)
+      ready(ns, W)
+      local played = {}
+      W.env.SOUNDKIT = { IG_QUEST_LIST_OPEN = 777 }
+      W.env.PlaySound = function(id) played[#played + 1] = id end
+      ns.Popups.questRequest("Frostie", "Wolves")
+      A.eq(played, { 777 }, "Shows only: still plays")
+      ns.Modules.set("popups", "sounds", "off")
+      ns.Popups.questRequest("Frostie", "Wolves")
+      A.eq(played, { 777 }, "Off: silent")
+      ns.Modules.set("popups", "sounds", "all")
+      ns.Popups.questRequest("Frostie", "Wolves")
+      A.eq(played, { 777, 777 }, "All: plays")
+    end,
     ding_pop_up_for_a_friend = function(ns, A, W)
       ready(ns, W)
       receive(ns, W, "Frostie", "UPDATE", { lv = "12" })

@@ -57,6 +57,12 @@ return {
       A.eq(f({ chat = true, chatRoast = true }), "all")
       A.eq(f({ chat = true, chatDied = false, chatLevel = true }), "important", "the old defaults or fewer: Important")
       A.eq(f({ chat = true }), "important")
+      A.eq(f({ chat = true, chatDied = false, chatLevel = false, chatCongrats = false, chatMock = false }), "off",
+        "every kind on by default turned off, the quiet ones never on: no chat lines before, Off now")
+      A.eq(f({ chat = true, chatOnline = false, chatOffline = false, chatDied = false, chatLevel = false,
+        chatCongrats = false, chatMock = false, chatRoast = false }), "off", "all seven off")
+      A.eq(f({ chat = true, chatDied = false, chatLevel = false, chatCongrats = false }), "important",
+        "a missing key is its old default (chatMock on)")
     end,
 
     sounds_from_the_five_old_switches = function(ns, A)

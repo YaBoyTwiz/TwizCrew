@@ -464,6 +464,16 @@ DB.REMOVED_KEYS = {
 function DB.chatNewsFrom(a)
   if type(a) ~= "table" or a.chat == nil then return nil end
   if a.chat == false then return "off" end
+  -- all seven per-kind switches turned off (a missing key = its old default) never wrote a chat line: Off
+  local KINDS = { chatOnline = false, chatOffline = false, chatDied = true, chatLevel = true, chatCongrats = true,
+    chatMock = true, chatRoast = false }
+  local any = false
+  for k, default in pairs(KINDS) do
+    local v = a[k]
+    if v == nil then v = default end
+    if v == true then any = true end
+  end
+  if not any then return "off" end
   if a.chatOnline == true or a.chatOffline == true or a.chatRoast == true then return "all" end
   return "important"
 end

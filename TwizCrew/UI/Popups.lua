@@ -496,6 +496,7 @@ function Popups.questRequest(name, title)
   f:SetAlpha(1)
   f:Show()
   layout()
+  if ns.Modules.setting(FEATURE, "sounds") == "off" then return end -- Sounds: Off is silent
   if type(PlaySound) == "function" and type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_OPEN then
     pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN)
   end

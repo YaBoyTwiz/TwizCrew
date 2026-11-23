@@ -247,7 +247,7 @@ function ACTIONS.layer()
   ensureFakes()
   if ns.Layer and ns.Layer.lookNow then ns.Layer.lookNow() end -- the fakes' first look, before the button's own news
   local now = layerOf[BUDDY] == "different" and "same" or "different"
-  if not ns.Modules.isEnabled("layer") then say("the Layer tracker is turned off in /tc, so nothing shows.") end
+  if not ns.Modules.isEnabled("layer") then say("Other-layer warnings are turned off in /tc, so nothing shows.") end
   popupHint("layerDiff", "Layer changes")
   layerOf[BUDDY] = now
   layerTurn = layerTurn + 1
@@ -264,7 +264,7 @@ function ACTIONS.roast()
   local before = #ns.Roasts.forTest.shown()
   inject(BUDDY, "ROAST", { k = r.k, v = r.v or "", x = r.x or "", n = tostring(math.random(#ns.Roasts.LINES[r.k])) })
   if #ns.Roasts.forTest.shown() == before then
-    say("no roast showed: Live roasts (or that kind of roast) is off in /tc, or one about Testbuddy showed less than "
+    say("no roast showed: Live roasts is off in /tc, or one about Testbuddy showed less than "
       .. "10 seconds ago.")
   end
 end
@@ -314,7 +314,7 @@ function ACTIONS.walk()
     return
   end
   if not ns.Modules.isEnabled("find") then
-    say("Find the crew is turned off in /tc (under Extras), so no arrows show.")
+    say("Find the crew is turned off in /tc (on the Find page), so no arrows show.")
     return
   end
   local me = ns.Where.me()
@@ -492,6 +492,7 @@ end
 function TestTools.open()
   if not win then win = buildWindow() end
   win:Show()
+  if win.Raise then win:Raise() end -- over the settings window it opens from (both are DIALOG strata)
 end
 
 function TestTools.close() if win then win:Hide() end end

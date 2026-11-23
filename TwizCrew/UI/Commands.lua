@@ -6,42 +6,44 @@ ns.Commands = Commands
 
 local FEATURE = "commands"
 
-local HELP = {
+-- /tc help: the everyday commands. /tc help more: the rest. The test checks (/tc guildtest, /tc caltest,
+-- /tc chattest) work but are on neither list: they are for fixing problems with Claude.
+Commands.HELP = {
   "TwizCrew commands:",
   "/tc - open or close the settings",
   "/tc about - how to use TwizCrew: a short page about what it does",
-  "/tc help - that page, and this list of commands",
-  "/tc show - show the crew panel",
-  "/tc hide - hide the crew panel",
   "/tc mini - keep the panel open, or let it tuck away into its tab",
-  "/tc recent - the list of recent happenings: friends online, deaths, level-ups, congrats and mocks",
-  "/tc minimap - show or hide the TwizCrew button on the minimap",
+  "/tc show - show the crew panel   /tc hide - hide it",
+  "/tc cal - the crew calendar: notes, dungeon runs and who usually plays when",
+  "/tc recent - what happened lately: friends online, deaths, level-ups, congrats and mocks",
   "/tc status <text> - a short note your friends see next to your name (/tc status alone clears it)",
+  "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc mock - the My mocks window: write, try and delete your own mocks",
+  "/tc awards - the awards show for this session, great on stream",
+  "/tc report - a health check you can copy and paste to Discord",
+  "/tc help - this list and the How to use page;  /tc help more - every other command",
+}
+
+Commands.HELP_MORE = {
+  "More TwizCrew commands:",
+  "/tc new - what's new: every version and what changed",
+  "/tc recap - today's recap: time played, levels, quests, deaths, gold and who was on",
+  "/tc rankup - put the highest rank of every spell on your action bars",
+  "/tc minimap - show or hide the TwizCrew button on the minimap",
   "/tc mock add <text> - add your own roast for the Mock button ({name} = the dead friend, {me} = you)",
   "/tc mock list - your roasts, numbered   /tc mock remove <number> - take one out",
   "/tc mock spot - put the mock show back in its normal spot (drag it to move it)",
-  "/tc new - what's new: every version and what changed",
-  "/tc rankup - put the highest rank of every spell on your action bars",
-  "/tc cal - the crew calendar: who played when, and the best time to play together",
-  "/tc recap - today's recap: time played, levels, quests, deaths, gold and who was on",
-  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, keep open, calendar, notes, AFK, ranks, mock, recap)",
-  "/tc afk - show your crew you are away (again to come back; moving or casting also brings you back)",
   "/tc meet clear - take the meet-up away (to make one: Ctrl + right-click a spot on the world map)",
+  "/tc awards all - the awards show for all time",
+  "/tc session new - start a new crew session, everyone's session stats start from 0",
+  "/tc stats reset - set your own stats back to 0 (asks first)",
   "/tc reset - put every setting back to normal (asks first)",
-  "/tc report - a health check you can copy and paste to Discord",
-  "/tc guildtest - check that guild messages reach your guildmates' copies (needs one of them online with TwizCrew)",
-  "/tc caltest - test the game's guild calendar; /tc caltest make - add a test event the whole guild sees; /tc caltest remove - take yours away",
-  "/tc chattest - test whether guild chat keeps its history on the server; /tc chattest send - post a test line (the whole guild sees it)",
+  "/tc test - try things out alone: pretend friends and pop-ups, only on your screen (/tc test help lists them)",
   "/tc debug - turn technical chat messages on or off",
   "/tc forget <name> - delete an offline guildmate's saved stats and notes here; first or full name (/tc remove does the same). A member who just left the guild is only hidden and comes back with their data",
   "/tc guild - every set of saved crew data, numbered; /tc guild use - make the one in use this guild's",
   "/tc guild new - start fresh for this guild; /tc guild load <number> - use another set (nothing is deleted)",
-  "/tc awards - the awards show for this session, great on stream",
-  "/tc awards all - the awards show for all time",
-  "/tc session new - start a new crew session, everyone's session stats start from 0",
-  "/tc stats reset - set your own stats back to 0 (asks first)",
-  "/tc test - try things out alone: pretend friends and pop-ups, only on your screen (/tc test lists them)",
+  "Key bindings: Esc > Options > Keybindings > AddOns > TwizCrew (panel, keep open, calendar, notes, AFK, ranks, mock, recap)",
 }
 
 local function say(text) print("TwizCrew: " .. text) end
@@ -273,7 +275,7 @@ function Commands.binding(what)
     if type(name) ~= "string" or not (ns.roster and ns.roster:get(name)) or not dead then
       say("target a dead crew friend to mock them.")
     elseif not ns.Roasts.canMock(name) then
-      say("mocks are switched off (Roasts, Mock button roasts).")
+      say("mocks are switched off (settings, Fun: Mock button).")
     elseif not ns.Roasts.mock(name) then
       say("give it a few seconds before mocking " .. name .. " again.")
     end
@@ -362,11 +364,16 @@ local function toggleDebug()
 end
 
 local function printHelp()
-  for _, line in ipairs(HELP) do print(line) end
+  for _, line in ipairs(Commands.HELP) do print(line) end
 end
 
--- /tc help: the About page and the list of commands (an unknown word only prints the list).
-local function help()
+-- /tc help: the About page and the everyday commands; /tc help more: the other commands (an unknown word only prints
+-- the everyday list).
+local function help(rest)
+  if tostring(rest or ""):lower() == "more" then
+    for _, line in ipairs(Commands.HELP_MORE) do print(line) end
+    return
+  end
   if ns.About then ns.About.open() end
   printHelp()
 end

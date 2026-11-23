@@ -392,10 +392,13 @@ return {
       A.eq(seen, { "GUILD", W.state.player })
     end,
 
-    help_lists_guildtest = function(ns, A, W)
+    guildtest_is_unlisted_but_works = function(ns, A, W)
       boot(W)
-      tc(W, "help")
-      A.ok(printed(W, "/tc guildtest - "))
+      tc(W, "help"); tc(W, "help more")
+      A.no(printed(W, "/tc guildtest - "), "a test check: on neither help list")
+      local before = #W.printed
+      tc(W, "guildtest")
+      A.ok(#W.printed > before, "the command still answers")
     end,
   },
 }

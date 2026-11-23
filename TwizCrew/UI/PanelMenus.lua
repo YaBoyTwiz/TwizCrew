@@ -81,28 +81,16 @@ local function isOn(key)
   return function() return setting(key) and true or false end
 end
 
--- The wrench button's menu: handy tools. New tools go here.
+-- The wrench button's menu: handy tools, things to open (no switches: those live in the settings). New tools go here.
+-- Recent activity is not here: the Activity tab and the crew tab's menu open it.
 function Panel.toolItems()
-  local function rank(key) return ns.Modules.setting("rankup", key) end
-  local function flipRank(key)
-    return function()
-      if not ns.Modules.isEnabled("rankup") then ns.Modules.setEnabled("rankup", true) end
-      ns.Modules.set("rankup", key, not rank(key))
-    end
-  end
   return compact {
     ns.RankUp and { label = "Update my spell ranks", icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom",
       onClick = function() ns.RankUp.run() end } or nil,
-    ns.RankUp and { label = "...by itself when I learn a spell", icon = "Interface\\Icons\\INV_Misc_PocketWatch_01",
-      checked = function() return rank("auto") and true or false end, onClick = flipRank("auto") } or nil,
-    ns.RankUp and { label = "...with its own button on screen", icon = "Interface\\Icons\\INV_Misc_Rune_01",
-      checked = function() return rank("showButton") and true or false end, onClick = flipRank("showButton") } or nil,
     ns.Calendar and { label = "Crew calendar", icon = "Interface\\Icons\\INV_Scroll_03",
       onClick = function() ns.Calendar.toggle() end } or nil,
     ns.MockEditor and { label = "My mocks", icon = "Interface\\Icons\\INV_Misc_Bone_HumanSkull_01",
       onClick = function() ns.MockEditor.open() end } or nil,
-    ns.Recent and { label = "Recent activity", icon = "Interface\\Icons\\INV_Misc_Note_02",
-      onClick = function() ns.Recent.open() end } or nil,
     ns.Recap and { label = "Today's recap", icon = "Interface\\Icons\\INV_Misc_Book_11",
       onClick = function() ns.Recap.show() end } or nil,
     ns.AwayCard and ns.AwayCard.hasCard() and { label = "While you were away",
@@ -338,19 +326,8 @@ function Panel.rowMenu(m)
       else print("TwizCrew: could not forget " .. ns.Util.safeText(name) .. " (" .. tostring(why) .. ").") end
     end }
   end
-  -- my own things, on every row (my own row is off by default); later features for me go here too
-  for _, it in ipairs(Panel.myItems()) do items[#items + 1] = it end
+  -- (my own things, status and AFK, are on my own row's menu and the title's menu, not on every friend's)
   return compact(items)
-end
-
--- What I can do for myself from any row's menu (and my own row's).
-function Panel.myItems()
-  return compact {
-    { label = "Me: set my status", onClick = function() Panel.openStatusBox() end },
-    { label = (ns.Away and ns.Away.isAway()) and "Me: I'm back" or "Me: go AFK", onClick = function() Panel.toggleAway() end },
-    ns.RankUp and ns.Modules.isEnabled("rankup") and
-      { label = "Me: update my spell ranks", onClick = function() ns.RankUp.run() end } or nil,
-  }
 end
 
 -- The share icon on a quest line: ask them to share it.

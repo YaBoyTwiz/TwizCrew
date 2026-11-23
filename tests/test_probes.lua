@@ -297,9 +297,10 @@ return {
       A.ok(printed(W, "/tc caltest make - add a guild test event"))
       tc(W, "chattest what")
       A.ok(printed(W, "/tc chattest send - post a test line to guild chat (the whole guild sees it)"))
-      tc(W, "help")
-      A.ok(printed(W, "/tc caltest - "), "help lists caltest")
-      A.ok(printed(W, "/tc chattest - "), "help lists chattest")
+      W.printed = {}
+      tc(W, "help"); tc(W, "help more")
+      A.no(printed(W, "/tc caltest - "), "a test check: on neither help list")
+      A.no(printed(W, "/tc chattest - "), "a test check: on neither help list")
     end,
 
     chattest_lists_streams_and_says_history_is_kept = function(ns, A, W)

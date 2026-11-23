@@ -272,7 +272,7 @@ return {
     choice_control_says_right_click_goes_back = function(ns, A, W)
       local tip = recordTip(W)
       start(ns, W)
-      ns.Settings.open()
+      ns.Settings.open(); ns.Settings.setTab("advanced", "panel")
       local r = ns.Settings.rowForTest("panel", "rowStyle")
       hover(r.control)
       A.eq(tip.lines[1], "Next choice")
@@ -315,7 +315,27 @@ return {
       A.eq(W.printed[before + 1], "TwizCrew commands:", "and the list is printed")
       local list = table.concat(W.printed, "\n", before + 1)
       A.contains(list, "/tc about -")
-      A.contains(list, "/tc help -")
+      A.contains(list, "/tc help more -")
+      local lines = 0
+      for i = before + 1, #W.printed do if W.printed[i]:find("^/tc") then lines = lines + 1 end end
+      A.ok(lines <= 12, "about ten everyday lines, got " .. lines)
+      A.no(list:find("/tc guild ", 1, true), "the guild data commands are on the long list")
+      before = #W.printed
+      W.env.SlashCmdList.TWIZCREW("help more")
+      A.eq(W.printed[before + 1], "More TwizCrew commands:")
+      local more = table.concat(W.printed, "\n", before + 1)
+      A.contains(more, "/tc guild - "); A.contains(more, "/tc forget <name> - "); A.contains(more, "/tc test - ")
+      A.contains(more, "Key bindings:")
+      -- every command word that does something is on one of the two lists, except the test checks
+      local listed = table.concat(ns.Commands.HELP, "\n") .. "\n" .. table.concat(ns.Commands.HELP_MORE, "\n")
+      for _, word in ipairs({ "about", "mini", "show", "hide", "cal", "recent", "status", "afk", "mock", "awards",
+        "report", "new", "recap", "rankup", "minimap", "meet", "session", "stats", "reset", "test", "debug", "forget",
+        "guild" }) do
+        A.ok(listed:find("/tc " .. word, 1, true), word .. " is listed")
+      end
+      for _, word in ipairs({ "guildtest", "caltest", "chattest" }) do
+        A.no(listed:find("/tc " .. word, 1, true), word .. " is not listed")
+      end
       ns.About.close()
       before = #W.printed
       W.env.SlashCmdList.TWIZCREW("nonsense")

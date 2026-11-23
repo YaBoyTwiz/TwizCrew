@@ -14,7 +14,7 @@ local setting, keepOpen, openMenu, script, draggable = P.setting, P.keepOpen, P.
 
 local KEEP_HEIGHT = 20   -- the Keep open switch right under the header
 local UPDATE_HEIGHT = 17 -- the gold "Update available: vX" line under it
-local NEWS_HEIGHT = 18   -- the What's new line under it, always there (bright "New in vX!" until you've read it)
+local NEWS_HEIGHT = 18   -- the "New in vX!" line under it, only until the What's new window has been opened
 
 local afkButton -- the "zzz" button in the header: go AFK / come back
 local toolsButton -- the wrench in the header: a menu of handy tools (spell ranks, ...)
@@ -31,7 +31,7 @@ local countButton -- a hover area over the count ("2 here · 9 online"): what th
 local rootHead
 local barTextNow = ""  -- the text on the bar's count spot now (test hook)
 ---------------------------------------------------------------------------------------------------------- update
--- "Update available: vX" or nil, worked out inside Update reminders' own guard: an error there means "no line",
+-- "Update available: vX" or nil, worked out inside Remind me to update' own guard: an error there means "no line",
 -- never a broken panel.
 local function updateText()
   if not ns.Updates or not ns.Updates.available then return nil end
@@ -190,22 +190,16 @@ local function drawHeader(s, view, news)
   else
     updateBar:Hide()
   end
-  -- What's new: always there so it's easy to find; bright with "New in vX!" until the window has been opened
+  -- What's new: only while there is something new (owner, 2026-11-23: no longer always there); a click on the title,
+  -- the wrench menu and /tc new open it any time.
   newsLine = nil
-  if ns.Changelog then
-    local fresh = ns.Changelog.unseen()
+  if ns.Changelog and ns.Changelog.unseen() then
     local ver = "v" .. ns.Util.safeText(tostring(ns.VERSION))
-    if fresh then
-      newsLine = s.rowStyle == "tiny" and ("New in " .. ver .. "!") or ("New in " .. ver .. "! Click to see what changed")
-    else
-      newsLine = s.rowStyle == "tiny" and "What's new" or ("What's new in " .. ver)
-    end
+    newsLine = s.rowStyle == "tiny" and ("New in " .. ver .. "!") or ("New in " .. ver .. "! Click to see what changed")
     newsBar:ClearAllPoints()
     newsBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 2, -(top - 2))
     newsBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", -2, -(top - 2))
     newsBar.text:SetText(newsLine)
-    newsBar.text:SetTextColor(T.rgb(fresh and "8fd0ff" or "c8c8c8"))
-    newsBar.glow:SetAlpha(fresh and 1 or 0.45)
     newsBar:Show()
     top = top + NEWS_HEIGHT
   else

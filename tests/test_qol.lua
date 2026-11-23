@@ -84,18 +84,20 @@ return {
       local db = start(ns, W)
       W:advance(1)
       A.eq(db.newsSeen, ns.VERSION)
-      A.eq(ns.Panel.newsLineForTest(), "What's new in v" .. ns.VERSION, "always there, quiet")
+      A.eq(ns.Panel.newsLineForTest(), nil, "nothing new: no line (the title opens What's new)")
       ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
-      A.eq(ns.Panel.newsLineForTest(), "What's new", "short in tiny rows")
+      A.eq(ns.Panel.newsLineForTest(), nil)
     end,
     an_update_shows_the_news_line_until_seen = function(ns, A, W)
       local db = start(ns, W, { fadeOnSince017 = true })
       W:advance(1)
       A.eq(ns.Panel.newsLineForTest(), "New in v" .. ns.VERSION .. "! Click to see what changed")
+      ns.Modules.set("panel", "rowStyle", "tiny"); W:advance(1)
+      A.eq(ns.Panel.newsLineForTest(), "New in v" .. ns.VERSION .. "!", "short in tiny rows")
       W.env.SlashCmdList.TWIZCREW("new")
       W:advance(1)
       A.eq(db.newsSeen, ns.VERSION)
-      A.eq(ns.Panel.newsLineForTest(), "What's new in v" .. ns.VERSION, "quiet once the window was opened")
+      A.eq(ns.Panel.newsLineForTest(), nil, "gone once the window was opened")
     end,
     ------------------------------------------------------------------------------------------- online friends only
     offline_friends_wait_behind_the_offline_bar = function(ns, A, W)

@@ -601,10 +601,10 @@ return {
       A.eq(ns.Quest.share("Not In My Log"), "missing")
       rawset(W.env.C_QuestLog, "IsPushableQuest", function() return false end)
       A.eq(ns.Quest.share("Kobold Camp Cleanup"), "unshareable")
-      ns.Modules.set("panel", "questRequests", false)
+      ns.Modules.set("panel", "shareQuest", false)
       W:advance(16)
       receive(ns, W, "Frostie", "QREQ", { t = "Twiz", q = "Kobold Camp Cleanup" })
-      A.eq(#ns.Popups.textsForTest(), 0, "switched off")
+      A.eq(#ns.Popups.textsForTest(), 0, "Share my quests off: nobody can ask (one switch for both)")
       A.eq(ns.Log.errors(10), {})
     end,
     my_quest_id_and_shareable_go_out = function(ns, A, W)
@@ -664,21 +664,20 @@ return {
     right_click_menu = function(ns, A, W)
       start(ns, W)
       local M = ns.Panel.rowMenu
-      local ME1, ME2, ME3 = "Me: set my status", "Me: go AFK", "Me: update my spell ranks" -- mine, on every row
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends", ME1, ME2, ME3 })
-      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", "Forget this friend", ME1, ME2, ME3 }, "offline")
+      -- my own things (status, AFK, spell ranks) are not on a friend's menu any more: my own row and the title menu
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Invite to group", "Add to friends" })
+      A.eq(labels(M({ name = "Frostie", offline = true, tags = {} })), { "Add to friends", "Forget this friend" }, "offline")
       W.state.groupMembers = { "Frostie" }
-      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends", ME1, ME2, ME3 }, "already grouped")
+      A.eq(labels(M({ name = "Frostie", tags = {} })), { "Whisper", "Add to friends" }, "already grouped")
       W.state.groupMembers = {}
       A.eq(labels(M({ name = "Frostie", tags = { "DEAD" } })), { "Whisper", "Invite to group", "Mock them",
-        "Add to friends", ME1, ME2, ME3 }, "dead: mock")
+        "Add to friends" }, "dead: mock")
       A.eq(labels(M({ name = "Frostie", dinged = true, tags = {} })), { "Whisper", "Invite to group",
-        "Congratulate them", "Add to friends", ME1, ME2, ME3 }, "just leveled up: congrats")
-      local items = M({ name = "Frostie", tags = {} })
-      items[5].onClick()
-      A.eq(ns.Away.isAway(), true, "Me: go AFK from a friend's row")
-      A.eq(labels(M({ name = "Frostie", tags = {} }))[5], "Me: I'm back")
-      items[5].onClick()
+        "Congratulate them", "Add to friends" }, "just leveled up: congrats")
+      for _, it in ipairs(M({ name = "Frostie", tags = {} })) do A.no(it.label:find("^Me:"), it.label) end
+      local title = labels(ns.Panel.menuItems())
+      local function hasLabel(list, l) for _, v in ipairs(list) do if v == l then return true end end end
+      A.ok(hasLabel(title, "Set my status") and hasLabel(title, "Go AFK"), "the title menu keeps them")
       W.state.units.party1 = { name = "Frostie", player = true, visible = true }
       W.env.CanInspect = function() return true end
       local inspected

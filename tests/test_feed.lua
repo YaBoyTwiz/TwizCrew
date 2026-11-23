@@ -131,18 +131,24 @@ return {
       A.ok(ns.FeedLogic.newGate(1e9):allow("died", "X (test)", 5, true))
     end,
 
-    chat_switches_per_kind = function(ns, A)
+    news_in_my_chat_has_three_levels = function(ns, A)
       local d = ns.Modules.get("activity").defaults
+      A.eq(d, { chatNews = "important" }, "one choice instead of eight switches")
       local want = function(kind, s) return ns.FeedLogic.chatWanted(s or d, kind) end
       A.ok(want("died")); A.ok(want("levelup")); A.ok(want("congrats")); A.ok(want("mock"))
       A.no(want("online"), "the game already prints logins"); A.no(want("offline")); A.no(want("roast"))
       A.no(want("nonsense"))
-      local off = {}
-      for k, v in pairs(d) do off[k] = v end
-      off.chat = false
-      for _, kind in ipairs(ns.FeedLogic.KINDS) do A.no(want(kind, off), kind .. " with the master switch off") end
-      off.chat = true; off.chatOnline = true; off.chatDied = false
-      A.ok(want("online", off)); A.no(want("died", off))
+      for _, kind in ipairs(ns.FeedLogic.KINDS) do
+        A.no(want(kind, { chatNews = "off" }), kind .. " with Off")
+        A.ok(want(kind, { chatNews = "all" }), kind .. " with Everything")
+      end
+      A.no(want("nonsense", { chatNews = "all" }))
+      A.ok(want("died", { chatNews = "bogus" }), "an unknown value counts as Important")
+      A.no(want("roast", { chatNews = "bogus" }))
+      local def
+      for _, s in ipairs(ns.Modules.get("activity").settings) do if s.key == "chatNews" then def = s end end
+      A.eq(def.choices, { { "off", "Off" }, { "important", "Important" }, { "all", "Everything" } })
+      A.eq(def.label, "News in my chat")
       A.eq(ns.FeedLogic.chatText({ kind = "died", who = "Frostie", zone = "Westfall" }), "TwizCrew: Frostie died in Westfall")
       A.eq(ns.FeedLogic.chatText({ kind = "died", who = "Frostie" }, nil, "ffd100"),
         "|cffffd100TwizCrew:|r Frostie died")
@@ -331,7 +337,7 @@ return {
     default_scope_chat_lines = function(ns, A, W)
       ready(W)
       ns.db.modules.panel.settings.noticeScope = nil -- the default
-      ns.Modules.set("activity", "chatOnline", true); ns.Modules.set("activity", "chatOffline", true)
+      ns.Modules.set("activity", "chatNews", "all")
       friend(W, ns, "Ginkan")
       receive(W, ns, "Ginkan", "UPDATE", { lv = "13" })
       ns.Bus.fire("MEMBER_ONLINE", "Ginkan"); ns.Bus.fire("MEMBER_OFFLINE", "Ginkan")
@@ -362,19 +368,18 @@ return {
       W:advance(11)
       receive(W, ns, "Frostie", "ROAST", { k = "fall", v = "", x = "", n = "1" })
       A.no(printedLike(W, "forgot gravity"))
-      ns.Modules.set("activity", "chatRoast", true)
+      ns.Modules.set("activity", "chatNews", "all")
       W:advance(11)
       receive(W, ns, "Frostie", "ROAST", { k = "fall", v = "", x = "", n = "2" })
-      A.ok(printedLike(W, ns.Roasts.text("fall", 2, "Frostie")))
-      ns.Modules.set("activity", "chatOnline", true)
+      A.ok(printedLike(W, ns.Roasts.text("fall", 2, "Frostie")), "Everything: roasts too")
       receive(W, ns, "Frostie", "BYE", {}); W:advance(200)
       friend(W, ns, "Frostie")
-      A.ok(printedLike(W, "Frostie") and printedLike(W, "came online"))
-      -- master switch
+      A.ok(printedLike(W, "Frostie") and printedLike(W, "came online"), "Everything: online too")
+      -- Off
       local before = #W.printed
-      ns.Modules.set("activity", "chat", false)
+      ns.Modules.set("activity", "chatNews", "off")
       receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
-      A.eq(#W.printed, before, "master off: no chat line")
+      A.eq(#W.printed, before, "Off: no chat line")
       A.eq(lines(ns)[1], "Frostie reached level 13", "but it is still in the list")
     end,
 
@@ -425,10 +430,8 @@ return {
 
     reset_to_defaults_covers_the_new_switches_and_keeps_the_list = function(ns, A, W)
       ready(W)
-      ns.Modules.set("activity", "chat", false)
-      ns.Modules.set("activity", "chatOnline", true)
+      ns.Modules.set("activity", "chatNews", "all")
       ns.Modules.set("panel", "peek", false)
-      ns.Modules.set("panel", "peekSeconds", 9)
       ns.Modules.set("panel", "barHover", false)
       ns.Modules.set("panel", "barInstead", true)
       ns.Modules.set("panel", "keepOpen", true)
@@ -436,7 +439,7 @@ return {
       ns.Modules.resetAll()
       local d = ns.Modules.get("activity").defaults
       for key, value in pairs(d) do A.eq(ns.Modules.setting("activity", key), value, "activity." .. key) end
-      A.eq(ns.Modules.setting("panel", "peek"), true); A.eq(ns.Modules.setting("panel", "peekSeconds"), 5)
+      A.eq(ns.Modules.setting("panel", "peek"), true)
       A.eq(ns.Modules.setting("panel", "barHover"), true, "the mouse resting on the tab opens it")
       A.eq(ns.Modules.setting("panel", "barInstead"), false, "pop-ups keep showing unless it is on")
       A.eq(ns.Modules.setting("panel", "keepOpen"), false, "the tab is the default")
@@ -499,7 +502,9 @@ return {
       A.no(ns.Recent.isShown())
       local found
       for _, item in ipairs(ns.Panel.toolItems()) do if item.label == "Recent activity" then found = item end end
-      A.ok(found, "the wrench menu lists it")
+      A.no(found, "not in the wrench menu: the Activity tab and the crew tab's menu open it")
+      for _, item in ipairs(ns.Panel.tabMenuItems()) do if item.label:find("^Recent activity") then found = item end end
+      A.ok(found, "the crew tab's menu lists it")
       found.onClick()
       A.ok(ns.Recent.isShown())
     end,

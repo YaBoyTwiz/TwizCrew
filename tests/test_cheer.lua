@@ -102,13 +102,9 @@ return {
       for i, it in ipairs(items) do labels[i] = it.label end
       A.eq(labels[1], "Update my spell ranks")
       for _, it in ipairs(items) do A.eq(type(it.icon), "string", "an icon for " .. it.label) end
-      A.eq(items[2].checked(), false)
-      items[2].onClick()
-      A.eq(ns.Modules.setting("rankup", "auto"), true, "auto from the wrench")
-      items[3].onClick()
-      A.ok(ns.RankUp.buttonShownForTest(), "its own button from the wrench")
-      items[3].onClick()
-      A.no(ns.RankUp.buttonShownForTest())
+      for _, it in ipairs(items) do A.eq(it.checked, nil, "no switches in the wrench menu: " .. it.label) end
+      A.eq(labels, { "Update my spell ranks", "Crew calendar", "My mocks", "Today's recap", "What's new",
+        "How to use TwizCrew", "Health check (to copy to Discord)" })
       local b = ns.Panel.toolsButtonForTest()
       b._scripts.OnClick(b, "LeftButton") -- opens the menu
       A.eq(ns.Log.errors(10), {})

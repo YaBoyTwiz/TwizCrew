@@ -1,6 +1,6 @@
 -- The Recent window: the activity feed as a list, newest first, with a class icon (or a picture of the kind of
--- event), how long ago, and the line. The mouse wheel scrolls. Opened by the crew tab's right-click menu,
--- /tc recent, the wrench menu and the settings. The frame is built the first time it is opened.
+-- event), how long ago, and the line. The mouse wheel scrolls. Opened by the crew tab's right-click menu and
+-- /tc recent; "Clear the list" empties it. The frame is built the first time it is opened.
 -- The panel's Activity tab shows the same list with the same rows (Recent.entries, Recent.newRow, Recent.fillRow).
 local _, ns = ...
 
@@ -20,7 +20,7 @@ local KIND_ICON = {
 }
 
 local REFRESH = 30 -- seconds between redraws of the relative times
-local frame, rows, emptyText, hint
+local frame, rows, emptyText, hint, clearButton
 local offset = 0
 local ticker -- refreshes the "5m ago" times while the window is open
 local isOpen = false -- our own flag (the frame's IsShown is also false while it is built but hidden)
@@ -107,6 +107,12 @@ local function build()
   title:SetText("Recent activity")
   local close = Widgets.button(frame, "Close", function() Recent.close() end, nil, FEATURE)
   close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -10)
+  -- empties the list (it used to be a button in the settings); the panel's Activity tab empties with it
+  clearButton = Widgets.button(frame, "Clear the list", function()
+    if ns.Feed then ns.Feed.clear() end
+    Recent.refresh()
+  end, "danger", FEATURE)
+  clearButton:SetPoint("RIGHT", close, "LEFT", -6, 0)
   rows = {}
   for i = 1, VISIBLE do
     rows[i] = Recent.newRow(frame, WIDTH - 2 * PAD)
@@ -181,3 +187,4 @@ end
 -- Test hooks.
 function Recent.shownForTest() return shownLines end
 function Recent.visibleRowsForTest() return VISIBLE end
+function Recent.clearButtonForTest() return clearButton end

@@ -923,6 +923,51 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
    now"), maybe "The crew usually plays: ...", and Close (plus "How to use TwizCrew" once the About page is in).
    It never shows again, and it never shows for someone who already used TwizCrew in this guild.
 
+## Tips and the About page (2026-11-23)
+
+**Restart the game** (two new files, `UI/Help.lua` and `UI/About.lua`; `/reload` is not enough).
+
+1. **Panel tips.** Hover each of these and read the tip: the count in the header ("1 here · 5 online"), the Crew
+   and Hall of Shame tabs, the "?" after the Calendar button, the "Guild online" and "Offline" bars, the "My party"
+   and "Pinned" headings, the green + and the gold star on a row. Each shows a gold title and one or two plain
+   sentences, next to the thing you hover (not somewhere else on the screen).
+2. **Row tooltips.** Hover a guild member without TwizCrew (a dimmed row with "no addon"): a tooltip with their
+   name, "This guild member does not have TwizCrew...", and "Right-click for options". Open the Offline list and
+   hover an offline row: their name, "Offline, last seen ...", "Right-click for options". Hover a friend with the
+   addon: under the usual lines, short grey lines explain what the row shows (the gold bar, the quest's ! or ?,
+   "Dimmed, with zzz" when they are AFK, an award title, a flashing or dim arrow in a group). Keep the mouse on a
+   row for a minute: the tooltip stays and updates, it never vanishes by itself.
+3. **Status box.** Right-click, Set my status: hover a quick button or the box.
+4. **Hall of Shame.** Hover "This session", "All time", each category tab, and the "Wipe Squad" line (after a wipe).
+5. **Awards show.** In a show with a friend, hover a name on the Clown of the Night card, and (as the presenter)
+   Skip.
+6. **Calendar.** Under the Events month there is one colour key line (Gold: a note · Blue: a dungeon run ·
+   Purple: a raid · new · Gold top line: today): it fits on one line and does not cover the squares. Hover the
+   Events and Play times tabs, Month / Usual times, "+ Create note", "Your time zone" (top right), "Back to the
+   month", "This week as a grid", "See real weeks" / "Usual times", "Show everyone", a person's line under Usual
+   times, a gold square in the grid (its tooltip ends with "Gold square: ..."), the timeline of today (its tooltip
+   ends with "The gold line is now"), a note row on a day (the tick and the waiting mark are explained), Remove /
+   Edit on your own note. In a note: I'm going / Maybe / Can't make it, "Seen by", the X on your comment, Delete
+   my note / Edit my note. In "Create a note": Note / Dungeon / Raid, No time, the hour and minute boxes, a line of
+   the dungeon list.
+7. **The rest.** A level-up pop-up and a single "is online" pop-up: hovering says what a click does. The big arrow:
+   hover it (when a gold N shows above it, the tip explains the N). Settings: the Basics and Advanced
+   tabs, "Reset everything to defaults", any choice button (like Row style: "Right-click goes back one"). My mocks:
+   Try and X.
+8. **Plain buttons have no tip.** Close, Save, Cancel, Yes and No show nothing on hover.
+9. **The About page, every way in.** The "?" next to the tabs (click again closes it), the wrench menu "How to use
+   TwizCrew", the minimap button's right-click menu, Settings (Basics) "How to use TwizCrew", `/tc about`, and
+   `/tc help` (the page opens and the command list is printed in chat). `/tc xyz` only prints the list.
+10. **The page itself.** No line runs past the window's right edge or is cut off; the mouse wheel scrolls to the
+   last line ("TwizCrew is still growing..."); Escape closes it; it can be dragged. Read it once: is anything
+   wrong, unclear or missing?
+11. **Only on a new install.** Nothing opens by itself after this update (you already had TwizCrew). To see the
+   first-run: on a test account (or after moving `WTF/Account/*/SavedVariables/TwizCrew.lua` away while the game
+   is closed, and back afterwards), log in: about 5 seconds later the page opens once; not in a fight or a dungeon
+   (it waits until you are out), and not again at the next login.
+12. **Tiny row style.** Settings, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
+   the wrench menu).
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

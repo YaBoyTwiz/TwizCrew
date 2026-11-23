@@ -1,6 +1,7 @@
--- Mouse-over tips: the words in UI/Help.lua (limits, no em dash, the About lines fit), and a sample of tips shown on
--- hover (the panel's count, a guild member without the addon, a section bar, a Hall of Shame tab, calendar parts, the
--- "?" button).
+-- Mouse-over tips and the About page ("How to use TwizCrew"): the words in UI/Help.lua (limits, no em dash, the About
+-- lines fit and are true to the commands and tags), a sample of tips shown on hover (the panel's count, a guild member
+-- without the addon, a section bar, a Hall of Shame tab, calendar parts, the "?" button), and the About window: /tc about,
+-- /tc help, the wrench menu, the settings button, and opening once by itself on a new install only.
 
 local EM_DASH = "\226\128\148"
 local TITLE_MAX, TEXT_MAX = 32, 160
@@ -106,6 +107,20 @@ return {
         A.eq(type(l.text), "string", "line " .. i)
         A.ok(#l.text <= ns.Help.ABOUT_WIDTH, "line " .. i .. " fits the window: " .. l.text)
         A.no(l.text:find(EM_DASH, 1, true), "line " .. i .. ": no em dash")
+      end
+    end,
+    about_page_tells_the_truth_about_tags_and_commands = function(ns, A, W)
+      local all = {}
+      for _, l in ipairs(ns.Help.aboutLines()) do all[#all + 1] = l.text end
+      local text = table.concat(all, "\n")
+      for id, label in pairs(ns.Tags.LABEL) do A.contains(text, label .. ":", "the " .. id .. " tag is explained") end
+      A.contains(text, "Ctrl + right-click a spot on the world map", "the meet-up gesture")
+      A.contains(ns.MeetMap and "Ctrl + right-click" or "", "Ctrl + right-click")
+      -- every command the page names is in the help list
+      W.env.SlashCmdList.TWIZCREW("no-such-command")
+      local listed = table.concat(W.printed, "\n")
+      for cmd in text:gmatch("/tc ?(%l*)") do
+        if cmd ~= "" then A.contains(listed, "/tc " .. cmd .. " -", "a real command: /tc " .. cmd) end
       end
     end,
     -------------------------------------------------------------------------------------------- tips on hover
@@ -219,6 +234,10 @@ return {
       hover(tabs.shame); A.eq(tip.lines[1], "Hall of Shame")
       A.ok(tabs.help and tabs.help:IsShown(), "a ? next to the tabs")
       hover(tabs.help); A.eq(tip.lines[1], "How to use TwizCrew")
+      tabs.help._scripts.OnClick(tabs.help, "LeftButton")
+      A.ok(ns.About.isShown(), "the ? opens the About page")
+      tabs.help._scripts.OnClick(tabs.help, "LeftButton")
+      A.no(ns.About.isShown(), "and closes it")
     end,
     hall_of_shame_switch_tabs_and_wipe_line = function(ns, A, W)
       local tip = recordTip(W)
@@ -273,6 +292,92 @@ return {
       local g = ns.Widgets.helpTip(W.env.CreateFrame("Button"), "about")
       g._scripts.OnEnter(g) -- no tooltip in the game: nothing happens, no error
       A.eq(ns.Log.errors(10), {})
+    end,
+    -------------------------------------------------------------------------------------------- the About page
+    tc_about_opens_it = function(ns, A, W)
+      start(ns, W)
+      A.no(ns.About.isShown())
+      W.env.SlashCmdList.TWIZCREW("about")
+      A.ok(ns.About.isShown())
+      local shown = ns.About.shownForTest()
+      A.eq(shown[1], "What TwizCrew is")
+      ns.About.close()
+      A.no(ns.About.isShown())
+      ns.About.toggle(); A.ok(ns.About.isShown())
+      ns.About.toggle(); A.no(ns.About.isShown())
+    end,
+    tc_help_opens_it_and_prints_the_list = function(ns, A, W)
+      start(ns, W)
+      local before = #W.printed
+      W.env.SlashCmdList.TWIZCREW("help")
+      A.ok(ns.About.isShown(), "the page opens")
+      A.eq(W.printed[before + 1], "TwizCrew commands:", "and the list is printed")
+      local list = table.concat(W.printed, "\n", before + 1)
+      A.contains(list, "/tc about -")
+      A.contains(list, "/tc help -")
+      ns.About.close()
+      before = #W.printed
+      W.env.SlashCmdList.TWIZCREW("nonsense")
+      A.no(ns.About.isShown(), "an unknown word only prints the list")
+      A.eq(W.printed[before + 1], "TwizCrew commands:")
+    end,
+    other_ways_to_open_it = function(ns, A, W)
+      start(ns, W)
+      local item
+      for _, it in ipairs(ns.Panel.toolItems()) do if it.label == "How to use TwizCrew" then item = it end end
+      A.ok(item, "in the wrench menu")
+      A.eq(type(item.icon), "string")
+      item.onClick()
+      A.ok(ns.About.isShown())
+      ns.About.close()
+      local mm
+      for _, it in ipairs(ns.MinimapButton.menuItems()) do if it.label == "How to use TwizCrew" then mm = it end end
+      A.ok(mm, "in the minimap button's menu (it lists the wrench's tools)")
+      local found
+      for _, s in ipairs(ns.Modules.get("panel").settings) do if s.key == "about" then found = s end end
+      A.ok(found and found.kind == "button", "a button in the settings")
+      found.onClick()
+      A.ok(ns.About.isShown())
+    end,
+    opens_once_by_itself_on_a_new_install = function(ns, A, W)
+      boot(W) -- no saved data at all
+      A.eq(ns.db.aboutSeen, false)
+      W:advance(2)
+      A.no(ns.About.isShown(), "not at once")
+      W:advance(5)
+      A.ok(ns.About.isShown(), "a few seconds after login")
+      A.eq(ns.db.aboutSeen, true)
+      ns.About.close()
+      W:fire("PLAYER_LOGIN")
+      W:advance(10)
+      A.no(ns.About.isShown(), "only once")
+    end,
+    waits_out_a_fight_and_a_dungeon = function(ns, A, W)
+      W.state.inInstance, W.state.instanceType = true, "party"
+      boot(W)
+      W:advance(10)
+      A.no(ns.About.isShown(), "never in a dungeon")
+      W.state.inInstance, W.state.instanceType = false, "none"
+      W.state.combat = true
+      W:advance(20)
+      A.no(ns.About.isShown(), "never in a fight")
+      W.state.combat = false
+      W:advance(20)
+      A.ok(ns.About.isShown(), "afterwards")
+    end,
+    not_for_existing_users_after_an_update = function(ns, A, W)
+      W.env.TwizCrewDB = { modules = {}, roster = {}, myStatus = "" } -- saved by an older version
+      boot(W)
+      A.eq(ns.db.aboutSeen, true, "set without a word")
+      W:advance(30)
+      A.no(ns.About.isShown())
+    end,
+    the_flag_is_account_wide = function(ns, A)
+      for _, path in ipairs(ns.DB.GUILD_PATHS) do A.no(path:find("about", 1, true), "not per guild: " .. path) end
+      local db = ns.DB.init(nil, ns.Modules.list())
+      A.eq(db.aboutSeen, false)
+      A.eq(ns.DB.init({ myStatus = "hi" }, ns.Modules.list()).aboutSeen, true)
+      A.eq(ns.DB.init({}, ns.Modules.list()).aboutSeen, false, "an empty table is a new install too")
     end,
   },
 }

@@ -9,6 +9,8 @@ local FEATURE = "commands"
 local HELP = {
   "TwizCrew commands:",
   "/tc - open or close the settings",
+  "/tc about - how to use TwizCrew: a short page about what it does",
+  "/tc help - that page, and this list of commands",
   "/tc show - show the crew panel",
   "/tc hide - hide the crew panel",
   "/tc mini - minimize the panel to its title bar (again to restore it)",
@@ -360,6 +362,12 @@ local function printHelp()
   for _, line in ipairs(HELP) do print(line) end
 end
 
+-- /tc help: the About page and the list of commands (an unknown word only prints the list).
+local function help()
+  if ns.About then ns.About.open() end
+  printHelp()
+end
+
 local function awards(rest)
   local what = rest:lower()
   if what == "" then
@@ -403,6 +411,8 @@ local ACTIONS = {
   mock = mock,
   afk = function() ns.Panel.toggleAway() end,
   new = function() ns.Changelog.open() end,
+  about = function() ns.About.open() end,
+  help = help,
   rankup = function() ns.RankUp.run() end,
   cal = function() ns.Calendar.toggle() end,
   recap = function() ns.Recap.show() end,

@@ -446,6 +446,7 @@ end
 
 -- Accepts nil or any type; returns a repaired table.
 function DB.init(saved, defs)
+  local fresh = type(saved) ~= "table" or next(saved) == nil -- a new install: no saved TwizCrew data at all
   local db = type(saved) == "table" and saved or {}
   if db.guilds ~= nil and type(db.guilds) ~= "table" then keepAside(db, "guilds", db.guilds); db.guilds = {} end
   guildDefaults(db)
@@ -468,6 +469,8 @@ function DB.init(saved, defs)
     ns.Util.mergeDefaults(e, moduleDefaults(def))
   end
   for id in pairs(REMOVED) do db.modules[id] = nil end
+  -- the About page opens once by itself on a new install (UI/About.lua); data from an older version: never
+  if fresh then db.aboutSeen = false elseif db.aboutSeen == nil then db.aboutSeen = true end
   return db
 end
 

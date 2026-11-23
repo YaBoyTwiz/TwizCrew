@@ -20,6 +20,23 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   from the same list were dropped: "who still needs what" (the game has its own party quest progress tooltip:
   `C_TooltipInfo.GetQuestPartyProgress` exists in Forever 1.60.1, not seen on screen by us) and the dungeon prep
   check (not low-hanging: it needs a quest list per dungeon).
+- **Tips everywhere and a "How to use TwizCrew" page (2026-11-23, owner: "can we create (i) or mouse over tooltips
+  that explain what things are and do ... maybe also create an about tab ... keep it simple and be clear it might
+  update in the future"; approved: "yes do it"):** about 60 things that did not explain themselves got a mouse-over
+  tip (a gold title and one or two plain sentences): the panel's count, tabs, bars, headings, pin buttons, the
+  status box; every row now has a tooltip (a guild member without the addon and an offline row too) with short
+  lines saying what the row's marks mean; the Hall of Shame switch, tabs and Wipe Squad line; the Clown vote and
+  Skip; most calendar buttons, a colour key under the Events month, the note window and the note maker; pop-ups
+  whose click does something unsaid, the big arrow, the settings tabs, reset and choice buttons, My mocks. All the
+  words are in `UI/Help.lua` (tested for length and no em dash); the helper is `Widgets.addTip` / `helpTip`. The
+  About window (`UI/About.lua`, `ns.About.open/close/toggle`) is a short page in plain words that ends saying it
+  will change. **Claude's call:** a window opened by a "?" button rather than a panel tab, because the panel is too
+  narrow to read a page in. Ways in: the "?" after the panel's tabs (only while stats or the calendar is on, and
+  when it fits), the wrench menu (so also the minimap menu), Settings next to What's new, `/tc about`, `/tc help`
+  (also prints the command list; an unknown word still only prints the list). It opens once by itself on a new
+  install only (no saved data at all: `db.aboutSeen = false`, account-wide; older data gets `true` silently), 5 s
+  after login, never in a fight or a dungeon or raid. On the branch, **not released, not seen in the game; two new
+  files, so the game must be restarted.** Checks: `docs/TESTING.md`, "Tips and the About page".
 - **Review of v0.3.0, fixes (2026-11-23):** a review of the released code (never run in the game) found 8 defects;
   all are fixed on the branch `pin-party`, **not released, not seen in the game**. The quest list no longer floods
   the queue in a group (one group copy, newer replaces older; no whisper to a member who just got the group's copy;

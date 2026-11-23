@@ -13,6 +13,13 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Simpler settings (2026-11-23, owner: "some of the things in my addon might leave people with information
+  paralysis ... just figure out what you would change"; approved Claude's proposal: "i think u can remove them",
+  "yes start on all eight"):** about 45 fine-tuning switches removed, two groups merged into one choice each, plainer
+  names, the test buttons in their own window, a short `/tc help`, trimmed menus, the What's new line only while
+  unread. The window keeps its Basics / Advanced shape until the new look is chosen. On the branch `pin-party`, **not
+  released, not seen in the game; no new files (a `/reload` is enough).** Details: section "Simpler settings
+  (2026-11-23)" below; checks: `docs/TESTING.md`, same name.
 - **The crew tab (2026-11-23, owner picked mock-up "E, Hidden tab" out of ten: "many of the guild mates want more of
   their screen back"):** the panel tucks away into a small tab on the screen edge; resting the mouse on it slides the
   whole panel out, news slides out one row at a time, and a wide "Keep open" switch at the top keeps it out like
@@ -178,7 +185,8 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 - **Crew size (owner):** about **5**, probably more over time. Build the panel for ~5 but let it grow (scroll or a
   compact view past ~8; Claude's call).
 - **Crew panel can be hidden (owner)** but is **on by default**. Give it **plenty of settings** so people tailor
-  it to their comfort instead of turning it off.
+  it to their comfort instead of turning it off. **Reversed in part 2026-11-23** (owner: too many settings leave
+  people with "information paralysis"): about 45 fine-tuning switches are gone, see "Simpler settings (2026-11-23)".
 - **Testing (owner):** "we will test with WowUp"; the owner **can't test right now**, so build v1 "in a way that
   will make it easier to fix if something doesn't work" (fallbacks, a debug log Claude can read from the WTF
   folder after `/reload`, `/tc report`). See the design document, section 13.
@@ -760,12 +768,11 @@ visible": a clearly labelled switch, not a small icon.
   opens the Hall of Shame and, while tucked, slides the panel out ("note" open: stays at least about 6 s). Opening it
   counts what was missed as seen and hides the tab's tooltip.
 - **News:** one row slides out (the news line in the title bar and that friend's row; a calendar note has no row),
-  then back. Plain news stays the `peekSeconds` setting (5 s): came online, died, levelled up, other layer / back on
+  then back. Plain news stays 5 s (`PanelLogic.NEWS_SECONDS`; the `peekSeconds` setting is gone since 2026-11-23): came online, died, levelled up, other layer / back on
   my layer, ran off, a new calendar note (or an answer on mine). News whose row shows a button stays
-  `PanelLogic.REACT_SECONDS` (12, or the `peekSeconds` setting when that is longer): Congrats after a level-up, Mock after a death, **Mock back** on a mock or congrats
+  `PanelLogic.REACT_SECONDS` (12): Congrats after a level-up, Mock after a death, **Mock back** on a mock or congrats
   aimed at me (decided by `PanelLogic.newsReactable` from `Roasts.canCheer` / `canMock`, the same rules the row's
-  buttons use). With two or more waiting, plain news shortens to 3 s and reactable news to the longer of 3 s and the
-  setting (5 s by default). The mouse on the row
+  buttons use). With two or more waiting, plain news shortens to 3 s and reactable news to 5 s. The mouse on the row
   keeps it out; it goes 0.6 s after the mouse leaves. A right-click menu on it keeps it out. A click on the news line:
   congratulate (level-up), whisper (online), the calendar (a note), the big arrow (running off), the whole panel (a
   layer change), else the Recent list. Scope: exactly the old rules (`FeedLogic.inScope`, `Panel.noticeInScope`,
@@ -878,6 +885,75 @@ and read well, and the marks, badge and "!" beside the tab look right; whether t
 at a glance; whether the right-edge tooltips and menus land toward the middle; whether re-parenting the panel between
 the holder and the screen (Keep open on and off) leaves it in the right place; the one-time note's timing.
 
+## Simpler settings (2026-11-23)
+
+**The owner's words.** "I find that some of the things in my addon might leave people with information paralysis,
+for example when looking at the settings there is just a lot there ... maybe subtabs or removing and condensing things
+that might be overkill." Claude counted and proposed; the owner chose to remove (not hide) and approved all eight
+parts. **This reverses three earlier owner decisions:** "plenty of settings" (2026-11-05), the What's new line that
+always shows (v0.1.13) and the "Me: ..." entries on every friend's menu (2026-11-08).
+
+**Counts.** Before: 105 choices in the settings window (93 settings and 12 part switches), 9 buttons, a text box, 2
+lists, 15 test buttons and 6 rows that were only notes ("always on", "coming later"); Basics had 22 controls, the
+Advanced Panel page 53 rows. After: 59 choices (47 settings and 12 part switches), 5 buttons (How to use, What's
+new, My mocks, Tell crew to update, Try it out...) and the crew versions list; Basics has 8 controls and the two help
+buttons; the longest page (Panel) 21 rows.
+
+**The window now** (`UI/Settings.lua`: `BASICS` and `SUBTABS` are lists of items; a module no page names lands at the
+end of More). Basics: Keep the panel open, Panel size, Fade when I'm not using it, Whose news I get, Pop-ups, News in
+my chat, Sounds, Mark me AFK when I stop playing, then How to use TwizCrew and What's new. Advanced sub-tabs: Panel,
+Alerts, Fun, Find, More (the old All and Test sub-tabs are gone); each page ends with a "Rarely needed" heading.
+The "always on" and "coming later" rows are gone (Pokes and Group races stay registered, unseen).
+
+**Removed (everyone gets the value shown; the code reads it fixed, the dead branches are deleted).** Panel: How long
+news stays out (5 s), the zone / typed status / quest / XP bar / level and XP number lines (row style decides), XP
+details on hover (on), Grow direction (automatic, below), the six tag switches (on; the Tags on rows switch still
+hides all). Pop-ups: How long they stay (5 s). Roasts: the nine roast-kind switches (on), Add a roast and My roasts
+(the My mocks window does both). Hall of Shame: the Wipe Squad line (shown when there were wipes). Find: the meet-up
+pop-up, big arrow and minimap parts (one Meet-ups switch). Buttons that only repeated another way in: Show recent
+activity, Open the crew calendar, Show today's recap now, Update my spell ranks now. Out of the window but still
+working from their own control: Show offline friends and Show the guild online list (the two bars, the title menu),
+Only use my own roasts (the My mocks window), Show technical messages (`/tc debug`). Clear the list moved to the
+Recent window (a red button next to Close).
+
+**Merged.** "News in my chat" (`activity.chatNews`: off / important / all, default important = deaths, level-ups,
+congrats, mocks; all adds online, offline, roasts) replaces the master chat switch and seven per-kind ones.
+"Sounds" (`popups.sounds`: off / shows / all, default shows = the mock laugh and the awards show; all adds the
+pop-up, level-up and roast sounds; `Popups.soundOn("show" | "all")`) replaces five switches. "Share my quests" now
+also decides whether friends may ask for a share (Quest Share requests is gone). "Layer changes" covers both
+directions (Back on my layer is gone). "Remind me to update" (the updates module, was Update reminders) also
+decides the version chat line (Tell me in chat is gone).
+
+**Saved data** (`Core/DB.lua`). Once per account (`db.simpleSettings`) the two new choices take the old switches:
+`DB.chatNewsFrom` (chat off: off; online, offline or roast lines on: all; else important) and `DB.soundsFrom`
+(pop-up, level-up or roast sound on: all; mock laugh or awards show sound off: off; else shows). The values are set
+explicitly because the defaults are already merged in. Then the keys in `DB.REMOVED_KEYS` are deleted, at every
+start (it also cleans data an older copy wrote back). No other mapping: someone who had turned off a removed switch
+gets it back on; custom news or pop-up seconds go back to 5; Quest share requests off with Share my quests on lets
+friends ask again; Back on my layer off with Layer changes on shows that pop-up again.
+
+**Grow direction (automatic).** When the kept-open panel is dropped after a drag, it is anchored at its top-left
+(grows down) if its middle is in the top half of the screen, else at its bottom-left (grows up):
+`PanelLogic.growsUp`. The corner stays until the next drag (no flipping while it grows); a reset's "LEFT" default is
+converted once. An old grow-up panel keeps its bottom-left corner.
+
+**Outside the window.** Test tools: their own window "Try it out" (`TestTools.open`; More's "Try it out..." button
+and `/tc test`; `/tc test help` prints the commands). `/tc help`: about a dozen everyday lines (`Commands.HELP`),
+`/tc help more` the rest (`Commands.HELP_MORE`); `/tc guildtest`, `caltest`, `chattest` work but are on neither
+list. The wrench menu (so the minimap menu too) lost the two spell-rank switches and Recent activity. A friend's row
+menu lost the Me: entries (my own row and the title menu keep Set my status and Go AFK). The panel's What's new line
+shows only while there is something new ("New in vX!"); the title, the wrench menu and `/tc new` open What's new any
+time. Renamed: Activity tags -> Tags on rows, Layer tracker -> Other-layer warnings, Activity feed -> Activity list,
+Stats & Hall of Shame -> Hall of Shame, Update reminders -> Remind me to update, plus plainer labels (Whose news I
+get, Panel size, Background darkness, Fade when I'm not using it, Order, Show news from the tab, Open on
+mouse-over, No pop-ups for news the tab shows, Mark me AFK when I stop playing, Let the crew roast me, Mock button,
+Show the mocker's character, Award titles under names, Watch the crew's awards show, Count my steps). New tip texts
+are in `UI/Help.lua` (`sounds`, `chatNews`); the other (i) texts stay with their settings.
+
+**Left for the layout step (waits for the new look the owner is choosing):** one row of six tabs instead of Basics +
+sub-tabs, a grey line under each Basics control, the look of the "Rarely needed" heading, the two help buttons as
+links at the top of the window, and a Clear button on the panel's Activity tab.
+
 ## Website and Discord (on hold, owner 2026-11-11)
 
 - The owner wants TwizCrew tied to a website (a subfolder of twizgame.com first, movable to its own domain) and
@@ -893,8 +969,8 @@ the holder and the screen (Keep open on and off) leaves it in the right place; t
 - **Modular:** players can turn parts on and off.
 - **Two tiers:** the parts that must be there (essentials) are kept apart from the nice-to-have extras.
 - **One button sets everything back to defaults.**
-- **Settings: Basics and Advanced tabs (2026-11-07):** "too many advanced features... not so daunting". The window
-  opens on Basics (transparency, size, row style, panel on/off, offline friends, lock, hide in fights, pop-ups,
+- **Settings: Basics and Advanced tabs (2026-11-07):** "too many advanced features... not so daunting". **What Basics
+  and Advanced hold now: "Simpler settings (2026-11-23)".** Until then the window opened on Basics (transparency, size, row style, panel on/off, offline friends, lock, hide in fights, pop-ups,
   auto-away, minimap button); Advanced lists everything.
 - **Clown of the Night rules (2026-11-09, owner):** the title lasts "until the next show": every vote result
   replaces it (a winner: those names; "No clown tonight." or Skip: no clown); an all-time show (no vote) leaves it
@@ -906,8 +982,9 @@ the holder and the screen (Keep open on and off) leaves it in the right place; t
   ! or ?, hover adds where, quest objectives, status and distance; right-click a row for Whisper, Invite, Inspect
   (when near), Point the arrow, Mock (when dead), Add to friends. Switches: Show quests, Share my quest (Panel).
   Since 2026-11-22 a friend's whole quest log can be asked for too: see "Quest list".
-- **Advanced sub-tabs (2026-11-07):** "way too much stuff and takes forever to drag to the bottom". Advanced has
-  sub-tabs: Panel, Roasts, Pop-ups, Find, Crew, Test, and All (the old single page).
+- **Advanced sub-tabs (2026-11-07):** "way too much stuff and takes forever to drag to the bottom". Advanced got
+  sub-tabs (Panel, Roasts, Pop-ups, Find, Crew, Test, All); since 2026-11-23 they are Panel, Alerts, Fun, Find, More
+  (see "Simpler settings").
 - **AFK lives in the panel only (2026-11-07):** the AFK button and `/tc afk` tell the crew, never set the game's own
   AFK flag ("i dont need the game to set the afk flag"); the game's `/afk` shows the same way. No AFK pop-ups ("just
   do it within the panel"): the AFK tag, a "zzz" on the portrait and a faded row. Auto-away after 3 idle minutes
@@ -920,14 +997,16 @@ the holder and the screen (Keep open on and off) leaves it in the right place; t
   Fade default 50% ("its already too transparent"). Pop-up "Frostie is online" (Pop-ups: Friends coming online, on):
   not during the login quiet time, not when they were gone under 2 minutes (a /reload), several at once share one,
   click = whisper. Older saved settings were switched once (db.panelSince0112).
-  v0.1.13: the What's new line always stays (dim once read: "so people can always see it"); my own row off again
-  ("too much clutter", db.panelSince0113); my options (Me: set my status, Me: go AFK) are on every row's right-click
+  v0.1.13: the What's new line always stays (dim once read: "so people can always see it"; **reversed 2026-11-23**:
+  it shows only while unread); my own row off again
+  ("too much clutter", db.panelSince0113); my options (Me: set my status, Me: go AFK; **since 2026-11-23 only on my
+  own row and the title menu**, not every friend's) are on every row's right-click
   menu, the place for future "me" actions.
 - **Congrats button and Tools (2026-11-08):** a Congrats button on a friend's row for 5 minutes after they level up
   (also: clicking their level-up pop-up, "Congratulate them" in the row menu). It rides on MOCK with k = "g" (older
   copies show a plain line); the friend sees the sender's character /cheer (animation 68) with the level-up fanfare.
   Switch: Roasts, Congrats button. The standalone RankUp addon was merged in as module "rankup" (Tools/RankUp.lua,
-  Settings Advanced sub-tab Tools and a Tools part on Basics, /tc rankup, panel menus, optional on-screen button).
+  Settings Advanced, More since 2026-11-23, /tc rankup, the wrench menu, optional on-screen button).
 
 - **Spell helpers (2026-11-08, v0.1.20, owner: "build it"):** module "spellhelp" (Tools/SpellHelpersLogic.lua pure,
   Tools/SpellHelpers.lua). A window (wrench menu, /tc spells) lists every spell you know, bar spells first, with

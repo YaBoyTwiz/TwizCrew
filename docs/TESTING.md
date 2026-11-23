@@ -16,8 +16,8 @@ stop there and tell Claude.
   `~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/WTF/Account/*/SavedVariables/TwizCrew.lua`
 - **Friends** can't send you their file. Ask them to type `/tc report`, press Ctrl+C in the box that opens, and
   paste it in Discord.
-- **Many checks work alone** with the test buttons: `/tc`, then scroll to **Try it out** at the bottom (or type
-  `/tc test` in chat for the same as commands). They make pretend friends and pop-ups on your screen only. See
+- **Many checks work alone** with the test buttons: type `/tc test` (or `/tc`, Advanced, More, **Try it out…**) for
+  their window (`/tc test help` lists the same as chat commands). They make pretend friends and pop-ups on your screen only. See
   "Test tools" below.
 
 ## Alone (riskiest first)
@@ -122,7 +122,7 @@ before you stream.
 1. **No lag and no errors over a long session.** The counting runs all the time (twice a second), so this matters
    most. Play normally for an hour or more: walk, ride, swim, fight, die, loot, `/reload` once in the middle.
    - No red error pop-ups, no stutter or lower frame rate than without TwizCrew. If you're not sure about the frame
-     rate, turn the **Stats & Hall of Shame** switch off in `/tc` for ten minutes and compare.
+     rate, turn the **Hall of Shame** switch off in `/tc` (Advanced, Fun) for ten minutes and compare.
    - At the end, type `/tc report` and check the line "Turned off after errors: none". If it names something, tell
      Claude what it says.
 
@@ -192,7 +192,7 @@ before you stream.
    - A big dark window with a gold glow opens in the middle of the screen. It says "Getting the latest numbers…"
      for about 5 seconds.
    - Then one award at a time: the badge and the award name, then "and the award goes to…", then the winner's name,
-     their number and a one-line joke. A short sound plays (setting **Sound in the awards show**).
+     their number and a one-line joke. A short sound plays (Basics, **Sounds**: Shows only or All).
    - **Space** or a **click** goes to the next one. Check that Space does **not** make your character jump while the
      window is open, and does again after it closes.
    - **Escape** closes it at any time. The window can be dragged somewhere else.
@@ -225,7 +225,7 @@ Your friend needs TwizCrew too, so this waits until you've said "publish" (see "
    Everyone's session stats start from 0." Within a few seconds the **This session** numbers are 0 for **both** of
    you, the `Session:` line in `/tc report` is the same on both sides and ends with "(by hand)", and the **All
    time** numbers are untouched.
-5. **Turning stats off hides you.** Your friend turns **Stats & Hall of Shame** off in `/tc`. Within a few seconds
+5. **Turning stats off hides you.** Your friend turns **Hall of Shame** off in `/tc` (Advanced, Fun). Within a few seconds
    they disappear from your Hall of Shame (both This session and All time), their title goes away, and you see no
    roasts about them. When they turn it back on, they come back with their old numbers.
 6. **A wipe in a dungeon.** If your whole group dies in a dungeon within 30 seconds: one "WIPE!" roast for everyone
@@ -249,7 +249,7 @@ this is the list of what to report:
 - **Monster level before death**: does Died to a Weakling work, or does a death to a low monster only count as a
   normal death?
 - **Abandoning quests**: does Quitter count when you abandon from the quest log?
-- **Sounds**: does the awards show (and a roast, if **Play a sound** is on under **Live roasts**) make a sound?
+- **Sounds**: does the awards show (and a roast, with Basics, **Sounds: All**) make a sound?
 
 ### Hall of Shame part 1 (new awards, tabs)
 
@@ -315,7 +315,7 @@ You need a friend online with this version, both in the same crew session.
    the latest card instead of playing every one, and they still get the full 30 seconds to vote (their countdown
    starts near 30 and your result comes only after theirs reaches 0).
 7. Leave the show on one card for more than a minute: it closes on every screen.
-8. Your friend turns off "Show the crew's awards show on my screen" (`/tc`, Stats & Hall of Shame): start the show
+8. Your friend turns off "Watch the crew's awards show" (`/tc`, Advanced, Fun): start the show
    again, nothing opens on their screen.
 
 ## "Tell crew to update" button
@@ -341,7 +341,7 @@ checks work alone.
      box or nothing at all, tell Claude (the picture name would need changing).
    - Press **Tell crew to update**: chat says "told your crew that v… is out". Press it again right away: chat says
      to wait a few seconds. No error pop-ups.
-3. Under **Modules** there is **Update reminders** with an (i), on. Turn it off, press **Reset everything to
+3. On Advanced, More there is **Remind me to update** with an (i), on. Turn it off, press **Reset everything to
    defaults**: it is on again.
 
 ### With a friend (after publishing)
@@ -363,7 +363,7 @@ Easiest when you have just released a new version and your friend still has the 
    your screen.
 6. **Updates that add files** (Claude says so when releasing): the window says "Close and restart the game to load
    it" with no Reload button. After a full restart the version is right.
-7. **Turned off.** Your friend turns off **Update reminders**: when you press the button, no window for them.
+7. **Turned off.** Your friend turns off **Remind me to update**: when you press the button, no window for them.
 
 ## Minimap button
 
@@ -388,8 +388,7 @@ first** (this update added files, so `/reload` is not enough).
    addons; Questie's or OpenMap's entries are there too). TwizCrew should be listed, with the same icon. Click it:
    the settings open. Right-click it: the panel hides or shows. Hover it: the same box as above, without the drag
    line. If there is no such list, that is fine: nothing to check.
-8. **Hide and bring back.** Open the settings (`/tc`): under **Essentials** there is **Minimap button** (always
-   on) with an (i), and a **Show minimap button** switch with an (i). Turn the switch off: the button disappears.
+8. **Hide and bring back.** Open the settings (`/tc`), Advanced, More: a **Show minimap button** switch with an (i). Turn the switch off: the button disappears.
    Type `/tc minimap`: it comes back and chat says "minimap button shown". Type `/tc minimap` again: it hides.
 9. **Reset.** Drag the button somewhere else and hide it, then press **Reset everything to defaults** → **Yes**:
    the button comes back, at its starting spot.
@@ -402,11 +401,11 @@ Pretend friends and pop-ups, so you can check things without waiting for your cr
 crew never sees them, nothing is saved, and they are gone after **Clear test stuff**, **Reset everything to
 defaults** or `/reload`. Pretend names always end in **(test)**. No restart needed (no new files).
 
-1. **Where they are.** `/tc`, scroll to the bottom: a section **Try it out**, a line **Test tools** "only on your
-   screen" with an (i), then twelve buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death
-   pop-up**, **Layer pop-up**, **Roast pop-up**, **Friend comes online**, **Congrats from a friend**, **Update notice (reload)**, **Update notice (restart)**,
-   **Walking buddy**, **Clear test stuff**. `/tc test` in chat lists the same as commands (`/tc test fake`,
-   `/tc test ding`...).
+1. **Where they are.** Their own small window **Try it out**: `/tc test`, or `/tc`, Advanced, More, **Try it out…**.
+   Fifteen buttons, each with an (i): **Fake friends**, **Copy of me**, **Ding**, **Death pop-up**, **Friend comes
+   online**, **Congrats from a friend**, **Layer pop-up**, **Roast pop-up**, three **Try a mock / congrats** buttons,
+   **Update notice (reload)**, **Update notice (restart)**, **Walking buddy**, **Clear test stuff**. Drag it, Escape
+   or Close closes it. `/tc test help` in chat lists the same as commands (`/tc test fake`, `/tc test ding`...).
 2. **No chat spam, no invites.** While you use them, chat should never say "No player named … is currently playing",
    and nobody gets a group invite (that would mean TwizCrew tried to reach a pretend friend).
 3. **Each button once.** Press each one: a chat line or a pop-up, no red error. If chat says "that test did not
@@ -463,12 +462,12 @@ buttons (`/tc` → **Try it out**, see "Test tools" above).
    appears, and the number goes down as it earns.
    - Hover a tag pill on the row, then move back onto the row: the row's tooltip comes back (or at least nothing
      sticks on screen).
-6. **The level-up sound** (`/tc` → **Pop-ups** → **Level-up sound**, off by default): turn it on and press
-   **Ding**: you should hear the game's own level-up sound. Tell Claude if it is silent or a different sound.
-7. **Switches:** `/tc` → **Crew panel** → **Show level and XP numbers** and **XP details on hover**, and
-   **Pop-ups** → **Level-ups**: each one turns its part off (try them with **Fake friends** and **Ding**; with
-   Level-ups off, chat says so instead). **Reset everything to defaults** turns them back on (the sound stays off)
-   and removes the pretend friends.
+6. **The level-up sound** (`/tc` → Basics → **Sounds: All**; the default is Shows only): press **Ding**: you should
+   hear the game's own level-up sound. Tell Claude if it is silent or a different sound.
+7. **Switches:** `/tc` → Advanced → Alerts → **Level-ups** turns the pop-up off (try it with **Fake friends** and
+   **Ding**; with Level-ups off, chat says so instead). The level and XP numbers follow **Row style** (no switch
+   since 2026-11-23). **Reset everything to defaults** turns it back on (Sounds back to Shows only) and removes the
+   pretend friends.
 8. **With a friend (later), the real thing:**
    - When your friend levels up, you get one "<friend> reached level N!". Nothing on your friend's own screen (the
      game shows its own).
@@ -505,8 +504,8 @@ have the next version, and the real update notice shows it (nothing is saved and
    this time (chat may say "Still on v…" once), but the gold **!** and the gold line are still there.
 6. **Minimap tooltip.** Hover the button: the first line says **TwizCrew v…**, and the last line, in gold,
    "Update available: v… (Testbuddy (test) has it)".
-7. **Turned off.** In `/tc` → **Modules**, turn off **Update reminders**: the **!** and the gold line go away, the
-   version number stays. Turn it back on.
+7. **Turned off.** In `/tc` → Advanced → More, turn off **Remind me to update**: the **!**, the gold line and the
+   chat line go away, the version number stays. Turn it back on.
 8. **Tell crew to update still works** (with a friend). When your friend is the older one and you press **Tell crew
    to update** within 30 seconds of logging in, they get one window ("<you> says v… is out"), not two.
 9. **After updating for real:** no **!**, no gold line, no pop-up.
@@ -602,12 +601,12 @@ out**, or `/tc test ...`) work for most of it without a friend.
    panel opens; move away: it shrinks back. Off by default.
 9. **Chat lines.** Press **Ding**, **Death pop-up**, **Congrats from a friend**: each prints one line in your chat
    (`TwizCrew: ...` in gold, the name in class colour; the congrats shows the words in quotes). **Friend comes
-   online** prints nothing (off by default). Turn **Write events in my chat** off (Basics): no lines. Turn the
-   per-kind switches (Advanced > Panel > Activity feed) on and off. Chat lines should print whether the panel is
-   minimized or not. Nobody else ever sees them, and nothing is typed into any channel.
-10. **Recent activity.** `/tc recent`, the wrench menu entry and the Activity feed's **Show recent activity** button
-    open the list: newest first, class icon, "just now" / "5m ago", the line. Mouse wheel scrolls (more than ten
-    lines). **Press Escape** closes it. `/reload`: the list is still there (the pretend ones are not). **Clear test
+   online** prints nothing (off by default). Set **News in my chat** (Basics) to **Off**: no lines; to
+   **Everything**: **Friend comes online** and roasts print too. Chat lines should print whether the panel is
+   tucked away or kept open. Nobody else ever sees them, and nothing is typed into any channel.
+10. **Recent activity.** `/tc recent` and the crew tab's right-click menu open the list (since 2026-11-23 no longer
+    the wrench menu or a settings button; **Clear the list** is a red button in the window itself): newest first,
+    class icon, "just now" / "5m ago", the line. Mouse wheel scrolls (more than ten lines). **Press Escape** closes it. `/reload`: the list is still there (the pretend ones are not). **Clear test
     stuff** removes the pretend lines. Open it for the first time in a fight: chat says it opens after the fight.
 11. **With a real friend** (both on this version): their level-up, death, login and logout show in the list; a
     congrats and a mock they send you show with the words; after you press **Congrats** on their row, the list says
@@ -883,8 +882,9 @@ with a friend on the released version only step 6 can be checked.
    have an older TwizCrew. "Ask to share" for the quest on their row still works as before.
 7. **Keeping up.** While grouped, your friend accepts a new quest: a few seconds later it is in their list on your
    side (right-click again).
-8. **Switches.** Settings, Panel: "Tell me what my group can share" off = no pop-up. "Share my quests" off on your
-   friend's side = their list is empty on yours.
+8. **Switches.** Settings, Advanced, Alerts: "Quests my group can share" off = no pop-up. Advanced, Panel: "Share my
+   quests" off on your friend's side = their list is empty on yours, and an "Ask to share" from you gets no pop-up on
+   their side (one switch for both since 2026-11-23).
 9. **A refused share (the one to check first without Questie).** Ask a friend for a quest you are too low for (or
    whose earlier quest you have not done). After they click their pop-up, your chat should say "TwizCrew: <Name>
    couldn't share "<quest>": you can't take it yet (too low, or an earlier quest is missing)", and that quest
@@ -892,7 +892,7 @@ with a friend on the released version only step 6 can be checked.
    eligible for that quest": **if nothing arrives on yours, tell Claude the exact words their game printed.**
 10. **Tell Claude:** is the count right without Questie (it can count quests you are too low for)? Is the pop-up
    useful or annoying?
-11. **Not too many messages (review fix, 2026-11-23).** Settings, Crew connection, "Show technical messages" on,
+11. **Not too many messages (review fix, 2026-11-23).** Type `/tc debug` (technical messages on; again turns them off),
    then group with two friends on this version. Right after grouping your chat shows your list going out once
    (`send QLA via PARTY`) and no `send QLA via WHISPER` to those two right after it. Turn in two quests quickly: one
    more `send QLA via PARTY`, not two. Their lists still show on your side (step 1).
@@ -979,7 +979,8 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
 8. **Plain buttons have no tip.** Close, Save, Cancel, Yes and No show nothing on hover.
 9. **The About page, every way in.** The "?" next to the tabs (click again closes it), the wrench menu "How to use
    TwizCrew", the minimap button's right-click menu, Settings (Basics) "How to use TwizCrew", `/tc about`, and
-   `/tc help` (the page opens and the command list is printed in chat). `/tc xyz` only prints the list.
+   `/tc help` (the page opens and the everyday command list is printed in chat; `/tc help more` prints the rest).
+   `/tc xyz` only prints the everyday list.
 10. **The page itself.** No line runs past the window's right edge or is cut off; the mouse wheel scrolls to the
    last line ("TwizCrew is still growing..."); Escape closes it; it can be dragged. Read it once: is anything
    wrong, unclear or missing?
@@ -990,7 +991,7 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
    you log in inside a battleground (it waits for the card). On a character in no guild: the page opens once by
    itself after about 20 seconds; not in a fight or a dungeon (it waits until you are out).
    Either way nothing opens again at the next login.
-12. **Tiny row style.** Settings, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
+12. **Tiny row style.** Settings, Advanced, Panel, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
    the wrench menu).
 
 ## The crew tab (2026-11-23)
@@ -1017,15 +1018,15 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
 5. **Right edge.** Drag the tab to the right edge of the screen. Rest the mouse on it: the panel slides out to the
    LEFT. Hover a row: its tooltip opens on the left of the row (toward the middle of the screen), not off the edge.
    Right-click a row and the title: the menu opens toward the middle and is fully on screen. Tooltips of the update
-   and What's new lines too.
+   and "New in v…" lines too (when they show).
 6. **Dragging the tab.** Drag the tab up and down the edge: it stays where you drop it. Drag it across the screen
    and drop it in the other half: it jumps to that edge. `/reload`: same side, same height. Turn **Lock position**
    on (right-click the tab): the tab no longer drags. Change the screen resolution or the UI scale to something
    smaller: the tab is still fully on screen.
 7. **Keep open and back.** Slide the panel out: right under the title bar is a wide **Keep open: OFF** switch, dim.
    Hover it: "Keep open", "ON: the panel stays on screen...". Click it: it reads **Keep open: ON** (gold, lit), the
-   tab disappears and the panel stays where you last left it as a normal window (drag, grow direction and
-   lock work as before; it fades with **See-through when idle**). Click it again: the panel tucks back into the tab. In Tiny rows it reads "Keep: ON" /
+   tab disappears and the panel stays where you last left it as a normal window (drag and lock work as before; it
+   grows down in the top half of the screen and up in the bottom half; it fades with **Fade when I'm not using it**). Click it again: the panel tucks back into the tab. In Tiny rows it reads "Keep: ON" /
    "Keep: OFF". `/tc mini`, the key binding (Keybindings > AddOns > TwizCrew > "Keep the crew panel open, or let it
    tuck away"), the title bar's right-click menu ("Keep open" / "Tuck away"), the tab's right-click menu and the
    minimap button's menu do the same.
@@ -1037,8 +1038,7 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    the screen where your panel was, at about its height. Turning Keep open on puts the panel back exactly where it
    was. The note never comes again.
 9. **News and how long it stays.** With the panel tucked: **Friend comes online** slides out one row (the line
-   "Offbuddy (test) came online" in the title bar and the friend's row) for about 5 seconds (the **How long news
-   stays out** setting), then back. **Ding**: the row has a **Congrats** button and stays about 12 seconds.
+   "Offbuddy (test) came online" in the title bar and the friend's row) for about 5 seconds, then back. **Ding**: the row has a **Congrats** button and stays about 12 seconds.
    **Death pop-up**: a **Mock** button, about 12 seconds. **Congrats from a friend**: a **Mock back** button, about 12
    seconds. **Layer pop-up**: "is on another layer" / "is back on your layer", about 5 seconds. With a friend: a new
    calendar note says "New calendar note from ..." (no row; a click opens the calendar); a group member running off
@@ -1053,8 +1053,8 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    whole panel. With Scale at 150%, drag the tab: it stays exactly where you drop it, it reaches the very top and
    the very bottom of the screen, and changing Scale does not move it. Set Scale back to 100%. Open the Hall of Shame tab on the slid-out panel: the panel grows wider (336) smoothly and nothing
    is cut off on the far side.
-12. **Pop-ups.** By default pop-ups show as before AND the news slides out of the tab. Turn **Show news on the tab,
-   not as pop-ups** on: online, death, level-up, layer and running-off pop-ups stop while the panel is tucked and
+12. **Pop-ups.** By default pop-ups show as before AND the news slides out of the tab. Turn **No pop-ups for news the
+   tab shows** on (Advanced, Panel, Rarely needed): online, death, level-up, layer and running-off pop-ups stop while the panel is tucked and
    news slides out; roasts, meet-ups, quest shares and the other notices still pop up. With Keep open on: pop-ups as
    always.
 13. **Hiding.** Hide during fights / in dungeons / when no crew is online hide the tab too. `/tc hide`: no tab;
@@ -1067,7 +1067,7 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    note. Nothing slides out during the fight. About 3 seconds after the fight: "2 things happened in that fight" in
    the title bar with the friend's row and its **Mock back** button, for about 12 seconds. Only one thing: it slides
    out as usual. Things whose pop-up you already saw in the fight (a level-up, a death) are not repeated. With
-   **Slide out news** off: nothing slides out after the fight. Die in a fight: it still comes after.
+   **Show news from the tab** off: nothing slides out after the fight. Die in a fight: it still comes after.
 16. **The Activity tab.** Slide the panel out: the bar under the header reads Crew, Hall of Shame, Activity,
    Calendar (maybe "Cal") and "?". Click **Activity**: the list of what happened (icon, line, "5m ago"), newest
    first, at the panel's normal width. Hover a line: the whole line and the clock time. The mouse wheel scrolls. With
@@ -1075,13 +1075,13 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    opening it clears that. Click the red number on the tab: the panel opens straight on Activity. Switch to Tiny rows:
    the words shorten ("Act", "Cal") and nothing overlaps or pokes out of the panel. Turn Stats and Calendar off in
    the settings: the bar still shows Crew and Activity. `/tc recent` still opens the Recent window.
-17. **See-through when idle** (not tested in the game yet). Leave the mouse away from the tab: it is faint, about
+17. **Fade when I'm not using it** (was "See-through when idle"; not tested in the game yet). Leave the mouse away from the tab: it is faint, about
    40%, text and all. Move the mouse onto it: it turns solid in a fraction of a second. Move away: about a second
    later it fades back over under half a second. Rest on it so the panel slides out: solid the whole time, and the
    panel is never faded. Let a friend come online: the tab and the news are solid while it shows, then fade about
    a second after it slides back. Right-click the tab: solid while the menu is open. Drag the tab: solid. Turn on
    **Keep open**: the whole panel is faint when the mouse is away and solid with the mouse on it (move between rows,
-   the header and the tabs: no flicker). Settings, **See-through when idle**: moving the slider changes it at once;
+   the header and the tabs: no flicker). Settings, **Fade when I'm not using it**: moving the slider changes it at once;
    100% means nothing is ever faint; hover its (i) for the tip. Fight with it faint: no errors. On purpose: the
    **Keep open** switch bar under the title bar fades with the panel, but the update line, the news line and the
    Mock, Congrats and Share buttons stay solid even when the panel is faint (news and reactions are not
@@ -1121,6 +1121,36 @@ that is part of the test: write it down and carry on.
    among the messages it can read?
 4. Ask one guild mate who was **offline** when you sent it to log on and type `/tc chattest`. What is their last
    line?
+
+## Simpler settings (2026-11-23)
+
+Not tested in the game yet. No new files: a `/reload` is enough. Riskiest first.
+
+1. **The upgrade.** Log in with your old saved settings: no red errors, `/tc report` says "Turned off after errors:
+   none". Settings you had changed and that still exist (Scale, Row style, Keep open, pop-up switches...) are as you
+   left them. If you had **Friends coming online in chat** or **Roasts in chat** on, **News in my chat** (Basics)
+   now says **Everything**; if you had chat lines off, **Off**; else **Important**. If you had a pop-up, level-up or
+   roast sound on, **Sounds** says **All**; if you had the mock laugh or the awards show sound off, **Off**; else
+   **Shows only**.
+2. **Basics.** `/tc`: eight controls (Keep the panel open, Panel size, Fade when I'm not using it, Whose news I get,
+   Pop-ups, News in my chat, Sounds, Mark me AFK when I stop playing), then How to use TwizCrew and What's new. Does
+   it all fit without scrolling?
+3. **Advanced.** Five sub-tabs: Panel, Alerts, Fun, Find, More (no All, no Test). Each page ends with a
+   **Rarely needed** heading. The sub-tab row fits on one line. Each switch and slider still works and has an (i).
+4. **Sounds.** Basics, Sounds **Off**: no sound from a mock, the awards show or a ding (`/tc test`, Ding, Try a mock
+   (live)). **Shows only**: the mock laugh and the awards show only. **All**: also the ding and the pop-up sound.
+5. **Try it out.** Advanced, More, **Try it out…** (and `/tc test`): a small window with the fifteen test buttons.
+   `/tc test help` lists the chat commands.
+6. **Grow direction is automatic.** Keep the panel open, drag it to the bottom half of the screen: when more friends
+   come online it grows upward and stays on screen. Drag it to the top half: it grows downward.
+7. **Menus.** The wrench menu has no spell-rank switches and no Recent activity; the minimap's right-click menu is
+   shorter too. A friend's row menu no longer ends with "Me: …" entries (your own row and the title's menu have
+   Set my status and Go AFK).
+8. **What's new line.** It shows only right after an update ("New in v…!"); once you open What's new it is gone for
+   good. Clicking the panel's title still opens What's new.
+9. **Help.** `/tc help`: about a dozen lines. `/tc help more`: the rest. `/tc guildtest`, `/tc caltest` and
+   `/tc chattest` are on neither list but still work.
+10. **Clear the list.** `/tc recent`: a red **Clear the list** button next to Close empties it (the Activity tab too).
 
 ## What to send back
 

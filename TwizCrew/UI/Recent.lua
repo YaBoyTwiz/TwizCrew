@@ -75,9 +75,7 @@ end
 function Recent.fillRow(r, e, wall)
   r.tcEntry = e
   if ns.ClassIcon.apply(r.icon, e.class) == "none" then
-    r.icon:SetTexture(KIND_ICON[e.kind] or KIND_ICON.online)
-    r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    r.icon:Show()
+    ns.Icons.set(r.icon, ns.Icons.recent(e.kind), KIND_ICON[e.kind] or KIND_ICON.online) -- (UI/Icons.lua)
   end
   local ago = ns.FeedLogic.ago(e.at, wall)
   r.ago:SetText(ago)

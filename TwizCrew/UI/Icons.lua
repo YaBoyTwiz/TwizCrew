@@ -115,9 +115,9 @@ function Icons.card(id) return CARD[id] end
 function Icons.ok() return T.probe(Icons.ATLAS) ~= "failed" end
 
 -- Draws icon `name` on tex. Without the atlas (or for an unknown name) draws `fallback` (a game texture path,
--- trimmed with 0.08 / 0.92 when it is a square game icon, as before), else hides tex. Returns "atlas", "game" or
--- "none".
-function Icons.set(tex, name, fallback)
+-- trimmed with 0.08 / 0.92 when it is a square game icon, as before; whole with `whole`, for a place that drew it
+-- whole), else hides tex. Returns "atlas", "game" or "none".
+function Icons.set(tex, name, fallback, whole)
   if type(tex) ~= "table" then return "none" end
   local c = Icons.cell(name)
   if c and Icons.ok() and T.setTexture(tex, Icons.ATLAS) ~= "failed" then
@@ -129,7 +129,7 @@ function Icons.set(tex, name, fallback)
   end
   if type(fallback) == "string" and fallback ~= "" then
     T.setTexture(tex, fallback)
-    if fallback:find("Interface\\Icons\\", 1, true) then T.setCoords(tex, 0.08, 0.92, 0.08, 0.92)
+    if not whole and fallback:find("Interface\\Icons\\", 1, true) then T.setCoords(tex, 0.08, 0.92, 0.08, 0.92)
     else T.setCoords(tex, 0, 1, 0, 1) end
     tex:Show()
     return "game"

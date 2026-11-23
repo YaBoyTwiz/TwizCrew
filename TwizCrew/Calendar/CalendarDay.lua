@@ -377,7 +377,7 @@ local function drawDay()
       local minutes = ((n.at + off) % L.DAY) / 60
       local x = AXIS_X + BAR_W * minutes / 1440
       mk.tcNote = n
-      mk.icon:SetTexture(ns.Notes.iconTexture(n.i))
+      ns.Notes.setIcon(mk.icon, n.i)
       mk:ClearAllPoints()
       mk:SetPoint("TOP", P.dayPane, "TOPLEFT", x, -(48 + DAY_ROWS * ROW_H))
       mk.line:ClearAllPoints()

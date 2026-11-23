@@ -223,7 +223,7 @@ local function drawEvents()
           c.tcLines[k] = "+" .. (#notes - LINES + 1) .. " more"
           line.text:SetText("|cff9a8f70" .. c.tcLines[k] .. "|r")
         elseif n then
-          line.icon:SetTexture(ns.Notes.iconTexture(n.i))
+          ns.Notes.setIcon(line.icon, n.i)
           line.icon:Show()
           c.tcLines[k] = lineText(n, off)
           line.text:SetText(c.tcLines[k])
@@ -349,7 +349,7 @@ local function drawEventDay()
     r.tcKey = n and n.key or nil
     r.tcNew = nil
     if n then
-      r.icon:SetTexture(ns.Notes.iconTexture(n.i))
+      ns.Notes.setIcon(r.icon, n.i)
       r.tcNew = isNew(n, P.shownDay, today)
       r.text:SetText(lineText(n, off) .. (r.tcNew and "  |cffffd100new|r" or ""))
       local counts, rp = countsText(n.key)

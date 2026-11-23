@@ -176,6 +176,15 @@ function Notes.iconTexture(i)
   return e.tex
 end
 
+-- Draws note kind i on a texture: "Fun" and "Crew" in TwizCrew's own icons (UI/Icons.lua), the others (and those two
+-- when the atlas does not load) the game icon as before.
+local ATLAS_KIND = { Fun = "congrats", Crew = "tab_crew" }
+function Notes.setIcon(tex, i)
+  local e = Notes.ICONS[tonumber(i) or 1] or Notes.ICONS[1]
+  if ns.Icons then return ns.Icons.set(tex, ATLAS_KIND[e.name], e.tex) end
+  tex:SetTexture(e.tex)
+end
+
 -- Mine: made by this copy (its key starts with my diary id), or by one of my own characters on another computer
 -- (a second install has its own diary id, so its notes carry that one; the author's name and class are then one of
 -- mine: two guild members can share a first name, so the name alone is not enough).

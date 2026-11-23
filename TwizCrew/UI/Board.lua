@@ -24,6 +24,8 @@ local view = "session"
 local frame, sessionButton, allButton, subtitle, footer, tabButtons
 local rows = {}         -- pool, one per award at most
 local lastModel, lastLayout
+local CAT_ICON = 14     -- a category's icon left of its word
+local catIcons, lastCatWidth -- the category icons show (the row fits with them); the width it was decided for
 
 local function script(f, name, fn, featureId) Widgets.script(f, name, fn, featureId or FEATURE) end
 
@@ -147,6 +149,13 @@ local function build(parent)
     local id = t.id
     local b = Board.textButton(frame, t.label, function() Board.setTab(id) end, nil, "tab_" .. id)
     if prev then b:SetPoint("LEFT", prev, "RIGHT", 2, 0) else b:SetPoint("TOPLEFT", frame, "TOPLEFT", -5, -(SWITCH_HEIGHT + 2)) end
+    -- the category's icon left of its word (TwizCrew's icons; drawn only when the whole row fits: placeCatIcons)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetSize(CAT_ICON, CAT_ICON)
+    b.icon:SetPoint("LEFT", b, "LEFT", 3, 0)
+    b.tcIconOn = ns.Icons.set(b.icon, id == ns.BoardLogic.TROPHY_TAB.id and "trophy" or ns.Icons.category(id)) == "atlas"
+    b.icon:Hide()
+    b.tcWords = t.label
     tabButtons[#tabButtons + 1] = b
     prev = b
   end
@@ -157,6 +166,35 @@ local function build(parent)
   footer.hover = Widgets.helpTip(CreateFrame("Frame", nil, frame), "wipe", FEATURE) -- the Wipe Squad line's tip
   footer.hover:SetAllPoints(footer)
   footer.hover:Hide()
+end
+
+-- The category buttons with their icons (icon 3 in, the word 3 after it) when the whole row fits `width`; else the
+-- words alone, as before (the words never give way to the icons).
+local function placeCatIcons(width)
+  local function wordWidth(b)
+    local w = b.label:GetStringWidth()
+    if type(w) ~= "number" or w <= 0 then w = #b.tcWords * 6 end
+    return w
+  end
+  local total, all = -5, true
+  for i, b in ipairs(tabButtons) do
+    total = total + wordWidth(b) + 3 + CAT_ICON + 3 + 5 + (i > 1 and 2 or 0)
+    if not rawget(b, "tcIconOn") then all = false end
+  end
+  local on = all and total <= width
+  catIcons = on
+  for _, b in ipairs(tabButtons) do
+    b.label:ClearAllPoints()
+    if on then
+      b.label:SetPoint("LEFT", b, "LEFT", 3 + CAT_ICON + 3, 0)
+      b:SetWidth(3 + CAT_ICON + 3 + wordWidth(b) + 5)
+      b.icon:Show()
+    else
+      b.label:SetPoint("CENTER", b, "CENTER", 0, 0)
+      b:SetWidth(wordWidth(b) + 10)
+      b.icon:Hide()
+    end
+  end
 end
 
 local function placeLine(fs, text, y, width)
@@ -181,6 +219,7 @@ function Board.draw(parent, top, width)
   for i, t in ipairs(m.tabs) do
     if tabButtons[i] then tabButtons[i]:SetActive(t.active) end
   end
+  if catIcons == nil or lastCatWidth ~= width then lastCatWidth = width; placeCatIcons(width) end
 
   local y = 2 * (SWITCH_HEIGHT + 2)
   placeLine(subtitle, m.subtitle, y, width)
@@ -197,7 +236,9 @@ function Board.draw(parent, top, width)
     r:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -y)
     r:SetWidth(width)
     r:SetHeight(height)
-    r.icon:SetTexture(row.icon)
+    -- the award's own icon (UI/Icons.lua; the game icon when the atlas did not load); the Trophies tab's rows are
+    -- people, so they keep the ribbon
+    ns.Icons.set(r.icon, (Board.tab() ~= ns.BoardLogic.TROPHY_TAB.id) and ns.Icons.award(row.id) or nil, row.icon, true)
     r.name:SetText(row.name)
     r.number:SetWidth(numberWidth)
     r.number:SetText(row.text)
@@ -261,3 +302,4 @@ function Board.modelForTest() return lastModel end
 function Board.buttonsForTest() return { session = sessionButton, all = allButton, tabs = tabButtons,
   footer = footer and footer.hover } end
 function Board.layoutForTest() return lastLayout end
+function Board.categoryIconsForTest() return catIcons end

@@ -349,7 +349,8 @@ local function buildMaker()
     b.border:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 2)
     b.border:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 2, -2)
     T.color(b.border, C.title, 1)
-    local ic = iconTexture(b, e.tex, 18) -- fills its 22 square button
+    local ic = iconTexture(b, nil, 18) -- fills its 22 square button
+    ns.Notes.setIcon(ic, i)
     ic:SetAllPoints(b)
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(b)

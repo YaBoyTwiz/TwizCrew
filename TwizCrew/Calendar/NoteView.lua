@@ -235,7 +235,7 @@ function NoteView.refresh()
     dungeonLine:Show()
   else
     banner:Hide(); shade:Hide(); bannerTitle:Hide()
-    bigIcon:SetTexture(ns.Notes.iconTexture(n.i))
+    ns.Notes.setIcon(bigIcon, n.i)
     bigIcon:Show()
     title:SetText(text)
     title:Show()

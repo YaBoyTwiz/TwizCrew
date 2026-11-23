@@ -304,6 +304,121 @@ return {
       A.eq(ns.Modules.set("panel", "theme", 7), false, "a number is refused")
     end,
 
+    ---------------------------------------------------------------------------------------------------- icons
+    the_atlas_table_is_the_spec = function(ns, A)
+      local I = ns.Icons
+      local n = 0
+      for name, c in pairs(I.CELLS) do
+        n = n + 1
+        local row, col = c[1], c[2]
+        -- each cell is 64 texels of 512, inset half a texel: exactly as the spec, never the 0.08 / 0.92 trim
+        local function near(x, y) return math.abs(x - y) < 0.000002 end
+        A.ok(near(c[3], (col * 64 + 0.5) / 512) and near(c[4], (col * 64 + 63.5) / 512), name .. " u")
+        A.ok(near(c[5], (row * 64 + 0.5) / 512) and near(c[6], (row * 64 + 63.5) / 512), name .. " v")
+      end
+      A.eq(n, 55, "55 icons")
+      for alias, target in pairs(I.ALIASES) do A.ok(I.CELLS[target], alias .. " -> " .. target) end
+      local tex = ns.Theme.frame("Frame", nil, UIParent):CreateTexture()
+      A.eq(I.set(tex, "award_medic"), "atlas")
+      A.eq(tex._texture, ATLAS)
+      A.eq(tex._coords, { 0.875977, 0.999023, 0.625977, 0.749023 }, "the texcoords as they are")
+      A.eq(I.set(tex, "roast"), "atlas", "an alias")
+      A.eq(tex._coords, { 0.500977, 0.624023, 0.000977, 0.124023 }, "roast is the mock cell")
+    end,
+
+    every_real_key_has_an_icon_or_a_fallback = function(ns, A)
+      local I = ns.Icons
+      for _, d in ipairs(ns.StatsDefs.AWARDS) do
+        A.ok(I.award(d.id) and I.cell(I.award(d.id)), "award " .. d.id .. " has an icon")
+        A.ok(d.icon or ns.StatsDefs.ICON_FALLBACK, "award " .. d.id .. " has a game icon to fall back to")
+      end
+      A.eq(I.award("pauper"), "award_pauper"); A.ok(I.cell("award_pauper"), "pauper uses the loot bag")
+      A.eq(I.award("clown"), "clown")
+      A.eq(I.award("nobody"), nil, "an unknown id keeps the game icon")
+      for _, t in ipairs(ns.StatsDefs.TABS) do A.ok(I.cell(I.category(t.id)), "category " .. t.id) end
+      for _, kind in ipairs(ns.FeedLogic.KINDS) do
+        A.ok(I.cell(I.recent(kind)), "Recent / Activity kind " .. kind)
+        A.ok(I.cell(I.news(kind)), "news line kind " .. kind)
+      end
+      for _, kind in ipairs({ "runaway", "calnote", "calreply", "fight" }) do A.ok(I.cell(I.news(kind)), "news " .. kind) end
+      A.eq(I.news("otherlayer"), nil, "layer news keeps the game's blink")
+      A.eq(I.news("samelayer"), nil)
+      for _, kind in ipairs({ "death", "roast", "levelup", "online", "runaway" }) do
+        A.ok(I.cell(I.popup(kind)), "pop-up " .. kind)
+      end
+      A.eq(I.popup("layer_diff"), nil, "layer pop-ups keep the game icon")
+      A.eq(I.popup("qshare"), nil, "quest share keeps the game icon")
+      A.eq(I.popup("meet"), nil, "the meet-up keeps the map")
+      for _, id in ipairs({ "crew", "shame", "activity", "calendar" }) do A.ok(I.cell(I.tab(id)), "tab " .. id) end
+      for _, id in ipairs({ "basic", "panel", "alerts", "fun", "find", "more" }) do A.ok(I.cell(I.page(id)), "page " .. id) end
+      for _, id in ipairs({ "away", "welcome", "recap", "awards" }) do A.ok(I.cell(I.card(id)), "card " .. id) end
+      for _, name in ipairs({ "mock", "mock_back", "congrats", "crown", "clown", "crown_stolen", "new_member" }) do
+        A.ok(I.cell(name), name)
+      end
+    end,
+
+    icons_show_in_their_places = function(ns, A, W)
+      boot(W)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12", tg = "DEAD" })
+      ns.Panel.pin("Frostie") -- (so the row is in the main view)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(1)
+      local tabs = ns.Panel.tabButtonsForTest()
+      A.ok(tabs.crew.icon:IsShown() or not tabs.crew.tcIconShown, "the Crew tab's icon follows the fit")
+      A.eq(tabs.crew.icon._texture, ATLAS)
+      A.no(rawget(tabs.help, "icon"), "the ? gets no icon")
+      local row = ns.Panel.firstRowForTest and ns.Panel._.rowFrames[1]
+      A.ok(row and row.mock:IsShown(), "a dead friend's row has its Mock button")
+      A.eq(row.mock.icon._texture, ATLAS, "the Mock button's icon")
+      A.eq(row.mock.icon._coords, { 0.500977, 0.624023, 0.000977, 0.124023 })
+      A.eq(row.cheer.icon._texture, ATLAS, "the Congrats button's icon")
+      ns.Popups.notice("Interface\\Icons\\INV_Misc_Gift_01", "Hi", "there", nil, nil, "new_member")
+      W:advance(0.6)
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    without_the_atlas_every_place_shows_what_it_showed = function(ns, A, W)
+      W.state.missingArt = { [ATLAS] = true }
+      boot(W)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12", tg = "DEAD" })
+      ns.Panel.pin("Frostie") -- (so the row is in the main view)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(1)
+      A.no(ns.Icons.ok())
+      local tabs = ns.Panel.tabButtonsForTest()
+      A.no(tabs.crew.tcIconOn, "no tab icons")
+      A.no(tabs.crew.icon:IsShown(), "and no empty square")
+      local row = ns.Panel._.rowFrames[1]
+      A.eq(row.mock.icon._texture, ns.Tags.ICON.DEAD, "Mock: the skull, as before")
+      A.eq(row.cheer.icon._texture, "Interface\\Icons\\INV_Misc_Gift_01", "Congrats: the gift, as before")
+      A.eq(row.cheer.icon._coords, { 0.08, 0.92, 0.08, 0.92 }, "trimmed like a game icon")
+      A.eq(ns.Theme.drawnId(), "crowned", "only the icons fall back; the theme's frame loaded")
+      local tex = ns.Theme.frame("Frame", nil, UIParent):CreateTexture()
+      A.eq(ns.Icons.set(tex, "award_medic", "Interface\\Icons\\Spell_Holy_Resurrection", true), "game")
+      A.eq(tex._coords, { 0, 1, 0, 1 }, "a place that drew it whole stays whole")
+      A.eq(ns.Icons.set(tex, "award_medic"), "none")
+      A.no(tex:IsShown(), "no fallback: hidden, never an empty square")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    tab_icons_count_in_the_fit = function(ns, A, W)
+      boot(W)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(1)
+      local tabs = ns.Panel.tabButtonsForTest()
+      local root = ns.Panel.rootForTest()
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.2)
+        local used = 3
+        for _, b in ipairs({ tabs.crew, tabs.shame, tabs.act, tabs.cal, tabs.help }) do
+          if b:IsShown() then used = used + b:GetWidth() + 4 end
+        end
+        A.ok(used - 4 <= root:GetWidth(), style .. ": fits with the icons' room counted (" .. used - 4 .. ")")
+        local w = #tabs.shame.label:GetText() * 6 + 10
+        A.eq(tabs.shame:GetWidth(), w + (tabs.shame.tcIconShown and 16 or 0), style .. ": 16 more per icon")
+      end
+    end,
+
     tavern_oak_darkens_while_see_through = function(ns, A, W)
       boot(W)
       ns.Modules.set("panel", "theme", "tavern")

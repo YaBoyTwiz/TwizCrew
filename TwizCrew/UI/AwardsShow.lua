@@ -272,7 +272,7 @@ end
 local function drawClown()
   local r = vote and vote.result or { names = {}, n = 0 }
   local def = ns.StatsDefs.trophyDef("clown")
-  badge:SetTexture(def and def.icon or ns.StatsDefs.ICON_FALLBACK)
+  ns.Icons.set(badge, "clown", def and def.icon or ns.StatsDefs.ICON_FALLBACK, true)
   badge:Show()
   if #r.names == 0 then
     title:SetText(ns.ShowLogic.clownLine(r.names, r.n))
@@ -309,7 +309,7 @@ local function draw()
     title:SetText(THE_END)
     hintText = HINT_CLOSE
   elseif a then
-    badge:SetTexture(a.def.icon or ns.StatsDefs.ICON_FALLBACK)
+    ns.Icons.set(badge, ns.Icons.award(a.def.id), a.def.icon or ns.StatsDefs.ICON_FALLBACK, true)
     badge:Show()
     title:SetText(a.def.name)
     if phase == "drum" then

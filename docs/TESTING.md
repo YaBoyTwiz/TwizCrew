@@ -1076,6 +1076,41 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    the words shorten ("Act", "Cal") and nothing overlaps or pokes out of the panel. Turn Stats and Calendar off in
    the settings: the bar still shows Crew and Activity. `/tc recent` still opens the Recent window.
 
+## Server-side storage probes (2026-11-23)
+
+Two test commands that check whether Blizzard's server can keep a calendar note for guild mates who log on while
+you are offline. They change nothing in TwizCrew. Every line they print also goes into the saved log, so after a
+`/reload` or logout Claude can read the results from the SavedVariables file. **None of this has run in the game.**
+`make` and `send` put something the **whole guild can see** (a calendar event called "TCtest <your name>", a guild
+chat line "TCtest <time>"), so tell the guild first. If the game shows "TwizCrew has been blocked from an action",
+that is part of the test: write it down and carry on.
+
+**The calendar (`/tc caltest`):**
+
+1. Type `/tc caltest`. It takes about 5 seconds. Write down: how many calendar functions are present and which are
+   missing, whether `The server sent the event list`, how many events the game holds this month, and every guild or
+   TCtest event it lists. `Nothing came back` is a result too.
+2. Type `/tc caltest make`. It tries to make the test event from the typed command, then a small window offers
+   **Create test event**: click it (it makes a second event). Write down both `AddEvent from the ...` lines, both
+   `Your test event is listed now: yes / no` lines and the last `Ways tried so far` line.
+3. Log out fully (to the character screen or out of the game), log back in and type `/tc caltest` again. Is the
+   TCtest event still listed?
+4. Ask one guild mate who was **offline** when you made it (and who has this version) to log on and type
+   `/tc caltest`. Do they see your TCtest event? This is the real question.
+5. When done, type `/tc caltest remove`: it removes the TCtest events you made and says how many are still listed.
+
+**Guild chat history (`/tc chattest`):**
+
+1. Type `/tc chattest`. It takes about 5 seconds. Write down: which functions are present, the channels it lists,
+   for each how many messages can be read and how old the oldest is, whether older lines arrived, and the **last
+   line**: `History kept by the server: yes / no / can't tell; messages written before this login: ...`.
+2. Type `/tc chattest send` (the guild sees the line). It tries from the typed command, then a small window offers
+   **Send test line**: click it. Write down both `SendMessage from the ...` lines (does the line show in the channel?).
+3. Log out fully, log back in and type `/tc chattest` again. Does the last line now say `yes`, and is your TCtest line
+   among the messages it can read?
+4. Ask one guild mate who was **offline** when you sent it to log on and type `/tc chattest`. What is their last
+   line?
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

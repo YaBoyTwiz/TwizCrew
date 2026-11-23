@@ -1110,6 +1110,14 @@ beta, not from Blizzard, so **test every one of them in the real game**.
   create guild events in Classic (no permission); guild event invites have been broken since Classic
   1.15.3; characters outside a guild may only see changes after a relog. Comments and play times stay
   peer-to-peer (too big).
+- **Probes for notes that reach offline guild mates (2026-11-23, results pending):** two test commands, which change
+  nothing in TwizCrew, check the two server-side stores in the game before anything is designed. `/tc caltest`
+  lists this month's guild calendar events; `/tc caltest make` makes a guild event "TCtest <name>" (typed and by a
+  button click, since `AddEvent` wants the player's own action); `/tc caltest remove` deletes it. `/tc chattest`
+  reads the guild tab's chat channels (`C_Club` streams), asks the server for older lines and ends with "History kept
+  by the server: yes / no / can't tell"; `/tc chattest send` posts a test line. The real test: after a full relog,
+  and on a guild mate who was offline at the time, is the event or line still there? Steps: `docs/TESTING.md`,
+  "Server-side storage probes". Their lines also go to the saved log.
 - Some interface changes are **locked during combat** (`InCombatLockdown()`): wait for `PLAYER_REGEN_ENABLED`.
 - **Lua 5.1**, Blizzard's version: no `goto`, no `//`, no bit operators (use the `bit` library), no `require`,
   `io` or `os`. The `.toc` file lists the files to load.

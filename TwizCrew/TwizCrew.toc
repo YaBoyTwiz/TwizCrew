@@ -94,6 +94,9 @@ UI\Welcome.lua
 UI\Settings.lua
 UI\Report.lua
 UI\GuildTest.lua
+UI\Probes.lua
+UI\CalTest.lua
+UI\ChatTest.lua
 UI\TestTools.lua
 UI\MinimapLogic.lua
 UI\MinimapButton.lua

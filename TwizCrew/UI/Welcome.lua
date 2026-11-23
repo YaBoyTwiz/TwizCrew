@@ -15,6 +15,7 @@ local FEATURE = "welcome"
 local Logic = ns.WelcomeLogic
 local I = "Interface\\Icons\\"
 local START_DELAY, START_CAP = 30, 120 -- s after login: the start card's earliest look, and when to stop waiting
+Welcome.START_CAP = START_CAP -- (UI/About.lua waits that long for the card)
 local POPUP_SECONDS = 20
 local FORGET_AFTER = 400 * 86400 -- s: a welcomed name is kept this long
 
@@ -123,18 +124,30 @@ local function showStart()
   card.fill(nil, lines, buttons)
 end
 
+-- The game says this character is in no guild (not just "not known yet").
+local function noGuild() return ns.Guild.known() and not ns.Guild.inGuild() end
+
 -- The start card: worked out once, START_DELAY s after login (the list loaded and this guild's data in use), at the
--- latest at START_CAP.
+-- latest at START_CAP. In no guild it is not worked out at all: an invite later this session decides it (the next
+-- guild list). A new install seen in no guild (nothing saved at login, this account never read a guild's name) is
+-- remembered account-wide (db.welcomePending), so the card is still owed when the invite comes after a logout; the
+-- first guild that decides uses it up.
 function Welcome.maybeStart(final)
   if startDecided or not started or ns.now() - startedAt < START_DELAY - 1 then return end -- (timers run a hair early)
   local G = ns.Guild
   if not G.active() or not G.loaded() then
+    if noGuild() then
+      local g = ns.db and ns.db.guild
+      if fresh and not (type(g) == "table" and g.named) then ns.db.welcomePending = true end
+      return
+    end
     if final then startDecided = true end
     return
   end
   startDecided = true
   local w = store()
-  Logic.markStart(w, fresh)
+  Logic.markStart(w, fresh or ns.db.welcomePending == true)
+  ns.db.welcomePending = nil
   if Logic.startDue(w) then ns.AwayCard.whenFree(showStart, FEATURE) end
 end
 
@@ -163,17 +176,19 @@ function Welcome.start()
   C_Timer.After(START_CAP, function() ns.Log.safe(FEATURE, Welcome.maybeStart, true) end)
 end
 
--- Test hooks.
 -- Is the start card still to come this session (not decided yet for a fresh copy, or owed and waiting for a free
--- moment)? The About page asks, so a new install does not get two windows at once (UI/About.lua).
+-- moment)? Not while the game says there is no guild. The About page asks, so a new install does not get two windows
+-- at once (UI/About.lua).
 function Welcome.startOwed()
   local w = ns.db and ns.db.welcome
   local state = type(w) == "table" and w.start or nil
   if state == "shown" or state == "no" then return false end
   if state == "due" then return true end
-  return started and fresh and not startDecided or false
+  if not started or startDecided or noGuild() then return false end
+  return fresh or ns.db.welcomePending == true
 end
 
+-- Test hooks.
 function Welcome.isStartShown() return card ~= nil and card.frame:IsShown() and true or false end
 function Welcome.startCardForTest() return card end
 function Welcome.lastSaidForTest() return lastSaid end

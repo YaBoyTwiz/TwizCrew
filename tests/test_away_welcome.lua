@@ -356,6 +356,59 @@ return {
       A.eq(legacy.welcome.start, "no")
       retire(H, W4)
     end,
+    installed_before_the_invite_same_session = function(ns, A, W, H)
+      local N, nns = H.client("Newbie Recruit", { noGuild = true, level = 8 })
+      N.env.TwizCrewDB = {}
+      H.link(N)
+      login(N)
+      H.advance(130) -- past the card's own cap, still in no guild
+      A.no(nns.Welcome.isStartShown())
+      H.joinCrewGuild(N) -- invited
+      H.advance(40)
+      A.ok(nns.Welcome.isStartShown(), "the start card once the guild's data is in use")
+      A.eq(N.env.TwizCrewDB.welcome.start, "shown")
+      A.eq(N.env.TwizCrewDB.welcomePending, nil, "used up")
+      noErrors(A, nns)
+    end,
+    installed_before_the_invite_logged_out_first = function(ns, A, W, H)
+      local saved = {}
+      local N, nns = H.client("Newbie Recruit", { noGuild = true, level = 8 })
+      N.env.TwizCrewDB = saved
+      H.link(N)
+      login(N)
+      H.advance(130)
+      A.ok(nns.About.isShown(), "no guild: the About page instead")
+      nns.About.close()
+      A.eq(saved.welcomePending, true, "a new install seen with no guild")
+      retire(H, N)
+      -- (as if this copy had read the guild's list just before logging out: not empty at the next login)
+      saved.guild.name, saved.guild.keys = "Crew Guild", { ["newbie recruit"] = "Newbie" }
+      local N2, nns2 = H.client("Newbie Recruit", { level = 8 })
+      N2.env.TwizCrewDB = saved
+      H.link(N2) -- invited between the two sessions
+      login(N2)
+      H.advance(40)
+      A.ok(nns2.Welcome.isStartShown(), "still owed")
+      A.eq(saved.welcomePending, nil)
+      noErrors(A, nns, nns2)
+    end,
+    existing_users_in_no_guild_are_never_owed_the_card = function(ns, A, W, H)
+      local legacy = { roster = { Frostie = { name = "Frostie", class = "WARRIOR" },
+        Chaos = { name = "Chaos", class = "WARRIOR" } } }
+      local W1, ns1 = H.client("Twiz Main", { noGuild = true })
+      W1.env.TwizCrewDB = legacy
+      H.link(W1)
+      login(W1)
+      H.advance(130)
+      A.eq(legacy.welcomePending, nil, "old data: not a new install")
+      retire(H, W1)
+      local W2, ns2 = session(H, legacy, BEFORE, 0)
+      H.advance(60)
+      A.eq(legacy.guild.name, "Crew", "adopted")
+      A.no(ns2.Welcome.isStartShown(), "an old user whose data was just adopted")
+      A.eq(legacy.welcome.start, "no")
+      noErrors(A, ns1, ns2)
+    end,
     the_start_card_waits_for_the_fight_and_has_the_about_button = function(ns, A, W, H)
       local W1, ns1 = session(H, {}, BEFORE, 0, { level = 25 })
       local opened

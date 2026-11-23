@@ -102,27 +102,31 @@ end
 function About.isShown() return open end
 
 ---------------------------------------------------------------------------------------------- once, on a new install
+-- Not in a fight or inside an instance: the same rule as the cards (UI/AwayCard.lua).
 local function busy()
+  if ns.AwayCard and ns.AwayCard.busy then return ns.AwayCard.busy() end
   if ns.Util.plain(InCombatLockdown) then return true end
-  local _, kind = ns.Util.plain(IsInInstance)
-  return kind == "party" or kind == "raid"
+  return ns.Util.plain(IsInInstance) == true
 end
 
 -- A new install in a guild is also owed the welcome card (UI/Welcome.lua), which has a button for this page: one
--- window at first login is enough. So while that card is owed this page waits for it once; when the card has shown,
--- this page counts as offered; when it could not show (no guild list, say), this page opens after all.
-local CARD_WAIT = 40 -- seconds; the welcome card shows about 30 s after login
-local waitedForCard = false
+-- window at first login is enough. So while that card is owed this page waits for it (asking again every RETRY s):
+-- while it is due (only waiting for a free moment) for as long as it takes, while it is not decided yet until the
+-- card's own cap. When the card has shown, this page counts as offered; when it could not show (no guild list, say),
+-- this page opens after all.
+local loginAt
 
 local function tryFirst()
   if not ns.db or ns.db.aboutSeen ~= false then return end -- seen already, or saved data from an older version
   local w = ns.db.welcome
   if type(w) == "table" and w.start == "shown" then ns.db.aboutSeen = true; return end
-  if not waitedForCard and ns.Welcome and ns.Welcome.startOwed and ns.Welcome.startOwed()
-    and C_Timer and C_Timer.After then
-    waitedForCard = true
-    C_Timer.After(CARD_WAIT, function() ns.Log.safe(FEATURE, tryFirst) end)
-    return
+  local W = ns.Welcome
+  if W and W.startOwed and W.startOwed() and C_Timer and C_Timer.After then
+    local due = type(w) == "table" and w.start == "due"
+    if due or ns.now() - (loginAt or 0) < (W.START_CAP or 120) then
+      C_Timer.After(RETRY, function() ns.Log.safe(FEATURE, tryFirst) end)
+      return
+    end
   end
   if busy() then
     if C_Timer and C_Timer.After then C_Timer.After(RETRY, function() ns.Log.safe(FEATURE, tryFirst) end) end
@@ -133,6 +137,7 @@ end
 
 -- At login: a new install opens the page once, a few seconds in.
 function About.onLogin()
+  loginAt = loginAt or ns.now()
   if ns.db and ns.db.aboutSeen ~= false then return end -- (no saved data yet: asked again when the time comes)
   if C_Timer and C_Timer.After then
     C_Timer.After(FIRST_DELAY, function() ns.Log.safe(FEATURE, tryFirst) end)

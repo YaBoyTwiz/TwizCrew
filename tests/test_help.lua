@@ -360,6 +360,25 @@ return {
       A.no(ns.About.isShown(), "one window is enough: the page did not open by itself too")
       A.eq(ns.db.aboutSeen, true, "the card offered it")
     end,
+    waits_for_a_welcome_card_that_comes_late = function(ns, A, W)
+      W.state.guildListDelay = 60 -- a slow server: the guild list (and so the welcome card) comes after a minute
+      boot(W)
+      W:advance(100)
+      A.ok(ns.Welcome.isStartShown(), "the welcome card")
+      A.no(ns.About.isShown(), "the page waited for it")
+    end,
+    waits_for_a_welcome_card_held_back_in_a_battleground = function(ns, A, W)
+      W.state.inInstance, W.state.instanceType = true, "pvp" -- (the card waits there; the page used to not)
+      boot(W)
+      W:advance(150)
+      A.no(ns.Welcome.isStartShown())
+      A.no(ns.About.isShown(), "the page waits too")
+      W.state.inInstance, W.state.instanceType = false, "none"
+      W:advance(20)
+      A.ok(ns.Welcome.isStartShown(), "the card first")
+      W:advance(30)
+      A.no(ns.About.isShown(), "and only the card")
+    end,
     waits_out_a_fight_and_a_dungeon = function(ns, A, W)
       W.state.guild = nil
       W.state.inInstance, W.state.instanceType = true, "party"

@@ -176,6 +176,7 @@ local IMPL = {
   SetTexCoord = function(self, ...) self._coords = { ... } end,
   SetVertexColor = function(self, r, g, b, a) self._vertex = { r, g, b, a } end,
   SetBackdrop = function(self, bd) self._backdrop = bd end,
+  SetTextColor = function(self, r, g, b, a) self._textColor = { r, g, b, a } end,
   GetBackdrop = function(self) return self._backdrop end,
   SetVerticalScroll = function(self, v) self._vscroll = v end,
   GetVerticalScroll = function(self) return self._vscroll or 0 end,

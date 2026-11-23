@@ -245,14 +245,30 @@ return {
 
     texts_take_the_theme = function(ns, A, W)
       boot(W)
-      ns.Modules.set("panel", "theme", "tavern")
-      local title = ns.Panel.headerButtonsForTest().head -- (the title is a text on the header)
-      A.ok(title)
+      ns.Modules.set("panel", "keepOpen", true)
+      W:advance(0.5)
+      local count = ns.Panel._.countText
+      A.eq(count.tcRole, "count")
+      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 }, "Crowned crew: the header count in light grey")
       local tab = ns.Panel.tabForTest()
       A.eq(tab.label.tcRole, "tuckLetters")
+      A.eq(tab.label._textColor, { 1, 0.85, 0.42, 1 }, "the banner's letters")
+      ns.Modules.set("panel", "theme", "tavern")
+      W:advance(0.2)
+      A.eq(count._textColor, { 0.95, 0.89, 0.74, 1 }, "Tavern night's count colour, at once")
+      A.eq(tab.label._textColor, { 0.96, 0.89, 0.69, 1 })
       ns.Popups.notice("Interface\\Icons\\INV_Misc_Gift_01", "Hello", "there")
       W:advance(0.6)
+      ns.AwayCard.newCard("TwizCrewThemeTestCard", "Interface\\Icons\\INV_Misc_Gift_01", "A card", true, nil,
+        "card_away").fill("sub", { { icon = "Interface\\Icons\\INV_Misc_Gift_01", text = "a line" } }, {})
+      local card = W.env.TwizCrewThemeTestCard
+      A.eq(skin(card).mode, "flat", "Tavern night's card: parchment")
       ns.Modules.set("panel", "theme", "classic")
+      W:advance(0.2)
+      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 })
+      A.eq(tab.label._textColor, { 1, 0.82, 0, 1 }, "Classic: the accent")
+      A.eq(skin(card).mode, "backdrop", "the card follows")
+      A.eq(card._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Gold-Border")
       A.eq(ns.Log.errors(10), {})
     end,
 

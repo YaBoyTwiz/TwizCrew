@@ -118,10 +118,11 @@ local function showStart()
     buttons[#buttons + 1] = { label = "How to use TwizCrew", onClick = function() ns.About.open() end }
   end
   buttons[#buttons + 1] = { label = "Close" }
-  if not card then card = ns.AwayCard.newCard("TwizCrewWelcomeCard", I .. "INV_Misc_Gift_01", "Welcome", false, FEATURE) end
+  if not card then
+    card = ns.AwayCard.newCard("TwizCrewWelcomeCard", I .. "INV_Misc_Gift_01", "Welcome to TwizCrew", false, FEATURE)
+  end
   local id = G.id()
-  card.titleText = "Welcome to " .. (id and ns.Util.safeText(id) or "the guild")
-  card.fill(nil, lines, buttons)
+  card.fill(id and ("You are in " .. ns.Util.safeText(id) .. ".") or nil, lines, buttons)
 end
 
 -- The game says this character is in no guild (not just "not known yet").

@@ -903,7 +903,13 @@ with a friend on the released version only step 6 can be checked.
 5. **Waits.** Log in inside a dungeon after a long break: no card until you walk out (then within a few seconds).
 6. **Switch.** Settings, Today's recap, "Show what changed while I was away" off: no card.
 7. **An alt in another guild** never gets lines about this guild (each guild keeps its own list).
-8. **Tell Claude:** are the lines right? Too many level-up lines? Do the crown lines ever show (they need friends'
+8. **"Show Offline Members" unticked (review fix).** Untick it in the guild window, log out, and log in 12 hours or
+   more later. The card may show level-ups, but never a long list of "... left the guild" (members who are only
+   offline). Tick it again, log out, and log in 12 hours or more later: no long list of "... joined the guild"
+   either. Real joins and leaves still show when they are a few at a time.
+9. **Log out inside a dungeon (review fix).** Log in inside a dungeon 12 hours or more after the last logout, and
+   log out (or `/reload`) before walking out: no card. Log in again outside: the card still comes.
+10. **Tell Claude:** are the lines right? Too many level-up lines? Do the crown lines ever show (they need friends'
    numbers to arrive in the first seconds)?
 
 ## Welcome card (2026-11-23)
@@ -916,12 +922,19 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
    pop-up goes. **If nothing is posted, tell Claude what happened** (the chat box may open with the line typed
    instead).
 3. **Once.** The same person never gets a second pop-up, also after a `/reload`.
-4. **"Show Offline Members" off:** no pop-ups at all (the addon needs the whole list first).
+4. **"Show Offline Members" off:** no pop-ups at all (the addon needs the whole list first). Tick it again while
+   online: still no crowd of pop-ups for the offline members who come back into the list (more than 3 new names at
+   once are not believed).
 5. **Switch.** Settings, Pop-ups, "New guild members" off: no pop-up.
 6. **The newcomer's card.** On the new member's side (with TwizCrew), about 30 seconds after their first login in the
-   guild: a card "Welcome to <guild>" with "Online near your level: ..." (or "Nobody near your level is on right
-   now"), maybe "The crew usually plays: ...", and Close (plus "How to use TwizCrew" once the About page is in).
+   guild: a card "Welcome to TwizCrew", under it "You are in <guild>.", then "Online near your level: ..." (or
+   "Nobody near your level is on right now"), maybe "The crew usually plays: ...", "How to use TwizCrew" and Close.
    It never shows again, and it never shows for someone who already used TwizCrew in this guild.
+7. **Installed before the invite (review fix).** A recruit with no guild installs TwizCrew and logs in: after
+   about 20 seconds the "How to use TwizCrew" page opens (no guild, so no card). (a) Invite them a few minutes
+   later, same session: about half a minute after the invite the welcome card shows. (b) On another try, they log
+   out before the invite and log in again after it: the welcome card shows about 30 seconds after that login. Either
+   way it never shows again.
 
 ## Tips and the About page (2026-11-23)
 
@@ -964,8 +977,9 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
 11. **Only on a new install.** Nothing opens by itself after this update (you already had TwizCrew). To see the
    first-run: on a test account (or after moving `WTF/Account/*/SavedVariables/TwizCrew.lua` away while the game
    is closed, and back afterwards), log in. In the guild: about 30 seconds later the welcome card shows (with a
-   "How to use TwizCrew" button) and the page does NOT open by itself as well. On a character in no guild: the
-   page opens once by itself after about 45 seconds; not in a fight or a dungeon (it waits until you are out).
+   "How to use TwizCrew" button) and the page does NOT open by itself as well, also when the guild list is slow or
+   you log in inside a battleground (it waits for the card). On a character in no guild: the page opens once by
+   itself after about 20 seconds; not in a fight or a dungeon (it waits until you are out).
    Either way nothing opens again at the next login.
 12. **Tiny row style.** Settings, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
    the wrench menu).

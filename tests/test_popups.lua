@@ -352,6 +352,9 @@ return {
       A.eq(keys, { "online", "layerDiff", "layerSame", "death", "levelUp", "levelUpSound", "newMember", "sound",
         "seconds" })
       A.eq(d.defaults.newMember, true, "new guild members: on")
+      for _, s in ipairs(d.settings) do
+        if s.key == "newMember" then A.contains(s.info, "if you were gone 12 hours or more", "when the away card shows") end
+      end
       A.eq(d.defaults.levelUp, true); A.eq(d.defaults.levelUpSound, false)
       for _, s in ipairs(d.settings) do if s.key == "levelUpSound" then A.eq(s.parent, "levelUp") end end
     end,

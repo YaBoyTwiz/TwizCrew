@@ -429,7 +429,8 @@ ns.Modules.register({
       info = "Shows a pop-up like \"Say hi to Sneakz\" when someone new joins the guild while you are online. Click "
         .. "it to say hello in guild chat. It shows even when \"Tell me about\" is set to your party and pinned "
         .. "friends, because someone brand new is in nobody's party or pins yet. Members who joined while you were "
-        .. "offline are on the \"While you were away\" card instead (Today's recap)." },
+        .. "offline are on the \"While you were away\" card instead, if you were gone 12 hours or more (Today's "
+        .. "recap)." },
     { key = "sound", label = "Play a sound", kind = "toggle",
       info = "Plays a short sound when pop-ups appear. Off by default so streams stay quiet." },
     { key = "seconds", label = "How long they stay", kind = "slider", min = 2, max = 15, step = 1,

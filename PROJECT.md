@@ -13,6 +13,12 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **The crew tab (2026-11-23, owner picked mock-up "E, Hidden tab" out of ten: "many of the guild mates want more of
+  their screen back"):** the panel tucks away into a small tab on the screen edge; resting the mouse on it slides the
+  whole panel out, news slides out one row at a time, and a wide "Keep open" switch at the top keeps it out like
+  before. Replaces the minimize button. On the branch `pin-party`, **not released, not seen in the game; a file was
+  renamed (`UI/PanelMini.lua` -> `UI/PanelTab.lua`), so the game must be restarted.** Details: section "The crew tab
+  (2026-11-23)" below; checks: `docs/TESTING.md`, "The crew tab".
 - **"While you were away" and the welcome card (2026-11-23, owner picked them from a research list: "i like the
   while u were away part. welcome card"; approved the written description: "yes do it"):** on the branch
   `feat-away-welcome` (on top of `pin-party`), **not released, not seen in the game; it adds 4 files, so the game must be restarted.** Details:
@@ -260,6 +266,10 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Minimize, activity feed, peek and chat lines (2026-11-11)
 
+**Replaced in part on 2026-11-23 by the crew tab** (section "The crew tab (2026-11-23)"): the minimize button, the
+minimized bar, its notices, the peek and "open while my mouse is on the bar" are gone; the bullets below about them
+are history. Still true here: the activity feed, the chat lines, the Recent window and the test tools' buttons.
+
 - **Why:** a friend said the panel clutters the screen (wants to minimize it, still get useful information, and open
   it again easily). The owner also wants a record in chat of what happened (e.g. what someone said in a congrats).
   The owner approved building it and left the design to Claude ("use your best judgement"). **All the decisions below
@@ -269,7 +279,7 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   "Minimize, activity feed, peek and chat lines". **The release needs `RESTART_SINCE`** set to the new version: three
   files were added (`UI/FeedLogic.lua`, `UI/Feed.lua`, `UI/Recent.lua`) and `TwizCrew.toc` and `Bindings.xml` changed.
   No version bump, changelog entry or release yet (the owner says "release it").
-- **Minimize (Panel, PanelLogic.view):** a minus / plus button at the far right of the title bar, `/tc mini` (also
+- **(History, replaced by the crew tab) Minimize (Panel, PanelLogic.view):** a minus / plus button at the far right of the title bar, `/tc mini` (also
   `/tc minimize`), the key binding "Minimize or restore the crew panel" (`TWIZCREW_MINI`), and a "Minimize the panel" /
   "Restore the panel" entry in the title bar's right-click menu. Minimized = just the header (24 px, same width,
   same corner): title, the online count, the missed number and the button; the AFK, tools and settings
@@ -293,19 +303,19 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   which the feed logs as "roast" lines), so a death line has the place, not the cause. Mocks and congrats about
   *other* friends that show on my screen are logged too (dir "seen"). Text goes through `ns.Util.safeText` and a
   `issecretvalue` guard; the test tools' fakes are kept in memory only (never saved, gone with Clear test stuff).
-- **Bar notices (Panel):** while minimized, online / died / level-up (when the matching pop-up switch is on) and
+- **(History, replaced by the crew tab) Bar notices (Panel):** while minimized, online / died / level-up (when the matching pop-up switch is on) and
   congrats / mocks sent to me replace the count on the bar for 6 s (3 s when two or more wait behind it), the friend's
   name in class colour, with a gold glow that fades in 1.6 s. Further events queue (8 waiting at most, the oldest
   waiting one is dropped past that). A red number on the bar counts the events since the panel was last open;
   restoring clears it, and so does opening the list from it. Clicking the notice does what the pop-up would
   (level-up: congratulate; online: whisper; others: open the list) and moves to the next.
-- **Peek:** setting `peek` (default on, `peekSeconds` default 5): with each notice that starts, the panel drops open
+- **(History, replaced by the crew tab) Peek:** setting `peek` (default on, `peekSeconds` default 5): with each notice that starts, the panel drops open
   under the bar with only that friend's row (so the Congrats button is on it after a level-up), then closes. The mouse
   on the panel (or on one of its menus) keeps it open until it leaves. Never in a fight: a peek due in a fight is
   dropped (the plain-text bar notice still shows, since the panel's own frames already change in combat), and a fight
   closes a peek. `barHover` ("Open while my mouse is on the bar", default off): hovering the bar shows the full panel
   until the mouse leaves.
-- **No doubling up:** `barInstead` (default on): while minimized, and only while the bar is on screen and the activity
+- **(History, replaced by the crew tab) No doubling up:** `barInstead` (default on): while minimized, and only while the bar is on screen and the activity
   feed is on, the online / died / level-up pop-ups are not made (so there is no pop-up sound either). Everything else
   (layer pop-ups, roasts, meet-ups, quest shares) still pops up. Not minimized: exactly as before.
 - **Chat lines:** `activity` module settings: master `chat` (default on) plus one per kind. Defaults: died, level-up,
@@ -316,7 +326,8 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   line; mouse wheel scrolls; hover shows the clock time. Opened by the missed number, `/tc recent`, the wrench menu
   ("Recent activity") and a button on the Activity feed settings. Built the first time it is opened and not in combat
   (in a fight the first open says so and waits).
-- **Settings:** Basics got Minimize the panel, Peek at the friend and Write events in my chat. The rest are on
+- **Settings:** Basics got Minimize the panel (now Keep open), Peek at the friend (now Slide out news) and Write
+  events in my chat. The rest are on
   Advanced, Panel (the panel's and the new "Activity feed" module's switches), each with an (i) text.
 - **Test tools:** Ding, Death pop-up and Roast already ran through the real events, so they now show the bar notice,
   peek and chat line too. New buttons / commands: **Friend comes online** (`/tc test online`) and **Congrats from a
@@ -363,7 +374,7 @@ the owner's **guild**: copies talk through the guild and only guild members are 
   anywhere. The digest carries 8 small checksums, and only the differing groups of notes are swapped; a friend still
   on v0.1.23 is swapped with in full at most once an hour while nothing changed. Online friends' play time for today
   and yesterday rides in the digest. Timed notes use the clock offset of their own date (clock changes).
-- **Files split (no behaviour change):** `UI/Panel.lua` → Panel, PanelRows, PanelHeader, PanelMenus, PanelMini;
+- **Files split (no behaviour change):** `UI/Panel.lua` → Panel, PanelRows, PanelHeader, PanelMenus, PanelMini (PanelTab since 2026-11-23);
   `Calendar/CalendarUI.lua` → CalendarUI, CalendarMonth, CalendarDay, CalendarUsual, CalendarMaker; the test tools
   moved from `UI/Report.lua` to `UI/TestTools.lua`.
 - **Small fixes:** dragging the mock show (it raised an error and three drags switched Live roasts off); changing
@@ -537,16 +548,16 @@ buttons, so it's easy to access, maybe make it pulsate or flash or blink when up
   date before yesterday (UTC days), and whatever arrives while the calendar window is open.
 - **The pulse:** a gold glow behind the button fades in and out about every 1.5 s (PanelLogic.pulseAlpha, a 0.1 s
   ticker that runs only while the button is on screen and something is new), and the word turns bright. It stops
-  when the calendar is opened by any route. Minimized, the bar is hidden: nothing pulses, and it pulses again when
-  the panel is restored.
+  when the calendar is opened by any route. Only while the panel is on screen: tucked into the crew tab nothing
+  pulses (a new note or an answer slides out of the tab as news instead, "New calendar note from ...").
 - **How it is kept (Calendar/Notes.lua):** `db.calendar.fresh` = the latest day (a UTC day number) that has news,
   saved with the guild's calendar, so it survives a logout and belongs to the guild. Set where notes and replies
   arrive (Notes.receive, Notes.receiveReply), cleared by Calendar.open; it runs out by itself once that day is past
   and the daily clean-up drops it. `CALENDAR_FRESH` fires when the answer of `Notes.fresh()` changes (the panel
   redraws on it). A flag set on arrival was chosen over comparing times with "when I last looked": the crew's clocks
   and the order messages arrive in cannot be trusted for that.
-- **Not done:** nothing on the minimized bar or the minimap button for calendar news; the button does not show which
-  note is new.
+- **Not done:** nothing on the minimap button for calendar news; the button does not show which note is new. (The
+  crew tab says it since 2026-11-23.)
 - **The source folder on the Windows PC (2026-11-22):** `master` was moved to the released v0.2.0 (GitHub's history
   had been rewritten by the release). The uncommitted work that was there (a quest list, feed and panel changes from
   2026-11-15, never released, not in v0.2.0) is kept on the local branch `old/0.1.24-quest-list`. The owner: "let's
@@ -720,6 +731,96 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   calendar count at show time; the crown rule (no tie counts); the four greetings; 3 pop-ups a minute and dropping
   the rest; 20 s pop-up; the start card at 30 s; "near" = 5 levels, 5 names; two other people for a best time; the
   setting inside Today's recap; the re-show in the wrench menu (no `/tc away`, it would clash with `/tc afk`).
+
+## The crew tab (2026-11-23)
+
+**The owner's words.** "The UI panel ... takes up too much screen real estate. I like how it functions and what it
+does, but ... many of the guild mates want more of their screen back." Measured: the default panel was about 246 x
+630 UI units on a normal evening (about 15% of the screen). Out of ten mock-ups he chose "E, Hidden tab": "just having
+it slide out info that is important and hiding it again is nice; we can make info that has an optional reaction stick
+a little longer, such as the congrats or mock. Also when a player mouses over it or interacts with the tab I would
+like the whole thing to slide out and look mostly like it currently does, so they can see everything like now ...
+this means we no longer need the minimize button because the tab by default will always just take up a small part of
+the screen." Later the same day: Keep open is off for everyone, existing users included ("I don't like the idea that
+someone who doesn't know there is a better way misses it"), and the Keep open control must be "extremely easy and
+visible": a clearly labelled switch, not a small icon.
+
+**What it does (approved description).**
+- **Quiet:** only a small tab (24 x 86) on the left or right screen edge: "C R E W" and the number of people here
+  (the header's "here": me, my party and pinned members online). Drag it along its edge or across to the other edge;
+  its side and height are saved per account (`tabSide`, `tabY`, Panel settings; kept on screen after a resolution or
+  scale change). "Lock position" stops the tab too. Right-click: Keep open, Recent activity (N new), Lock position,
+  Open settings, Hide panel.
+- **Everything:** the mouse resting on the tab about 0.3 s, or a click, slides the whole panel out as it always looked
+  (header, Keep open switch, tabs, sections, bars, Hall of Shame, Calendar button, "?", menus, tooltips). It slides
+  back about 1 s after the mouse has left the tab, the panel and any menu opened from them. A click while it is out
+  closes it. Opening it counts what was missed as seen.
+- **News:** one row slides out (the news line in the title bar and that friend's row; a calendar note has no row),
+  then back. Plain news stays the `peekSeconds` setting (5 s): came online, died, levelled up, other layer / back on
+  my layer, ran off, a new calendar note (or an answer on mine). News whose row shows a button stays
+  `PanelLogic.REACT_SECONDS` (12): Congrats after a level-up, Mock after a death, **Mock back** on a mock or congrats
+  aimed at me (decided by `PanelLogic.newsReactable` from `Roasts.canCheer` / `canMock`, the same rules the row's
+  buttons use). With two or more waiting, plain news shortens to 3 s and reactable news to 5 s. The mouse on the row
+  keeps it out; it goes 0.6 s after the mouse leaves. A right-click menu on it keeps it out. A click on the news line:
+  congratulate (level-up), whisper (online), the calendar (a note), the big arrow (running off), the whole panel (a
+  layer change), else the Recent list. Scope: exactly the old rules (`FeedLogic.inScope`, `Panel.noticeInScope`,
+  "Tell me about"). Layer, running-off and calendar news are made by the panel itself (`FeedLogic.newsEntry`, never in
+  the Recent list or chat); layer news follows the pop-up switches Layer changes / Back on my layer, said once until
+  "back"; calendar news is said once per sync (`CALENDAR_NEWS` from Calendar/Notes.lua); none of it in the first 30 s
+  after login.
+- **The tab's marks:** unseen news: a soft gold glow (a brighter flash when it arrives) and a red number; a party
+  member or pinned friend DEAD: a small red skull mark; on OTHER LAYER: a portal mark in the layer tag's colour; an
+  update waiting: the gold "!".
+- **Keep open** (`keepOpen`, default off): a wide switch right under the header, "Keep open: OFF" (dim) / "Keep open:
+  ON" (gold, lit with a check mark), "Keep: OFF/ON" in Tiny rows, tip from `Help.TIPS.keepOpen`. On: the panel is the
+  old ordinary window (drag anywhere, saved position, fade, grow direction, lock), the tab is hidden. Also `/tc mini`
+  (and `/tc minimize`), the key binding "Keep the crew panel open, or let it tuck away", the title bar menu ("Keep
+  open" / "Tuck away"), the tab's menu, the minimap button's menu and the setting.
+- **Pop-ups:** they show as before, and the news slides out of the tab too. "Show news on the tab, not as pop-ups"
+  (`barInstead`, default off) stops the online, death, level-up, layer and running-off pop-ups while the panel is
+  tucked, the tab is on screen and news slides out.
+- Hide during fights / in dungeons / when no crew is online and `/tc hide` hide the tab too.
+
+**Claude's calls (designer and builder; change any).** A 0.3 s pause before hover opens; no hover-open while
+`IsMouselooking()` or a mouse button is held (the pause starts again), in a fight (`InCombatLockdown`) or in a dungeon
+or raid; a click always works. No news slides out in a fight (a fight drops the waiting news; it is still counted), as
+the old peek. The slide: the panel frame hangs in a holder (`TwizCrewPanelHolder`) that clips its children
+(`SetClipsChildren`, guarded: without it the panel shows at once); the panel is laid out once (while tucked it is laid
+out as the full panel behind the closed holder, ready to slide) and only the holder's width is eased over 0.18 s by an
+OnUpdate, also finished by the 0.1 s ticker; the holder is clamped to the screen, the panel itself not (it must sit
+beside the narrow holder). Tooltips and menus open toward the middle of the screen when the tab is on the right
+(`Widgets.menu`'s `toLeft`). The guild list is read often whenever the tab or the panel is on screen (the tab shows the
+count; the away card needs complete reads). The tab's menu, the Mock back button, the tab marks as small icons beside
+the tab, the 0.6 s "goes shortly after the mouse leaves", one calendar line per sync, the steady glow instead of a
+pulse (no ticker running for it), the tab scaled with the Scale setting, "Keep open" as a check-marked bar instead of a
+tack icon (the owner's later word).
+
+**How the old settings map.** `minimized` is gone (deleted from saved settings once); everyone gets the tab, whatever
+it was. `peek` is "Slide out news", `peekSeconds` "How long news stays out". `barHover` is "Open when my mouse rests on
+the tab", default **on**. `barInstead` keeps its meaning ("Show news on the tab, not as pop-ups"). Fade, grow direction
+and lock apply to Keep open mode (their help says so); lock also locks the tab. Saved settings hold every default
+(`DB.init` merges them in), so a changed default never reaches an existing user by itself: the first run of this
+version (`db.panelTabSince`, account-wide) sets `keepOpen` off and `barHover` on for an existing user (one who has the
+older marks `panelSince0112` / `fadeOnSince017`), places the tab on the edge nearest to where the panel was, at about
+its height (`PanelLogic.tabFromPosition`), turns a grow-up position saved while minimized back into the panel's, keeps
+the panel's own position for Keep open, and shows a one-time note (`db.tabNoteDue`; a chat line and a pop-up about
+10 s after login, never in a fight): "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything.
+Want it always open? Click Keep open at the top of the panel." A new install gets the tab and no note.
+
+**Files.** `UI/PanelTab.lua` (was `UI/PanelMini.lua`): the tab, the holder and the slide, the ticker, hover and click,
+the news queue and its kinds, pop-up suppression, Keep open. `UI/PanelLogic.lua`: view, hoverOpens, tabCount,
+clampTabY, tabSnap, tabFromPosition, tabMarks, newsReactable, newsSeconds, slideWidth, keepLabel, keepSwitchText.
+`UI/FeedLogic.lua`: newsEntry, the queue's per-entry lengths (`lengths`), `endAfter`, `has`. Tests: `tests/test_tab.lua`
+(was `tests/test_minimize.lua`).
+
+**Only the game can tell:** whether `SetClipsChildren` exists and clips on Forever (and so whether the slide shows or
+it pops at once); whether the slide looks smooth and the holder's clamp keeps a tall panel on screen near the bottom
+edge; whether `IsMouseOver` on the tab and the panel behaves for hover, the 1 s close and a menu; whether
+`IsMouselooking` / `IsMouseButtonDown` exist and stop hover while turning the camera; whether the tab drags and snaps
+right and stays on screen after a resolution or UI scale change; whether "C R E W" on four lines and the number fit
+and read well, and the marks, badge and "!" beside the tab look right; whether the Keep open switch reads as a switch
+at a glance; whether the right-edge tooltips and menus land toward the middle; whether re-parenting the panel between
+the holder and the screen (Keep open on and off) leaves it in the right place; the one-time note's timing.
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

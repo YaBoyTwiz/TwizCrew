@@ -34,10 +34,11 @@ stop there and tell Claude.
 3. **The hidden crew channel.** No longer applies since the guild conversion (there is no channel; see "Guild
    conversion" below, step 8).
 
-4. **The crew panel** (the TwizCrew window on the left side of the screen).
+4. **The crew panel** (since the crew tab, 2026-11-23: rest the mouse on the small tab on the screen edge to see it,
+   or turn **Keep open** on at its top to keep it out like this check expects).
    - It shows up with a dark background, a gold border and the title "TwizCrew". With no friends online it says
      "No crew yet".
-   - Drag it somewhere else, then `/reload`. It should come back in the new spot.
+   - With Keep open on: drag it somewhere else, then `/reload`. It should come back in the new spot.
    - Right-click its title: a small menu opens. Click something in it, then open it again and click somewhere else
      on the screen, then press Escape: each time the menu should close.
    - Right-click its title and pick **Set my status**: a small box opens with your status in it. Type something and
@@ -56,9 +57,10 @@ stop there and tell Claude.
    - If the window is taller than your screen, the mouse wheel scrolls it.
    - Turn a few things off and on (for example the **Crew panel** switch): the panel hides and comes back.
    - Change the **Scale** slider and the **Row style**: the panel changes right away.
-   - Drag the panel somewhere, then click **Reset everything to defaults**. It asks
-     "Reset all TwizCrew settings and the panel position?". Click **Yes**: the panel goes back to its first spot.
-     `/reload`: it should still be in that first spot.
+   - Turn Keep open on, drag the panel somewhere, then click **Reset everything to defaults**. It asks
+     "Reset all TwizCrew settings and the panel position?". Click **Yes**: Keep open is off again (the panel is
+     tucked into its tab) and the panel's own spot is back to the first one (turn Keep open on to see it).
+     `/reload`: still the same.
 
 7. **Chat commands.**
    - `/tc status LF Deadmines` → chat says `TwizCrew: status set to "LF Deadmines"`. `/tc status` clears it.
@@ -562,6 +564,11 @@ first** (this update added files, so `/reload` is not enough). Turn on Lua error
 
 ## Minimize, activity feed, peek and chat lines
 
+**Replaced in part by the crew tab (2026-11-23):** the minimize button, the minimized title bar, its notices and
+the peek are gone, so checks 1 to 8, 12 and 13 below no longer apply as written; their new versions are in "The
+crew tab" at the end. Checks 9 to 11 (chat lines, the Recent list, a real friend) still apply ("minimized or not"
+now reads "tucked away or kept open").
+
 New in the version after 0.1.23 (not released yet). **Needs a game restart** (three new files, a new key binding):
 copy the addon in and restart the game, a `/reload` is not enough. Riskiest first. Pretend events (`/tc`, **Try it
 out**, or `/tc test ...`) work for most of it without a friend.
@@ -767,7 +774,9 @@ note or answer):
 8. **Not for other people's chat.** Two friends commenting on a note that is not yours: no pulse.
 9. **It is remembered.** A friend adds a note, you `/reload` (or log out and in) without opening the calendar: it
    still pulses.
-10. **Minimized.** While it pulses, minimize the panel: no bar, no glow. Restore it: it pulses again.
+10. **Tucked away (since the crew tab).** While it pulses, let the panel tuck into its tab: nothing pulses behind
+   the closed tab. A new note from a friend while the panel is tucked slides out of the tab as "New calendar note
+   from ..." instead. Rest the mouse on the tab: the button pulses on the slid-out panel.
 
 ## Calendar: Events and Play times (2026-11-22)
 
@@ -983,6 +992,70 @@ Needs a friend (or a new recruit) to join the guild while you are online, and yo
    Either way nothing opens again at the next login.
 12. **Tiny row style.** Settings, Row style Tiny: the tabs still fit; the "?" hides if there is no room (it stays in
    the wrench menu).
+
+## The crew tab (2026-11-23)
+
+The panel now tucks away into a small tab on the screen edge (owner picked mock-up "E, Hidden tab"). **Restart the
+game** (a file was renamed, `UI/PanelMini.lua` is now `UI/PanelTab.lua`; `/reload` is not enough). Riskiest first.
+Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding`, `death`, `online`, `layer`,
+`congrats in`).
+
+1. **The slide looks right and clips.** Rest the mouse on the tab: after a short pause the whole panel slides out
+   sideways from the tab (about a fifth of a second), away from the screen edge, as one piece. While it slides, no
+   part of the panel shows outside the growing strip (nothing pokes out over the tab or past the screen edge), and
+   it does not jump at the end. Move the mouse away: about a second later it slides back into the tab. If the
+   panel just pops up with no slide, tell Claude (the client has no clipping, and the fallback is "at once"). If you
+   see the panel jump to the middle of the screen or sit half off-screen, tell Claude at once.
+2. **The pause.** Sweep the mouse quickly across the tab: nothing opens. Rest it there: it opens after about a third
+   of a second.
+3. **Turning the camera.** Hold the right (or left) mouse button and turn the camera so the cursor passes over the
+   tab: the panel must not open. Let go with the cursor resting on the tab: it opens after the pause.
+4. **Fights and dungeons.** In a fight, rest the mouse on the tab: nothing. Click the tab: it opens; click again: it
+   closes and does not slide right back out while the mouse stays on the tab. Inside a dungeon or raid: the same
+   (hover does nothing, a click works). News does not slide out during a fight; it is counted on the tab.
+5. **Right edge.** Drag the tab to the right edge of the screen. Rest the mouse on it: the panel slides out to the
+   LEFT. Hover a row: its tooltip opens on the left of the row (toward the middle of the screen), not off the edge.
+   Right-click a row and the title: the menu opens toward the middle and is fully on screen. Tooltips of the update
+   and What's new lines too.
+6. **Dragging the tab.** Drag the tab up and down the edge: it stays where you drop it. Drag it across the screen
+   and drop it in the other half: it jumps to that edge. `/reload`: same side, same height. Turn **Lock position**
+   on (right-click the tab): the tab no longer drags. Change the screen resolution or the UI scale to something
+   smaller: the tab is still fully on screen.
+7. **Keep open and back.** Slide the panel out: right under the title bar is a wide **Keep open: OFF** switch, dim.
+   Hover it: "Keep open", "ON: the panel stays on screen...". Click it: it reads **Keep open: ON** (gold, lit), the
+   tab disappears and the panel stays where you last left it as a normal window (drag, fade, grow direction and
+   lock work as before). Click it again: the panel tucks back into the tab. In Tiny rows it reads "Keep: ON" /
+   "Keep: OFF". `/tc mini`, the key binding (Keybindings > AddOns > TwizCrew > "Keep the crew panel open, or let it
+   tuck away"), the title bar's right-click menu ("Keep open" / "Tuck away"), the tab's right-click menu and the
+   minimap button's menu do the same.
+8. **The one-time note (an existing user).** On the first login of this version (you had TwizCrew before), about 10
+   seconds after login (never during a fight: it waits): a pop-up "TwizCrew now tucks away into a small tab" and a
+   chat line "TwizCrew now tucks away into a small tab. Mouse over the tab to see everything. Want it always open?
+   Click Keep open at the top of the panel." Clicking the pop-up slides the panel out. The tab sits on the side of
+   the screen where your panel was, at about its height. Turning Keep open on puts the panel back exactly where it
+   was. The note never comes again.
+9. **News and how long it stays.** With the panel tucked: **Friend comes online** slides out one row (the line
+   "Offbuddy (test) came online" in the title bar and the friend's row) for about 5 seconds (the **How long news
+   stays out** setting), then back. **Ding**: the row has a **Congrats** button and stays about 12 seconds.
+   **Death pop-up**: a **Mock** button, about 12 seconds. **Congrats from a friend**: a **Mock back** button, about 12
+   seconds. **Layer pop-up**: "is on another layer" / "is back on your layer", about 5 seconds. With a friend: a new
+   calendar note says "New calendar note from ..." (no row; a click opens the calendar); a group member running off
+   says "... is running off". Keep the mouse on a slid-out row: it stays; move away: it leaves shortly after.
+   Right-click the row: the menu opens and the row stays out until the menu closes. Several at once come one after
+   another.
+10. **The tab's marks.** News you did not see makes the tab glow and shows a red number; resting the mouse to open
+   the panel (or the tab's menu "Recent activity") clears them. With a pinned friend or a party member DEAD, a small
+   red skull mark sits on the tab; on OTHER LAYER a portal mark. When a newer TwizCrew is out, a gold "!" sits on
+   the tab. Is the tab readable ("C R E W" and the number)? Does anything on it overlap?
+11. **Scale and Hall of Shame.** Set Scale to 150%: the tab and the panel are bigger, and the slide still shows the
+   whole panel. Open the Hall of Shame tab on the slid-out panel: the panel grows wider (336) smoothly and nothing
+   is cut off on the far side.
+12. **Pop-ups.** By default pop-ups show as before AND the news slides out of the tab. Turn **Show news on the tab,
+   not as pop-ups** on: online, death, level-up, layer and running-off pop-ups stop while the panel is tucked and
+   news slides out; roasts, meet-ups, quest shares and the other notices still pop up. With Keep open on: pop-ups as
+   always.
+13. **Hiding.** Hide during fights / in dungeons / when no crew is online hide the tab too. `/tc hide`: no tab;
+   `/tc show`: back.
 
 ## What to send back
 

@@ -1,7 +1,7 @@
 -- The Recent window: the activity feed as a list, newest first, with a class icon (or a picture of the kind of
 -- event), how long ago, and the line. The mouse wheel scrolls. Opened by the crew tab's right-click menu,
--- /tc recent, the wrench menu and the settings. The frame is built the first time it is opened, and
--- not in combat (it then says so and does not open).
+-- /tc recent, the wrench menu and the settings. The frame is built the first time it is opened.
+-- The panel's Activity tab shows the same list with the same rows (Recent.entries, Recent.newRow, Recent.fillRow).
 local _, ns = ...
 
 local Recent = {}
@@ -34,16 +34,22 @@ local function plain(s)
   return (tostring(s or ""):gsub("||", "\1"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("\1", "||"))
 end
 
-local function newRow(i)
-  local r = CreateFrame("Frame", nil, frame)
-  r:SetSize(WIDTH - 2 * PAD, ROW_H)
-  r:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(HEAD + (i - 1) * ROW_H))
+-- What the list shows: the activity feed, newest first.
+function Recent.entries() return ns.Feed and ns.Feed.entries() or {} end
+Recent.ROW_H = ROW_H
+
+-- One row of the list (the window's and the panel's Activity tab): the icon, the line, "5m ago" (agoWidth wide, 64 by
+-- default); hover: the whole line and the clock time, the tooltip at anchor() (default to the right). The caller
+-- places it.
+function Recent.newRow(parent, width, agoWidth, anchor)
+  local r = CreateFrame("Frame", nil, parent)
+  r:SetSize(width, ROW_H)
   r.icon = r:CreateTexture(nil, "ARTWORK")
   r.icon:SetSize(T.icon(18), T.icon(18))
   r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
   r.ago = T.text(r, T.FONT.small, C.muted)
   r.ago:SetPoint("RIGHT", r, "RIGHT", 0, 0)
-  r.ago:SetWidth(64)
+  r.ago:SetWidth(agoWidth or 64)
   r.ago:SetJustifyH("RIGHT")
   r.text = T.readable(T.text(r, T.FONT.small, C.white))
   r.text:SetPoint("LEFT", r.icon, "RIGHT", 6, 0)
@@ -55,7 +61,7 @@ local function newRow(i)
   Widgets.script(r, "OnEnter", function(self)
     local e = rawget(self, "tcEntry")
     if not GameTooltip or not e then return end
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(self, type(anchor) == "function" and anchor() or "ANCHOR_RIGHT")
     GameTooltip:SetText(plain(ns.Feed.coloredLine(e)), 1, 1, 1, 1, true)
     local clock = type(date) == "function" and select(2, pcall(date, "%H:%M:%S", e.at)) or nil
     if type(clock) == "string" then GameTooltip:AddLine(clock, 0.8, 0.8, 0.8) end
@@ -63,6 +69,21 @@ local function newRow(i)
   end, FEATURE)
   Widgets.script(r, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end, FEATURE)
   return r
+end
+
+-- Shows entry e in row r (wall: the wall clock now). Returns what it shows: { line (no colours), ago, kind }.
+function Recent.fillRow(r, e, wall)
+  r.tcEntry = e
+  if ns.ClassIcon.apply(r.icon, e.class) == "none" then
+    r.icon:SetTexture(KIND_ICON[e.kind] or KIND_ICON.online)
+    r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    r.icon:Show()
+  end
+  local ago = ns.FeedLogic.ago(e.at, wall)
+  r.ago:SetText(ago)
+  r.text:SetText(ns.Feed.coloredLine(e))
+  r:Show()
+  return { line = plain(ns.Feed.coloredLine(e)), ago = ago, kind = e.kind }
 end
 
 local function build()
@@ -87,7 +108,10 @@ local function build()
   local close = Widgets.button(frame, "Close", function() Recent.close() end, nil, FEATURE)
   close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -PAD, -10)
   rows = {}
-  for i = 1, VISIBLE do rows[i] = newRow(i) end
+  for i = 1, VISIBLE do
+    rows[i] = Recent.newRow(frame, WIDTH - 2 * PAD)
+    rows[i]:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -(HEAD + (i - 1) * ROW_H))
+  end
   emptyText = T.text(frame, T.FONT.small, C.muted)
   emptyText:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -HEAD - 6)
   emptyText:SetText("Nothing yet. Friends coming online, deaths, level-ups, congrats and mocks show up here.")
@@ -97,7 +121,7 @@ end
 
 local function draw()
   if not frame then return end
-  local list = ns.Feed and ns.Feed.entries() or {}
+  local list = Recent.entries()
   local first, last = ns.PanelLogic.window(#list, offset, VISIBLE)
   offset = first - 1
   local wall = ns.wallclock()
@@ -105,17 +129,7 @@ local function draw()
   for i = 1, VISIBLE do
     local r, e = rows[i], list[first + i - 1]
     if e and first + i - 1 <= last then
-      r.tcEntry = e
-      if ns.ClassIcon.apply(r.icon, e.class) == "none" then
-        r.icon:SetTexture(KIND_ICON[e.kind] or KIND_ICON.online)
-        r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        r.icon:Show()
-      end
-      local ago = ns.FeedLogic.ago(e.at, wall)
-      r.ago:SetText(ago)
-      r.text:SetText(ns.Feed.coloredLine(e))
-      r:Show()
-      shownLines[#shownLines + 1] = { line = plain(ns.Feed.coloredLine(e)), ago = ago, kind = e.kind }
+      shownLines[#shownLines + 1] = Recent.fillRow(r, e, wall)
     else
       r.tcEntry = nil
       r:Hide()

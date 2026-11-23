@@ -235,7 +235,7 @@ ns.Modules.register({
     { key = "openRecent", label = "Show recent activity", kind = "button",
       onClick = function() if ns.Recent then ns.Recent.open() end end,
       info = "Opens a small window with the list of recent events, newest first. Also: /tc recent, the wrench "
-        .. "menu on the panel, or the crew tab's right-click menu." },
+        .. "menu on the panel, the crew tab's right-click menu, or the Activity tab on the panel." },
     { key = "clearRecent", label = "Clear the list", kind = "button", onClick = function() Feed.clear() end,
       info = "Empties the list of recent events." },
   },

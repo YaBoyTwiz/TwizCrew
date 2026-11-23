@@ -2,10 +2,11 @@
 -- the "Guild online (N)" bar and its rows, the "Offline (N)" bar and its rows (rules: UI/PanelLogic.lua). Guild
 -- members without the addon are rows too, dimmed. Pins are saved per guild (ns.db.pins). Registers the module "panel".
 -- Hiding the panel = turning the module off. Redraws are coalesced: many requests in one frame -> one redraw.
--- While the stats module is on, two tabs sit under the header: "Crew" (the rows, with award titles under the
--- winners' names) and "Hall of Shame" (drawn by ns.Board). The tab is not saved. While the calendar module is on, a
--- "Calendar" button sits next to them: it opens the crew calendar's own window (not a tab), and a gold glow pulses
--- behind it while the calendar has something new (ns.Notes.fresh). Either module alone keeps the bar. A gold "?" at
+-- Tabs sit under the header: "Crew" (the rows, with award titles under the winners' names), "Hall of Shame" (drawn
+-- by ns.Board, while the stats module is on) and "Activity" (the Recent list's entries, while the activity module is
+-- on; the label counts what is new). The tab is not saved. While the calendar module is on, a "Calendar" button sits
+-- next to them: it opens the crew calendar's own window (not a tab), and a gold glow pulses behind it while the
+-- calendar has something new (ns.Notes.fresh). The bar shows whenever it holds more than the Crew tab. A gold "?" at
 -- the end (when it fits) opens "How to use TwizCrew" (UI/About.lua; the wrench menu has it too).
 -- The crew tab (2026-11-23): unless "Keep open" is on, the panel is tucked away into a small tab on the left or right
 -- screen edge; resting the mouse on the tab (or a click) slides the whole panel out, and news slides out one row at a
@@ -71,10 +72,14 @@ local headFrames = {}      -- "My party" / "Pinned" heading -> its frame
 local CHEER_FOR = 300 -- seconds the Congrats button stays on a friend's row after they level up
 local dingAt, cheered = {}, {} -- name -> when they leveled up; name -> true once we congratulated them
 P.cheered = cheered
-local crewTab, shameTab, calTab, helpTab
+local crewTab, shameTab, actTab, calTab, helpTab
+local actRows, actShown = {}, {} -- the Activity tab's rows (Recent.newRow) and what they show (test hook)
+local actOffset = 0              -- the Activity tab's scroll
+local ACT_ROWS = 10              -- Activity rows shown at once
+P.actUnseen = 0                  -- entries the Activity list got since it (or the Recent window) was last looked at
 local calTicker        -- pulses the glow behind the Calendar button while the calendar has something new
 local CAL_PULSE_TICK = 0.1
-local tab = "crew"     -- "crew" | "shame" (session only)
+local tab = "crew"     -- "crew" | "shame" | "activity" (session only)
 local rowFrames = {}   -- pool, created once and reused (at most PANEL_MAX_ROWS)
 P.rowFrames = rowFrames
 local models = {}      -- row models of the last redraw
@@ -151,6 +156,11 @@ local function calOn()
   return ns.Calendar ~= nil and calTab ~= nil and ns.Modules.isEnabled("calendar")
 end
 
+-- The Activity tab exists while the activity module is on.
+local function actOn()
+  return ns.Recent ~= nil and ns.Feed ~= nil and actTab ~= nil and ns.Modules.isEnabled("activity")
+end
+
 -- Something new in the calendar (asked inside ns.Log.safe("calendar", ...): never an error charged to the panel).
 local function calFresh()
   if not ns.Notes then return false end
@@ -174,46 +184,70 @@ local function syncCalPulse(on)
   end
 end
 
-local function setCalWords(words)
-  if calTab.words == words then return end
-  calTab.words = words
-  calTab.label:SetText(words)
-  local w = calTab.label:GetStringWidth()
+local function setWords(b, words)
+  if b.words == words then return end
+  b.words = words
+  b.label:SetText(words)
+  local w = b.label:GetStringWidth()
   if type(w) ~= "number" or w <= 0 then w = #words * 6 end
-  calTab:SetWidth(w + 10)
+  b:SetWidth(w + 10)
 end
 
--- The bar under the header: Crew, Hall of Shame (stats on), Calendar (calendar on), then "?" (the About page) when it
--- fits (the wrench menu has it too). width: the panel's width now.
+-- The words on the bar, from the longest: the first step that fits the panel's width (narrow row styles take the
+-- short words; the "?" goes before "Hall of Shame" is shortened).
+local TAB_STEPS = {
+  { shame = "Hall of Shame", act = "Activity", cal = "Calendar", help = true },
+  { shame = "Hall of Shame", act = "Activity", cal = "Cal", help = true },
+  { shame = "Hall of Shame", act = "Act", cal = "Cal", help = true },
+  { shame = "Hall of Shame", act = "Act", cal = "Cal", help = false },
+  { shame = "Shame", act = "Act", cal = "Cal", help = true },
+  { shame = "Shame", act = "Act", cal = "Cal", help = false },
+}
+
+-- Is there more than the Crew tab to put on the bar?
+local function tabsOn() return statsOn() or calOn() or actOn() end
+
+-- The bar under the header: Crew, Hall of Shame (stats on), Activity (activity on, with the count of what is new),
+-- Calendar (calendar on), then "?" (the About page) when it fits (the wrench menu has it too). width: the panel's
+-- width now.
 local function drawTabs(width)
-  local stats, cal = statsOn(), calOn()
-  local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
-  crewTab:SetActive(tab == "crew")
-  if stats then
-    shameTab:SetActive(tab == "shame")
-    shameTab:Show()
-  else
-    shameTab:Hide()
+  local stats, cal, act = statsOn(), calOn(), actOn()
+  local count = P.actUnseen > 0 and (" (" .. math.min(P.actUnseen, 99) .. ")") or ""
+  local help = true
+  for i, st in ipairs(TAB_STEPS) do
+    setWords(shameTab, st.shame)
+    setWords(actTab, st.act .. count)
+    setWords(calTab, st.cal)
+    local used = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
+      + (act and (actTab:GetWidth() + 4) or 0) + (cal and (calTab:GetWidth() + 4) or 0)
+    local fits = used + (st.help and helpTab:GetWidth() or 0) <= width
+    if fits or i == #TAB_STEPS then
+      help = st.help and fits
+      break
+    end
   end
+  crewTab:SetActive(tab == "crew")
+  local last = crewTab
+  local function chain(b, on)
+    if not on then b:Hide(); return end
+    b:ClearAllPoints()
+    b:SetPoint("LEFT", last, "RIGHT", 4, 0)
+    b:Show()
+    last = b
+  end
+  chain(shameTab, stats)
+  if stats then shameTab:SetActive(tab == "shame") end
+  chain(actTab, act)
+  if act then actTab:SetActive(tab == "activity") end
+  chain(calTab, cal)
   if cal then
     local fresh = calFresh()
-    local before = (PAD - 5) + crewTab:GetWidth() + 4 + (stats and (shameTab:GetWidth() + 4) or 0)
-    setCalWords("Calendar")
-    -- tiny rows: the short word (room kept for the "?" after it)
-    if before + calTab:GetWidth() + 4 + helpTab:GetWidth() > width then setCalWords("Cal") end
-    calTab:ClearAllPoints()
-    calTab:SetPoint("LEFT", stats and shameTab or crewTab, "RIGHT", 4, 0)
     T.textColor(calTab.label, fresh and C.text or C.muted)
-    calTab:Show()
     syncCalPulse(fresh)
-    used = used + calTab:GetWidth() + 4
   else
-    calTab:Hide()
     stopCalPulse()
   end
-  helpTab:ClearAllPoints()
-  helpTab:SetPoint("LEFT", cal and calTab or (stats and shameTab or crewTab), "RIGHT", 4, 0)
-  if used + helpTab:GetWidth() <= width then helpTab:Show() else helpTab:Hide() end
+  chain(helpTab, help)
   P.tabBar:Show()
 end
 
@@ -477,10 +511,26 @@ local function hideChrome()
   for _, f in pairs(headFrames) do f:Hide() end
 end
 
+local function hideActivity()
+  for _, r in ipairs(actRows) do r:Hide() end
+  actShown = {}
+end
+
+-- Puts the note line (`text`) under what is drawn at y; returns the new bottom.
+local function drawNote(text, y, width)
+  noteText:ClearAllPoints()
+  noteText:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -(y - GAP + 4))
+  noteText:SetWidth(width)
+  noteText:SetText(text)
+  noteText:Show()
+  local real = noteText.GetStringHeight and noteText:GetStringHeight() or nil
+  return y - GAP + 4 + Logic.noteHeight(text, width, LINE, real)
+end
+
 local function redraw()
   redraws = redraws + 1
   if not P.root or not P.enabled then return end
-  if not statsOn() then tab = "crew" end
+  if (tab == "shame" and not statsOn()) or (tab == "activity" and not actOn()) then tab = "crew" end
   local s = allSettings()
   local online = 0
   if ns.roster then online = ns.roster:onlineCount() end
@@ -569,7 +619,7 @@ local function redraw()
 
   local top = P.drawHeader(s, layout, news)
   local live = view ~= "tab" -- on screen now (tucked and closed: laid out behind the holder)
-  if layout ~= "peek" and (statsOn() or calOn()) then
+  if layout ~= "peek" and tabsOn() then
     local wide = tab == "shame"
     drawTabs((wide and BOARD_WIDTH or ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"]) + 2 * PAD)
     if not live then stopCalPulse() end
@@ -579,6 +629,47 @@ local function redraw()
     stopCalPulse()
   end
 
+  if tab == "activity" and layout == "full" then
+    -- the Activity tab: the Recent list's entries, newest first, at the panel's normal width
+    for _, r in ipairs(rowFrames) do r:Hide() end
+    hideChrome()
+    if P.tipRow then Panel.hideRowTip(P.tipRow) end
+    P.visibleRows = 0
+    P.stopArrowTicker()
+    if ns.Board then ns.Log.safe("board", ns.Board.hide) end
+    if live then P.actUnseen = 0 end
+    local width = ROW_WIDTH[ROW_WIDTH[s.rowStyle] and s.rowStyle or "full"]
+    local list = ns.Recent.entries()
+    local first, last = Logic.window(#list, actOffset, ACT_ROWS)
+    actOffset = first - 1
+    local y, wall = top + GAP, ns.wallclock()
+    actShown = {}
+    for i = 1, ACT_ROWS do
+      local e, r = (first + i - 1 <= last) and list[first + i - 1] or nil, actRows[i]
+      if e then
+        if not r then r = ns.Recent.newRow(P.root, width, 48, P.sideAnchor); actRows[i] = r end
+        r:SetWidth(width)
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -y)
+        actShown[#actShown + 1] = ns.Recent.fillRow(r, e, wall)
+        y = y + ns.Recent.ROW_H
+      elseif r then
+        r:Hide()
+      end
+    end
+    y = y + GAP
+    if #list == 0 then note = "Nothing has happened yet."
+    elseif #list > ACT_ROWS then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #list .. ")"
+    else note = nil end
+    if note then y = drawNote(note, y, width) else noteText:Hide() end
+    P.root:SetSize(width + 2 * PAD, y + 2)
+    P.root:Show()
+    P.syncBarTicker()
+    settle(width + 2 * PAD, y + 2, view)
+    normalizeAnchor()
+    return
+  end
+  hideActivity()
   if tab == "shame" and layout == "full" and not live then
     -- tucked and closed: nobody sees the board behind the closed holder; it is drawn when the panel slides out
     P.syncBarTicker()
@@ -671,13 +762,7 @@ local function redraw()
   elseif #entries == 1 and entries[1].bar == "offline" then note = "Nobody else is online right now."
   elseif #entries > max then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #entries .. ")" end
   if note then
-    noteText:ClearAllPoints()
-    noteText:SetPoint("TOPLEFT", P.root, "TOPLEFT", PAD, -(y - GAP + 4))
-    noteText:SetWidth(width)
-    noteText:SetText(note)
-    noteText:Show()
-    local real = noteText.GetStringHeight and noteText:GetStringHeight() or nil
-    y = y - GAP + 4 + Logic.noteHeight(note, width, LINE, real)
+    y = drawNote(note, y, width)
   else
     noteText:Hide()
   end
@@ -769,6 +854,9 @@ local function build()
     shameTab = ns.Board.textButton(P.tabBar, "Hall of Shame", function() Panel.setTab("shame") end, FEATURE,
       "tabShame")
     shameTab:SetPoint("LEFT", crewTab, "RIGHT", 4, 0)
+    actTab = ns.Board.textButton(P.tabBar, "Activity", function() Panel.setTab("activity") end, FEATURE,
+      "tabActivity")
+    actTab.words = "Activity"
     calTab = ns.Board.textButton(P.tabBar, "Calendar", function() if ns.Calendar then ns.Calendar.toggle() end end,
       FEATURE)
     calTab.words = "Calendar"
@@ -801,17 +889,26 @@ end
 ---------------------------------------------------------------------------------------------------------- public
 -- Mouse wheel: delta 1 = up (earlier rows), -1 = down. The Hall of Shame does not scroll.
 function Panel.scroll(delta)
-  if Panel.tab() == "shame" then return end
-  offset = offset - (tonumber(delta) or 0)
+  local t = Panel.tab()
+  if t == "shame" then return end
+  if t == "activity" then actOffset = actOffset - (tonumber(delta) or 0)
+  else offset = offset - (tonumber(delta) or 0) end
   requestRedraw()
 end
 
--- "crew" | "shame". Opening the Hall of Shame asks the crew for fresh numbers (Stats.request rate-limits itself).
+-- "crew" | "shame" | "activity". Opening the Hall of Shame asks the crew for fresh numbers (Stats.request
+-- rate-limits itself). Opening Activity counts its list as seen and clears the tab's missed number, as the Recent
+-- window does.
 function Panel.setTab(id)
   if id == "shame" then
     if not statsOn() then return end
     tab = "shame"
     ns.Stats.request()
+  elseif id == "activity" then
+    if not actOn() then return end
+    tab = "activity"
+    actOffset, P.actUnseen = 0, 0
+    if P.bar then P.bar:clearMissed() end
   elseif id == "crew" then
     tab = "crew"
   else
@@ -820,7 +917,22 @@ function Panel.setTab(id)
   requestRedraw()
 end
 
-function Panel.tab() return (tab == "shame" and statsOn()) and "shame" or "crew" end
+function Panel.tab()
+  if tab == "shame" and statsOn() then return "shame" end
+  if tab == "activity" and actOn() then return "activity" end
+  return "crew"
+end
+
+-- A new entry in the activity feed: counted as new on the Activity tab's label (only what "Tell me about" covers),
+-- or drawn at once while the Activity tab is on screen.
+local function onFeedForActivity(e)
+  if type(e) ~= "table" or not FL.isKind(e.kind) then return end
+  if tab == "activity" and P.shown and P.curView == "full" then return requestRedraw() end
+  if ns.Recent and ns.Recent.isShown() then return end
+  if not Panel.noticeInScope(e.kind, FL.keyOf(e)) then return end
+  P.actUnseen = P.actUnseen + 1
+  requestRedraw()
+end
 
 -- Opens or closes the offline friends list at the bottom (the "Offline (N)" bar; remembered).
 function Panel.toggleOffline()
@@ -865,7 +977,11 @@ function Panel.offlineBarForTest() return offBarShown and offBar or nil end
 function Panel.guildBarForTest() return guildBarShown and guildBar or nil end
 function Panel.headFrameForTest(words) local f = headFrames[words]; return f and f:IsShown() and f or nil end
 function Panel.entriesForTest() return entries end
-function Panel.tabButtonsForTest() return { bar = P.tabBar, crew = crewTab, shame = shameTab, cal = calTab, help = helpTab } end
+function Panel.tabButtonsForTest()
+  return { bar = P.tabBar, crew = crewTab, shame = shameTab, act = actTab, cal = calTab, help = helpTab }
+end
+function Panel.activityForTest() return actShown end
+function Panel.activityRowForTest(i) return actRows[i] end
 function Panel.calPulseForTest() return calTicker ~= nil end
 function Panel.refresh() requestRedraw() end
 
@@ -976,6 +1092,9 @@ local function onEnable()
     lengths = P.newsLengths })
   P.open = nil
   ns.Bus.on(FEATURE, "FEED_ADDED", Panel.onFeed)
+  ns.Bus.on(FEATURE, "FEED_ADDED", onFeedForActivity)
+  ns.Bus.on(FEATURE, "FEED_CHANGED", function() if tab == "activity" then requestRedraw() end end)
+  ns.Bus.on(FEATURE, "RECENT_OPENED", function() P.actUnseen = 0; requestRedraw() end)
   P.listenForNews() -- layer changes, running off, calendar notes (UI/PanelTab.lua)
   -- a fight drops the news waiting to slide out (it is still counted as missed)
   ns.Events.on(FEATURE, "PLAYER_REGEN_DISABLED", function() P.inCombat = true; P.bar:clear(); requestRedraw() end)

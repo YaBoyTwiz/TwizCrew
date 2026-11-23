@@ -1068,6 +1068,13 @@ Most checks work alone with **Try it out** (`/tc test fake`, then `/tc test ding
    the title bar with the friend's row and its **Mock back** button, for about 12 seconds. Only one thing: it slides
    out as usual. Things whose pop-up you already saw in the fight (a level-up, a death) are not repeated. With
    **Slide out news** off: nothing slides out after the fight. Die in a fight: it still comes after.
+16. **The Activity tab.** Slide the panel out: the bar under the header reads Crew, Hall of Shame, Activity,
+   Calendar (maybe "Cal") and "?". Click **Activity**: the list of what happened (icon, line, "5m ago"), newest
+   first, at the panel's normal width. Hover a line: the whole line and the clock time. The mouse wheel scrolls. With
+   nothing yet: "Nothing has happened yet." While you look at Crew, new things make the label read "Activity (2)";
+   opening it clears that. Click the red number on the tab: the panel opens straight on Activity. Switch to Tiny rows:
+   the words shorten ("Act", "Cal") and nothing overlaps or pokes out of the panel. Turn Stats and Calendar off in
+   the settings: the bar still shows Crew and Activity. `/tc recent` still opens the Recent window.
 
 ## What to send back
 

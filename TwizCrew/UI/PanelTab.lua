@@ -117,7 +117,10 @@ local function mouseOverPanel()
 end
 P.mouseOverPanel = mouseOverPanel
 
-local function mouseOverTab() return shownNow(tab) and over(tab) and focusOn(tab) end
+local function mouseOverTab()
+  if not shownNow(tab) then return false end
+  return (over(tab) or (shownNow(tab.badge) and over(tab.badge))) and focusOn(tab) -- (the red number hangs off it)
+end
 
 -- The player is turning the camera or holding a mouse button (guarded: not every client has these).
 local function busyMouse()
@@ -372,8 +375,9 @@ function P.buildTab()
   tab.label:SetText("C\nR\nE\nW")
   tab.count = T.readable(T.text(tab, T.FONT.normal, C.text), 1)
   tab.count:SetPoint("BOTTOM", tab, "BOTTOM", 0, 8)
-  -- the missed number (red), the gold "!" of a waiting update, and the two marks
-  tab.badge = CreateFrame("Frame", nil, tab)
+  -- the missed number (red: a click opens the panel on the Activity tab), the gold "!" of a waiting update, and the
+  -- two marks
+  tab.badge = CreateFrame("Button", nil, tab)
   tab.badge:SetSize(T.icon(16), T.icon(13))
   tab.badge:SetFrameLevel((tab:GetFrameLevel() or 1) + 3)
   local badgeBg = tab.badge:CreateTexture(nil, "BACKGROUND")
@@ -381,6 +385,14 @@ function P.buildTab()
   T.color(badgeBg, "b3261e", 0.95)
   tab.badge.text = T.readable(T.text(tab.badge, T.FONT.small, C.white))
   tab.badge.text:SetPoint("CENTER", tab.badge, "CENTER", 0, 0)
+  if tab.badge.RegisterForClicks then tab.badge:RegisterForClicks("LeftButtonUp") end
+  script(tab.badge, "OnClick", function() Panel.openActivity() end)
+  script(tab.badge, "OnEnter", function()
+    tabHover = true
+    startBarTicker()
+    tabTip(tab)
+  end)
+  script(tab.badge, "OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
   tab.badge:Hide()
   tab.hint = T.readable(T.text(tab, T.FONT.normal, C.title), 1)
   tab.hint:SetText("!")
@@ -445,6 +457,12 @@ function Panel.openTab(by)
   flashAt = nil
   startBarTicker()
   requestRedraw()
+end
+
+-- The red number on the tab (and the after-fight summary): the panel, straight on the Activity tab.
+function Panel.openActivity()
+  if not P.open then Panel.openTab("click") end
+  Panel.setTab("activity")
 end
 
 function Panel.closeTab()
@@ -751,8 +769,7 @@ function Panel.noticeClicked()
   elseif e.kind == "otherlayer" or e.kind == "samelayer" then
     return Panel.openTab("click")
   elseif e.kind == "fight" then -- the after-fight summary: the whole panel, on the Activity tab
-    Panel.openTab("click")
-    return Panel.setTab("activity")
+    return Panel.openActivity()
   elseif ns.Recent then
     ns.Recent.open()
   end

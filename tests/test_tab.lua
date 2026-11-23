@@ -1300,6 +1300,7 @@ return {
       ns.Panel.noticeClicked()
       W:advance(0.1)
       A.eq(ns.Panel.viewForTest(), "full", "a click opens the panel")
+      A.eq(ns.Panel.tab(), "activity", "on the Activity tab")
       A.eq(ns.Log.errors(10), {})
     end,
 
@@ -1367,6 +1368,139 @@ return {
       W:advance(4)
       A.eq(ns.Panel.viewForTest(), "tab")
       A.eq(ns.Panel.barForTest().missed, 1, "counted as before")
+    end,
+
+    -------------------------------------------------------------------------------------------------- activity tab
+    activity_tab_lists_what_happened = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      W:advance(1)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" })
+      W:advance(1)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      local tabs = ns.Panel.tabButtonsForTest()
+      A.ok(tabs.act and tabs.act:IsShown(), "an Activity tab next to Crew and Hall of Shame")
+      tabs.act._scripts.OnClick(tabs.act, "LeftButton"); W:advance(0.2)
+      A.eq(ns.Panel.tab(), "activity")
+      local shown = ns.Panel.activityForTest()
+      A.eq(#shown, 2)
+      A.eq(shown[1].line, "Frostie reached level 13", "newest first")
+      A.eq(shown[2].line, "Frostie came online in Elwynn Forest")
+      A.eq(shown[1].ago, ns.FeedLogic.ago(ns.Feed.entries()[1].at, ns.wallclock()))
+      A.eq(ns.Panel.rowCountForTest(), 0, "no crew rows")
+      A.eq(root(ns):GetWidth(), 230 + 16, "the panel's normal width")
+      -- the same row tooltip as the Recent window
+      local tip = {}
+      W.env.GameTooltip = { SetOwner = function(_, _, anchor) tip.anchor = anchor; tip.lines = {} end,
+        SetText = function(_, t) tip.lines[#tip.lines + 1] = t end, AddLine = function(_, t) tip.lines[#tip.lines + 1] = t end,
+        Show = function() end, Hide = function() end, IsOwned = function() return false end }
+      local r = ns.Panel.activityRowForTest(1)
+      r._scripts.OnEnter(r)
+      A.eq(tip.lines[1], "Frostie reached level 13")
+      A.ok(tip.lines[2] and tip.lines[2]:match("^%d%d:%d%d:%d%d$"), "the clock time")
+      -- many: the wheel scrolls
+      for lv = 14, 30 do receive(W, ns, "Frostie", "UPDATE", { lv = tostring(lv) }); W:advance(0.1) end
+      W:advance(0.2)
+      A.eq(ns.Panel.activityForTest()[1].line, "Frostie reached level 30", "new entries show at once")
+      ns.Panel.scroll(-1); W:advance(0.2)
+      A.eq(ns.Panel.activityForTest()[1].line, "Frostie reached level 29")
+      A.contains(ns.Panel.noteForTest(), "Scroll for more")
+      ns.Feed.clear(); W:advance(0.2)
+      A.eq(#ns.Panel.activityForTest(), 0)
+      A.eq(ns.Panel.noteForTest(), "Nothing has happened yet.")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    activity_tab_without_stats_and_calendar = function(ns, A, W)
+      ready(W)
+      ns.Modules.setEnabled("stats", false)
+      ns.Modules.setEnabled("calendar", false)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      local tabs = ns.Panel.tabButtonsForTest()
+      A.ok(tabs.bar:IsShown(), "the row shows: Crew and Activity")
+      A.no(tabs.shame:IsShown()); A.no(tabs.cal:IsShown())
+      A.ok(tabs.act:IsShown())
+      ns.Modules.setEnabled("activity", false); W:advance(0.2)
+      A.no(tabs.bar:IsShown(), "Crew alone: no row")
+      A.eq(ns.Panel.tab(), "crew")
+    end,
+
+    activity_tab_counts_what_is_new_and_clears_it = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      local tabs = ns.Panel.tabButtonsForTest()
+      -- the label: "Activity", or "Act" when the bar is full; the count of what is new in brackets
+      local function label() return (tabs.act.label:GetText():gsub("^Activity", "Act")) end
+      A.eq(label(), "Act")
+      friend(W, ns, "Frostie"); W:advance(1)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "13" }); W:advance(1)
+      A.eq(label(), "Act (2)")
+      ns.Panel.setTab("activity"); W:advance(0.2)
+      A.eq(label(), "Act", "seen")
+      receive(W, ns, "Frostie", "UPDATE", { lv = "14" }); W:advance(0.5)
+      A.eq(label(), "Act", "it is on screen: seen at once")
+      ns.Panel.setTab("crew"); W:advance(0.2)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "15" }); W:advance(0.5)
+      A.eq(label(), "Act (1)")
+      ns.Recent.open(); W:advance(0.2)
+      A.eq(label(), "Act", "the Recent window counts as seen too")
+      ns.Recent.close()
+      -- tucked: opening the tab clears the missed number, as the Recent window does
+      ns.Modules.set("panel", "keepOpen", false); W:advance(0.2)
+      receive(W, ns, "Frostie", "UPDATE", { lv = "16" }); W:advance(0.3)
+      A.eq(ns.Panel.barForTest().missed, 1)
+      ns.Panel.openTab("click"); ns.Panel.barForTest():addMissed()
+      ns.Panel.setTab("activity"); W:advance(0.2)
+      A.eq(ns.Panel.barForTest().missed, 0)
+    end,
+
+    the_red_number_opens_the_activity_tab = function(ns, A, W)
+      ready(W)
+      friend(W, ns, "Frostie")
+      W:advance(8)
+      local st = ns.Panel.tabStateForTest()
+      A.ok(st.badge, "the red number")
+      local badge = tabFrame(ns).badge
+      badge._scripts.OnClick(badge, "LeftButton"); W:advance(0.2)
+      A.eq(ns.Panel.viewForTest(), "full")
+      A.eq(ns.Panel.tab(), "activity", "straight on the Activity tab")
+      A.eq(ns.Panel.tabStateForTest().missed, 0)
+      ns.Panel.setTab("crew")
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(1.5)
+      A.eq(ns.Panel.viewForTest(), "tab")
+      W:advance(1)
+      tabFrame(ns)._scripts.OnClick(tabFrame(ns), "LeftButton"); W:advance(0.2)
+      A.eq(ns.Panel.tab(), "crew", "a click on the tab body: the last tab")
+    end,
+
+    the_tab_row_fits_in_every_row_style = function(ns, A, W)
+      ready(W)
+      ns.Modules.set("panel", "keepOpen", true); W:advance(0.2)
+      local tabs = ns.Panel.tabButtonsForTest()
+      local function used()
+        local w = 3
+        for _, b in ipairs({ tabs.crew, tabs.shame, tabs.act, tabs.cal, tabs.help }) do
+          if b:IsShown() then w = w + b:GetWidth() + 4 end
+        end
+        return w - 4
+      end
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.2)
+        A.ok(tabs.shame:IsShown() and tabs.act:IsShown() and tabs.cal:IsShown(), style)
+        A.ok(used() <= root(ns):GetWidth(), style .. ": fits (" .. used() .. " of " .. root(ns):GetWidth() .. ")")
+      end
+      A.eq(tabs.act.label:GetText(), "Act", "tiny rows: the short word")
+      ns.Modules.set("panel", "rowStyle", "full"); W:advance(0.2)
+      A.eq(tabs.act.label:GetText(), "Activity")
+      A.ok(tabs.help:IsShown(), "the ? fits in full rows")
+    end,
+
+    activity_tip_and_about_line = function(ns, A, W)
+      A.eq({ ns.Help.tip("tabActivity") },
+        { "Activity", "What happened lately: who came online, died, levelled up, and roasts." })
+      local all = {}
+      for _, l in ipairs(ns.Help.aboutLines()) do all[#all + 1] = l.text end
+      A.contains(table.concat(all, "\n"), "Activity tab")
     end,
 
     -------------------------------------------------------------------------------------------------- misc

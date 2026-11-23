@@ -538,8 +538,7 @@ buttons, so it's easy to access, maybe make it pulsate or flash or blink when up
 
 - **The button (UI/Panel.lua):** "Calendar" on the bar under the header, right of "Crew" and "Hall of Shame". It
   opens and closes the calendar's own window (not a tab: the month view is far wider than the panel; the panel keeps
-  its tab). The bar now shows while the stats module **or** the calendar module is on (stats off: "Crew" and
-  "Calendar"; calendar off: as before). With tiny rows the three words do not fit, so the button says "Cal".
+  its tab). Which buttons the bar holds, when it shows and its short words: "The crew tab (2026-11-23)", Activity tab.
 - **The small scroll in the header is gone** (owner approved). The wrench menu, `/tc cal`, the key binding, the
   minimap menu and the settings button still open the calendar.
 - **What counts as new (owner picked "new notes and replies to your notes"):** a note by someone else, or a comment
@@ -783,6 +782,17 @@ visible": a clearly labelled switch, not a small icon.
   `FeedLogic.afterFight` (short forms `FeedLogic.shortLine`). Because pop-ups show in fights, deaths, level-ups,
   online and layer news (whose pop-up switches must be on for the tab to take them) mostly had their pop-up already:
   the summary is mainly mocks and congrats aimed at me, calendar notes and running off with pop-ups off.
+- **Activity tab** (owner, 2026-11-23: "is there an activity tab"): a third panel tab after "Crew" and "Hall of Shame"
+  (the bar: Crew, Hall of Shame while stats is on, Activity while the activity module is on, the Calendar button while
+  calendar is on, then "?"; it shows whenever it holds more than Crew). It lists the Recent window's entries at the
+  panel's normal width, 10 at a time, newest first: the same rows (icon, line, "5m ago", the tooltip with the clock
+  time; `Recent.entries`, `Recent.newRow`, `Recent.fillRow` serve both), the mouse wheel scrolls, "Scroll for more
+  (1-10 of N)" under it, "Nothing has happened yet." when empty. The label counts entries added since the Activity tab
+  or the Recent window was last looked at ("Activity (3)"; only what "Tell me about" covers; session only). Opening
+  it clears that count and the tab's missed number. The red number on the crew tab (a button now) opens the panel
+  straight on Activity, so does a click on the after-fight summary; a click on the tab body keeps the last tab. When
+  the bar is too narrow the words shorten in this order: "Cal", "Act", the "?" goes, "Shame". The Recent window,
+  `/tc recent` and the menu entries stay.
 - **The tab's marks:** unseen news: a soft gold glow (a brighter flash when it arrives) and a red number; a party
   member or pinned friend DEAD: a small red skull mark; on OTHER LAYER: a portal mark in the layer tag's colour; an
   update waiting: the gold "!".
@@ -831,7 +841,8 @@ tab or the panel and left, or at least 6 s. A new install gets the tab and no no
 **Files.** `UI/PanelTab.lua` (was `UI/PanelMini.lua`): the tab, the holder and the slide, the ticker, hover and click,
 the news queue and its kinds, pop-up suppression, Keep open. `UI/PanelLogic.lua`: view, hoverOpens, tabCount,
 clampTabY, tabSnap, tabFromPosition, tabMarks, newsReactable, newsSeconds, slideWidth, keepLabel, keepSwitchText.
-`UI/FeedLogic.lua`: newsEntry, the queue's per-entry lengths (`lengths`), `endAfter`, `has`, afterFight, shortLine. Tests: `tests/test_tab.lua`
+`UI/FeedLogic.lua`: newsEntry, the queue's per-entry lengths (`lengths`), `endAfter`, `has`, afterFight, shortLine.
+`UI/Recent.lua`: the rows and entries the Activity tab shares with the Recent window. `UI/Panel.lua`: the Activity tab. Tests: `tests/test_tab.lua`
 (was `tests/test_minimize.lua`).
 
 **Only the game can tell:** whether `SetClipsChildren` exists and clips on Forever (and so whether the slide shows or

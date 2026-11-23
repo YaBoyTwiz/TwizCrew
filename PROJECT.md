@@ -473,8 +473,10 @@ we have not seen it), the name forms on guild and whisper messages, and how the 
   `IsInGuild`, `UnitName` / `UnitGUID("player")` and `GetGuildInfo` turn unreadable inside dungeons (the addon keeps
   sending and keeps knowing itself then); whether the guild's name comes within 10 s of login; the new panel lines
   and textures.
-- *Follow-up work:* splitting `Crew/Guild.lua` (about 1240 lines; it cannot be a pure
-  move, parked); **part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news**, designed only in
+- *Follow-up work:* `Crew/Guild.lua` was split on 2026-11-23, behaviour unchanged, into `Crew/GuildNames.lua`
+  (rows, keys, names, the loaded list), `Crew/GuildIdentity.lua` (whose saved data is on top, the fit rule),
+  `Crew/Guild.lua` (membership, the guild's name, active(), reads, events) and `Crew/GuildCommands.lua` (`/tc guild
+  use`, `new`, `load`); shared state goes through the private table `ns.Guild._`. Still open: **part 2, the Guild Board** and **part 3, guild-wide Hall of Shame and news**, designed only in
   outline (the design's "three parts"; research on the game calendar and other addons in "What an addon can and
   cannot do"). No version bump and no Changelog entry yet.
 
@@ -484,7 +486,7 @@ section; the list: first word as the key; stripping "-Realm"; sending and whispe
 the guild name is remembered for the session; no readable name after 10 s means one shared "?" set; the guild list
 counts as complete after three identical reads, and as whole only when exact or listing an offline member; the fit rule (two and half) for old data and for the 60-day clean-up;
 old friends start pinned; pins are per guild; hiding instead of deleting; the `/tc guild` commands and the wording of
-their lines; `Crew/Guild.lua` not split.
+their lines; `Crew/Guild.lua` not split in this work (split later, see Follow-up work).
 
 ## Calendar button next to the tabs (2026-11-22)
 

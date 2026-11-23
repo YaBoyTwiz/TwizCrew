@@ -59,7 +59,7 @@ end
 
 -- /tc guild: every set of saved crew data, numbered (0 = the one in use), and what to type; "use [yes]": the data in
 -- use becomes this guild's; "new": this guild starts fresh at the next /reload; "load <number> [yes]": that set
--- becomes this guild's at the next /reload. Nothing saved is ever deleted (Core/DB.lua, Crew/Guild.lua).
+-- becomes this guild's at the next /reload. Nothing saved is ever deleted (Core/DB.lua, Crew/GuildCommands.lua).
 local NO_NAMES = "This game does not tell addons the guild's name, so TwizCrew uses one shared set of saved data."
 
 local function friends(n) return n == 1 and "1 friend" or (n .. " friends") end

@@ -21,9 +21,9 @@ end
 -- reload or command loses, strands, silently reassigns or duplicates a set.
 -- * Ownership changes only by the one safe guess (unnamed or "?" data is named for a guild whose complete list fits
 --   it: Crew/Guild.lua) or by the player's command (/tc guild use, new, load).
--- * db.guild.byChar[character] decides at login which set comes up (DB.useGuildOf). Crew/Guild.lua writes it only
---   when that character's guild has a set (in use or parked) or another guild's named set is in use; for unnamed or
---   "?" data the guild has not taken it is cleared, so the next login moves nothing.
+-- * db.guild.byChar[character] decides at login which set comes up (DB.useGuildOf). Crew/GuildIdentity.lua writes it
+--   only when that character's guild has a set (in use or parked) or another guild's named set is in use; for unnamed
+--   or "?" data the guild has not taken it is cleared, so the next login moves nothing.
 -- * db.guild.request = { kind = "new" | "load", guild, char, from, key }: a one-shot /tc guild new or load, used up
 --   at the next start-up whoever logs in, carried out only for that character while it still fits (requestPlan).
 --   Its outcome, db.guild.requestResults[character] = { kind, done, reason } (one per character, so one character's
@@ -35,8 +35,8 @@ end
 -- * Old friends are forgotten (Crew's 60-day rule) only on a whole guild list, while the saved friends fit it or the
 --   set fitted this guild before (Guild.mayForget, guild.fitIn): a set used in a guild that is not its own forgets
 --   nothing.
--- * guild.pinnedOld (per set): unnamed v0.1.24 data taken by a guild pinned its old crew once (Crew/Guild.lua, or a
---   /tc guild load of that set: carryOut).
+-- * guild.pinnedOld (per set): unnamed v0.1.24 data taken by a guild pinned its old crew once (Crew/GuildIdentity.lua,
+--   or a /tc guild load of that set: carryOut).
 -- * guild.fitIn (per set): the real name of the last guild whose list the saved friends fitted (Guild.mayForget:
 --   the 60-day rule keeps running there after over half the friends left). nil until then.
 -- * Fields of a set that are not in GUILD_PATHS ride along in db.guild.extra while it is in use. db.guild.named:
@@ -58,7 +58,7 @@ local function guildDefaults(db)
   ns.Util.mergeDefaults(db, {
     roster = {},
     -- keys[lower(full name)] = the key a guild member was given the first time (never changed), mine[GUID] = my key
-    -- on that character, spell[lower(full name)] = the full name as the game spells it (see Crew/Guild.lua); name,
+    -- on that character, spell[lower(full name)] = the full name as the game spells it (see Crew/GuildNames.lua); name,
     -- byChar, request, requestResults, named, extra, pinnedOld, fitIn (nil by default): see above
     guild = { keys = {}, mine = {}, spell = {}, byChar = {}, requestResults = {} },
     guilds = {},
@@ -297,7 +297,7 @@ local function refill(t, from)
 end
 
 -- The unnamed (v0.1.24) set brought up by a request is taken by a guild without its list deciding: like a guild
--- that takes it in the game (Crew/Guild.lua), it pins its old crew to the panel once (guild.pinnedOld).
+-- that takes it in the game (Crew/GuildIdentity.lua), it pins its old crew to the panel once (guild.pinnedOld).
 local function pinOldCrew(db)
   if db.guild.pinnedOld then return end
   db.guild.pinnedOld = true

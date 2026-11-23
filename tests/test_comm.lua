@@ -56,7 +56,8 @@ end
 
 return {
   files = { "Core/Init.lua", "Core/Util.lua", "Core/Log.lua", "Core/Events.lua", "Core/Modules.lua", "Core/DB.lua",
-    "Crew/Guild.lua", "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
+    "Crew/GuildNames.lua", "Crew/GuildIdentity.lua", "Crew/Guild.lua", "Crew/GuildCommands.lua",
+    "Comm/Codec.lua", "Comm/Queue.lua", "Comm/Transport.lua", "Comm/Comm.lua" },
   tests = {
     ------------------------------------------------------------------------------------------------ sending
     broadcast_is_one_guild_send = function(ns, A, W)

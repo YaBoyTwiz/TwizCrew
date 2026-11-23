@@ -15,7 +15,10 @@ Core\Log.lua
 Core\Events.lua
 Core\Modules.lua
 Core\DB.lua
+Crew\GuildNames.lua
+Crew\GuildIdentity.lua
 Crew\Guild.lua
+Crew\GuildCommands.lua
 Comm\Codec.lua
 Comm\Queue.lua
 Comm\Transport.lua

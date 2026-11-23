@@ -1,11 +1,6 @@
 -- The guild list: who is in the guild, what is their key, what is their full name. The one answer for the rest of the
 -- addon (ns.Guild). Reads only what the game's guild functions give, every value through ns.Util.plain.
 --
--- Key of a member: the first word of the name, unless another member already holds that word (saved keys count, and
--- so does the current list); then the full name. Keys are saved in ns.db.guild.keys[lower(full)] the first time a
--- member is seen (only on a complete read) and never change. Keys, like all data about other people, are kept per
--- guild (Core/DB.lua: the set on top belongs to ns.db.guild.name, the "data guild").
---
 -- active(): in a guild, nothing pending, and the data on top belongs to it. Only then is the list read (but see
 -- readMode), are keys given out, and does the addon send, accept, hide or write anything for the crew; otherwise it
 -- acts as if in no guild. GUILD_STATE(active) fires when active() changes; inGuild() stays the game's answer. The
@@ -33,22 +28,30 @@
 --   name later renames "?" data only when the list fits (like unnamed data).
 -- * A gap in the names (none now, but this account has read one): nothing is adopted; only load works, and the
 --   chosen set becomes the shared "?" set.
--- My own key is saved per character GUID (ns.db.guild.mine) so myKey() can answer before the list loads.
+--
+-- ns.Guild is four files, in this .toc order: Crew/GuildNames.lua (reading the rows, keys and names, the loaded
+-- list), Crew/GuildIdentity.lua (whose saved data is on top, the fit rule), this file (membership, the guild's name,
+-- active(), when the list is read, the events) and Crew/GuildCommands.lua (/tc guild use, new, load). They share
+-- private helpers through Guild._.
 local _, ns = ...
 
 local FEATURE = "guild"
-local Guild = {}
-ns.Guild = Guild
+local Guild = ns.Guild
+local P = Guild._
+local L = P.list -- the loaded list (Crew/GuildNames.lua): members, byFull, byKey, byFirst, byGuid, loaded ...
 
 local plain = ns.Util.plain
+local saved, readList, anyOffline, byFullName = P.saved, P.readList, P.anyOffline, P.byFullName
+local assignKeys, saveSpelling, sigOf, install, rememberMyKey = P.assignKeys, P.saveSpelling, P.sigOf, P.install,
+  P.rememberMyKey
+local PLACEHOLDER, dataGuild, isReal, hasSet, rememberGuild = P.PLACEHOLDER, P.dataGuild, P.isReal, P.hasSet,
+  P.rememberGuild
+local dataEmpty, aboutNobody, rosterFits, nameData = P.dataEmpty, P.aboutNobody, P.rosterFits, P.nameData
 local COALESCE = 1       -- s: roster events closer than this are read once, after the gap
 local TICK = 1           -- s: the ticker that checks membership and asks for refreshes
-local MAX_MEMBERS = 2000 -- never read more rows than this
 local STABLE_GAP, STABLE_READS = 5, 3 -- this many reads this far apart with one readable count: the list is complete
 local ADOPT_RETRY = 60   -- s: unnamed or "?" data that did not fit a complete list: read again this often at most
 
-local members, byFull, byKey, byFirst, byGuid = {}, {}, {}, {}, {}
-local loaded = false
 local complete = false       -- the last read gave as many readable rows as the game said there are (or was stable)
 local whole = false          -- and it surely holds the offline members too (see Guild.whole)
 local announced              -- nil until known, then true / false: is the character in a guild (the game, after grace)
@@ -68,186 +71,9 @@ local pendingRead = false
 local started = false
 local ticker
 local signature = ""
-local heldBy = {}            -- lower(key) -> lower(full name) of whoever was ever given that key (saved keys)
 local quietAt                -- ns.now() of the last whole read that unnamed or "?" data did not fit (nil: none)
 local partialAt              -- ns.now() of the last complete but not whole read that it did not fit (nil: none)
 local lastComplete = false   -- the last read in "adopt" mode was complete (then re-reads wait ADOPT_RETRY s)
-local previewed = {}         -- /tc guild load <n> shown this session: n -> the set it showed (from .. key)
-local fallback = { keys = {}, mine = {}, spell = {} } -- used while saved data is not attached (tests, very early)
-
-local function saved()
-  local db = ns.db
-  if type(db) ~= "table" then return fallback end
-  if type(db.guild) ~= "table" then db.guild = {} end
-  local g = db.guild
-  if type(g.keys) ~= "table" then g.keys = {} end
-  if type(g.mine) ~= "table" then g.mine = {} end
-  if type(g.spell) ~= "table" then g.spell = {} end
-  return g
-end
-
-local function savedKeys() return saved().keys end
-
--- "Chaos Deathbringr-Realm" / "Chaos Deathbringr" -> "Chaos Deathbringr"; nil when there is no usable name.
-local function clean(raw)
-  if type(raw) ~= "string" or ns.Util.isSecret(raw) then return nil end
-  local name = raw
-  local ok, amb = pcall(Ambiguate, name, "none")
-  if ok and type(amb) == "string" and amb ~= "" then name = amb end
-  name = name:match("^([^%-]*)") or name
-  name = ns.Util.trim(name)
-  if name == "" then return nil end
-  return name
-end
-
-local function firstWord(full) return full:match("^(%S+)") or full end
-
-local function realmSuffix()
-  local realm = plain(GetRealmName)
-  if type(realm) == "string" and realm ~= "" then return " " .. realm:lower() end
-end
-
--- A lower-case name without our realm in the " Realm" space form ("chaos deathbringr realm" -> "chaos deathbringr"),
--- but only when what is left is a full name known(rest) accepts; otherwise the name as it is. So a stranger called
--- "Chaos Realm" stays "chaos realm" and never becomes member Chaos Deathbringr's first word.
-local function withoutRealm(l, known)
-  if known(l) then return l end
-  local suffix = realmSuffix()
-  if suffix and #l > #suffix and l:sub(-#suffix) == suffix then
-    local rest = l:sub(1, #l - #suffix)
-    if known(rest) then return rest end
-  end
-  return l
-end
-
--- Seconds before now from GetGuildRosterLastOnline's years, months, days, hours (30-day months, 365-day years).
-local function offlineSeconds(y, mo, d, h)
-  if type(y) ~= "number" and type(mo) ~= "number" and type(d) ~= "number" and type(h) ~= "number" then return nil end
-  y, mo, d, h = tonumber(y) or 0, tonumber(mo) or 0, tonumber(d) or 0, tonumber(h) or 0
-  return ((y * 365 + mo * 30 + d) * 24 + h) * 3600
-end
-
--- One list row from the game, or nil.
-local function readRow(i)
-  local r = { plain(GetGuildRosterInfo, i) }
-  local full = clean(r[1])
-  if not full then return nil end
-  local e = { full = full, first = firstWord(full) }
-  e.rank = type(r[2]) == "string" and r[2] or ""
-  e.rankIndex = type(r[3]) == "number" and r[3] or nil
-  e.level = type(r[4]) == "number" and r[4] or nil
-  e.zone = type(r[6]) == "string" and r[6] or ""
-  e.online = r[9] == true
-  e.class = type(r[11]) == "string" and r[11] or nil
-  e.guid = type(r[17]) == "string" and r[17] or nil
-  if not e.online then
-    local y, mo, d, h = plain(GetGuildRosterLastOnline, i)
-    local secs = offlineSeconds(y, mo, d, h)
-    e.lastOnlineRaw = secs
-    e.lastOnline = secs and (ns.wallclock() - secs) or nil
-  end
-  return e
-end
-
-local function savedClassOf(first)
-  local roster = ns.db and ns.db.roster
-  if type(roster) ~= "table" then return nil end
-  local row = roster[first]
-  if type(row) ~= "table" then
-    local lower = first:lower()
-    for name, r in pairs(roster) do
-      if type(name) == "string" and name:lower() == lower then row = r; break end
-    end
-  end
-  return type(row) == "table" and type(row.class) == "string" and row.class or nil
-end
-
--- The full name as the game spells it (guild.spell[lower(full)]), for lasting records (recordName).
-local function saveSpelling(e) saved().spell[e.full:lower()] = e.full end
-
--- Gives every entry its key (entries are sorted A-Z by full name). allowNew false (a partial read): only saved keys,
--- an entry without one gets none.
-local function assignKeys(entries, allowNew)
-  local saved = savedKeys()
-  local holder = {} -- lower(key) -> lower(full name) of the member who has it
-  for lf, key in pairs(saved) do
-    if type(lf) == "string" and type(key) == "string" and key ~= "" then holder[key:lower()] = lf end
-  end
-  local groups, order = {}, {}
-  for _, e in ipairs(entries) do
-    local lf = e.full:lower()
-    local key = saved[lf]
-    if type(key) == "string" and key ~= "" then
-      e.key = key
-    else
-      local lw = e.first:lower()
-      if allowNew then
-        if not groups[lw] then groups[lw] = {}; order[#order + 1] = lw end
-        groups[lw][#groups[lw] + 1] = e
-      end
-    end
-  end
-  -- a key no other full name holds (case-insensitive): the wanted one, else "Name (2)", "Name (3)"...
-  local function free(wanted, lf)
-    local key, n = wanted, 1
-    while holder[key:lower()] and holder[key:lower()] ~= lf do
-      n = n + 1
-      key = wanted .. " (" .. n .. ")"
-    end
-    holder[key:lower()] = lf
-    return key
-  end
-  for _, lw in ipairs(order) do
-    local group = groups[lw]
-    local winner
-    if not holder[lw] then
-      for _, e in ipairs(group) do -- a one-word name is its own first word
-        if e.full:lower() == lw then winner = e; break end
-      end
-      if not winner and #group == 1 then winner = group[1] end
-      if not winner then
-        local class = savedClassOf(group[1].first)
-        if class then
-          for _, e in ipairs(group) do
-            if e.class == class then winner = e; break end
-          end
-        end
-        winner = winner or group[1]
-      end
-    end
-    for _, e in ipairs(group) do
-      e.key = free((e == winner) and e.first or e.full, e.full:lower())
-      saved[e.full:lower()] = e.key
-      saveSpelling(e)
-    end
-  end
-  heldBy = holder
-end
-
-local function sigOf(entries)
-  local parts = {}
-  for i, e in ipairs(entries) do
-    parts[i] = table.concat({ e.key, e.full, e.class or "", e.level or "", e.zone, e.rank, e.rankIndex or "",
-      e.online and "1" or "0", e.lastOnlineRaw or "", e.guid or "" }, "\1")
-  end
-  return table.concat(parts, "\2")
-end
-
-local guidsComplete = false -- every listed member has a GUID (then a unit whose GUID is not listed is no member)
-
-local function install(entries)
-  members, byFull, byKey, byFirst, byGuid = entries, {}, {}, {}, {}
-  guidsComplete = #entries > 0
-  for _, e in ipairs(entries) do
-    if not e.guid then guidsComplete = false end
-    byFull[e.full:lower()] = e
-    byKey[e.key:lower()] = e
-    local lw = e.first:lower()
-    byFirst[lw] = byFirst[lw] or {}
-    byFirst[lw][#byFirst[lw] + 1] = e
-    if e.guid then byGuid[e.guid] = e end
-  end
-end
 
 -- This character's guild name as the game gives it (nil when it gives none, or a secret). The guild's identity is
 -- its name alone (a realm the game gives now and then would make it flip).
@@ -257,179 +83,11 @@ local function guildId()
   return nil
 end
 
-local PLACEHOLDER = "?" -- the data guild's name when the game never named the guild (single-guild mode)
-
-local function dataGuild()
-  local g = ns.db and ns.db.guild
-  local name = type(g) == "table" and g.name
-  return type(name) == "string" and name ~= "" and name or nil
-end
-
-local function isReal(name) return type(name) == "string" and name ~= "" and name ~= PLACEHOLDER end
-
--- Guild `name` has a parked set (db.guilds[name]).
-local function hasSet(name)
-  local guilds = ns.db and ns.db.guilds
-  return type(guilds) == "table" and guilds[name] ~= nil
-end
-
--- db.guild.byChar[this character] decides which set the next login puts on top (DB.useGuildOf). It names this
--- character's guild `id` only when that guild has a set (on top, or parked), or when another guild's named set is on
--- top (the next login parks that one under its own name). Never for unnamed or "?" data the guild has not taken:
--- then it is cleared, and the next login changes nothing.
-local function rememberGuild(id)
-  local g = ns.db and ns.db.guild
-  local char = ns.DB.charId()
-  if type(g) ~= "table" or type(g.byChar) ~= "table" or not char or not isReal(id) then return end
-  local dg = dataGuild()
-  if dg == id or hasSet(id) or isReal(dg) then g.byChar[char] = id else g.byChar[char] = nil end
-end
-
--- Is v empty: nil, or a table holding only empty tables (skip: a field to leave out, e.g. the calendar's own id)?
-local function hollow(v, skip)
-  if v == nil then return true end
-  if type(v) ~= "table" then return false end
-  for k, x in pairs(v) do
-    if k ~= skip and not hollow(x) then return false end
-  end
-  return true
-end
-
--- Nothing at all is saved on top for a crew: every per-guild field of DB.GUILD_PATHS is missing or empty (the
--- calendar's "me", this account's own diary id made when the calendar is first used, is not about anyone).
-local function dataEmpty()
-  local db = ns.db
-  for _, path in ipairs(ns.DB.GUILD_PATHS) do
-    local parent, key = path:match("^(%w+)%.(%w+)$")
-    local from = parent and db[parent] or db
-    local v = type(from) == "table" and from[key or path] or nil
-    local marker = path == "guild.pinnedOld" or path == "guild.fitIn" -- (a set's own bookkeeping, not about anyone)
-    if not marker and not hollow(v, path == "calendar" and "me" or nil) then return false end
-  end
-  return true
-end
-
--- Real (not test) rows of the saved roster: { name, row }.
-local function savedRows()
-  local out = {}
-  local roster = ns.db and ns.db.roster
-  for name, row in pairs(type(roster) == "table" and roster or {}) do
-    if type(name) == "string" and type(row) == "table" and not ns.isTestName(name) then
-      out[#out + 1] = { name = name, row = row }
-    end
-  end
-  return out
-end
-
--- Nothing saved on top is about anyone else: no real roster row, no crew numbers, no trophy, no calendar note by
--- someone else (a note's key starts with its author's diary id, calendar.me for mine). Only this player's own
--- session, feed, diary and notes: a v0.1.24 user who never had anyone on the panel. Unnamed data like that is taken
--- by a guild at once, like empty data (onIdentity), and pins nobody.
-local function aboutNobody()
-  if #savedRows() > 0 then return false end
-  local db = ns.db
-  local stats = type(db.stats) == "table" and db.stats or {}
-  for name in pairs(type(stats.crew) == "table" and stats.crew or {}) do
-    if type(name) ~= "string" or not ns.isTestName(name) then return false end
-  end
-  if not hollow(stats.trophies) then return false end
-  local cal = type(db.calendar) == "table" and db.calendar or {}
-  local mine = type(cal.me) == "string" and cal.me ~= "" and (cal.me .. "-") or nil
-  for key in pairs(type(cal.notes) == "table" and cal.notes or {}) do
-    if not (mine and type(key) == "string" and key:sub(1, #mine) == mine) then return false end
-  end
-  return true
-end
-
--- Does the saved roster on top belong to the guild of this list? Rows whose first word a listed member has (and,
--- when both sides know a class, the same class) count: at least 2 of them and at least half of the rows; a roster of
--- one row only when its class is known and equal. An empty roster fits only when nothing at all is saved (dataEmpty).
--- Returns fits, then how many saved rows matched and how many there are.
-local function rosterFits(entries)
-  local rows = savedRows()
-  if #rows == 0 then return dataEmpty(), 0, 0 end
-  local byF = {}
-  for _, e in ipairs(entries or {}) do
-    local lw = e.first:lower()
-    byF[lw] = byF[lw] or {}
-    byF[lw][#byF[lw] + 1] = e
-  end
-  local matches, sure = 0, 0
-  for _, r in ipairs(rows) do
-    local class = type(r.row.class) == "string" and r.row.class ~= "" and r.row.class or nil
-    for _, e in ipairs(byF[(r.name:match("^(%S+)") or r.name):lower()] or {}) do
-      if not class or not e.class or class == e.class then
-        matches = matches + 1
-        if class and e.class then sure = sure + 1 end
-        break
-      end
-    end
-  end
-  if #rows == 1 then return sure == 1, matches, 1 end
-  return matches >= 2 and matches * 2 >= #rows, matches, #rows
-end
-
 -- Says a line once per session.
 local function tell(id, text)
   if told[id] then return end
   told[id] = true
   print(text)
-end
-
--- Unnamed (v0.1.24) data taken by a guild: every saved friend is pinned to the panel's main view, once per set
--- (guild.pinnedOld): the old crew were people the player chose, so they stay in view with their notices.
-local function pinOldCrew()
-  local db = ns.db
-  if type(db.guild) ~= "table" or db.guild.pinnedOld then return end
-  db.guild.pinnedOld = true
-  if type(db.pins) ~= "table" then db.pins = {} end
-  for _, r in ipairs(savedRows()) do db.pins[r.name] = true end
-end
-
--- Unnamed data on top becomes guild `name`'s (a real name, or "?" without one), unless that guild has a parked set.
--- Returns true when it did.
-local function nameData(name)
-  local g = ns.db and ns.db.guild
-  if type(g) ~= "table" or dataGuild() ~= nil and dataGuild() ~= PLACEHOLDER then return false end
-  if hasSet(name) then return false end
-  if dataGuild() == nil then pinOldCrew() end
-  g.name = name
-  rememberGuild(name)
-  ns.Log.add("info", "saved data now belongs to %s", name == PLACEHOLDER and "a guild the game does not name"
-    or ns.Util.safeText(name))
-  return true
-end
-
-local function byFullName(a, b)
-  local x, y = a.full:lower(), b.full:lower()
-  if x ~= y then return x < y end
-  return a.full < b.full
-end
-
--- My GUID and my (cleaned) name as the game gave them at the first good read, kept for the session: inside a dungeon
--- UnitGUID / UnitName("player") may turn unreadable, and my own guild echo must still be mine (never a roster row).
-local myGuidSeen, myNameSeen
-local function myGuid()
-  local guid = plain(UnitGUID, "player")
-  if type(guid) == "string" and guid ~= "" then myGuidSeen = guid end
-  return myGuidSeen
-end
-local function myName()
-  local name = clean(plain(UnitName, "player"))
-  if name then myNameSeen = name end
-  return myNameSeen
-end
-
--- Saves my key for this character (ns.db.guild.mine[GUID]) once the list has me.
-local function rememberMyKey()
-  local guid = myGuid()
-  if type(guid) ~= "string" then return end
-  local e = byGuid[guid]
-  if not e then
-    local mine = myName()
-    e = mine and byFull[mine:lower()]
-  end
-  if e then saved().mine[guid] = e.key end
 end
 
 local updateActive -- (below)
@@ -486,30 +144,6 @@ local function tellChoice()
   end
 end
 
--- The game's list as it is now: entries (one per full name), the count the game gives, readable rows, and the set of
--- lower-case full names read.
-local function readList()
-  local count = plain(GetNumGuildMembers)
-  if type(count) ~= "number" or count <= 0 then return {}, count, 0, {} end
-  local entries, seen, readable = {}, {}, 0
-  for i = 1, math.min(count, MAX_MEMBERS) do
-    local e = readRow(i)
-    if e then
-      readable = readable + 1
-      if not seen[e.full:lower()] then
-        seen[e.full:lower()] = true
-        entries[#entries + 1] = e
-      end
-    end
-  end
-  return entries, count, readable, seen
-end
-
-local function anyOffline(entries)
-  for _, e in ipairs(entries) do if not e.online then return true end end
-  return false
-end
-
 -- Reads the game's list (see readMode). A list that cannot be read (secret values, nothing yet) changes nothing.
 -- A partial read (fewer readable rows than the game counts, unless the same counts came back on STABLE_READS reads
 -- STABLE_GAP s apart) updates the members it did read, keeps the others as they were and gives out no new keys;
@@ -553,18 +187,18 @@ local function read()
   local kept = {}
   for _, e in ipairs(entries) do if e.key then kept[#kept + 1] = e end end
   if not isComplete then -- members this read could not see stay as they were
-    for _, e in ipairs(members) do
+    for _, e in ipairs(L.members) do
       if not seen[e.full:lower()] then kept[#kept + 1] = e end
     end
   end
   if #kept == 0 then return end
   table.sort(kept, byFullName)
   local sig = sigOf(kept)
-  local first = not loaded
+  local first = not L.loaded
   local nowWhole = isComplete and isWhole
   local changed = sig ~= signature or (isComplete and not complete) or (nowWhole and not whole)
   install(kept)
-  loaded, complete, whole = true, isComplete, nowWhole
+  L.loaded, complete, whole = true, isComplete, nowWhole
   signature = sig
   rememberMyKey()
   if isReal(curId) and dataGuild() == curId and Guild.listFits() then saved().fitIn = curId end -- (see mayForget)
@@ -588,8 +222,8 @@ end
 
 -- Drops the list (left the guild, or the data on top is not this guild's).
 local function dropList()
-  local had = loaded or #members > 0
-  loaded, complete, whole, signature = false, false, false, ""
+  local had = L.loaded or #L.members > 0
+  L.loaded, complete, whole, signature = false, false, false, ""
   stableKey, stableN, stableAt = nil, 0, nil
   quietAt, partialAt, lastComplete = nil, nil, false
   install({})
@@ -716,13 +350,13 @@ end
 -- The game's answer: is this character in a guild (any guild)?
 function Guild.inGuild() return announced == true end
 function Guild.known() return announced ~= nil end
-function Guild.loaded() return loaded end
-function Guild.complete() return loaded and complete end
+function Guild.loaded() return L.loaded end
+function Guild.complete() return L.loaded and complete end
 -- The list surely holds every member, offline ones too: the last read was exact (as many readable rows as the game
 -- counts), or complete and it lists at least one offline member. (If the guild window's "Show Offline Members" box
 -- is not ticked the game may give only the online members.) Only a whole list hides saved friends who are missing
 -- from it (Roster:syncGuild), lets the 60-day rule run (mayForget) and refuses unnamed data that does not fit.
-function Guild.whole() return loaded and complete and whole end
+function Guild.whole() return L.loaded and complete and whole end
 
 -- This session's guild name (sticky; nil while the game names none); the guild the saved data on top belongs to
 -- (nil: unnamed, from before guilds; "?": taken while the game named no guild).
@@ -800,7 +434,7 @@ end
 Guild.settling = settling
 
 -- The guild list is complete and the saved friends on top fit it (rosterFits).
-function Guild.listFits() return loaded and complete and (rosterFits(members)) end
+function Guild.listFits() return L.loaded and complete and (rosterFits(L.members)) end
 
 -- May Crew forget friends not seen for 60 days? Only while active, on a whole list, and when the saved friends fit it
 -- (listFits) or this set has fitted this very guild before (guild.fitIn, written in read: over half the friends may
@@ -818,110 +452,9 @@ end
 -- character in no guild or in another guild leaves the data on top as it is.
 function Guild.writable() return Guild.active() end
 
--- The checks use, new and load share: in a guild, nothing pending, this guild's name known (here). Returns the name,
--- or nil and why: "noguild", "changing", "noname". forLoad: in a gap in the names (an account that has read guild
--- names, none now) load still works, and the chosen set becomes the shared "?" set.
-local function commandGuild(forLoad)
-  if not Guild.inGuild() then return nil, "noguild" end
-  if settling() then return nil, "changing" end
-  local id = here()
-  if not id and forLoad and nameless() then id = PLACEHOLDER end
-  if not id then return nil, "noname" end
-  return id
-end
-
--- This guild has a parked set: "parked" (byChar written: the next login brings it up), or "parkedShared" for the
--- "?" set (no byChar without a readable name: /tc guild load brings it up).
-local function parked(id)
-  if id == PLACEHOLDER then return "parkedShared" end
-  rememberGuild(id)
-  return "parked"
-end
-
--- Records a one-shot request for DB.useGuildOf; an older result for this character is not said any more.
-local function request(r)
-  local g = ns.db.guild
-  r.char = ns.DB.charId()
-  g.request = r
-  if type(g.requestResults) == "table" and r.char then g.requestResults[r.char] = nil end
-end
-
--- /tc guild use [yes]: the data on top (unnamed or "?") becomes this guild's, at once, when the saved friends fit
--- this guild's list (rosterFits) or nothing is saved; with yes also when they do not. Unnamed data taken this way
--- pins the old crew (pinOldCrew). Cancels a /tc guild new or load request. Returns true, or false and why:
--- commandGuild's, "inuse" (it is already), "parked" / "parkedShared" (see parked), "named" (another guild's data is
--- on top: /reload), "noroster" (no friend list to check), "nolist" (the list is not in yet), "nofit" (with the number
--- of saved friends in this guild, and of saved friends).
-function Guild.useHere(yes)
-  local id, why = commandGuild()
-  if not id then return false, why end
-  local dg = dataGuild()
-  if dg == id then return false, "inuse" end
-  if hasSet(id) then return false, parked(id) end
-  if isReal(dg) then return false, "named" end
-  if not dataEmpty() and not yes then
-    if #savedRows() == 0 then return false, "noroster" end
-    local entries = readList()
-    if #entries == 0 then return false, "nolist" end
-    local fits, matches, rows = rosterFits(entries)
-    if not fits then return false, "nofit", matches, rows end
-  end
-  local g = ns.db.guild
-  if dg == nil then pinOldCrew() end
-  g.name = id
-  g.request = nil
-  rememberGuild(id)
-  quietAt = nil
-  ns.Log.add("info", "/tc guild use%s: the saved data is %s's", yes and " yes" or "", ns.Util.safeText(id))
-  updateActive()
-  return true
-end
-
--- /tc guild new [yes]: this guild gets a fresh set of its own at the next login (a one-shot request DB.useGuildOf
--- carries out; the unnamed or "?" data on top is parked, nothing is deleted). On a game that never names guilds the
--- set is shared by every character, so it needs yes; with the shared "?" set in use, new yes starts it fresh (the
--- current one is parked). Returns true, or false and why: commandGuild's, "inuse", "parked" / "parkedShared" (this
--- guild has a set: never a second one), "named" (another guild's data is on top: /reload first), "shared" (yes
--- needed), "sharedInUse" (the shared set is in use: yes starts it fresh).
-function Guild.newHere(yes)
-  local id, why = commandGuild()
-  if not id then return false, why end
-  local dg = dataGuild()
-  if dg == id and id == PLACEHOLDER then
-    if not yes then return false, "sharedInUse" end
-    request({ kind = "new", guild = id })
-    ns.Log.add("info", "/tc guild new yes: the shared set starts fresh at the next login")
-    return true
-  end
-  if dg == id then return false, "inuse" end
-  if hasSet(id) then return false, parked(id) end
-  if isReal(dg) then return false, "named" end
-  if id == PLACEHOLDER and not yes then return false, "shared" end
-  request({ kind = "new", guild = id })
-  ns.Log.add("info", "/tc guild new: %s gets fresh saved data at the next login", ns.Util.safeText(id))
-  return true
-end
-
--- /tc guild load <number> [yes]: set <number> of ns.DB.sets becomes this guild's data at the next login. Without yes
--- it only remembers which set <number> showed; yes records a one-shot request DB.useGuildOf carries out (the set in
--- use is parked, nothing is deleted or merged), and only for the set shown this session under that number. Returns
--- true and the set, or false and why: commandGuild(true)'s, "nonumber" (no such set), "inuse" (set 0), "nopreview".
-function Guild.loadHere(number, yes)
-  local id, why = commandGuild(true)
-  if not id then return false, why end
-  local entry = type(number) == "number" and ns.DB.sets(ns.db)[number + 1] or nil
-  if not entry then return false, "nonumber" end
-  if entry.from == "top" then return false, "inuse", entry end
-  local shown = entry.from .. ":" .. entry.key
-  if not yes then
-    previewed[number] = shown
-    return true, entry
-  end
-  if previewed[number] ~= shown then return false, "nopreview", entry end
-  request({ kind = "load", guild = id, from = entry.from, key = entry.key })
-  ns.Log.add("info", "/tc guild load: set %s becomes %s's at the next login", tostring(number), ns.Util.safeText(id))
-  return true, entry
-end
+-- For Crew/GuildCommands.lua (/tc guild use, new, load).
+P.settling, P.nameless, P.here, P.updateActive = settling, nameless, here, updateActive
+function P.clearQuiet() quietAt = nil end
 
 -- The name the commands speak of for this character's guild ("?" on a game that never names guilds).
 Guild.here = here
@@ -948,267 +481,6 @@ end
 local function tick()
   checkState()
   if seenIn and (not lastRefresh or ns.now() - lastRefresh >= interval()) then Guild.refresh() end
-end
-
--- The entries are shared tables: callers must not change them.
-function Guild.members()
-  local out = {}
-  for i, e in ipairs(members) do out[i] = e end
-  return out
-end
-
-function Guild.get(key)
-  if type(key) ~= "string" then return nil end
-  local e = byKey[key:lower()]
-  if e and e.key == key then return e end
-  return nil
-end
-
-function Guild.count()
-  local online = 0
-  for _, e in ipairs(members) do if e.online then online = online + 1 end end
-  return online, #members
-end
-
-local function listedFull(l) return byFull[l] ~= nil end
-
--- The member a raw game name belongs to, in any form: the first word, the full name, with or without "-Realm" (the
--- space form " Realm" only after a listed full name). nil for a stranger, an unreadable name, or while the list is
--- not loaded.
-local function lookup(raw)
-  if not loaded then return nil end
-  local name = clean(raw)
-  if not name then return nil end
-  local l = withoutRealm(name:lower(), listedFull)
-  -- order: an exact full name, then an exact key, then (one word only) the first-word fallback; unless the word
-  -- was once given to someone else (then it is theirs, even while they are away)
-  local e = byFull[l] or byKey[l]
-  if e then return e end
-  if not l:find(" ", 1, true) then
-    local same = byFirst[l]
-    if same and #same == 1 and (not heldBy[l] or heldBy[l] == same[1].full:lower()) then return same[1] end
-  end
-  return nil
-end
-
--- "Chaos Deathbringr-Realm" -> "Chaos Deathbringr" (nil when there is no usable name). The one place names are cleaned.
-Guild.cleanName = clean
-
--- A full name the list gives now, or one it gave before (the saved keys: also while the list is not loaded).
-local function knownFull(l)
-  if byFull[l] then return true end
-  local key = savedKeys()[l]
-  return type(key) == "string" and key ~= ""
-end
-
--- lower(full name) of a raw name, with our realm taken off in the " Realm" form too (only after a known full name).
-local function lowerFull(raw)
-  local name = clean(raw)
-  if not name then return nil end
-  return withoutRealm(name:lower(), knownFull)
-end
-
--- The key saved for this member the first time the guild list showed them (any name form, any case), also while the
--- list is not loaded; nil when they were never listed.
-function Guild.savedKeyOf(raw)
-  local l = lowerFull(raw)
-  local key = l and savedKeys()[l]
-  return type(key) == "string" and key ~= "" and key or nil
-end
-
--- True when the saved keys or the current list give `key` (any case) to someone other than `raw`.
-function Guild.keyTakenByOther(key, raw)
-  if type(key) ~= "string" then return false end
-  local lk, l = key:lower(), lowerFull(raw)
-  for lf, k in pairs(savedKeys()) do
-    if type(k) == "string" and k:lower() == lk and lf ~= l then return true end
-  end
-  local e = byKey[lk]
-  return e ~= nil and e.full:lower() ~= l
-end
-
-function Guild.keyOf(raw)
-  local e = lookup(raw)
-  return e and e.key or nil
-end
-
--- How a member is named in a short-lived message field (a mock's target, a quest share ask, a vote, an award card's
--- winners; trophy records hold full names instead, see recordName):
--- their first word when no other current member starts with it (any case), else their full name; a key the list
--- does not have, as it is. Keys are this copy's own (another copy may have given a namesake pair the opposite keys),
--- names are the same for every copy: fromWire reads them back.
-function Guild.wireName(key)
-  local e = Guild.get(key)
-  if not e then return key end
-  local same = byFirst[e.first:lower()]
-  if same and #same > 1 then return e.full end
-  return e.first
-end
-
--- My key for the member a name from a message field stands for: an exact full name among current members, else a
--- first word exactly one current member has (an old copy's first word too). Never a key. nil for anyone else, a
--- first word two members share, an unreadable name, or while the list is not loaded.
-function Guild.fromWire(raw)
-  if not loaded then return nil end
-  local l = lowerFull(raw)
-  if not l then return nil end
-  local e = byFull[l]
-  if e then return e.key end
-  if not l:find(" ", 1, true) then
-    local same = byFirst[l]
-    if same and #same == 1 then return same[1].key end
-  end
-  return nil
-end
-
--- The full name to write into a lasting record (a trophy record) for a member key: from the list, else the spelling
--- saved for them (guild.spell), else (last resort) the lower-case saved key name with each word's capital rebuilt,
--- else the key as it is.
-function Guild.recordName(key)
-  if type(key) ~= "string" or ns.isTestName(key) then return key end
-  local e = Guild.get(key)
-  if e then return e.full end
-  local spell = saved().spell
-  for lf, k in pairs(savedKeys()) do
-    if k == key and type(lf) == "string" then
-      if type(spell[lf]) == "string" then return spell[lf] end
-      return (lf:gsub("(%S)(%S*)", function(a, b) return a:upper() .. b end))
-    end
-  end
-  return key
-end
-
--- My key for a name read from a lasting record: an exact full name in the list or in the saved keys; a single
--- first word: whoever was given that word as key (the saved keys), even if they left, never whoever has that word
--- alone today. nil otherwise (shown as plain text).
-function Guild.fromRecord(raw)
-  local l = lowerFull(raw)
-  if not l then return nil end
-  local e = loaded and byFull[l]
-  if e then return e.key end
-  local keys = savedKeys()
-  if type(keys[l]) == "string" and keys[l] ~= "" then return keys[l] end
-  if not l:find(" ", 1, true) then
-    for _, key in pairs(keys) do
-      if type(key) == "string" and key:lower() == l then return key end
-    end
-  end
-  return nil
-end
-
--- A name the player typed: an exact full name (what the panel shows), else a single word: "which one?" when two
--- current members start with it, else an exact key, else the first word of exactly one member. Returns the key, or
--- nil (and "ambiguous" for a shared first word); nil while the list is not loaded.
-function Guild.resolveTyped(raw)
-  if not loaded then return nil end
-  local l = lowerFull(raw)
-  if not l then return nil end
-  if byFull[l] then return byFull[l].key end
-  local same = not l:find(" ", 1, true) and byFirst[l] or nil
-  if same and #same > 1 then return nil, "ambiguous" end
-  if byKey[l] then return byKey[l].key end
-  if same and #same == 1 then return same[1].key end
-  return nil
-end
-
-function Guild.isMember(raw) return lookup(raw) ~= nil end
-
--- What someone who is not a member is called: their cleaned name, but never a member's key (nil then), so a
--- stranger "Chaos" never lands on member Chaos's row.
-local function outsider(name)
-  if not name or byKey[name:lower()] then return nil end
-  return name
-end
-
--- The member key for a name the game gives (a unit's name: one word or the full name, maybe with a realm); for
--- someone the loaded list does not have, their cleaned name (never a member's key); before the list loads, the first
--- word, as before the guild.
-function Guild.keyOfName(raw)
-  local key = Guild.keyOf(raw)
-  if key then return key end
-  if loaded then return outsider(clean(raw)) end
-  return type(raw) == "string" and not ns.Util.isSecret(raw) and ns.shortName(raw) or nil
-end
-
--- The member key of the player behind a unit token ("party2", "target", "nameplate4"): by GUID first, then by name
--- (keyOfName rules). nil when the game will not say.
-function Guild.keyOfUnit(unit)
-  local guid = plain(UnitGUID, unit)
-  if loaded and type(guid) == "string" then
-    local e = byGuid[guid]
-    if e then return e.key end
-    if guidsComplete then return outsider(clean(plain(UnitName, unit))) end -- not a member, whatever the name
-  end
-  local raw = plain(UnitName, unit)
-  local key = Guild.keyOf(raw)
-  local e = key and Guild.get(key)
-  if e and e.guid and type(guid) == "string" and e.guid ~= guid then -- the name fits a member, the GUID is not theirs
-    return outsider(clean(raw))
-  end
-  return Guild.keyOfName(raw)
-end
-
-function Guild.fullName(key)
-  local e = Guild.get(key)
-  return e and e.full or nil
-end
-
-function Guild.display(key)
-  local e = Guild.get(key)
-  if not e then return key end
-  local same = byFirst[e.first:lower()]
-  if same and #same > 1 then return e.full end
-  return e.first
-end
-
--- My own entry in the list: by GUID, else by the name the game gives me.
-local function myEntry()
-  if not loaded then return nil end
-  local guid = myGuid()
-  if type(guid) == "string" and byGuid[guid] then return byGuid[guid] end
-  local mine = myName()
-  return mine and byFull[mine:lower()] or nil
-end
-
--- My key: from the list, else the one saved for this character (any guild list read before), else nil.
-function Guild.myKey()
-  local e = myEntry()
-  if e then return e.key end
-  local guid = myGuid()
-  local key = type(guid) == "string" and saved().mine[guid]
-  return type(key) == "string" and key ~= "" and key or nil
-end
-
--- My full name: the listed member whose GUID is mine, else UnitName when it has several words, else unknown (nil).
--- (On Forever UnitName may give only the first word, so a one-word UnitName alone proves nothing.)
-local function myFull()
-  if loaded then
-    local guid = myGuid()
-    local e = type(guid) == "string" and byGuid[guid]
-    if e then return e.full end
-  end
-  local name = myName()
-  if name and name:find(" ", 1, true) then return name end
-  return nil
-end
-
-function Guild.isMe(raw)
-  local name = clean(raw)
-  if not name then return false end
-  local full = myFull()
-  full = full and full:lower()
-  local l = withoutRealm(name:lower(), function(x) return x == full end) -- the space form only after my full name
-  if l == full then return true end
-  local uname = myName()
-  local mine = full or (uname and uname:lower())
-  if not mine then return false end
-  if l:find(" ", 1, true) then
-    if full then return false end
-    return firstWord(l) == firstWord(mine)
-  end
-  local other = byFull[l]
-  if other and other.full:lower() ~= mine then return false end -- a listed member who is not me has this exact name
-  return l == firstWord(mine)
 end
 
 function Guild.start()

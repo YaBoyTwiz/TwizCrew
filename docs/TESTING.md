@@ -888,6 +888,41 @@ with a friend on the released version only step 6 can be checked.
    (`send QLA via PARTY`) and no `send QLA via WHISPER` to those two right after it. Turn in two quests quickly: one
    more `send QLA via PARTY`, not two. Their lists still show on your side (step 1).
 
+## While you were away (2026-11-23)
+
+**Restart the game** (new files; `/reload` is not enough). Tick "Show Offline Members" in the guild window.
+
+1. **No card the first time.** Log in, play a minute, log out. Nothing shows: there was nothing to compare yet.
+2. **The card.** Log in again 12 hours or more later (or the next day). About ten seconds after login a card
+   "While you were away" shows, with "You were gone ... hours" or "... days" under the title. Check its lines
+   against the guild window: who leveled ("Name 27 -> 30"), who joined, who left. Members without TwizCrew count too.
+3. **Nothing to say.** If nothing changed (and no new notes), no card shows at all.
+4. **Clicks.** A click anywhere closes it. A "new calendar note" line opens the calendar; a crown line ("Chaos took
+   Money Pit from Frostie") opens the Hall of Shame, all-time, at that award. After that, the wrench menu has "While
+   you were away": it shows the card again.
+5. **Waits.** Log in inside a dungeon after a long break: no card until you walk out (then within a few seconds).
+6. **Switch.** Settings, Today's recap, "Show what changed while I was away" off: no card.
+7. **An alt in another guild** never gets lines about this guild (each guild keeps its own list).
+8. **Tell Claude:** are the lines right? Too many level-up lines? Do the crown lines ever show (they need friends'
+   numbers to arrive in the first seconds)?
+
+## Welcome card (2026-11-23)
+
+Needs a friend (or a new recruit) to join the guild while you are online, and you on this version.
+
+1. **The pop-up.** Someone joins the guild: within a few seconds a pop-up "Say hi to <name>", "Level 8 Mage just
+   joined the guild - click to say hello". Not for the people already in the guild when you logged in.
+2. **The hello.** Click it: guild chat shows a hello from you ("Welcome to the guild, <name>!" or similar) and the
+   pop-up goes. **If nothing is posted, tell Claude what happened** (the chat box may open with the line typed
+   instead).
+3. **Once.** The same person never gets a second pop-up, also after a `/reload`.
+4. **"Show Offline Members" off:** no pop-ups at all (the addon needs the whole list first).
+5. **Switch.** Settings, Pop-ups, "New guild members" off: no pop-up.
+6. **The newcomer's card.** On the new member's side (with TwizCrew), about 30 seconds after their first login in the
+   guild: a card "Welcome to <guild>" with "Online near your level: ..." (or "Nobody near your level is on right
+   now"), maybe "The crew usually plays: ...", and Close (plus "How to use TwizCrew" once the About page is in).
+   It never shows again, and it never shows for someone who already used TwizCrew in this guild.
+
 ## What to send back
 
 - `/reload`, then tell Claude what you tried and what looked wrong. Claude reads the log file on this PC.

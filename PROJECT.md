@@ -13,6 +13,13 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **"While you were away" and the welcome card (2026-11-23, owner picked them from a research list: "i like the
+  while u were away part. welcome card"; approved the written description: "yes do it"):** on the branch
+  `feat-away-welcome` (on top of `pin-party`), **not released, not seen in the game; it adds 4 files, so the game must be restarted.** Details:
+  section "While you were away and the welcome card" below; checks: `docs/TESTING.md`, same two names. Two ideas
+  from the same list were dropped: "who still needs what" (the game has its own party quest progress tooltip:
+  `C_TooltipInfo.GetQuestPartyProgress` exists in Forever 1.60.1, not seen on screen by us) and the dungeon prep
+  check (not low-hanging: it needs a quest list per dungeon).
 - **Review of v0.3.0, fixes (2026-11-23):** a review of the released code (never run in the game) found 8 defects;
   all are fixed on the branch `pin-party`, **not released, not seen in the game**. The quest list no longer floods
   the queue in a group (one group copy, newer replaces older; no whisper to a member who just got the group's copy;
@@ -617,6 +624,60 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   **Not checked on Forever:** that the game prints these lines there, and their exact words.
 - **Older copies (v0.2.0 and before)** drop both message types: for them the menu says "Their quests (asking...)"
   and only the one quest on the row can be asked for, as before.
+
+## While you were away and the welcome card (2026-11-23)
+
+- **"While you were away" (UI/AwayCard.lua, rules in UI/AwayLogic.lua):** about 10 s after login, when this account
+  last logged out with this guild's data 12 hours ago or more, one card: "You were gone 3 days", then new calendar
+  notes, who joined, who left, Hall of Shame crowns that changed hands ("Chaos took Money Pit from Frostie"), and
+  level-ups ("Irek 27 -> 30"), at most 12 lines (the last "...and N more"). Nothing to say = no card. Click = close;
+  a click on the calendar line opens the calendar, on a crown line the Hall of Shame (all-time) at that award's tab.
+  The wrench menu has "While you were away" once a card was shown this session. Switch: Today's recap, "Show what
+  changed while I was away" (`awayCard`, on; needs the Today's recap module on).
+- **Where the data lives:** `db.away.snap` = { at, guild (its name), members[key] = { level, class, name as shown,
+  full, guid }, crowns[award id] = winner keys }, per guild (`away` in `DB.GUILD_PATHS`: an alt in another guild
+  compares against that guild's list; the snapshot's own guild name is checked too). Written at `PLAYER_LOGOUT` (a
+  `/reload` too), only after this session's card was worked out (a quick `/reload` right after login keeps the old
+  one), only while TwizCrew uses this guild's data and the list is complete. A whole list replaces it; a list that
+  may lack the offline members only updates the members it lists (the rest are kept), and only an existing snapshot
+  is updated that way. Crowns are written only while the stats module is on.
+- **When lines appear:** members are matched by GUID, then full name (a member whose key changed is the same
+  member). Level-ups: same member, higher level. Joined: in the list now, not in the snapshot. Left: in the snapshot,
+  not in the list now, and only when the list is whole (`Guild.whole()`). My own characters (`guild.mine`, the
+  names in `stats.chars`, my key) are never listed. The card waits for a whole list up to 90 s after login, then goes
+  on with a complete one without "left" lines. Calendar: notes by someone else made after the last logout (the time in
+  the note's key), not opened yet, still in the keep window (`Notes.newSince`), counted when the card shows (notes
+  that sync later are not counted: Claude's call, the simpler honest option). Crowns: all-time winners at logout
+  against now, rates (`noSteal`) left out, a crown counts as taken only when none of the old holders still holds it;
+  friends' numbers only arrive after login, so this line shows only what has arrived by then. Never during a fight
+  or inside an instance (checked every 3 s until out).
+- **Welcome pop-up (UI/Welcome.lua, rules in UI/WelcomeLogic.lua):** someone in the guild list who was not in the
+  last WHOLE list of this session (so never on the first list of a session, and never before a whole list was seen:
+  with "Show Offline Members" unticked there are no welcome pop-ups at all), not in the snapshot of the last logout
+  (they are on the away card instead), not one of my characters, not welcomed before on this account: "Say hi to
+  Sneakz", "Level 8 Mage just joined the guild - click to say hello" (`Popups.notice`, 20 s). The click itself calls
+  `SendChatMessage(line, "GUILD")` (needs the click), one of four lines at random ("Welcome to the guild, Sneakz!");
+  if the game refuses, the chat box opens with "/g <line>"; without that, one chat line says what to type. At most 3
+  a minute (more at once are dropped). Switch: Pop-ups, "New guild members" (`newMember`, on; needs the Pop-ups
+  module on); not filtered by "Tell me about" (someone brand new is in nobody's party or pins). Welcomed names:
+  `db.welcome.welcomed[lower(full name)]` = when, per guild, forgotten after 400 days. Limit: a brand-new alt that
+  never ran TwizCrew cannot be told from a stranger: it gets a "joined" line on the away card, and a pop-up when it
+  joins while I am online with another account.
+- **The newcomer's start card:** once per guild set on this account (`db.welcome.start` = "due", "shown" or "no").
+  The first time TwizCrew uses a guild's data, it is owed only when this copy had no saved crew data for it at login
+  (`Guild.dataEmpty()` right after the login swap, so an old user whose data is adopted, or anyone with saved keys,
+  gets "no"). Shown about 30 s after login once the list loaded (owed until shown: a fight or a dungeon all session
+  moves it to the next login): "Welcome to <guild>", "Online near your level: Frostie (24), Chaos (26)" (online,
+  within 5 levels, nearest first, at most 5) or "Nobody near your level is on right now", "The crew usually plays:
+  Tue 8pm-11pm" only when the play times already on this copy cover at least two other people (a brand-new copy
+  rarely has them by then; nothing is invented), a "How to use TwizCrew" button when `ns.About.open` exists (the
+  About window is built on another branch), and Close.
+- **Start-up:** `Core/Boot.lua` starts both right after the login swap of saved data, before the modules, so they
+  read the last logout's data before anything writes and hear the guild list's first events.
+- **Claude's calls (change any):** 12 hours; 10 s / 90 s; 12 lines; the order of the lines; the snapshot written only
+  at logout; the calendar count at show time; the crown rule (no tie counts); the four greetings; 3 pop-ups a minute
+  and dropping the rest; 20 s pop-up; the start card at 30 s; "near" = 5 levels, 5 names; two other people for a best
+  time; the setting inside Today's recap; the re-show in the wrench menu (no `/tc away`, it would clash with `/tc afk`).
 
 ## Website and Discord (on hold, owner 2026-11-11)
 

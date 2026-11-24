@@ -314,6 +314,8 @@ return {
     end,
     ------------------------------------------------------------------------------------------------- asking
     asking_a_friend_for_several_quests = function(ns, A, W)
+      local mine = {}
+      questLog(W, mine)
       start(ns, W)
       receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
       receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
@@ -341,7 +343,7 @@ return {
       A.contains(W.printed[#W.printed], "TwizCrew: asked Frostie for 3 quests.")
       A.eq({ QW.buttonForTest() }, { "Stop asking", true })
       A.eq(QW.statusForTest(), "Asked for 3 quests. Waiting for Frostie to say yes.")
-      A.eq(QW.linesForTest()[2], "[ ] Kobolds", "the ticks went with the ask")
+      A.eq(QW.linesForTest()[2], "[x] Kobolds", "the ticks stay (a quest taken drops out by itself)")
       -- news about someone else's ask, or from someone else, changes nothing
       receive(ns, W, "Frostie", "QMS", { t = "Twiz", k = "other", st = "yes" })
       receive(ns, W, "Holly", "QMS", { t = "Twiz", k = key, st = "yes" })
@@ -351,6 +353,7 @@ return {
       A.eq(QW.statusForTest(), "Frostie said yes: got 0 of 3 so far.")
       -- I take one: their copy hears it, so the next can come
       before = #W.sent
+      mine[#mine + 1] = { id = 42, title = "Kobolds" }
       W:fire("QUEST_ACCEPTED", 42)
       W:advance(2)
       local news = sentOf(ns, W, "QMU", before)
@@ -361,6 +364,7 @@ return {
       A.contains(W.printed[#W.printed], "Frostie couldn't share \"Murlocs\": you can't take it yet")
       -- the last one taken: one line to end it
       local printed = #W.printed
+      mine[#mine + 1] = { id = 43, title = "Wolves" }
       W:fire("QUEST_ACCEPTED", 43)
       W:advance(2)
       A.eq(printedWith(W, "TwizCrew: You got 2 of 3 quests from Frostie.", printed), 1)
@@ -396,8 +400,8 @@ return {
       local key = ask()
       receive(ns, W, "Frostie", "QMS", { t = "Twiz", k = key, st = "busy" })
       A.contains(W.printed[#W.printed], "Frostie is sharing quests with someone else. Ask again in a moment.")
-      -- asked again too soon
-      QW.toggle(42)
+      -- asked again too soon (the ticks are still there after a failed ask)
+      A.eq(QW.linesForTest()[2], "[x] Kobolds")
       local before = #W.sent
       QW.press()
       A.contains(W.printed[#W.printed], "you just asked Frostie. Give them a moment.")
@@ -430,8 +434,15 @@ return {
       W:advance(16)
       key = ask()
       receive(ns, W, "Frostie", "QMS", { t = "Twiz", k = key, st = "yes" })
-      W:advance(122)
+      local sent = #W.sent
+      for i = 1, 5 do -- (Frostie stays online: their copy's usual updates still come)
+        W:advance(25)
+        receive(ns, W, "Frostie", "UPDATE", { xc = tostring(100 + i) })
+      end
       A.contains(W.printed[#W.printed], "Frostie stopped sharing (their copy stopped answering).")
+      W:advance(1)
+      local stop = sentOf(ns, W, "QMU", sent)
+      A.eq(stop[#stop].x, "1", "their copy is told to stop too")
       A.eq(ns.Log.errors(10), {})
     end,
     ------------------------------------------------------------------------------------------------ sharing
@@ -479,13 +490,12 @@ return {
       local res = sentOf(ns, W, "QRES", before)
       A.eq(#res, 1); A.eq(res[1].r, "decl"); A.eq(res[1].i, "43"); A.eq(res[1].t, "Frostie")
       A.eq(pushed, { 42, 43, 44 })
-      -- no answer to the last one: it is over after a while
-      W:advance(47)
-      res = sentOf(ns, W, "QRES", before)
-      A.eq(res[#res].r, "time"); A.eq(res[#res].i, "44")
+      -- they take the last one: done
+      receive(ns, W, "Frostie", "QMU", { t = "Twiz", k = "5x1", i = "44" })
+      W:advance(2)
       news = sentOf(ns, W, "QMS", before)
-      A.eq(news[#news].st, "end"); A.eq(news[#news].r, "done"); A.eq(news[#news].d, "1")
-      A.contains(W.printed[#W.printed], "TwizCrew: done sharing with Frostie (1 of 3 taken).")
+      A.eq(news[#news].st, "end"); A.eq(news[#news].r, "done"); A.eq(news[#news].d, "2")
+      A.contains(W.printed[#W.printed], "TwizCrew: done sharing with Frostie (2 of 3 taken).")
       A.eq(ns.QuestAsk.jobForTest(), nil)
       A.eq(pushed, { 42, 43, 44 })
       A.eq(ns.Log.errors(10), {})
@@ -637,24 +647,323 @@ return {
       local req = sentOf(ns, W, "QREQ", before)
       A.eq(#req, 1); A.eq(req[1].q, "Kobolds")
       A.eq(QW.statusForTest(), "Asking one at a time (older TwizCrew): got 0 of 3 so far.")
-      -- I take it at once: the next ask still waits, their copy drops a second ask within 15 s
+      -- I take it at once: the next ask still waits, their copy drops a second ask within 15 s (20 s here, for margin)
       W:fire("QUEST_ACCEPTED", 42)
-      W:advance(10)
+      W:advance(18)
       A.eq(#sentOf(ns, W, "QREQ", before), 1)
-      W:advance(6)
+      W:advance(2)
       req = sentOf(ns, W, "QREQ", before)
       A.eq(#req, 2); A.eq(req[2].q, "Murlocs")
-      -- refused: the next, again not sooner than 16 s after the last ask
+      -- refused: the next, again not sooner than 20 s after the last ask
       receive(ns, W, "Frostie", "QRES", { t = "Twiz", q = "Murlocs", i = "44", r = "inv" })
-      W:advance(13)
+      W:advance(18)
       A.eq(#sentOf(ns, W, "QREQ", before), 2)
-      W:advance(4)
+      W:advance(2)
       req = sentOf(ns, W, "QREQ", before)
       A.eq(#req, 3); A.eq(req[3].q, "Wolves")
-      -- no answer to the last one
-      W:advance(47)
-      A.contains(W.printed[#W.printed], "TwizCrew: You got 1 of 3 quests from Frostie.")
+      -- no answer to the last one: asked once more, then skipped with one line
+      W:advance(44)
       A.eq(#sentOf(ns, W, "QREQ", before), 3)
+      W:advance(2)
+      req = sentOf(ns, W, "QREQ", before)
+      A.eq(#req, 4); A.eq(req[4].q, "Wolves", "asked once more")
+      W:advance(46)
+      A.eq(printedWith(W, "TwizCrew: Frostie didn't answer about \"Wolves\", so it was skipped."), 1)
+      A.contains(W.printed[#W.printed], "TwizCrew: You got 1 of 3 quests from Frostie.")
+      A.eq(#sentOf(ns, W, "QREQ", before), 4)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    an_older_copy_ask_stops_when_they_leave_go_offline_or_go_quiet = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(1)
+      receiveOldList(ns, W, "Frostie", "1x1", { { 42, "1", "Kobolds" }, { 43, "1", "Wolves" }, { 44, "1", "Murlocs" } })
+      grouped(W, { "Frostie" })
+      ns.QuestList.open("Frostie")
+      local QW = ns.QuestWindow
+      for _, id in ipairs({ 42, 43, 44 }) do QW.toggle(id) end
+      -- they leave my group (I stay in one)
+      local before = #W.sent
+      QW.press()
+      W:advance(1)
+      W.state.groupMembers = {}
+      W:advance(2)
+      A.contains(W.printed[#W.printed], "Frostie stopped sharing (the group broke up). You got 0 of 3 quests.")
+      W:advance(60)
+      A.eq(#sentOf(ns, W, "QREQ", before), 1, "no more asks")
+      -- they go offline
+      grouped(W, { "Frostie" })
+      QW.press()
+      W:advance(1)
+      receive(ns, W, "Frostie", "BYE", {})
+      W:advance(2)
+      A.contains(W.printed[#W.printed], "Frostie stopped sharing (they went offline).")
+      -- they never answer at all: two quests asked (each twice), then it stops
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(16)
+      before = #W.sent
+      QW.press()
+      W:advance(160)
+      A.contains(W.printed[#W.printed], "Frostie stopped sharing (their copy stopped answering).")
+      A.eq(#sentOf(ns, W, "QREQ", before), 4, "two quests, each asked twice")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    ------------------------------------------------------------------------------------- answers that end it
+    a_full_log_far_away_or_no_answer_ends_the_share_and_busy_is_tried_once_more = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 42, title = "Kobolds" }, { id = 43, title = "Wolves" },
+        { id = 44, title = "Murlocs" } })
+      local pushed, selected = {}, nil
+      rawset(W.env.C_QuestLog, "SetSelectedQuest", function(id) selected = id end)
+      W.env.QuestLogPushQuest = function() pushed[#pushed + 1] = selected end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      grouped(W, { "Frostie" })
+      W:advance(2)
+      local n = 0
+      local function ask()
+        n = n + 1
+        local key = n .. "x1"
+        receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = key, q = "42,43,44" })
+        ns.Popups.clickForTest(popupWith(ns, "Frostie asks for 3 quests"))
+        return key
+      end
+      -- their quest log is full: every quest left would fail the same way, so one end, no line per quest
+      ask()
+      local before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie's quest log is full.")
+      W:advance(5)
+      local news = sentOf(ns, W, "QMS", before)
+      A.eq(news[#news].st, "end"); A.eq(news[#news].r, "full")
+      A.eq(#sentOf(ns, W, "QRES", before), 0)
+      A.contains(W.printed[#W.printed], "TwizCrew: stopped sharing with Frostie (their quest log is full).")
+      A.eq(#pushed, 1)
+      -- too far away: the same
+      W:advance(16)
+      ask()
+      before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is too far away to receive your quest.")
+      W:advance(5)
+      news = sentOf(ns, W, "QMS", before)
+      A.eq(news[#news].r, "far")
+      A.eq(#pushed, 2)
+      -- busy: the same quest once more a few seconds later; busy again: they hear why, the next one comes
+      W:advance(16)
+      ask()
+      before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is busy.")
+      W:advance(2)
+      A.eq(#pushed, 3, "not at once")
+      A.eq(#sentOf(ns, W, "QRES", before), 0, "nothing to tell yet")
+      W:advance(5)
+      A.eq(pushed[#pushed], 42, "the same quest again")
+      W:fire("CHAT_MSG_SYSTEM", "Frostie is busy.")
+      W:advance(3)
+      local res = sentOf(ns, W, "QRES", before)
+      A.eq(#res, 1); A.eq(res[1].r, "busy"); A.eq(res[1].i, "42")
+      A.eq(pushed[#pushed], 43)
+      -- no answer for 45 s: their offer may still be open, so no next offer on top of it
+      local count = #pushed
+      before = #W.sent
+      W:advance(47)
+      news = sentOf(ns, W, "QMS", before)
+      A.eq(news[#news].st, "end"); A.eq(news[#news].r, "time")
+      A.eq(#sentOf(ns, W, "QRES", before), 0)
+      A.contains(W.printed[#W.printed], "stopped sharing with Frostie (no answer to the last offer).")
+      W:advance(30)
+      A.eq(#pushed, count)
+      -- the asker's side of such an end: one line
+      W:advance(16)
+      receiveList(ns, W, "Frostie", "1x1", ELWYNN, FOUR)
+      ns.QuestList.open("Frostie")
+      ns.QuestWindow.toggle(50) -- (the other three are in my own log here)
+      before = #W.sent
+      ns.QuestWindow.press()
+      W:advance(1)
+      local key = sentOf(ns, W, "QMR", before)[1].k
+      local printed = #W.printed
+      receive(ns, W, "Frostie", "QMS", { t = "Twiz", k = key, st = "end", r = "full", d = "0" })
+      A.eq(W.printed[#W.printed], "TwizCrew: Frostie stopped sharing (your quest log is full). You got 0 of 1 quests.")
+      A.eq(#W.printed - printed, 1)
+      A.eq(ns.Log.errors(10), {})
+    end,
+    the_same_friend_asking_again_replaces_their_old_ask = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 42, title = "Kobolds" }, { id = 43, title = "Wolves" } })
+      local pushed = 0
+      W.env.QuestLogPushQuest = function() pushed = pushed + 1 end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      grouped(W, { "Frostie" })
+      W:advance(2)
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "1x1", q = "42,43" })
+      ns.Popups.clickForTest(popupWith(ns, "Frostie asks for 2 quests"))
+      A.eq(pushed, 1)
+      -- their copy forgot it (a /reload): a new ask from them is taken, not "busy"
+      W:advance(16)
+      local before = #W.sent
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "1x2", q = "43" })
+      W:advance(2)
+      for _, f in ipairs(sentOf(ns, W, "QMS", before)) do A.no(f.st == "busy", "not busy") end
+      A.eq(ns.QuestAsk.jobForTest().key, "1x2")
+      A.ok(popupWith(ns, "Frostie asks for 1 quest"))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    asks_that_cannot_work_say_so_at_once = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
+      W:advance(1)
+      receiveList(ns, W, "Frostie", "1x1", ELWYNN, FOUR)
+      ns.QuestList.open("Frostie")
+      local QW = ns.QuestWindow
+      QW.toggle(42)
+      -- I'm in a group, Frostie isn't in it
+      grouped(W, { "Holly" })
+      local before = #W.sent
+      QW.press()
+      W:advance(1)
+      A.contains(W.printed[#W.printed], "quest sharing only works in a group. Invite Frostie first.")
+      A.eq(#sentOf(ns, W, "QMR", before), 0)
+      -- their sharing is off: their copy says so, no 30 s wait
+      grouped(W, { "Frostie", "Holly" })
+      QW.press()
+      W:advance(1)
+      local key = sentOf(ns, W, "QMR", before)[1].k
+      receive(ns, W, "Frostie", "QMS", { t = "Twiz", k = key, st = "end", r = "off", d = "0" })
+      A.eq(W.printed[#W.printed], "TwizCrew: Frostie stopped sharing (they turned quest sharing off). You got 0 of 1 quests.")
+      -- no answer: their copy is told to stop too, and my ticks stay for another try
+      W:advance(16)
+      before = #W.sent
+      QW.press()
+      W:advance(32)
+      A.contains(W.printed[#W.printed], "No answer from Frostie.")
+      local stop = sentOf(ns, W, "QMU", before)
+      A.eq(stop[#stop].x, "1")
+      A.eq(QW.linesForTest()[2], "[x] Kobolds")
+      -- the sharer's side: sharing off, an ask from a group member gets "off"
+      ns.Modules.set("panel", "shareQuest", false)
+      before = #W.sent
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "9x9", q = "42" })
+      receive(ns, W, "Lurabe", "QMR", { t = "Twiz", k = "9x9", q = "42" }) -- (not in my group, not crew: nothing)
+      W:advance(2)
+      local news = sentOf(ns, W, "QMS", before)
+      A.eq(#news, 1); A.eq(news[1].t, "Frostie"); A.eq(news[1].st, "end"); A.eq(news[1].r, "off")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    ------------------------------------------------------------------------------------------ game lines
+    the_games_accepted_line_moves_the_share_on_but_not_a_late_one = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 42, title = "Kobolds" }, { id = 43, title = "Wolves" },
+        { id = 44, title = "Murlocs" } })
+      local pushed, selected = {}, nil
+      rawset(W.env.C_QuestLog, "SetSelectedQuest", function(id) selected = id end)
+      W.env.QuestLogPushQuest = function() pushed[#pushed + 1] = selected end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      grouped(W, { "Frostie" })
+      W:advance(2)
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "1x1", q = "42,43,44" })
+      ns.Popups.clickForTest(popupWith(ns, "Frostie asks for 3 quests"))
+      A.eq(pushed, { 42 })
+      W:advance(3)
+      W:fire("CHAT_MSG_SYSTEM", "Frostie has accepted your quest.")
+      W:advance(2)
+      A.eq(pushed, { 42, 43 }, "the game's line counts as taken")
+      A.eq(ns.QuestAsk.jobForTest().taken, 1)
+      -- their copy's word moves it on first; the game's line for that quest comes a moment after the next share
+      receive(ns, W, "Frostie", "QMU", { t = "Twiz", k = "1x1", i = "43" })
+      W:advance(1.5)
+      A.eq(pushed, { 42, 43, 44 })
+      W:fire("CHAT_MSG_SYSTEM", "Frostie has accepted your quest.")
+      A.eq(ns.QuestAsk.jobForTest().taken, 2, "a late line is not the next quest taken")
+      A.eq(ns.QuestAsk.jobForTest().state, "wait")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_block_after_the_share_counts_but_not_one_for_another_function = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 42, title = "Kobolds" }, { id = 43, title = "Wolves" },
+        { id = 44, title = "Murlocs" } })
+      W.env.QuestLogPushQuest = function() end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      grouped(W, { "Frostie" })
+      W:advance(2)
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "1x1", q = "42,43,44" })
+      ns.Popups.clickForTest(popupWith(ns, "Frostie asks for 3 quests"))
+      receive(ns, W, "Frostie", "QMU", { t = "Twiz", k = "1x1", i = "42" })
+      W:advance(1.2) -- the automatic share of the second quest has gone out
+      A.eq(ns.QuestAsk.jobForTest().state, "wait")
+      W:fire("ADDON_ACTION_BLOCKED", "TwizCrew", "CastSpellByName()")
+      A.no(ns.QuestAsk.clickModeForTest(), "a block of something else changes nothing")
+      W:fire("ADDON_ACTION_FORBIDDEN", "OtherAddon", "QuestLogPushQuest()")
+      A.no(ns.QuestAsk.clickModeForTest(), "nor another addon's")
+      W:fire("ADDON_ACTION_FORBIDDEN", "TwizCrew", "QuestLogPushQuest()") -- after the call returned
+      A.ok(ns.QuestAsk.clickModeForTest())
+      A.ok(popupWith(ns, "Share next quest (2 of 3)"))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    one_watch_per_friend_and_the_quest_log_keeps_its_pick = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 42, title = "Kobolds" }, { id = 43, title = "Wolves" },
+        { id = 7, title = "Mine" } })
+      local pushed, selected = {}, 7
+      rawset(W.env.C_QuestLog, "SetSelectedQuest", function(id) selected = id end)
+      rawset(W.env.C_QuestLog, "GetSelectedQuest", function() return selected end)
+      W.env.QuestLogPushQuest = function() pushed[#pushed + 1] = selected end
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
+      grouped(W, { "Frostie", "Holly" })
+      W:advance(2)
+      receive(ns, W, "Frostie", "QMR", { t = "Twiz", k = "1x1", q = "42,43" })
+      ns.Popups.clickForTest(popupWith(ns, "Frostie asks for 2 quests"))
+      A.eq(pushed, { 42 })
+      A.eq(selected, 7, "the quest log has its own pick back")
+      -- Holly's single ask, clicked in the middle of Frostie's share
+      receive(ns, W, "Holly", "QREQ", { t = "Twiz", q = "Wolves" })
+      ns.Popups.clickForTest(popupWith(ns, "Holly asks you to share a quest"))
+      A.eq(pushed, { 42, 43 })
+      A.eq(selected, 7)
+      -- Frostie's answer still reaches Frostie's share, Holly's reaches Holly
+      local before = #W.sent
+      W:fire("CHAT_MSG_SYSTEM", "Frostie has declined your quest.")
+      W:fire("CHAT_MSG_SYSTEM", "Holly is not eligible for that quest.")
+      W:advance(3)
+      local res = sentOf(ns, W, "QRES", before)
+      A.eq(#res, 2)
+      A.eq(res[1].t, "Frostie"); A.eq(res[1].r, "decl"); A.eq(res[1].i, "42")
+      A.eq(res[2].t, "Holly"); A.eq(res[2].r, "inv"); A.eq(res[2].q, "Wolves")
+      A.eq(pushed, { 42, 43, 43 }, "Frostie's next one went out")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    ------------------------------------------------------------------------------------------- zones
+    my_zone_from_either_game_name_and_the_window_follows_me = function(ns, A, W)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(1)
+      receiveList(ns, W, "Frostie", "1x1", { "Westfall", "Stormwind City", "Elwynn Forest" }, {
+        { 1, "1", "Defias", 1 }, { 2, "1", "Rats", 2 }, { 3, "1", "Kobolds", 3 } })
+      -- the two names differ: either one counts (any case)
+      W.state.zone = "Elwynn Forest"
+      W.env.GetZoneText = function() return "stormwind city" end
+      local g = ns.QuestList.groups("Frostie")
+      A.eq(g.groups[1].title, "Stormwind City"); A.eq(g.groups[2].title, "Elwynn Forest")
+      A.ok(g.groups[1].here and g.groups[2].here)
+      -- the game names no zone at all: their order, and "this zone"
+      W.env.GetZoneText = function() return nil end
+      W.state.zone = nil
+      g = ns.QuestList.groups("Frostie")
+      A.eq(g.groups[1].title, "Westfall"); A.no(g.groups[1].here); A.eq(g.zone, nil)
+      ns.QuestList.open("Frostie")
+      ns.QuestWindow.setOnlyHere(true)
+      A.eq(ns.QuestWindow.linesForTest(), { "Frostie has no quests in this zone." })
+      ns.QuestWindow.setOnlyHere(false)
+      -- the window redraws itself when I change zone, and when my group changes
+      W.env.GetZoneText = function() return "Westfall" end
+      W.state.zone = "Westfall"
+      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall", "(not redrawn yet)")
+      W:fire("ZONE_CHANGED_NEW_AREA")
+      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall (you are here)")
+      A.eq(ns.QuestWindow.statusForTest(), "Sharing only works in a group.")
+      grouped(W, { "Frostie" })
+      W:fire("GROUP_ROSTER_UPDATE")
+      A.eq(ns.QuestWindow.statusForTest(), "")
       A.eq(ns.Log.errors(10), {})
     end,
     -------------------------------------------------------------------------------------------- end to end

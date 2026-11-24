@@ -292,19 +292,32 @@ function Quest.request(name, title)
   return true
 end
 
--- Picks one quest of my log and shares it with the group (see Quest.share).
+-- Picks one quest of my log and shares it with the group (see Quest.share). The quest the quest log had picked
+-- before is picked again afterwards, so an open quest log does not jump to the shared quest.
 local function push(q)
+  local wasId = QLog().GetSelectedQuest and call(QLog().GetSelectedQuest)
+  local wasIndex = call(GetQuestLogSelection)
   if type(q.id) == "number" and QLog().SetSelectedQuest then call(QLog().SetSelectedQuest, q.id) end
   if type(SelectQuestLogEntry) == "function" then call(SelectQuestLogEntry, q.index) end
+  local r = "shared"
   local can
   if type(q.id) == "number" and QLog().IsPushableQuest then
     can = call(QLog().IsPushableQuest, q.id)
   elseif type(GetQuestLogPushable) == "function" then
     can = call(GetQuestLogPushable)
   end
-  if can == false or can == 0 then return "unshareable" end
-  if type(QuestLogPushQuest) ~= "function" then return "noapi" end
-  call(QuestLogPushQuest)
+  if can == false or can == 0 then
+    r = "unshareable"
+  elseif type(QuestLogPushQuest) ~= "function" then
+    r = "noapi"
+  else
+    call(QuestLogPushQuest)
+  end
+  if type(wasId) == "number" and wasId > 0 and QLog().SetSelectedQuest then call(QLog().SetSelectedQuest, wasId) end
+  if type(wasIndex) == "number" and wasIndex > 0 and type(SelectQuestLogEntry) == "function" then
+    call(SelectQuestLogEntry, wasIndex)
+  end
+  if r ~= "shared" then return r end
   return "shared", (type(q.id) == "number" and q.id or nil)
 end
 
@@ -337,9 +350,10 @@ end
 -- back (QRES), so the friend's copy can say why and stop offering a quest they can't take. This is what tells
 -- "too low" or "an earlier quest is missing" for people without Questie.
 local PUSH_WINDOW = 10 -- seconds after the click in which the game's answer is taken as the answer to that share
--- { name, title, id, at, window (seconds, default PUSH_WINDOW), onResult (fn(code), optional: a share of several,
--- Crew/QuestAsk.lua) }
-local pendingShare
+local ACCEPT_GUARD = 2 -- seconds after a share in which "has accepted your quest" is taken as late news of the last one
+-- One watch per friend: name -> { name, title, id, at, window (seconds, default PUSH_WINDOW), onResult (fn(code),
+-- optional: a share of several, Crew/QuestAsk.lua, which then tells the friend itself) }
+local watching = {}
 
 -- { the game's own text (by its global name), the English text when the game has no such name, our code }
 local PUSH_RESULTS = {
@@ -364,7 +378,6 @@ local RESULT_WORDS = {
   far = { "you are too far away from them" },
   -- only from copies that share several quests at once (Crew/QuestAsk.lua; older copies drop unknown codes)
   gone = { "they don't have it anymore" },
-  time = { "no answer to the offer in time" },
   cant = { "the game won't let it be shared" },
 }
 
@@ -395,27 +408,38 @@ local function saidBy(text, def)
 end
 
 local function onSystemLine(text)
-  local p = pendingShare
-  if not p then return end
+  if next(watching) == nil then return end
   local now = ns.now()
-  if now - p.at > (p.window or PUSH_WINDOW) or now < p.at then pendingShare = nil; return end
-  if ns.Util.isSecret(text) or type(text) ~= "string" then return end
+  local live = {}
+  for name, p in pairs(watching) do
+    if now - p.at > (p.window or PUSH_WINDOW) or now < p.at then watching[name] = nil else live[#live + 1] = p end
+  end
+  if #live == 0 or ns.Util.isSecret(text) or type(text) ~= "string" then return end
   for _, def in ipairs(PUSH_RESULTS) do
     local said = saidBy(text, def)
-    if said and sameFriend(said, p.name) then
-      pendingShare = nil
-      local fields = { t = ns.wireName(p.name), q = p.title, i = p.id and tostring(p.id) or "", r = def[3] }
-      if not ns.Comm.sendTo(p.name, "QRES", fields) then ns.Comm.sendGroup("QRES", fields) end
-      ns.Log.add("info", "quest share for %s refused by the game: %s", p.name, def[3])
-      if p.onResult then p.onResult(def[3]) end
-      return
+    if said then
+      for _, p in ipairs(live) do
+        if sameFriend(said, p.name) then
+          watching[p.name] = nil
+          ns.Log.add("info", "quest share for %s refused by the game: %s", p.name, def[3])
+          if p.onResult then
+            p.onResult(def[3])
+          else
+            Quest.tellResult(p.name, p.title, p.id, def[3])
+          end
+          return
+        end
+      end
     end
   end
-  if p.onResult then
-    local said = saidBy(text, PUSH_ACCEPTED)
-    if said and sameFriend(said, p.name) then
-      pendingShare = nil
+  local said = saidBy(text, PUSH_ACCEPTED)
+  if not said then return end
+  for _, p in ipairs(live) do
+    -- (a late line about the quest before this one, when the asker's copy already moved the share on, is not news)
+    if p.onResult and sameFriend(said, p.name) and now - p.at >= ACCEPT_GUARD then
+      watching[p.name] = nil
       p.onResult("ok")
+      return
     end
   end
 end
@@ -426,14 +450,16 @@ end
 function Quest.shareForQueue(name, id, onResult, window)
   local r, _, title = Quest.shareId(id)
   if r == "shared" then
-    pendingShare = { name = name, title = title, id = tonumber(id), at = ns.now(), window = window, onResult = onResult }
+    watching[name] = { name = name, title = title, id = tonumber(id), at = ns.now(), window = window, onResult = onResult }
   end
   return r, title
 end
 
 -- Stops watching for the game's answer to a share made by Quest.shareForQueue with this onResult.
 function Quest.stopWatching(onResult)
-  if pendingShare and pendingShare.onResult == onResult then pendingShare = nil end
+  for name, p in pairs(watching) do
+    if p.onResult == onResult then watching[name] = nil end
+  end
 end
 
 -- Tells the friend why their quest did not come (a QRES with one of the codes of RESULT_WORDS).
@@ -474,7 +500,7 @@ function Quest.resultPatternForTest(format) return resultPattern(format) end
 function Quest.shareFor(name, title)
   local r, id = Quest.share(title)
   if r == "shared" and type(name) == "string" then
-    pendingShare = { name = name, title = title, id = id, at = ns.now() } -- the game's answer is watched for
+    watching[name] = { name = name, title = title, id = id, at = ns.now() } -- the game's answer is watched for
   end
   if r == "missing" then
     print("TwizCrew: you don't have \"" .. ns.Util.safeText(title) .. "\" anymore.")

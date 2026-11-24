@@ -171,6 +171,7 @@ return {
       }, "an older copy's list: one list, no headings")
       -- asking for one of them (an older copy: the usual share request)
       W.state.inGroup = true
+      W.state.groupMembers = { "Frostie" }
       local before = #W.sent
       ns.QuestWindow.toggle(42)
       ns.QuestWindow.press()
@@ -181,7 +182,7 @@ return {
       W:advance(6)
       receiveList(ns, W, "Frostie", "200x2", { { 42, "1", "A Fine Quest" } })
       A.eq(QL.count("Frostie"), 1)
-      A.eq(ns.QuestWindow.linesForTest(), { "[ ] A Fine Quest" })
+      A.eq(ns.QuestWindow.linesForTest(), { "[x] A Fine Quest" }, "still ticked: the ask didn't get it yet")
       W:advance(6)
       receiveList(ns, W, "Frostie", "300x3", {})
       A.eq(ns.QuestWindow.linesForTest(), { "They have no quests (or don't share them)" })

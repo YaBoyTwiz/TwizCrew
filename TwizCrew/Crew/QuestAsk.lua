@@ -11,9 +11,13 @@
 -- it (QMU), or the game tells the sharer it was refused or declined (Crew/Quest.lua, "why a share didn't work"), or
 -- nobody answered in STEP_WAIT. The next share then goes out by itself (AUTO_NEXT), unless the game wants a click for
 -- it: then (or with AUTO_NEXT off) the sharer gets a "Share next quest (2 of 3)" pop-up for each next one.
+-- Some answers end the whole share instead: the asker's quest log is full, they are too far away (both would fail
+-- the same way for every quest left), or no answer in STEP_WAIT (the offer may still be open on their screen).
+-- "Busy" (a window was open) is tried once more, BUSY_RETRY later.
 -- A friend whose list has no zone headings (list format 1) has an older copy that drops QMR: their quests are asked
--- for with the usual single asks (QREQ), one after another, each once the last one is answered (or after OLD_WAIT),
--- never sooner than OLD_GAP after the last (an older copy drops a second ask from the same friend within 15 s).
+-- for with the usual single asks (QREQ), one after another, each once the last one is answered (or asked once more
+-- after OLD_WAIT, then skipped), never sooner than OLD_GAP after the last (an older copy drops a second ask from the
+-- same friend within 15 s, counted when it arrives there).
 local ADDON, ns = ...
 
 local QuestAsk = {}
@@ -34,8 +38,10 @@ local POPUP_SECONDS = 20 -- sharer: how long the ask (and each "share next") pop
 local STEP_WAIT = 45    -- sharer: seconds to wait for the answer to one offer before the next
 local NEXT_GAP = 1      -- sharer: seconds between an answer and the next share (automatic)
 local BLOCK_GAP = 2     -- sharer: a "blocked" from the game this soon after an automatic share is about that share
-local OLD_WAIT = 45     -- asker (older copy): a single ask with no answer by then is over
-local OLD_GAP = 16      -- asker (older copy): seconds between two single asks
+local BUSY_RETRY = 5    -- sharer: seconds before a quest that met "busy" is offered once more
+local OLD_WAIT = 45     -- asker (older copy): a single ask with no answer by then is asked once more, then skipped
+local OLD_GAP = 20      -- asker (older copy): seconds between two single asks (their copy needs 15 on arrival)
+local OLD_STALL = 150   -- asker (older copy): no answer at all for this long: give up
 local TICK = 1
 
 local asks = {}         -- asker: friend -> { key, ids, titles, mode ("new" | "old"), state, got, failed, at, news, ... }
@@ -104,10 +110,18 @@ local function allAnswered(a)
   return true
 end
 
+-- Why a share stopped, as the asker reads it ...
 local STOP_WORDS = {
   group = "the group broke up", noclick = "no click for the next one", stall = "their copy stopped answering",
   none = "they don't have those quests anymore", off = "they turned quest sharing off",
   noapi = "quest sharing isn't available in their game", gone = "they went offline",
+  full = "your quest log is full", far = "you are too far away from them", time = "no answer to the last offer",
+}
+-- ... and as the sharer reads it.
+local SHARER_WORDS = {
+  group = "the group broke up", noclick = "no click for the next one", gone = "they went offline",
+  noapi = "quest sharing isn't available in this game version", full = "their quest log is full",
+  far = "they are too far away", time = "no answer to the last offer",
 }
 
 -- My ask to `name` is over: one line in chat, and the same words for their window.
@@ -131,6 +145,10 @@ local function finish(name, why)
   end
   lastWords[name] = words
   print("TwizCrew: " .. words)
+  -- their copy may still be sharing for an ask mine gave up on: tell it to stop
+  if a.mode == "new" and (why == "noanswer" or why == "stall") then
+    sendTo(name, "QMU", { t = ns.wireName(name), k = a.key, x = "1" })
+  end
   ns.Log.add("info", "quest ask to %s over: %s", name, tostring(why))
   if ns.QuestList.changed then ns.QuestList.changed() end
   refresh()
@@ -154,7 +172,7 @@ local function oldNext(name)
       else
         local ok, why = ns.Quest.request(name, a.titles[id])
         if ok then
-          a.sentAt, a.ready = ns.now(), false
+          a.sentAt, a.ready, a.again = ns.now(), false, false
           refresh()
           return
         end
@@ -165,6 +183,20 @@ local function oldNext(name)
       end
     end
   end
+end
+
+-- Older copy: the single ask got no answer in OLD_WAIT: ask once more, then skip it (one line in chat).
+local function oldTimeout(name)
+  local a = asks[name]
+  local id = a.ids[a.cur]
+  if a.again or not id then
+    print("TwizCrew: " .. safe(name) .. " didn't answer about \"" .. safe(a.titles[id]) .. "\", so it was skipped.")
+    oldNext(name)
+    return
+  end
+  local ok, why = ns.Quest.request(name, a.titles[id])
+  if not ok and why == "group" then finish(name, "group"); return end
+  a.sentAt, a.again = ns.now(), true
 end
 
 -- The ask in one message, whole: quests are left out from the end until it fits (never with a cut ID).
@@ -183,6 +215,10 @@ end
 function QuestAsk.ask(name, ids)
   if type(name) ~= "string" or name == "" or type(ids) ~= "table" or #ids == 0 then return false end
   if ns.Quest.needGroup(name) then return false end
+  if not inMyGroup(name) and not ns.isTestName(name) then
+    print("TwizCrew: quest sharing only works in a group. Invite " .. safe(name) .. " first.")
+    return false
+  end
   local now = ns.now()
   if asks[name] or (askedAt[name] and now - askedAt[name] < ASK_GAP and now >= askedAt[name]) then
     print("TwizCrew: you just asked " .. safe(name) .. ". Give them a moment.")
@@ -312,18 +348,19 @@ end
 
 -- The share for this ask is over (why: "done", "group", "cancel", "gone", "noclick", "noapi", "no", ...). The asker
 -- is told, except when they stopped it, went offline, or were already told ("no").
+local QUIET = { cancel = true, gone = true, no = true, replaced = true } -- the asker is not told (see above)
 local function stop(why)
   local j = job
   if not j then return end
-  if why ~= "cancel" and why ~= "gone" and why ~= "no" then tellAsker({ st = "end", r = why, d = tostring(j.taken) }) end
+  if not QUIET[why] then tellAsker({ st = "end", r = why, d = tostring(j.taken) }) end
   ns.Quest.stopWatching(onStep)
   job = nil
   if j.state ~= "ask" then
     local who = safe(j.asker)
     if why == "done" then
       print("TwizCrew: done sharing with " .. who .. " (" .. j.taken .. " of " .. #j.ids .. " taken).")
-    elseif why ~= "cancel" then
-      print("TwizCrew: stopped sharing with " .. who .. " (" .. (STOP_WORDS[why] or why) .. ").")
+    elseif why ~= "cancel" and why ~= "replaced" then
+      print("TwizCrew: stopped sharing with " .. who .. " (" .. (SHARER_WORDS[why] or why) .. ").")
     end
   end
   ns.Log.add("info", "quest share for %s over: %s", j.asker, tostring(why))
@@ -358,17 +395,36 @@ local function shareNext(byClick)
   end
 end
 
--- The answer to the quest I just offered (a code of Crew/Quest.lua's PUSH_RESULTS, "ok" (they took it) or "time").
-onStep = function(code)
-  if not job or job.state ~= "wait" then return end
-  ns.Quest.stopWatching(onStep)
-  if code == "ok" then job.taken = job.taken + 1 end
-  if job.i >= #job.ids then stop("done"); return end
+-- The next share in `gap` seconds (by itself), or a "Share next quest" pop-up when a click is needed.
+local function nextStep(gap)
   if QuestAsk.AUTO_NEXT and not clickMode then
-    job.state, job.nextAt = "next", ns.now() + NEXT_GAP
+    job.state, job.nextAt = "next", ns.now() + gap
   else
     showNext()
   end
+end
+
+-- The answer to the quest I just offered (a code of Crew/Quest.lua's PUSH_RESULTS, "ok" (they took it) or "time").
+-- A refusal is told to the asker here (QRES), except the ones that end the whole share.
+onStep = function(code)
+  if not job or job.state ~= "wait" then return end
+  ns.Quest.stopWatching(onStep)
+  local id = job.ids[job.i]
+  if code == "ok" then
+    job.taken = job.taken + 1
+  elseif code == "full" or code == "far" or code == "time" then
+    stop(code) -- every quest left would fail the same way (or their offer may still be open)
+    return
+  elseif code == "busy" and not job.retried[id] then
+    job.retried[id] = true
+    job.i = job.i - 1 -- the same quest once more, a little later
+    nextStep(BUSY_RETRY)
+    return
+  else
+    ns.Quest.tellResult(job.asker, job.titles[id], id, code)
+  end
+  if job.i >= #job.ids then stop("done"); return end
+  nextStep(NEXT_GAP)
 end
 
 -- The click on the ask pop-up: say yes and share the first quest.
@@ -391,8 +447,10 @@ end
 
 -- The game blocked one of my calls (ADDON_ACTION_BLOCKED / _FORBIDDEN): when it is the share made by itself a moment
 -- ago, the game wants a click for each share: offer that quest again with a pop-up, and use clicks from now on.
-local function onBlocked(addon)
+local function onBlocked(addon, fn)
   if addon ~= ADDON or not job or job.state ~= "wait" or not job.auto then return end
+  -- (when the game names the blocked function, it must be the share)
+  if not ns.Util.isSecret(fn) and type(fn) == "string" and not fn:find("QuestLogPushQuest", 1, true) then return end
   if ns.now() - job.autoAt > BLOCK_GAP then return end
   clickMode = true
   ns.Quest.stopWatching(onStep)
@@ -405,7 +463,6 @@ local function onAsk(sender, f)
   if type(sender) ~= "string" or type(f) ~= "table" then return end
   if not ns.wireIsMe(f.t) or ns.isMe(sender) then return end
   if not (ns.roster and ns.roster:get(sender)) then return end -- crew only
-  if ns.Modules.setting("panel", "shareQuest") == false then return end -- (not sharing: nobody can ask)
   if type(f.k) ~= "string" or f.k == "" or #f.k > 16 then return end
   local ids = QuestAsk.parseIds(f.q)
   if not ids then return end
@@ -414,7 +471,13 @@ local function onAsk(sender, f)
   if heardAt[sender] and now - heardAt[sender] < ASK_GAP and now >= heardAt[sender] then return end
   if not (inAnyGroup() and inMyGroup(sender)) then return end -- sharing needs us in one group
   heardAt[sender] = now
-  if job then
+  if ns.Modules.setting("panel", "shareQuest") == false then -- not sharing: nobody can ask, and they hear so
+    sendTo(sender, "QMS", { t = ns.wireName(sender), k = f.k, st = "end", r = "off", d = "0" })
+    return
+  end
+  if job and job.asker == sender then
+    stop("replaced") -- their copy forgot the last ask (a /reload, say): this one counts
+  elseif job then
     sendTo(sender, "QMS", { t = ns.wireName(sender), k = f.k, st = "busy" })
     return
   end
@@ -431,7 +494,7 @@ local function onAsk(sender, f)
     return
   end
   job = { asker = sender, key = f.k, ids = list, titles = titles, i = 0, state = "ask", created = now, at = now,
-    taken = 0 }
+    taken = 0, retried = {} }
   if ns.Popups and ns.Popups.questAsk then
     ns.Popups.questAsk(sender, "ask", #list, 1, titles[list[1]], QuestAsk.yesClick)
   end
@@ -455,11 +518,18 @@ function QuestAsk.tick()
   for name, a in pairs(asks) do due[#due + 1] = { name, a } end
   for _, x in ipairs(due) do
     local name, a = x[1], x[2]
-    if a.mode == "new" then
+    local m = ns.roster and ns.roster:get(name)
+    if not m or not m.online then
+      finish(name, "gone")
+    elseif not inMyGroup(name) then
+      finish(name, "group")
+    elseif a.mode == "new" then
       if a.state == "sent" and now - a.at > ANSWER_WAIT then finish(name, "noanswer")
       elseif a.state ~= "sent" and now - a.news > STALL then finish(name, "stall") end
-    elseif (a.ready or now - a.sentAt > OLD_WAIT) and now - a.sentAt >= OLD_GAP then
-      oldNext(name)
+    elseif now - a.news > OLD_STALL then
+      finish(name, "stall")
+    elseif now - a.sentAt >= OLD_GAP then
+      if a.ready then oldNext(name) elseif now - a.sentAt > OLD_WAIT then oldTimeout(name) end
     end
   end
   -- sharer
@@ -475,8 +545,6 @@ function QuestAsk.tick()
   end
   if not (inAnyGroup() and inMyGroup(job.asker)) then stop("group"); return end
   if job.state == "wait" and now - job.at > STEP_WAIT then
-    local id = job.ids[job.i]
-    ns.Quest.tellResult(job.asker, job.titles[id], id, "time")
     onStep("time")
   elseif job.state == "next" and now >= job.nextAt then
     shareNext(false)

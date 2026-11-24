@@ -203,6 +203,10 @@ local function build()
   T.skin(frame, "window", { alpha = 0.97 }) -- the look's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewQuests") end -- Escape closes it
   Widgets.script(frame, "OnHide", function() isOpen = false end, FEATURE)
+  -- my zone ("you are here", the order, Only this zone) and my group (the line by the button) change while it is open
+  for _, event in ipairs({ "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "GROUP_ROSTER_UPDATE" }) do
+    ns.Events.on(FEATURE, event, function() QuestWindow.refresh() end)
+  end
   if frame.EnableMouseWheel then frame:EnableMouseWheel(true) end
   Widgets.script(frame, "OnMouseWheel", function(_, delta) QuestWindow.scroll(delta) end, FEATURE)
 
@@ -330,8 +334,8 @@ function QuestWindow.press()
   end
   local ids = tickedIds()
   if #ids == 0 then return false end
+  -- the ticks stay: a quest I take, or one that is refused for good, drops out by itself; the rest can be asked again
   local ok = ns.QuestAsk.ask(friend, ids)
-  if ok then ticks = {} end
   draw()
   return ok
 end

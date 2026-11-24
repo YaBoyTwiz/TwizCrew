@@ -158,21 +158,22 @@ return {
       })
       A.eq(QL.known("Frostie"), true)
       A.eq(QL.count("Frostie"), 2)
-      A.eq(labels(QL.menuItems("Frostie")), {
-        "Ask to share: A Fine Quest",
-        "Ask to share: Wolves Across the Border",
-        "Can't share: Bound to them (it can't be shared)",
-        "Can't share: Old one (you already did it)",
-        "1 quest you both have",
-      })
       for _, it in ipairs(ns.Panel.rowMenu(row)) do if it.label:find("^Their quests") then item = it end end
       A.eq(item.label, "Their quests (2 you can get)")
       item.onClick()
-      A.eq(labels(QL.lastMenu)[1], "Ask to share: A Fine Quest", "the click opens their quests")
-      -- asking for one of them is the usual share request
+      A.ok(ns.QuestWindow.isShown(), "the click opens their quests in a window")
+      A.eq(ns.QuestWindow.linesForTest(), {
+        "[ ] A Fine Quest",
+        "[ ] Wolves Across the Border",
+        "- Can't share: Bound to them (it can't be shared)",
+        "- Kobold Camp Cleanup (you both have)",
+        "- Can't share: Old one (you already did it)",
+      }, "an older copy's list: one list, no headings")
+      -- asking for one of them (an older copy: the usual share request)
       W.state.inGroup = true
       local before = #W.sent
-      QL.lastMenu[1].onClick()
+      ns.QuestWindow.toggle(42)
+      ns.QuestWindow.press()
       W:advance(2)
       local req = sentOf(ns, W, "QREQ", before)
       A.eq(#req, 1); A.eq(req[1].q, "A Fine Quest"); A.eq(req[1].t, "Frostie")
@@ -180,10 +181,10 @@ return {
       W:advance(6)
       receiveList(ns, W, "Frostie", "200x2", { { 42, "1", "A Fine Quest" } })
       A.eq(QL.count("Frostie"), 1)
-      A.eq(labels(QL.menuItems("Frostie")), { "Ask to share: A Fine Quest" })
+      A.eq(ns.QuestWindow.linesForTest(), { "[ ] A Fine Quest" })
       W:advance(6)
       receiveList(ns, W, "Frostie", "300x3", {})
-      A.eq(labels(QL.menuItems("Frostie")), { "They have no quests (or don't share them)" })
+      A.eq(ns.QuestWindow.linesForTest(), { "They have no quests (or don't share them)" })
       -- a full quest log comes in several pieces and is only used once whole
       local many = {}
       for i = 1, 25 do many[i] = { 1000 + i, "1", "Quest number " .. i .. " with a long enough name" } end
@@ -262,8 +263,9 @@ return {
       local st, words = Q.canGet(77, "Deep Trouble", true)
       A.eq(st, "no"); A.eq(words, "you can't take it yet (too low, or an earlier quest is missing)")
       A.eq(ns.QuestList.count("Frostie"), 1, "no longer offered")
-      A.eq(labels(ns.QuestList.menuItems("Frostie")), { "Ask to share: Easy One",
-        "Can't share: Deep Trouble (you can't take it yet (too low, or an earlier quest is missing))" })
+      ns.QuestList.open("Frostie")
+      A.eq(ns.QuestWindow.linesForTest(), { "[ ] Easy One",
+        "- Can't share: Deep Trouble (you can't take it yet (too low, or an earlier quest is missing))" })
       -- a passing reason is said but not remembered
       receive(ns, W, "Frostie", "QRES", { t = "Twiz", q = "Easy One", i = "78", r = "busy" })
       A.contains(W.printed[#W.printed], "you were busy")
@@ -300,8 +302,9 @@ return {
       A.eq(t[1].subtext, "Click to see them and ask")
       A.contains(W.printed[#W.printed], "Frostie has 2 quests you can get")
       ns.Popups.clickForTest(1)
-      A.eq(labels(ns.QuestList.lastMenu), { "Ask to share: A Fine Quest", "Ask to share: Another One",
-        "Can't share: Bound to them (it can't be shared)" }, "the click opens their quests")
+      A.ok(ns.QuestWindow.isShown(), "the click opens their quests")
+      A.eq(ns.QuestWindow.linesForTest(), { "[ ] A Fine Quest", "[ ] Another One",
+        "- Can't share: Bound to them (it can't be shared)" })
       -- their list changes: no second pop-up in the same grouping
       W:advance(6)
       receiveList(ns, W, "Frostie", "6x2", { { 42, "1", "A Fine Quest" }, { 45, "1", "Third" }, { 46, "1", "Fourth" } })

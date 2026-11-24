@@ -7,6 +7,7 @@ local Quest = {}
 ns.Quest = Quest
 
 local TITLE_MAX, OBJ_MAX, OBJECTIVES = 40, 120, 3
+local HEADING_MAX = 30 -- letters of a quest log heading (the zone name) sent with the quest list
 
 local current          -- questID we decided you're on
 local counts = {}      -- questID -> "n/m;n/m" of its objectives last time we looked (to see which one moved)
@@ -20,22 +21,35 @@ end
 
 local function QLog() return type(C_QuestLog) == "table" and C_QuestLog or {} end -- looked up each time
 
--- Every quest in the log: { id, title, index, complete }.
+-- A heading row's name as it is kept (nil when the game gives none or a secret one).
+local function headingOf(title)
+  if not readable(title) or type(title) ~= "string" or title == "" then return nil end
+  return title
+end
+
+-- Every quest in the log: { id, title, index, complete, heading }. heading: the name of the heading row above it in
+-- the game's quest log (the zone, or a group like a class or a dungeon), or nil.
 local function entries()
   local list = {}
   local n = call(QLog().GetNumQuestLogEntries) or call(GetNumQuestLogEntries)
   n = tonumber(n) or 0
+  local heading
   for i = 1, math.min(n, 60) do
     local info = call(QLog().GetInfo, i)
     if type(info) == "table" then
-      if not info.isHeader and info.questID and readable(info.title) then
+      if info.isHeader then
+        heading = headingOf(info.title)
+      elseif info.questID and readable(info.title) then
         list[#list + 1] = { id = info.questID, title = info.title, index = i,
-          complete = call(QLog().IsComplete, info.questID) and true or false }
+          complete = call(QLog().IsComplete, info.questID) and true or false, heading = heading }
       end
     else
       local title, _, _, isHeader, _, isComplete, _, questID = call(GetQuestLogTitle, i)
-      if title and not isHeader and readable(title) then
-        list[#list + 1] = { id = questID or ("i" .. i), title = title, index = i, complete = isComplete == 1 or isComplete == true }
+      if isHeader then
+        heading = headingOf(title)
+      elseif title and readable(title) then
+        list[#list + 1] = { id = questID or ("i" .. i), title = title, index = i,
+          complete = isComplete == 1 or isComplete == true, heading = heading }
       end
     end
   end
@@ -130,22 +144,39 @@ function Quest.wire()
 end
 
 -- My whole quest log for the crew (Crew/QuestList.lua): { id, title (cut for the wire), shareable (true / false /
--- nil when the game doesn't say) }. Empty when I don't share quests.
+-- nil when the game doesn't say), heading (the quest log heading it is under, cut for the wire, or nil) }. Empty
+-- when I don't share quests.
 Quest.TITLE_MAX = TITLE_MAX
+Quest.HEADING_MAX = HEADING_MAX
+local function pushable(id)
+  if not QLog().IsPushableQuest then return nil end
+  local p = call(QLog().IsPushableQuest, id)
+  if p ~= nil and readable(p) then return (p and p ~= 0) and true or false end
+  return nil
+end
+
 function Quest.log()
   local out = {}
   if ns.Modules.setting("panel", "shareQuest") == false then return out end
   for _, q in ipairs(entries()) do
     if type(q.id) == "number" then
-      local shareable
-      if QLog().IsPushableQuest then
-        local p = call(QLog().IsPushableQuest, q.id)
-        if p ~= nil and readable(p) then shareable = (p and p ~= 0) and true or false end
-      end
-      out[#out + 1] = { id = q.id, title = ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX), shareable = shareable }
+      out[#out + 1] = { id = q.id, title = ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX), shareable = pushable(q.id),
+        heading = q.heading and ns.Util.truncateUTF8(q.heading, HEADING_MAX) or nil }
     end
   end
   return out
+end
+
+-- One quest of my log by its ID: { id, title (cut for the wire), shareable }, or nil.
+function Quest.find(id)
+  id = tonumber(id)
+  if not id then return nil end
+  for _, q in ipairs(entries()) do
+    if q.id == id then
+      return { id = id, title = ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX), shareable = pushable(id) }
+    end
+  end
+  return nil
 end
 
 -- "Kobold Camp Cleanup (3/8)" / "(ready to turn in)" from a crew member's shared fields (pure); nil without one.
@@ -236,15 +267,19 @@ function Quest.canGet(id, title, shareable)
   return "unknown", nil
 end
 
+-- Sharing needs a group: true (and the usual explanation in chat) when I'm in none.
+function Quest.needGroup(name)
+  if inAnyGroup() or ns.isTestName(name) then return false end
+  print("TwizCrew: quest sharing only works in a group. Invite " .. ns.Util.safeText(tostring(name)) .. " first.")
+  return true
+end
+
 -- Ask `name` to share `title` (their quest, as their copy sent it). Returns true when the request went out, or
 -- false and a reason ("group", "soon", "quest").
 function Quest.request(name, title)
   if type(name) ~= "string" or name == "" then return false, "quest" end
   if type(title) ~= "string" or title == "" then return false, "quest" end
-  if not inAnyGroup() and not ns.isTestName(name) then
-    print("TwizCrew: quest sharing only works in a group. Invite " .. ns.Util.safeText(name) .. " first.")
-    return false, "group"
-  end
+  if Quest.needGroup(name) then return false, "group" end
   local now = ns.now()
   if askedAt[name] and now - askedAt[name] < REQUEST_GAP then
     print("TwizCrew: you just asked " .. ns.Util.safeText(name) .. ". Give them a moment.")
@@ -257,24 +292,40 @@ function Quest.request(name, title)
   return true
 end
 
+-- Picks one quest of my log and shares it with the group (see Quest.share).
+local function push(q)
+  if type(q.id) == "number" and QLog().SetSelectedQuest then call(QLog().SetSelectedQuest, q.id) end
+  if type(SelectQuestLogEntry) == "function" then call(SelectQuestLogEntry, q.index) end
+  local can
+  if type(q.id) == "number" and QLog().IsPushableQuest then
+    can = call(QLog().IsPushableQuest, q.id)
+  elseif type(GetQuestLogPushable) == "function" then
+    can = call(GetQuestLogPushable)
+  end
+  if can == false or can == 0 then return "unshareable" end
+  if type(QuestLogPushQuest) ~= "function" then return "noapi" end
+  call(QuestLogPushQuest)
+  return "shared", (type(q.id) == "number" and q.id or nil)
+end
+
 -- Shares the quest with this title (or the title as it was cut short for the wire) with the group.
 -- Returns "shared", "missing" (not in your log), "unshareable" (the game won't share it) or "noapi".
 function Quest.share(want)
   if type(want) ~= "string" or want == "" then return "missing" end
   for _, q in ipairs(entries()) do
-    if q.title == want or ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX) == want then
-      if type(q.id) == "number" and QLog().SetSelectedQuest then call(QLog().SetSelectedQuest, q.id) end
-      if type(SelectQuestLogEntry) == "function" then call(SelectQuestLogEntry, q.index) end
-      local pushable
-      if type(q.id) == "number" and QLog().IsPushableQuest then
-        pushable = call(QLog().IsPushableQuest, q.id)
-      elseif type(GetQuestLogPushable) == "function" then
-        pushable = call(GetQuestLogPushable)
-      end
-      if pushable == false or pushable == 0 then return "unshareable" end
-      if type(QuestLogPushQuest) ~= "function" then return "noapi" end
-      call(QuestLogPushQuest)
-      return "shared", (type(q.id) == "number" and q.id or nil)
+    if q.title == want or ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX) == want then return push(q) end
+  end
+  return "missing"
+end
+
+-- Shares the quest with this ID (Quest.share's answers; "shared" comes with the ID and the title as sent).
+function Quest.shareId(id)
+  id = tonumber(id)
+  if not id then return "missing" end
+  for _, q in ipairs(entries()) do
+    if q.id == id then
+      local r = push(q)
+      return r, id, ns.Util.truncateUTF8(tostring(q.title), TITLE_MAX)
     end
   end
   return "missing"
@@ -286,7 +337,9 @@ end
 -- back (QRES), so the friend's copy can say why and stop offering a quest they can't take. This is what tells
 -- "too low" or "an earlier quest is missing" for people without Questie.
 local PUSH_WINDOW = 10 -- seconds after the click in which the game's answer is taken as the answer to that share
-local pendingShare     -- { name, title, id, at }
+-- { name, title, id, at, window (seconds, default PUSH_WINDOW), onResult (fn(code), optional: a share of several,
+-- Crew/QuestAsk.lua) }
+local pendingShare
 
 -- { the game's own text (by its global name), the English text when the game has no such name, our code }
 local PUSH_RESULTS = {
@@ -309,7 +362,14 @@ local RESULT_WORDS = {
   busy = { "you were busy (a window was open)" },
   decl = { "you declined it" },
   far = { "you are too far away from them" },
+  -- only from copies that share several quests at once (Crew/QuestAsk.lua; older copies drop unknown codes)
+  gone = { "they don't have it anymore" },
+  time = { "no answer to the offer in time" },
+  cant = { "the game won't let it be shared" },
 }
+
+-- "Frostie has accepted your quest": no QRES (nothing went wrong), only a share of several moves on.
+local PUSH_ACCEPTED = { "ERR_QUEST_PUSH_ACCEPTED_S", "%s has accepted your quest" }
 
 -- "%s is busy." -> "^(.+) is busy" (the name is captured; an ending full stop doesn't matter)
 local function resultPattern(format)
@@ -326,24 +386,60 @@ local function sameFriend(said, name)
 end
 
 -- A system line: is it the game's answer to the share I just made for a friend? Then tell them.
+-- The friend's name in a system line of this kind ({ global name, English text }), or nil.
+local function saidBy(text, def)
+  local own = rawget(_G, def[1])
+  local said = text:match(resultPattern(type(own) == "string" and own or def[2]) or "^$")
+  if not said and type(own) == "string" then said = text:match(resultPattern(def[2]) or "^$") end
+  return said
+end
+
 local function onSystemLine(text)
   local p = pendingShare
   if not p then return end
   local now = ns.now()
-  if now - p.at > PUSH_WINDOW or now < p.at then pendingShare = nil; return end
+  if now - p.at > (p.window or PUSH_WINDOW) or now < p.at then pendingShare = nil; return end
   if ns.Util.isSecret(text) or type(text) ~= "string" then return end
   for _, def in ipairs(PUSH_RESULTS) do
-    local own = rawget(_G, def[1])
-    local said = text:match(resultPattern(type(own) == "string" and own or def[2]) or "^$")
-    if not said and type(own) == "string" then said = text:match(resultPattern(def[2])) end
+    local said = saidBy(text, def)
     if said and sameFriend(said, p.name) then
       pendingShare = nil
       local fields = { t = ns.wireName(p.name), q = p.title, i = p.id and tostring(p.id) or "", r = def[3] }
       if not ns.Comm.sendTo(p.name, "QRES", fields) then ns.Comm.sendGroup("QRES", fields) end
       ns.Log.add("info", "quest share for %s refused by the game: %s", p.name, def[3])
+      if p.onResult then p.onResult(def[3]) end
       return
     end
   end
+  if p.onResult then
+    local said = saidBy(text, PUSH_ACCEPTED)
+    if said and sameFriend(said, p.name) then
+      pendingShare = nil
+      p.onResult("ok")
+    end
+  end
+end
+
+-- Shares my quest with this ID for a friend's ask of several (Crew/QuestAsk.lua) and watches for the game's answer
+-- for `window` seconds: onResult(code) gets a PUSH_RESULTS code, or "ok" when the game says they took it. Returns
+-- Quest.shareId's answer and the title.
+function Quest.shareForQueue(name, id, onResult, window)
+  local r, _, title = Quest.shareId(id)
+  if r == "shared" then
+    pendingShare = { name = name, title = title, id = tonumber(id), at = ns.now(), window = window, onResult = onResult }
+  end
+  return r, title
+end
+
+-- Stops watching for the game's answer to a share made by Quest.shareForQueue with this onResult.
+function Quest.stopWatching(onResult)
+  if pendingShare and pendingShare.onResult == onResult then pendingShare = nil end
+end
+
+-- Tells the friend why their quest did not come (a QRES with one of the codes of RESULT_WORDS).
+function Quest.tellResult(name, title, id, code)
+  local fields = { t = ns.wireName(name), q = title or "", i = id and tostring(id) or "", r = code }
+  if not ns.Comm.sendTo(name, "QRES", fields) then ns.Comm.sendGroup("QRES", fields) end
 end
 
 -- A friend's copy says why the game didn't give me their quest.
@@ -363,6 +459,7 @@ local function onResult(sender, f)
   end
   print("TwizCrew: " .. ns.Util.safeText(sender) .. " couldn't share \"" .. ns.Util.safeText(title) .. "\": "
     .. words[1] .. ".")
+  if ns.QuestAsk and ns.QuestAsk.onResult then ns.QuestAsk.onResult(sender, tonumber(f.i), title, f.r) end
 end
 
 local function forgetRefused()
@@ -410,8 +507,10 @@ function Quest.start()
   if Quest.started then return end
   Quest.started = true
   ns.Events.on("quest", "QUEST_ACCEPTED", function(a, b)
-    Quest.accepted(tonumber(b) or tonumber(a)) -- classic: (logIndex, questID); modern: (questID)
+    local id = tonumber(b) or tonumber(a) -- classic: (logIndex, questID); modern: (questID)
+    Quest.accepted(id)
     ns.Self.refresh("quest")
+    if ns.QuestAsk and ns.QuestAsk.accepted then ns.QuestAsk.accepted(id) end
   end)
   -- only events every game version has (registering an unknown one is an error)
   for _, e in ipairs({ "QUEST_LOG_UPDATE", "QUEST_WATCH_UPDATE", "QUEST_TURNED_IN" }) do

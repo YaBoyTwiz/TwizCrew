@@ -123,6 +123,8 @@ local function click(f)
     ns.Find.pointToMeet()
   elseif p.kind == "qshare" and ns.Quest and ns.Quest.shareFor then
     ns.Quest.shareFor(p.names[1], p.title)
+  elseif p.kind == "qmulti" and type(p.onClick) == "function" then
+    ns.Log.safe("quest", p.onClick)
   elseif p.kind == "levelup" or (p.kind == "online" and #p.names == 1) then
     act(p.kind, p.names[1])
   end
@@ -173,7 +175,7 @@ local function newFrame()
       if not self.tcShown then return end
       local left = self.tcExpires - ns.now()
       local own = self.tcPopup and (self.tcPopup.kind == "roast" or self.tcPopup.kind == "qshare"
-        or self.tcPopup.kind == "notice")
+        or self.tcPopup.kind == "qmulti" or self.tcPopup.kind == "notice")
       if left <= 0 and own then close(self); return end
       self:SetAlpha(left >= FADE and 1 or math.max(0, left / FADE))
     end)
@@ -500,6 +502,41 @@ function Popups.questRequest(name, title)
   setIcon(f, nil, KIND_ICON.qshare)
   f.title:SetText(f.tcText)
   f.sub:SetText(f.tcSub)
+  f:SetAlpha(1)
+  f:Show()
+  layout()
+  if ns.Modules.setting(FEATURE, "sounds") == "off" then return end -- Sounds: Off is silent
+  if type(PlaySound) == "function" and type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_OPEN then
+    pcall(PlaySound, SOUNDKIT.IG_QUEST_LIST_OPEN)
+  end
+end
+
+-- A friend asks for several of my quests (Crew/QuestAsk.lua). kind "ask": "<Name> asks for 3 quests", click = say
+-- yes and share the first; kind "next": "Share next quest (2 of 3)" with the quest's name, click = share it (when
+-- the game wants a click for each share). Like questRequest: shows whether or not the pop-ups module is on, waits
+-- QSHARE_SECONDS, then closes itself.
+function Popups.questAsk(name, kind, total, index, title, onClick)
+  if type(name) ~= "string" or type(onClick) ~= "function" then return end
+  local f = takeFrame()
+  seq = seq + 1
+  local n = tonumber(total) or 1
+  local text, sub
+  if kind == "next" then
+    text = "Share next quest (" .. tostring(index) .. " of " .. n .. ")"
+    sub = ns.Util.safeText(tostring(title or "")) .. " for " .. colorName(name) .. "  -  click to share it"
+  else
+    text = colorName(name) .. " asks for " .. (n == 1 and "1 quest" or (n .. " quests"))
+    sub = n == 1 and "Click to share it" or "Click to share them, one at a time"
+  end
+  remember(text)
+  f.tcSeq, f.tcShown, f.tcPopup = seq, true, { kind = "qmulti", names = { name }, extra = {}, onClick = onClick }
+  f.tcText, f.tcSub = text, sub
+  f.tcExpires = ns.now() + QSHARE_SECONDS + FADE
+  f:SetWidth(ROAST_WIDTH)
+  T.color(f.edge, EDGE.qshare, 1)
+  setIcon(f, nil, KIND_ICON.qshare)
+  f.title:SetText(text)
+  f.sub:SetText(sub)
   f:SetAlpha(1)
   f:Show()
   layout()

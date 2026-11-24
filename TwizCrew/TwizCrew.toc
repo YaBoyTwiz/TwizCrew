@@ -31,6 +31,7 @@ Core\UpdateLogic.lua
 Tags\Tags.lua
 Crew\Quest.lua
 Crew\QuestList.lua
+Crew\QuestAsk.lua
 Layer\LayerKey.lua
 Layer\LayerSensor.lua
 Layer\Layer.lua
@@ -54,6 +55,7 @@ UI\PopupLogic.lua
 UI\Popups.lua
 UI\Feed.lua
 UI\Recent.lua
+UI\QuestWindow.lua
 Stats\StatsDefs.lua
 Stats\StatsLogic.lua
 Stats\SessionLogic.lua

@@ -59,6 +59,8 @@ Help.TIPS = {
     "Vote for tonight's biggest clown: one vote each, 30 seconds. The winner gets a title on the panel and a trophy." },
   skip = { "Skip the vote",
     "Ends the vote with no clown. Nobody has the Clown of the Night title until the next show." },
+  questOnlyZone = { "Only this zone",
+    "Shows only their quests in the zone you are in now. Your ticks in other zones still count." },
   ---------------------------------------------------------------------------------------------------- calendar
   calEvents = { "Events", "The crew's notes, dungeon runs and raids on a month. Click a day to see its notes." },
   calPlay = { "Play times", "Who played when: a month of who was on, each day's timeline, and the usual times." },

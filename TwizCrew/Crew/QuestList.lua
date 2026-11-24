@@ -1,10 +1,15 @@
 -- A friend's whole quest log, so you can see every quest they could share with you (not only the one they're on).
 -- QLQ = "send me your quest list" (t = who should answer); QLA = the list: s (a stamp, the same in every piece),
 -- n (how many quests), and one "q<questID>" = "<1 can be shared | 0 can't | ? unknown><title>" per quest.
+-- Since 2026-11-23 (list format 2) the list also has: f = "2" (in every piece; this copy also takes an ask for
+-- several quests, Crew/QuestAsk.lua), "h<n>" = the name of the n-th heading of the sender's quest log (the zone),
+-- and "z<questID>" = the number of the heading the quest is under (0: none). Older copies read only s, n and q<id>
+-- and skip the new fields; a list from them has no f, and shows as one list without headings.
 -- Asked when you hover or right-click a friend, and for crew members who are in your group. A copy in a group also
 -- sends its list to the group again when its quests change. Copies without this (v0.2.0 and older) drop both
 -- message types, so for them only the one quest on their row is known, as before.
 -- The heads-up: when a group member's list shows quests you can get, one pop-up says so (once per grouping).
+-- Clicking "Their quests" (or the heads-up) opens their quests in a window (UI/QuestWindow.lua).
 local _, ns = ...
 
 local QuestList = {}
@@ -24,13 +29,14 @@ local MAX_QUESTS = 30    -- more than a quest log holds
 local GROUP_SETTLE = 1   -- seconds after a group change before looking at who is in it
 local GROUP_ASK_WAIT = 5 -- ... and this many more before asking them (their own lists to the group come first)
 local GROUP_COPY = 30    -- seconds a list I sent to the group stands in for a whisper to a member who asks
-local MENU_TITLE = 30    -- letters of a quest's name in a menu line
+local FORMAT = 2         -- the list format this copy sends (f): zone headings, and it takes an ask for several quests
 local ICON_ASK = "Interface\\Icons\\Spell_ChargePositive"
-local ICON_NO = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 local ICON_LIST = "Interface\\Icons\\INV_Misc_Book_08"
 
-local lists = {}      -- friend -> { at, n, quests = { [id] = { id, title, shareable } } } (the last whole list)
-local building = {}   -- friend -> { [stamp] = { at, n, count, quests } } (lists still arriving)
+-- friend -> { at, n, format, quests = { [id] = { id, title, shareable, heading, hi } } } (the last whole list;
+-- heading: the name of the heading it is under, hi: that heading's place in their log, 0 for none)
+local lists = {}
+local building = {}   -- friend -> { [stamp] = { at, n, count, quests, format, heads, zones } } (lists still arriving)
 local askedAt, answeredAt = {}, {}
 local told = {}       -- friend -> true: the heads-up for them was shown in this grouping
 local cache = {}      -- friend -> { at, all }
@@ -38,7 +44,6 @@ local sentSig         -- my quests as they were when I last sent my list
 local sends = 0
 local pushWaiting, groupWaiting, askWaiting = false, false, false
 local groupSent       -- { at, sig, members = { [name] = true } }: my last list sent to the group
-local anchor
 
 local function inAnyGroup()
   return (call(IsInGroup) or call(IsInRaid)) and true or false
@@ -51,6 +56,7 @@ local function inMyGroup(name)
   if call(UnitInParty, full) or call(UnitInRaid, full) then return true end
   return (ns.Where and ns.Where.unitFor and ns.Where.unitFor(name)) and true or false
 end
+QuestList.inAnyGroup, QuestList.inMyGroup = inAnyGroup, inMyGroup
 
 local function redraw()
   local P = ns.Panel and ns.Panel._
@@ -91,11 +97,22 @@ end
 local function sendMine(to)
   local log = myLog()
   sends = sends + 1
-  local fields = { s = (math.floor(ns.now()) % 100000) .. "x" .. sends, n = tostring(#log) }
+  local fields = { s = (math.floor(ns.now()) % 100000) .. "x" .. sends, n = tostring(#log), f = tostring(FORMAT) }
+  local heads, count = {}, 0 -- heading name -> its number, in the order of my log
   for _, q in ipairs(log) do
     fields["q" .. q.id] = (q.shareable == true and "1" or q.shareable == false and "0" or "?") .. q.title
+    local h = 0
+    if type(q.heading) == "string" and q.heading ~= "" then
+      h = heads[q.heading]
+      if not h then
+        count = count + 1
+        h, heads[q.heading] = count, count
+        fields["h" .. h] = q.heading
+      end
+    end
+    fields["z" .. q.id] = tostring(h)
   end
-  local opts = { repeatKeys = { "s", "n" }, bulk = true }
+  local opts = { repeatKeys = { "s", "n", "f" }, bulk = true }
   sentSig = signature(log)
   if to and ns.Comm.sendTo(to, "QLA", fields, opts) then return true end
   opts.replace = "QLA"
@@ -138,8 +155,16 @@ function QuestList.known(name)
   return lists[name] ~= nil
 end
 
+-- Their list's format: 2 = it came with zone headings and their copy takes an ask for several quests
+-- (Crew/QuestAsk.lua); 1 = an older copy; nil = no list.
+function QuestList.format(name)
+  local l = lists[name]
+  return l and (l.format or 1) or nil
+end
+
 -- Every quest of theirs with what it means for me, the ones I can get first:
--- { id, title, can (true: worth asking), status ("ok", "have", "done", "unshareable", "no", "unknown"), words }.
+-- { id, title, can (true: worth asking), status ("ok", "have", "done", "unshareable", "no", "unknown"), words,
+-- heading (the heading it is under in their log, or nil), hi (that heading's place in their log, 0 for none) }.
 function QuestList.all(name)
   local l = lists[name]
   if not l then return {} end
@@ -151,7 +176,8 @@ function QuestList.all(name)
     local status, words = ns.Quest.canGet(q.id, q.title, q.shareable)
     -- as on the row: yes when we know I can get it, or when it can be shared and I neither have it nor did it
     local can = status == "ok" or (status == "unknown" and q.shareable == true)
-    all[#all + 1] = { id = q.id, title = q.title, can = can, status = status, words = words }
+    all[#all + 1] = { id = q.id, title = q.title, can = can, status = status, words = words, heading = q.heading,
+      hi = q.hi or 0 }
   end
   table.sort(all, function(a, b)
     if a.can ~= b.can then return a.can end
@@ -162,6 +188,11 @@ function QuestList.all(name)
   return all
 end
 
+-- Why I can't get one of their quests (an entry of QuestList.all), in the words the lists use.
+function QuestList.why(q)
+  return q.words or (q.status == "unknown" and "can't tell if it can be shared") or "you can't get it"
+end
+
 -- How many of their quests I can get (0 when we don't have their list).
 function QuestList.count(name)
   local n = 0
@@ -169,47 +200,57 @@ function QuestList.count(name)
   return n
 end
 
-local function shortTitle(title)
-  local safe = ns.Util.safeText(title)
-  local shown = ns.Util.truncateUTF8(safe, MENU_TITLE)
-  if shown ~= safe then shown = shown .. "..." end
-  return shown
-end
-
--- The menu of a friend's quests: ask for the ones I can get, why not for the others.
-function QuestList.menuItems(name)
-  local items = {}
-  if not lists[name] then
-    QuestList.want(name)
-    items[1] = { label = "No quest list from them yet (asked just now)", icon = ICON_LIST, onClick = function() end }
-    items[2] = { label = "They may have an older TwizCrew", icon = ICON_NO, onClick = function() end }
-    return items
-  end
-  local both = 0
-  for _, q in ipairs(QuestList.all(name)) do
-    if q.can then
-      items[#items + 1] = { label = "Ask to share: " .. shortTitle(q.title), icon = ICON_ASK,
-        onClick = function() ns.Quest.request(name, q.title) end }
-    elseif q.status == "have" then
-      both = both + 1
-    else
-      local why = q.words or (q.status == "unknown" and "can't tell if it can be shared") or "you can't get it"
-      items[#items + 1] = { label = "Can't share: " .. shortTitle(q.title) .. " (" .. why .. ")", icon = ICON_NO,
-        onClick = function() print("TwizCrew: no use asking: " .. tostring(why) .. ".") end }
+-- The zone I'm in, as the game names it in a few ways: { [lower-case name] = true }, and the name to show (or nil).
+local function myZones()
+  local set, shown = {}, nil
+  for _, fn in ipairs({ "GetZoneText", "GetRealZoneText" }) do
+    local z = call(_G[fn])
+    if type(z) == "string" and z ~= "" then
+      set[z:lower()] = true
+      shown = shown or z
     end
   end
-  if both > 0 then
-    items[#items + 1] = { label = both == 1 and "1 quest you both have" or (both .. " quests you both have"),
-      icon = ICON_LIST, onClick = function() end }
+  return set, shown
+end
+
+-- Their quests under the headings of their quest log, the zone I'm in first (else in the order of their log):
+-- { headed = true when their copy sent headings, zone = the name of my zone (or nil), groups = { { title (nil in a
+-- list without headings), here = true for my zone, quests = { entries of QuestList.all } } } }. A list without
+-- headings (an older copy) is one group. Quests under no heading come last, as "Other quests".
+function QuestList.groups(name)
+  local all = QuestList.all(name)
+  local zones, shown = myZones()
+  local l = lists[name]
+  local headed = false
+  if l and (l.format or 1) >= 2 then
+    for _, q in ipairs(all) do if q.heading then headed = true end end
   end
-  if #items == 0 then
-    items[1] = { label = "They have no quests (or don't share them)", icon = ICON_LIST, onClick = function() end }
+  if not headed then return { headed = false, zone = shown, groups = { { quests = all } } } end
+  local byPlace, places = {}, {}
+  for _, q in ipairs(all) do
+    local place = q.heading and q.hi or 0
+    local g = byPlace[place]
+    if not g then
+      g = { title = q.heading or "Other quests", quests = {}, place = place }
+      g.here = q.heading ~= nil and zones[q.heading:lower()] == true
+      byPlace[place] = g
+      places[#places + 1] = place
+    end
+    g.quests[#g.quests + 1] = q
   end
-  return items
+  table.sort(places, function(a, b)
+    local ga, gb = byPlace[a], byPlace[b]
+    if ga.here ~= gb.here then return ga.here end
+    if (a == 0) ~= (b == 0) then return b == 0 end
+    return a < b
+  end)
+  local groups = {}
+  for i, place in ipairs(places) do groups[i] = byPlace[place] end
+  return { headed = true, zone = shown, groups = groups }
 end
 
 -- The row menu's entry for a friend: "Their quests (4 you can get)". nil for someone we can't ask.
-function QuestList.rowItem(name, at)
+function QuestList.rowItem(name)
   if type(name) ~= "string" or ns.isTestName(name) or ns.isMe(name) then return nil end
   local m = ns.roster and ns.roster:get(name)
   if not m or not m.online then return nil end
@@ -221,32 +262,15 @@ function QuestList.rowItem(name, at)
     local n = QuestList.count(name)
     label = "Their quests (" .. (n == 0 and "none" or tostring(n)) .. " you can get)"
   end
-  return { label = label, icon = ICON_LIST, onClick = function()
-    -- under the row whose menu was just clicked (the panel remembers it), unless the caller named a frame
-    QuestList.open(name, at or (ns.Panel and ns.Panel._ and ns.Panel._.menuAnchor) or nil)
-  end }
+  return { label = label, icon = ICON_LIST, onClick = function() QuestList.open(name) end }
 end
 
-local function cursorAnchor()
-  if not anchor then
-    anchor = CreateFrame("Frame", nil, UIParent)
-    anchor:SetSize(1, 1)
-  end
-  local x, y = call(GetCursorPosition)
-  local scale = UIParent and call(UIParent.GetEffectiveScale, UIParent)
-  if type(x) == "number" and type(y) == "number" and type(scale) == "number" and scale > 0 then
-    anchor:ClearAllPoints()
-    anchor:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale, y / scale)
-  end
-  return anchor
-end
-
--- Opens the menu of their quests under `at` (a frame), or at the mouse.
-function QuestList.open(name, at)
-  local items = QuestList.menuItems(name)
-  QuestList.lastMenu = items
-  if ns.Widgets and ns.Widgets.menu then ns.Widgets.menu(at or cursorAnchor(), items) end
-  return items
+-- Opens the window of their quests (UI/QuestWindow.lua), asking for their list when ours is old.
+function QuestList.open(name)
+  if type(name) ~= "string" or name == "" then return false end
+  QuestList.want(name)
+  if ns.QuestWindow and ns.QuestWindow.open then return ns.QuestWindow.open(name) end
+  return false
 end
 
 ------------------------------------------------------------------------------------------------------ heads-up
@@ -326,12 +350,26 @@ local function onAsk(sender, f)
   sendMine(sender)
 end
 
+-- Is this list whole? All n quests, and for a list with headings (format 2) every quest's heading number and every
+-- heading name those numbers point at (their pieces may come in any order).
+local function whole(cur)
+  if cur.count < cur.n then return false end
+  if cur.format < 2 then return true end
+  for id in pairs(cur.quests) do
+    local z = cur.zones[id]
+    if z == nil or (z > 0 and not cur.heads[z]) then return false end
+  end
+  return true
+end
+
 local function onAnswer(sender, f)
   if type(sender) ~= "string" or type(f) ~= "table" then return end
   if ns.isMe(sender) then return end
   if not (ns.roster and ns.roster:get(sender)) then return end
   local s, n = f.s, tonumber(f.n)
   if type(s) ~= "string" or s == "" or #s > 16 or not n or n < 0 or n > MAX_QUESTS then return end
+  local format = tonumber(f.f) or 1
+  format = format >= 2 and 2 or 1 -- a newer format reads as the newest this copy knows (its fields are kept)
   local now = ns.now()
   local b = building[sender]
   if not b then b = {}; building[sender] = b end
@@ -339,23 +377,45 @@ local function onAnswer(sender, f)
     if now - cur.at > BUILD_AGE or now < cur.at then b[stamp] = nil end
   end
   local cur = b[s]
-  if not cur then cur = { at = now, n = n, count = 0, quests = {} }; b[s] = cur end
+  if not cur then
+    cur = { at = now, n = n, count = 0, quests = {}, format = format, heads = {}, zones = {}, zoneCount = 0 }
+    b[s] = cur
+  end
   for k, v in pairs(f) do
-    local id = type(k) == "string" and tonumber(k:match("^q(%d+)$"))
-    if id and type(v) == "string" and #v >= 2 and not cur.quests[id] and cur.count < MAX_QUESTS then
-      local flag = v:sub(1, 1)
-      local shareable = nil
-      if flag == "1" then shareable = true elseif flag == "0" then shareable = false end
-      cur.quests[id] = { id = id, title = ns.Util.truncateUTF8(v:sub(2), ns.Quest.TITLE_MAX), shareable = shareable }
-      cur.count = cur.count + 1
+    if type(k) == "string" and type(v) == "string" then
+      local id = tonumber(k:match("^q(%d+)$"))
+      if id and #v >= 2 and not cur.quests[id] and cur.count < MAX_QUESTS then
+        local flag = v:sub(1, 1)
+        local shareable = nil
+        if flag == "1" then shareable = true elseif flag == "0" then shareable = false end
+        cur.quests[id] = { id = id, title = ns.Util.truncateUTF8(v:sub(2), ns.Quest.TITLE_MAX), shareable = shareable }
+        cur.count = cur.count + 1
+      end
+      local h = tonumber(k:match("^h(%d+)$"))
+      if h and h >= 1 and h <= MAX_QUESTS and v ~= "" then
+        cur.heads[h] = ns.Util.truncateUTF8(v, ns.Quest.HEADING_MAX)
+      end
+      local zid = tonumber(k:match("^z(%d+)$"))
+      local z = tonumber(v)
+      if zid and z and z >= 0 and z <= MAX_QUESTS and z == math.floor(z) and cur.zones[zid] == nil
+        and cur.zoneCount < MAX_QUESTS then
+        cur.zones[zid] = z
+        cur.zoneCount = cur.zoneCount + 1
+      end
     end
   end
-  if cur.count < cur.n then return end -- more pieces to come
+  if not whole(cur) then return end -- more pieces to come
   b[s] = nil
-  lists[sender] = { at = now, n = cur.count, quests = cur.quests }
+  for id, q in pairs(cur.quests) do
+    local z = cur.format >= 2 and cur.zones[id] or 0
+    q.hi = z
+    q.heading = z > 0 and cur.heads[z] or nil
+  end
+  lists[sender] = { at = now, n = cur.count, quests = cur.quests, format = cur.format }
   cache[sender] = nil
   headsUp(sender)
   redraw()
+  if ns.QuestWindow and ns.QuestWindow.refresh then ns.QuestWindow.refresh(sender) end
 end
 
 ns.Comm.on("QLQ", function(sender, fields) ns.Log.safe(FEATURE, onAsk, sender, fields) end)
@@ -374,6 +434,7 @@ end
 function QuestList.changed()
   cache = {}
   redraw()
+  if ns.QuestWindow and ns.QuestWindow.refresh then ns.QuestWindow.refresh() end
 end
 
 -- Test hooks.

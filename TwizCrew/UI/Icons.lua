@@ -1,6 +1,6 @@
--- TwizCrew's own icons: one atlas (Art/Icons/Icons.tga, 512 x 512, 8 x 8 cells of 64, 55 used), the same in every
--- theme. The texcoords are used exactly as they are (each icon has its own margin and outline, and the cells are inset
--- half a texel): never the 0.08 / 0.92 trim of the game's icons. When the atlas does not load, every place falls back
+-- TwizCrew's own icons: one atlas (Art/Icons/Icons.tga, 512 x 512, 8 x 8 cells of 64, 55 used). The texcoords are
+-- used exactly as they are (each icon has its own margin and outline, and the cells are inset half a texel): never the
+-- 0.08 / 0.92 trim of the game's icons. When the atlas does not load, every place falls back
 -- to the picture it showed before (Icons.set's fallback), so there is never an empty square.
 --   Icons.set(tex, name, fallback)  draws icon `name` (or the fallback texture path, trimmed like before); returns
 --                                   "atlas", "game" or "none"
@@ -14,7 +14,7 @@ ns.Icons = Icons
 local T = ns.Theme
 Icons.ATLAS = T.ART .. "Icons\\Icons.tga"
 
--- name = { row, col, left, right, top, bottom } (docs/THEMES-SPEC.md section 5)
+-- name = { row, col, left, right, top, bottom } (docs/THEMES-SPEC.md section 2)
 Icons.CELLS = {
   tab_crew          = { 0, 0, 0.000977, 0.124023, 0.000977, 0.124023 },
   tab_shame         = { 0, 1, 0.125977, 0.249023, 0.000977, 0.124023 },

@@ -1132,7 +1132,7 @@ Not tested in the game yet. No new files: a `/reload` is enough. Riskiest first.
    now says **Everything**; if you had chat lines off, **Off**; else **Important**. If you had a pop-up, level-up or
    roast sound on, **Sounds** says **All**; if you had the mock laugh or the awards show sound off, **Off**; else
    **Shows only**.
-2. **Basics.** `/tc`: the theme picker, then eight controls (Keep the panel open, Panel size, Fade when I'm not using
+2. **Basics.** `/tc`: eight controls (Keep the panel open, Panel size, Fade when I'm not using
    it, Whose news I get, Pop-ups, News in my chat, Sounds, Mark me AFK when I stop playing), each with a grey line
    under it. How to use TwizCrew and What's new are links at the top (the window's layout: "Themes and icons").
 3. **The other tabs.** Panel, Alerts, Fun, Find, More (no All, no Test). Each page ends with a **Rarely needed**
@@ -1154,46 +1154,36 @@ Not tested in the game yet. No new files: a `/reload` is enough. Riskiest first.
 
 ## Themes and icons (2026-11-23)
 
-Not tested in the game yet. **Fully restart the game the first time** (quit and start it again; `/reload` is not
-enough): the new picture files and code files are only found at start-up. Riskiest first; screenshots help a lot.
+Not tested in the game yet. Classic (the game's own art) is the only look since just after v0.4.0; the icons stay.
+Coming from v0.4.0 a `/reload` is enough (files were only removed); from v0.3.0 or older, fully restart the game
+the first time (the icon file is only found at start-up). Riskiest first; screenshots help a lot.
 
-1. **Does the art show at all?** Log in: the panel's tab should be a dark-red banner with a gold crown (Crowned
-   crew, the default), and the panel a dark stone frame with a gold line. If everything looks like the game's own
-   grey-and-gold dialog boxes instead, the art did not load: `/tc report`, the **Theme** line says "art missing".
-   Tell Claude.
-2. **Is anything upside down?** The crest at the bottom of the panel, the banner, the tavern sign, the icons (the
-   crown, the skull, the clown). If upside down, tell Claude (one switch flips them all).
-3. **Are the edges clean?** The frame's corners and sides join without seams or dark lines, at Panel size 100% and
-   150%, and on a card (`/tc test`, a card) and the settings window.
-4. **Are the icons sharp at 16 px?** The icons on the panel's tabs, the Mock and Congrats buttons, the news line, the
-   Hall of Shame: crisp, no bits of the neighbouring icon at the edges.
-5. **Crowned crew.** The title plate behind "TwizCrew" (it sticks out a little above the panel), the crest hanging
-   under the bottom edge (it must not cover the last row or "Scroll for more"), character-style tabs, red game buttons
-   (Close, Mock), the Keep open bar as a game button that lights up when on. Slide the panel out of the tab: the plate
-   and the crest are whole, and the panel is where it used to be. Move the tab to the very top and bottom of the
-   screen: the panel still slides out fully on screen.
-6. **Tavern night** (`/tc`, Basics, click the third picture). It changes at once: oak frame and background, a lighter
-   oak band behind the title, "TwizCrew" in the old-book font, cream tabs, a chalk Keep open bar, the tavern sign as
-   the tab, tankards on the panel's edge. Cards and pop-ups are parchment with dark text: readable?
-7. **Classic** (the first picture): the game's own dialog borders, the gold-bordered cards, no emblem; the minimap
-   button shows its old icon again (the other two show the crest or the tankards).
-8. **The picker.** The three previews look like small versions of each theme; the chosen one has a gold outline and
-   its name in gold. The same picker is first on the Panel tab. Reset everything: back to Crowned crew. If the art
-   did not load (check 1), a line under the picker says every theme is drawn as Classic.
-9. **Icons in their places.** The Hall of Shame: an icon on each award row and, when the row fits, on each category
+1. **Coming from v0.4.0.** Log in with v0.4.0's saved settings (any theme chosen): no red errors, every window in
+   the game's own grey-and-gold dialog boxes, no crest under the panel, the minimap button shows its usual icon.
+   `/tc` has no theme picker (Basics starts with The panel, then Keep the panel open; Panel starts with the Crew
+   panel switch).
+2. **Do the icons show?** The icons on the panel's tabs, the Mock and Congrats buttons, the Hall of Shame. If they
+   are the game's own icons instead, the icon file did not load: `/tc report`, the **Look** line says "TwizCrew
+   icons missing". Tell Claude.
+3. **Is anything upside down?** The icons (the crown, the skull, the clown). If upside down, tell Claude (one switch
+   flips them all).
+4. **Are the icons sharp at 16 px?** Crisp, no bits of the neighbouring icon at the edges.
+5. **The look.** The title plate behind "TwizCrew" (it sticks out a little above the panel), character-style tabs,
+   red game buttons (Close, Mock), the Keep open bar as a game button that lights up when on, gold-bordered cards
+   (`/tc test`, a card) and pop-ups. Slide the panel out of the tab: the plate is whole and the panel is where it used
+   to be. Move the tab to the very top and bottom of the screen: the panel still slides out fully on screen.
+6. **Icons in their places.** The Hall of Shame: an icon on each award row and, when the row fits, on each category
    button; the awards show's big badge; pop-ups (`/tc test`); Recent activity (`/tc recent`) and the Activity tab;
    the news line when news slides out of the tab; a crown before an award title; the card logos; the calendar's Fun
    and Crew notes. Nowhere an empty square.
-10. **See-through.** Keep open on, Fade when I'm not using it 40%, mouse away: all three themes still readable over a
-    bright zone (the Barrens) and a dark one (a dungeon). Tavern night's oak goes a bit darker while faded.
-11. **The panel's tabs.** In each row style the words are the same as before the icons (Full rows: "Hall of Shame",
-    the "?" where it used to be); icons only where they fit. **The settings tabs.** One row of six tabs with icons:
-    does it fit? The grey lines under the Basics controls are
-    readable; the two links at the top turn white with a line under them on hover and open their windows. The Panel
-    tab starts with the picker, Rarely needed has the theme's divider above it.
-12. **Activity Clear.** Open the panel's Activity tab with more than ten entries: a small **Clear** button right of
-    "Scroll for more" empties the list.
-13. **Fights.** Switch themes, then fight something: no red errors, nothing slows down.
+7. **See-through.** Keep open on, Fade when I'm not using it 40%, mouse away: still readable over a bright zone (the
+   Barrens) and a dark one (a dungeon).
+8. **The panel's tabs.** In each row style the words are the same as before the icons (Full rows: "Hall of Shame",
+   the "?" where it used to be); icons only where they fit. **The settings tabs.** One row of six tabs with icons:
+   does it fit? The grey lines under the Basics controls are readable; the two links at the top turn white with a
+   line under them on hover and open their windows. Rarely needed has a thin line above it.
+9. **Activity Clear.** Open the panel's Activity tab with more than ten entries: a small **Clear** button right of
+   "Scroll for more" empties the list.
 
 ## What to send back
 

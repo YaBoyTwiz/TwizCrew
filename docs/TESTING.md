@@ -870,15 +870,14 @@ with a friend on the released version only step 6 can be checked.
 
 1. **The menu.** Hover a friend's row, then right-click it: there is a line "Their quests (N you can get)". The
    first time it may say "(asking...)": close the menu and right-click again a second later.
-2. **The list.** Click that line: a second menu opens under the row with "Ask to share: <quest>" for each quest
-   you can get, "Can't share: <quest> (why)" for the others, and "N quests you both have" at the bottom. Compare it
-   with your friend's real quest log: is anything missing or wrong?
-3. **Asking.** In a group with them, click one "Ask to share" line: they get the usual pop-up, they click it, and
-   the game offers you the quest. Try one that is not the quest shown on their row.
+2. **The list.** Click that line: their quests open in a window (since 2026-11-23; see "Quests by zone and asking
+   for several" below for the window itself). Compare it with your friend's real quest log: is anything missing or
+   wrong?
+3. **Asking.** Covered by "Quests by zone and asking for several" below.
 4. **The tooltip.** Hover their row: a green line "Can share N quests with you".
 5. **The heads-up.** Leave the group, then group again: a pop-up "<Name> has N quests you can get" and a chat line,
-   once. Click the pop-up: their quests open at the mouse. It should not come back each time they pick up a quest.
-6. **A friend on the old version.** Their line stays "Their quests (asking...)", and clicking it says they may
+   once. Click the pop-up: their quests window opens. It should not come back each time they pick up a quest.
+6. **A friend on the old version.** Their line stays "Their quests (asking...)", and the window says they may
    have an older TwizCrew. "Ask to share" for the quest on their row still works as before.
 7. **Keeping up.** While grouped, your friend accepts a new quest: a few seconds later it is in their list on your
    side (right-click again).
@@ -896,6 +895,40 @@ with a friend on the released version only step 6 can be checked.
    then group with two friends on this version. Right after grouping your chat shows your list going out once
    (`send QLA via PARTY`) and no `send QLA via WHISPER` to those two right after it. Turn in two quests quickly: one
    more `send QLA via PARTY`, not two. Their lists still show on your side (step 1).
+
+## Quests by zone and asking for several (2026-11-23)
+
+**Restart the game** (two files were added; `/reload` is not enough). You need a friend on this version, in your
+group, with a few quests in two or more zones. Without Questie a quest you are too low for still shows as one you can
+get. Unknowns first:
+
+1. **One click or one per quest (the big unknown).** Tick 3 of their quests and press "Ask for 3 quests". Your friend
+   gets one pop-up "<You> asks for 3 quests" and clicks it once. Do all 3 offers reach you, one after the other, each
+   about a second after you answer the last one? **Tell Claude which happened:** (a) all 3 came from the one click;
+   (b) after the first, your friend got a pop-up "Share next quest (2 of 3)" for each next one (the game wanted a
+   click), and maybe a "TwizCrew has been blocked from an action" message once; (c) only the first came and nothing
+   else happened (then Claude sets `QuestAsk.AUTO_NEXT = false` in `Crew/QuestAsk.lua`).
+2. **Their answer lines.** Decline the second offer: your chat says "<Name> couldn't share "<quest>": you declined
+   it", and the third offer still comes. On their side the game prints a line: if yours says nothing, tell Claude the
+   exact words. Also tell Claude if their game prints "<You> has accepted your quest" when you take one.
+3. **The headings.** Open their quests (right-click their row, "Their quests"): headings like the ones in their own
+   quest log (the zone names), the zone you stand in first with "(you are here)". Compare with their quest log: same
+   headings, each quest under the right one? (A collapsed heading in their log may hide its quests: tell Claude.)
+4. **The ticks.** A box beside each quest you can get; grey lines with the reason for the rest ("(you both have)",
+   "Can't share: ... (why)"). "Tick this zone" ticks all of a heading, then reads "Untick this zone". The button
+   says "Ask for N quests" and follows the ticks; with nothing ticked it is grey.
+5. **Only this zone.** Tick it: only the zone you are in stays. Walk to a zone where they have nothing: one line
+   "<Name> has no quests in <zone>." After a /reload the box is off again.
+6. **Scrolling and Escape.** With a full log the mouse wheel scrolls the list ("Scroll for more" under it). Escape
+   closes the window. Open and close it in a fight: no error.
+7. **The end.** When all offers are answered your chat has one line "You got N of 3 quests from <Name>." and the line
+   next to the button says the same. While it runs the button reads "Stop asking"; press it once to see that your
+   friend's copy stops (no more offers).
+8. **No group.** Leave the group and press the button: the usual "quest sharing only works in a group" line, nothing
+   is sent.
+9. **A friend on v0.4.1 or older.** Their window shows one list without headings and without "Only this zone". Tick
+   two and ask: your chat says they have an older TwizCrew and you ask one at a time; they get the usual pop-up for
+   the first, and the second only after you answered the first offer (at least 16 s after the first ask).
 
 ## While you were away (2026-11-23)
 

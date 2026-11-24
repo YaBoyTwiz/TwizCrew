@@ -13,6 +13,17 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Quests by zone, ticks and one ask for several (2026-11-23, owner: "its nice that we can see all quest but its hard
+  to know what quest to ask for when looking at someones quest because they are all together. is it possible to filter
+  them by zone ... also can we put like a check box system that will let the user check a box beside all the quest
+  they want requested and then press the button this way they can cherry pick the quest"; approved the written
+  description: "yes build it"):** "Their quests" now opens a small window: their quests under the zone headings of
+  their quest log, my zone first, a check box per quest I can get, "Tick this zone", "Only this zone", and one button
+  "Ask for 3 quests"; the friend gets ONE pop-up and their copy shares the quests one at a time. On the branch
+  `pin-party`, **not released, not seen in the game. It adds 2 files (`Crew/QuestAsk.lua`, `UI/QuestWindow.lua`), so
+  the next release must set `RESTART_SINCE` to its own version (the game must be fully restarted).** Details: section
+  "Quest list (2026-11-22)" below, from "Quests by zone"; checks: `docs/TESTING.md`, "Quests by zone and asking for
+  several".
 - **v0.4.1 released (2026-11-23, owner: "release it when its done"):** the "Classic only" change below, nothing
   else. Released without an in-game try. No files added, so `RESTART_SINCE` stays 0.4.0.
 - **Classic only (2026-11-23, just after v0.4.0; owner: "For crew let's use Classic as the default and remove the
@@ -654,27 +665,35 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
 - **What the owner asked:** "so far it only shows one quest ... is there a way we can improve this". He picked
   option 1 (see every quest a friend can share) and option 3 (a heads-up when you group). Option 2 (one click
   shares everything you're missing) was left out: nobody has checked that the game accepts several shares from one
-  click.
+  click. On 2026-11-23 he asked for zones and ticks (see "Quests by zone" below), which brings back a form of option 2
+  with that question still open.
 - **How it travels (Crew/QuestList.lua):** `QLQ` = "send me your quest list" (t = who should answer). `QLA` = the
   list: `s` (a stamp, the same in every piece), `n` (how many quests), and one `q<questID>` = flag + title per
   quest (flag: 1 can be shared, 0 can't, ? the game doesn't say; title cut to 40 like the row's). A full log takes
   several messages; a list is used only once all `n` quests arrived, so half a list never replaces a whole one.
   Whispered when the friend can be whispered, else sent to the group. Sent in the slow lane (bulk).
+  **Since 2026-11-23 (list format 2)** the list also carries: `f` = "2" (in every piece, with `s` and `n`), `h<n>` =
+  the name of the n-th heading row of the sender's quest log (the zone, or a group like a class; cut to 30 letters),
+  and `z<questID>` = the number of the heading the quest is under (0: none). `q<id>` keeps its meaning, so v0.4.1 and
+  older copies read the list as before and skip the new fields (checked in a test that reads a new list the way they
+  do). A format-2 list is used only once every quest's `z` and every heading it points at arrived too (the pieces can
+  come in any order). A list without `f` is from an older copy: one list, no headings. `f` also says the copy takes
+  an ask for several quests (below). A full log of 30 quests takes about one message more than before.
 - **When a copy asks:** when you hover a friend's row (once per hover) or open its right-click menu (not again
   within 20 s, and not while the list is younger than 60 s), and, 6 s after the group changes, for every crew member
   in your group whose list did not come by itself (not while their list is younger than 5 minutes). A copy in a
   group sends its list to the group again by itself, 2 s after its quests change (a newer list replaces one still
   waiting in the queue). An asker gets at most one answer per 10 s, and none when they were in my group when my
   list went to it less than 30 s ago with the same quests. A list holds at most 30 quests, none without a name.
-- **What you see:** the row's right-click menu has "Their quests (4 you can get)"; a click opens a second menu:
-  "Ask to share: <quest>" (the usual share request, still needs a group and their click), "Can't share: <quest>
-  (why)", and "N quests you both have". The row's tooltip adds "Can share N quests with you". The row itself still
-  shows the one quest they're on, with its green or red mark, as before.
+- **What you see:** the row's right-click menu has "Their quests (4 you can get)"; a click opens their quests in a
+  window (until 2026-11-23 a second menu; the window is described under "Quests by zone" below). The row's tooltip
+  adds "Can share N quests with you". The row itself still shows the one quest they're on, with its green or red
+  mark, as before.
 - **"You can get it" is the same rule as the row's mark:** yes when Questie says so, or, without Questie, when the
   game says it can be shared and you neither have it nor did it. Without Questie that can count a quest you are too
   low for.
 - **The heads-up:** when a group member's list shows quests you can get, one pop-up ("Frostie has 4 quests you can
-  get", click = their quests) and one chat line. Once per friend per grouping; leaving the group resets it. Switch:
+  get", click = their quests window) and one chat line. Once per friend per grouping; leaving the group resets it. Switch:
   "Tell me what my group can share" (`questHeadsUp`, Panel, on by default).
 - **Privacy:** "Share my quest" is now "Share my quests": off means the list goes out empty too.
 - **Questie is not needed (owner: "I want it usable if the user doesn't have it").** Without Questie nothing knows
@@ -688,6 +707,47 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   **Not checked on Forever:** that the game prints these lines there, and their exact words.
 - **Older copies (v0.2.0 and before)** drop both message types: for them the menu says "Their quests (asking...)"
   and only the one quest on the row can be asked for, as before.
+- **Quests by zone (2026-11-23, owner's words in "Where we are"):** the window (`UI/QuestWindow.lua`, opened by
+  "Their quests" and by the heads-up's click; Escape closes it; a plain frame, fine in a fight) shows their quests
+  under their quest log's headings. The heading that matches the zone I'm in (`GetZoneText` or `GetRealZoneText`,
+  same letters, any case) comes first with "(you are here)", the others in the order of their log, quests under no
+  heading last as "Other quests". No real distance (zone names only; Questie is not used for this). Each quest I can
+  get (the same rule as the row's mark) has a check box; a click on the line ticks it too. The others are grey with the
+  reason: "<quest> (you both have)" or "Can't share: <quest> (why)". Each heading with something to tick has "Tick
+  this zone" (ticks all I can get under it; "Untick this zone" once all are ticked). "Only this zone" at the top
+  hides every other heading (not saved; when they have nothing in my zone: "<Name> has no quests in <zone>."); ticks in
+  hidden zones still count (Claude's call: the button's number always says what will be asked). The mouse wheel
+  scrolls (14 lines show; "Scroll for more"). The button at the bottom: "Ask for 3 quests" (follows the ticks; "Ask
+  for quests" and greyed at 0; at most 25 in one ask), "Stop asking" while an ask runs; without a group the click
+  prints the usual "quest sharing only works in a group" line. A line next to the button says how the ask goes.
+  An older copy's list: the same window, one list, no headings and no "Only this zone".
+- **Asking for several (Crew/QuestAsk.lua):** `QMR` = the ask (t = who shares, k = a stamp, q = quest IDs "33,42";
+  one message, at most 25; Claude's call: no titles, they would need several messages, and the sharer takes the names
+  from its own log). The sharer's copy takes it only from a guild member in its group, meant for it, with "Share my
+  quests" on, one ask per friend per 15 s, IDs that really are in its log and shareable (the others are left out; none
+  left: it answers "none"). It shows ONE pop-up, "Twiz asks for 3 quests" (20 s, then "no"). Its click shares the
+  first quest; then one at a time: the next goes out once the last is answered, because the game shows the asker one
+  offer at once. Answered = the asker's copy says it took it (`QMU` with the quest ID, from its `QUEST_ACCEPTED`), or
+  the game's line on the sharer's side (refused, declined, busy, ... the "why a share didn't work" watcher above, which
+  here watches 45 s per quest; also "<Name> has accepted your quest" when the game prints it), or 45 s with nothing (`QRES` "time").
+  The sharer's news goes to the asker as `QMS` (st = yes / no / busy (sharing for someone else) / next (a click is
+  needed) / end with r = why and d = how many were taken). It stops when the group breaks, the asker goes offline or
+  stops (`QMU` x = 1), or a "share next" pop-up gets no click. The asker sees the progress in the window, the usual
+  one line per refused quest (`QRES`, new codes "gone" (not in their log any more), "time", "cant"), and one line at
+  the end: "You got 2 of 3 quests from Frostie." (or "No answer from ...", "... is sharing quests with someone else",
+  "... stopped sharing (the group broke up)", "Stopped asking ..."). The asker gives up after 30 s without "yes" or
+  "no", and after 2 minutes without any news.
+- **One click or one click per quest? (not known; the first thing to check in the game):** after the sharer's one
+  click, the next shares are made by a timer, without a click (`QuestAsk.AUTO_NEXT = true`, one switch at the top of
+  `Crew/QuestAsk.lua`). If the game wants a hardware click for each `QuestLogPushQuest`, it reports a blocked action
+  (`ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` naming TwizCrew); TwizCrew then offers that quest again as a
+  pop-up "Share next quest (2 of 3)" and uses such a pop-up for every next share until the next /reload. If the game
+  instead silently ignores the call, nothing tells us: then set `AUTO_NEXT = false` (every next share is a pop-up).
+- **Asking an older copy for several:** a friend whose list has no `f` (v0.4.1 and older) drops `QMR`. Their copy
+  also drops a second `QREQ` from the same friend within 15 s and shows one pop-up per `QREQ`. So TwizCrew says once
+  "<Name> has an older TwizCrew, so you ask for one quest at a time (they click for each one)" and sends the usual
+  single asks one after another: the next once the last is answered (I took it, or a `QRES`) or after 45 s, never
+  sooner than 16 s after the last; each prints the usual "asked <Name> to share ..." line, and one line at the end.
 
 ## While you were away and the welcome card (2026-11-23)
 
@@ -1087,7 +1147,8 @@ templates); whether the six settings tabs fit with icons.
   objectives moved last, else the first watched; never C_SuperTrack, see test_lint). Rows show "Quest (3/8)" with a
   ! or ?, hover adds where, quest objectives, status and distance; right-click a row for Whisper, Invite, Inspect
   (when near), Point the arrow, Mock (when dead), Add to friends. Switches: Show quests, Share my quest (Panel).
-  Since 2026-11-22 a friend's whole quest log can be asked for too: see "Quest list".
+  Since 2026-11-22 a friend's whole quest log can be asked for too: see "Quest list". Since 2026-11-23 (owner: "yes
+  build it") it opens in a window by zone, with ticks and one ask for several: same section, "Quests by zone".
 - **Advanced sub-tabs (2026-11-07):** "way too much stuff and takes forever to drag to the bottom". Advanced got
   sub-tabs (Panel, Roasts, Pop-ups, Find, Crew, Test, All); since 2026-11-23 they are Panel, Alerts, Fun, Find, More
   (see "Simpler settings"), now tabs of their own next to Basics (see "Themes and icons").

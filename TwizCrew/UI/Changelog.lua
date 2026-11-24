@@ -14,6 +14,12 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.4.2", date = "2026-11-23", lines = {
+    "A friend's quests now open in a window, sorted by zone. The zone you are in comes first.",
+    "  Tick the quests you want and press \"Ask for quests\". Your friend clicks once; they come one at a time.",
+    "  \"Tick this zone\" picks a whole zone. \"Only this zone\" hides the rest.",
+    "  Both of you need this version for zones. With an older one you ask for one quest at a time.",
+  } },
   { ver = "0.4.1", date = "2026-11-23", lines = {
     "One look for everyone: Classic, the game's own frames. Crowned crew and Tavern night are gone.",
     "  The theme picker left the settings. If you had another theme, you are on Classic now.",

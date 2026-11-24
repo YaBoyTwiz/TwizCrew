@@ -13,6 +13,8 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.4.2 released (2026-11-23, owner: "release it"):** the quest window (quests by zone, ticks, one ask for
+  several) with its review fixes. Released without an in-game try. It adds two files, so `RESTART_SINCE` is 0.4.2.
 - **Quests by zone, ticks and one ask for several (2026-11-23, owner: "its nice that we can see all quest but its hard
   to know what quest to ask for when looking at someones quest because they are all together. is it possible to filter
   them by zone ... also can we put like a check box system that will let the user check a box beside all the quest

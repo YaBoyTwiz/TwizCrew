@@ -13,6 +13,8 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.4.1 released (2026-11-23, owner: "release it when its done"):** the "Classic only" change below, nothing
+  else. Released without an in-game try. No files added, so `RESTART_SINCE` stays 0.4.0.
 - **Classic only (2026-11-23, just after v0.4.0; owner: "For crew let's use Classic as the default and remove the
   other themes."):** Crowned crew and Tavern night, their art and the theme picker are removed; Classic (the game's
   own art) is the only look. The icon set stays exactly as it is (the owner likes the icons). A `theme` saved by

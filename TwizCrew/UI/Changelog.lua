@@ -14,6 +14,11 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.4.1", date = "2026-11-23", lines = {
+    "One look for everyone: Classic, the game's own frames. Crowned crew and Tavern night are gone.",
+    "  The theme picker left the settings. If you had another theme, you are on Classic now.",
+    "TwizCrew's own icons stay just as they were.",
+  } },
   { ver = "0.4.0", date = "2026-11-23", lines = {
     "The panel now tucks away into a small tab on the edge of your screen, so you get your screen back.",
     "  Rest your mouse on the tab and the whole panel slides out. Move away and it tucks in again.",

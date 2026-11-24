@@ -678,7 +678,8 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   older copies read the list as before and skip the new fields (checked in a test that reads a new list the way they
   do). A format-2 list is used only once every quest's `z` and every heading it points at arrived too (the pieces can
   come in any order). A list without `f` is from an older copy: one list, no headings. `f` also says the copy takes
-  an ask for several quests (below). A full log of 30 quests takes about one message more than before.
+  an ask for several quests (below). A full log takes more messages than before: 30 quests with 40-letter names were 8
+  pieces, now 9 with one heading, 10 with 5, 11 with 10 (2 to 3 more for a usual log).
 - **When a copy asks:** when you hover a friend's row (once per hover) or open its right-click menu (not again
   within 20 s, and not while the list is younger than 60 s), and, 6 s after the group changes, for every crew member
   in your group whose list did not come by itself (not while their list is younger than 5 minutes). A copy in a
@@ -715,39 +716,54 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   get (the same rule as the row's mark) has a check box; a click on the line ticks it too. The others are grey with the
   reason: "<quest> (you both have)" or "Can't share: <quest> (why)". Each heading with something to tick has "Tick
   this zone" (ticks all I can get under it; "Untick this zone" once all are ticked). "Only this zone" at the top
-  hides every other heading (not saved; when they have nothing in my zone: "<Name> has no quests in <zone>."); ticks in
-  hidden zones still count (Claude's call: the button's number always says what will be asked). The mouse wheel
-  scrolls (14 lines show; "Scroll for more"). The button at the bottom: "Ask for 3 quests" (follows the ticks; "Ask
-  for quests" and greyed at 0; at most 25 in one ask), "Stop asking" while an ask runs; without a group the click
-  prints the usual "quest sharing only works in a group" line. A line next to the button says how the ask goes.
-  An older copy's list: the same window, one list, no headings and no "Only this zone".
+  hides every other heading (not saved; when they have nothing in my zone: "<Name> has no quests in <zone>.", or "in
+  this zone" when the game names none); ticks in hidden zones still count (Claude's call: the button's number always
+  says what will be asked). The mouse wheel scrolls (14 lines show; "Scroll for more"). The button at the bottom:
+  "Ask for 3 quests" (follows the ticks; "Ask for quests" and greyed at 0; at most 25 in one ask), "Stop asking"
+  while an ask runs; when I'm in no group, or they are not in mine, the click prints the usual "quest sharing only
+  works in a group. Invite <Name> first." line. The ticks stay after an ask: a quest I take, or one refused for good,
+  drops out by itself, so after "No answer" or "busy" the same ask is one click again. A line next to the button says
+  how the ask goes. The window redraws itself when I change zone or my group changes. An older copy's list: the
+  same window, one list, no headings and no "Only this zone".
 - **Asking for several (Crew/QuestAsk.lua):** `QMR` = the ask (t = who shares, k = a stamp, q = quest IDs "33,42";
   one message, at most 25; Claude's call: no titles, they would need several messages, and the sharer takes the names
-  from its own log). The sharer's copy takes it only from a guild member in its group, meant for it, with "Share my
-  quests" on, one ask per friend per 15 s, IDs that really are in its log and shareable (the others are left out; none
-  left: it answers "none"). It shows ONE pop-up, "Twiz asks for 3 quests" (20 s, then "no"). Its click shares the
-  first quest; then one at a time: the next goes out once the last is answered, because the game shows the asker one
-  offer at once. Answered = the asker's copy says it took it (`QMU` with the quest ID, from its `QUEST_ACCEPTED`), or
-  the game's line on the sharer's side (refused, declined, busy, ... the "why a share didn't work" watcher above, which
-  here watches 45 s per quest; also "<Name> has accepted your quest" when the game prints it), or 45 s with nothing (`QRES` "time").
-  The sharer's news goes to the asker as `QMS` (st = yes / no / busy (sharing for someone else) / next (a click is
-  needed) / end with r = why and d = how many were taken). It stops when the group breaks, the asker goes offline or
-  stops (`QMU` x = 1), or a "share next" pop-up gets no click. The asker sees the progress in the window, the usual
-  one line per refused quest (`QRES`, new codes "gone" (not in their log any more), "time", "cant"), and one line at
-  the end: "You got 2 of 3 quests from Frostie." (or "No answer from ...", "... is sharing quests with someone else",
-  "... stopped sharing (the group broke up)", "Stopped asking ..."). The asker gives up after 30 s without "yes" or
-  "no", and after 2 minutes without any news.
+  from its own log). The sharer's copy takes it only from a guild member in its group, meant for it, one ask per
+  friend per 15 s, IDs that really are in its log and shareable (the others are left out; none left: it answers
+  "none"). With "Share my quests" off it answers "off" (so the asker hears at once). A new ask from the friend whose
+  share is running (their copy forgot the old one, after a /reload say) replaces it; anyone else gets "busy". It shows
+  ONE pop-up, "Twiz asks for 3 quests" (20 s, then "no"). Its click shares the first quest; then one at a time: the
+  next goes out once the last is answered, because the game shows the asker one offer at once. Answered = the asker's
+  copy says it took it (`QMU` with the quest ID, from its `QUEST_ACCEPTED`), or the game's line on the sharer's side
+  (the "why a share didn't work" watcher above, one watch per friend, here 45 s per quest; also "<Name> has accepted
+  your quest" when the game prints it, except in the first 2 s after a share, when it is late news of the quest
+  before). A refusal is told back (`QRES`) and the next quest follows, except: "busy" (a window was open) offers the
+  same quest once more 5 s later; "quest log full", "too far away" and 45 s with no answer end the whole share (they
+  would fail the same way for every quest left, or the last offer may still be open). The sharer's news goes to the
+  asker as `QMS` (st = yes / no / busy (sharing for someone else) / next (a click is needed) / end with r = why and d =
+  how many were taken). It also stops when the group breaks, the asker goes offline or stops (`QMU` x = 1), or a
+  "share next" pop-up gets no click. The asker sees the progress in the window, the usual one line per refused quest
+  (`QRES`, new codes "gone" (not in their log any more) and "cant"), and one line at the end: "You got 2 of 3 quests
+  from Frostie." (or "No answer from ...", "... is sharing quests with someone else", "... stopped sharing (your
+  quest log is full / you are too far away from them / no answer to the last offer / they turned quest sharing off /
+  the group broke up / they went offline / ...)", "Stopped asking ..."). The asker gives up after 30 s without "yes"
+  or "no", and after 2 minutes without any news (both tell the sharer's copy to stop), and when the friend goes
+  offline or leaves my group. Sharing puts the quest log's own pick back afterwards (an open quest log does not jump).
 - **One click or one click per quest? (not known; the first thing to check in the game):** after the sharer's one
   click, the next shares are made by a timer, without a click (`QuestAsk.AUTO_NEXT = true`, one switch at the top of
   `Crew/QuestAsk.lua`). If the game wants a hardware click for each `QuestLogPushQuest`, it reports a blocked action
-  (`ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` naming TwizCrew); TwizCrew then offers that quest again as a
-  pop-up "Share next quest (2 of 3)" and uses such a pop-up for every next share until the next /reload. If the game
-  instead silently ignores the call, nothing tells us: then set `AUTO_NEXT = false` (every next share is a pop-up).
+  (`ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` naming TwizCrew, and `QuestLogPushQuest` when it names the
+  function) within 2 s of a timer share; TwizCrew then offers that quest again as a pop-up "Share next quest (2 of
+  3)" and uses such a pop-up for every next share until the next /reload. If the game instead silently ignores the
+  call, nothing tells us: then set `AUTO_NEXT = false` (every next share is a pop-up).
 - **Asking an older copy for several:** a friend whose list has no `f` (v0.4.1 and older) drops `QMR`. Their copy
-  also drops a second `QREQ` from the same friend within 15 s and shows one pop-up per `QREQ`. So TwizCrew says once
-  "<Name> has an older TwizCrew, so you ask for one quest at a time (they click for each one)" and sends the usual
-  single asks one after another: the next once the last is answered (I took it, or a `QRES`) or after 45 s, never
-  sooner than 16 s after the last; each prints the usual "asked <Name> to share ..." line, and one line at the end.
+  also drops a second `QREQ` from the same friend within 15 s (counted when it arrives there) and shows one pop-up per
+  `QREQ`. So TwizCrew says once "<Name> has an older TwizCrew, so you ask for one quest at a time (they click for each
+  one)" and sends the usual single asks one after another: the next once the last is answered (I took it, or a
+  `QRES`), never sooner than 20 s after the last. A quest with no answer after 45 s is asked once more, then skipped
+  ("<Name> didn't answer about "<quest>", so it was skipped."). It stops when they go offline or leave my group, or
+  after 150 s without any answer. Each ask prints the usual "asked <Name> to share ..." line, and one line at the end.
+- **Known limit:** at most 5 pop-ups show at once; a new one pushes out the oldest, so an ask's pop-up can be pushed out
+  by a burst of other pop-ups (left as it is; the asker then hears "No answer").
 
 ## While you were away and the welcome card (2026-11-23)
 

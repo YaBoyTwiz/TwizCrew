@@ -907,28 +907,36 @@ get. Unknowns first:
    about a second after you answer the last one? **Tell Claude which happened:** (a) all 3 came from the one click;
    (b) after the first, your friend got a pop-up "Share next quest (2 of 3)" for each next one (the game wanted a
    click), and maybe a "TwizCrew has been blocked from an action" message once; (c) only the first came and nothing
-   else happened (then Claude sets `QuestAsk.AUTO_NEXT = false` in `Crew/QuestAsk.lua`).
+   else happened (then Claude sets `QuestAsk.AUTO_NEXT = false` in `Crew/QuestAsk.lua`). **Your friend watches for
+   the game's own dialog "TwizCrew has been blocked from an action only available to the Blizzard UI"** (it comes
+   with `ADDON_ACTION_FORBIDDEN`): tell Claude if it shows, and its exact words.
 2. **Their answer lines.** Decline the second offer: your chat says "<Name> couldn't share "<quest>": you declined
    it", and the third offer still comes. On their side the game prints a line: if yours says nothing, tell Claude the
    exact words. Also tell Claude if their game prints "<You> has accepted your quest" when you take one.
+   Then the ones that end it: with your quest log full, ask for 2: one line "<Name> stopped sharing (your quest log
+   is full). You got 0 of 2 quests.", not a line per quest. Leave an offer open for a minute without answering: the
+   share stops ("no answer to the last offer") and no second offer comes on top of it.
 3. **The headings.** Open their quests (right-click their row, "Their quests"): headings like the ones in their own
    quest log (the zone names), the zone you stand in first with "(you are here)". Compare with their quest log: same
    headings, each quest under the right one? (A collapsed heading in their log may hide its quests: tell Claude.)
 4. **The ticks.** A box beside each quest you can get; grey lines with the reason for the rest ("(you both have)",
    "Can't share: ... (why)"). "Tick this zone" ticks all of a heading, then reads "Untick this zone". The button
    says "Ask for N quests" and follows the ticks; with nothing ticked it is grey.
-5. **Only this zone.** Tick it: only the zone you are in stays. Walk to a zone where they have nothing: one line
+5. **Only this zone.** Tick it: only the zone you are in stays. Keep the window open and walk into another zone:
+   "(you are here)" moves without closing it. Walk to a zone where they have nothing: one line
    "<Name> has no quests in <zone>." After a /reload the box is off again.
 6. **Scrolling and Escape.** With a full log the mouse wheel scrolls the list ("Scroll for more" under it). Escape
    closes the window. Open and close it in a fight: no error.
 7. **The end.** When all offers are answered your chat has one line "You got N of 3 quests from <Name>." and the line
-   next to the button says the same. While it runs the button reads "Stop asking"; press it once to see that your
+   next to the button says the same. The quests you did not get stay ticked. Your friend's open quest log keeps the
+   quest it had picked (it does not jump to each shared quest). While it runs the button reads "Stop asking"; press it once to see that your
    friend's copy stops (no more offers).
 8. **No group.** Leave the group and press the button: the usual "quest sharing only works in a group" line, nothing
    is sent.
 9. **A friend on v0.4.1 or older.** Their window shows one list without headings and without "Only this zone". Tick
    two and ask: your chat says they have an older TwizCrew and you ask one at a time; they get the usual pop-up for
-   the first, and the second only after you answered the first offer (at least 16 s after the first ask).
+   the first, and the second only after you answered the first offer (at least 20 s after the first ask). Ignore
+   one of their pop-ups: 45 s later you are asked once more, then a line says it was skipped.
 
 ## While you were away (2026-11-23)
 

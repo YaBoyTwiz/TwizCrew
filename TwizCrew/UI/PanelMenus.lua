@@ -183,7 +183,7 @@ local function buildStatusBox()
   f:SetFrameStrata("DIALOG")
   if f.SetClampedToScreen then f:SetClampedToScreen(true) end
   f:EnableMouse(true)
-  T.skin(f, "window", { alpha = 0.95 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(f, "window", { alpha = 0.95 }) -- the look's frame (UI/Skin.lua)
   local title = T.text(f, T.FONT.normal, C.title)
   title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -10)
   title:SetText("Set my status")

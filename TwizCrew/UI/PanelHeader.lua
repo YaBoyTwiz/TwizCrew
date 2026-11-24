@@ -147,7 +147,7 @@ local function drawHeader(s, view, news)
   end
   if P.countText.SetJustifyH then P.countText:SetJustifyH("RIGHT") end
   if P.countText.SetWordWrap then P.countText:SetWordWrap(false) end
-  local countRole = noticeLine and "news" or "count" -- (the theme's header colours; a theme change re-inks it)
+  local countRole = noticeLine and "news" or "count" -- (the look's header colours; a repaint re-inks it)
   if P.countText.tcRole ~= countRole then T.ink(P.countText, countRole) end
   barTextNow = Logic.barText(noticeLine, count)
   P.countText:SetText(barTextNow)
@@ -184,7 +184,7 @@ local function drawHeader(s, view, news)
   local kept = keepOpen()
   keepTextNow = Logic.keepSwitchText(kept, style)
   keepBar.text:SetText(keepTextNow)
-  T.setKeep(keepBar, kept) -- the theme's switch, lit while on (UI/Skin.lua)
+  T.setKeep(keepBar, kept) -- the look's switch, lit while on (UI/Skin.lua)
   keepBar:ClearAllPoints()
   keepBar:SetPoint("TOPLEFT", P.root, "TOPLEFT", 2, -(top - 2))
   keepBar:SetPoint("TOPRIGHT", P.root, "TOPRIGHT", -2, -(top - 2))
@@ -265,7 +265,7 @@ function P.buildHeader()
   titleText = title
   title:SetPoint("LEFT", grip, "RIGHT", 4, 0)
   title:SetText("TwizCrew")
-  T.ink(title, "title") -- the theme's title colour and font
+  T.ink(title, "title") -- the look's title colour and font
   newsIcon = head:CreateTexture(nil, "ARTWORK")
   newsIcon:SetSize(NEWS_ICON, NEWS_ICON)
   newsIcon:Hide()

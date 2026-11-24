@@ -23,7 +23,7 @@ local frame, rows, offset, open = nil, nil, 0, false
 
 local function script(f, name, fn) Widgets.script(f, name, fn, FEATURE) end
 
--- The What's new window (UI/Changelog.lua, made the first time it opens) takes the theme's frame too.
+-- The What's new window (UI/Changelog.lua, made the first time it opens) takes the look's frame too.
 if ns.Changelog and type(ns.Changelog.open) == "function" then
   local openChangelog = ns.Changelog.open
   ns.Changelog.open = function(...)
@@ -44,7 +44,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   script(frame, "OnDragStart", function(self) self:StartMoving() end)
   script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the look's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewAbout") end -- Escape
   script(frame, "OnHide", function() open = false end) -- Escape closes it too
 

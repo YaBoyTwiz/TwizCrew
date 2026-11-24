@@ -353,7 +353,7 @@ function Widgets.button(parent, label, onClick, kind, featureId, tip)
   hl:SetAllPoints(b)
   T.color(hl, C.white, 0.08)
   b.hl = hl
-  if kind ~= "danger" then T.skinButton(b) end -- the theme's button (UI/Skin.lua)
+  if kind ~= "danger" then T.skinButton(b) end -- the look's button (UI/Skin.lua)
   script(b, "OnClick", function() onClick() end, featureId)
   if tip then Widgets.helpTip(b, tip, featureId) end
   return b
@@ -383,7 +383,7 @@ local function buildMenu()
   if menu.SetToplevel then menu:SetToplevel(true) end
   if menu.SetClampedToScreen then menu:SetClampedToScreen(true) end
   menu:EnableMouse(true)
-  T.skin(menu, "menu", { alpha = 0.95 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(menu, "menu", { alpha = 0.95 }) -- the look's frame (UI/Skin.lua)
   menu:Hide()
   script(menu, "OnHide", function() catcher:Hide() end)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewMenu") end -- Escape closes it

@@ -278,10 +278,9 @@ return {
       for i, s in ipairs(d.settings) do keys[i] = s.key end
       A.eq(keys, { "noticeScope", "keepOpen", "peek", "barHover", "barInstead", "scale", "bgAlpha", "rowStyle",
         "shareQuest", "questHeadsUp", "idleAlpha", "locked", "hideInCombat", "hideInInstance", "hideWhenAlone",
-        "showNoAddon", "sort", "showSelf", "whatsNew", "about", "theme" })
-      A.eq(d.defaults.theme, "crowned", "everyone starts on Crowned crew")
+        "showNoAddon", "sort", "showSelf", "whatsNew", "about" })
       for _, gone in ipairs({ "peekSeconds", "showZone", "showStatus", "showQuest", "showXP", "xpText", "xpTooltip",
-        "grow", "questRequests", "tag_DEAD", "tag_AFK" }) do
+        "grow", "questRequests", "tag_DEAD", "tag_AFK", "theme" }) do
         A.eq(d.defaults[gone], nil, gone .. " is gone")
       end
       A.eq(d.defaults.showOffline, false, "kept: the Offline bar switches it")

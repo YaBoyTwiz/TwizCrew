@@ -112,7 +112,7 @@ local function build()
   Widgets.script(frame, "OnDragStart", function(self) self:StartMoving() end, FEATURE)
   Widgets.script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end, FEATURE)
   Widgets.script(frame, "OnHide", function() current = nil end, FEATURE)
-  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the look's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewUpdate") end -- Escape closes it
   title = T.text(frame, T.FONT.normal, C.title)
   title:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD, -PAD)

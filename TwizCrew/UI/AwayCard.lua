@@ -48,7 +48,7 @@ function AwayCard.newCard(name, icon, title, closeOnClick, featureId, atlasIcon)
   frame:SetFrameStrata("FULLSCREEN_DIALOG")
   frame:EnableMouse(true)
   if frame.SetClampedToScreen then frame:SetClampedToScreen(true) end
-  T.skin(frame, "card", { alpha = 0.97, plate = "card", emblem = "card" }) -- the theme's card (UI/Skin.lua)
+  T.skin(frame, "card", { alpha = 0.97, plate = "card" }) -- the look's card (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, name) end
   local logo = frame:CreateTexture(nil, "ARTWORK")
   logo:SetSize(T.icon(26), T.icon(26))

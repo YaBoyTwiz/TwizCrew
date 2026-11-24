@@ -143,7 +143,7 @@ local function build()
   frame:SetMovable(true)
   frame:EnableMouse(true)
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
-  T.skin(frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(frame, "window", { alpha = 0.97 }) -- the look's frame (UI/Skin.lua)
   local glow = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
   glow:SetPoint("TOPLEFT", frame, "TOPLEFT", -8, 8)
   glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 8, -8)

@@ -447,9 +447,10 @@ end
 ---------------------------------------------------------------------------------------- simpler settings (2026-11-23)
 -- Settings that are gone: their keys are deleted from saved data at every start (cheap; also covers data an older
 -- copy wrote back after a roll-back). Most just took a fixed value; two groups became one choice each (below).
+-- panel.theme (v0.4.0's theme picker) went the same day, after the release: Classic is the only look.
 DB.REMOVED_KEYS = {
   panel = { "peekSeconds", "showZone", "showStatus", "showQuest", "showXP", "xpText", "xpTooltip", "grow",
-    "questRequests", "tag_DEAD", "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK" },
+    "questRequests", "tag_DEAD", "tag_LAYER", "tag_COMBAT", "tag_DUNGEON", "tag_TAXI", "tag_AFK", "theme" },
   activity = { "chat", "chatOnline", "chatOffline", "chatDied", "chatLevel", "chatCongrats", "chatMock", "chatRoast" },
   popups = { "layerSame", "levelUpSound", "sound", "seconds" },
   roasts = { "weak", "fall", "drown", "again", "deaths", "wipe", "steps", "jumps", "quit", "sound", "mockSound",

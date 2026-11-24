@@ -108,7 +108,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   Widgets.script(frame, "OnDragStart", function(self) self:StartMoving() end, FEATURE)
   Widgets.script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end, FEATURE)
-  T.skin(frame, "card", { alpha = 0.97, plate = "card", emblem = "card" }) -- the theme's card (UI/Skin.lua)
+  T.skin(frame, "card", { alpha = 0.97, plate = "card" }) -- the look's card (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewRecap") end
   local logo = frame:CreateTexture(nil, "ARTWORK")
   logo:SetSize(T.icon(26), T.icon(26))

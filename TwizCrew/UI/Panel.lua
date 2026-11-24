@@ -666,7 +666,7 @@ local function redraw()
     if #list == 0 then note = "Nothing has happened yet."
     elseif #list > ACT_ROWS then note = "Scroll for more (" .. first .. "-" .. last .. " of " .. #list .. ")"
     else note = nil end
-    -- "Clear" (the theme's button) at the right of the "Scroll for more" line, inside the panel's padding; the note is
+    -- "Clear" (the look's button) at the right of the "Scroll for more" line, inside the panel's padding; the note is
     -- narrowed by the button's room while it shows. It empties the list, like the Recent window's button.
     local clearOn = #list > ACT_ROWS and note ~= nil
     local noteTop = y - GAP + 4 -- (where drawNote puts the note)
@@ -819,9 +819,8 @@ local function build()
   if P.root.SetDontSavePosition then P.root:SetDontSavePosition(true) end -- the position lives in our saved data
   if P.root.SetClampedToScreen then P.root:SetClampedToScreen(true) end
   P.root:SetSize(ROW_WIDTH.full + 2 * PAD, HEADER_HEIGHT + 2 * PAD)
-  -- the theme's frame (UI/Skin.lua): the title plate or band behind the header, the crew emblem on the bottom edge
-  T.skin(P.root, "panel", { alpha = clamp(setting("bgAlpha"), 0, 1, 0.8), plate = "panel", band = true,
-    emblem = "panel" })
+  -- the look's frame (UI/Skin.lua) with the title plate behind the header
+  T.skin(P.root, "panel", { alpha = clamp(setting("bgAlpha"), 0, 1, 0.8), plate = "panel" })
   draggable(P.root)
   script(P.root, "OnHide", stopDrag)
   if P.root.EnableMouseWheel then P.root:EnableMouseWheel(true) end
@@ -858,8 +857,8 @@ local function build()
     f.text:SetPoint("LEFT", f, "LEFT", 2, 0)
     f.text:SetJustifyH("LEFT")
     f.text:SetText(words)
-    T.ink(f.text, "heading", words)
-    f.line = f:CreateTexture(nil, "ARTWORK") -- the theme's divider after the words
+    T.ink(f.text, "heading")
+    f.line = f:CreateTexture(nil, "ARTWORK") -- the look's divider after the words
     f.line:SetPoint("LEFT", f.text, "RIGHT", 6, 0)
     f.line:SetPoint("RIGHT", f, "RIGHT", 0, 0)
     T.divider(f.line)
@@ -908,7 +907,7 @@ local function build()
     -- "?": the About window (How to use TwizCrew), after the Calendar button (or the last tab shown)
     helpTab = ns.Board.textButton(P.tabBar, "?", function() if ns.About then ns.About.toggle() end end, FEATURE,
       "about")
-    -- the theme's tab look, and the icons left of the words (the "?" gets none)
+    -- the game's tab look, and the icons left of the words (the "?" gets none)
     for id, b in pairs({ crew = crewTab, shame = shameTab, activity = actTab, calendar = calTab }) do
       T.skinTab(b)
       b.icon = b:CreateTexture(nil, "ARTWORK")
@@ -1169,7 +1168,6 @@ ns.Modules.register({
     hideWhenAlone = false, showOffline = false, showGuildOnline = false, showNoAddon = true, sort = "online",
     showSelf = false, noticeScope = "close",
     keepOpen = false, peek = true, barHover = true, barInstead = false, tabSide = "left", tabY = 100,
-    theme = "crowned",
     position = { point = "LEFT", x = 40, y = 100 },
   },
   settings = {
@@ -1243,9 +1241,6 @@ ns.Modules.register({
       onClick = function() if ns.About then ns.About.open() end end,
       info = "A short page about what TwizCrew does and how to use it. Also: the \"?\" next to the panel's tabs, "
         .. "the wrench menu, or /tc about." },
-    { key = "theme", label = "Theme", kind = "choice", picker = "theme",
-      choices = { { "classic", "Classic" }, { "crowned", "Crowned crew" }, { "tavern", "Tavern night" } },
-      info = select(2, ns.Help.tip("theme")) },
   },
   onEnable = onEnable,
   onDisable = onDisable,
@@ -1253,7 +1248,6 @@ ns.Modules.register({
     if P.root and key == "scale" then rescaleSavedPosition() end
     if P.root and LOOK_KEYS[key] then applyLook() end
     if key == "keepOpen" then Panel.keepOpenChanged() end
-    if key == "theme" then T.apply(); if P.enabled then requestRedraw() end end
     if (key == "tabSide" or key == "tabY") and P.root and not moving then applyPosition() end
     if key == "locked" and P.enabled then requestRedraw() end
   end,

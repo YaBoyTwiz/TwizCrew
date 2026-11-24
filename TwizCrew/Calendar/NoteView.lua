@@ -76,7 +76,7 @@ local function build()
   if frame.RegisterForDrag then frame:RegisterForDrag("LeftButton") end
   script(frame, "OnDragStart", function(self) self:StartMoving() end)
   script(frame, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.skin(frame, "window", { alpha = 0.98 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(frame, "window", { alpha = 0.98 }) -- the look's frame (UI/Skin.lua)
   T.gloss(frame, nil, 0.04, "BORDER")
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewNoteView") end
   script(frame, "OnHide", function() shownKey = nil end)

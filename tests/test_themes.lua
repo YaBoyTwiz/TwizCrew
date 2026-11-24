@@ -1,9 +1,8 @@
--- Themes (2026-11-23): the three theme tables are complete, the 9-slice maths, switching repaints live (every module
--- on, every module off), the fallback to Classic when the art does not load, the vertical flip in one place, the
--- see-through darkening of Tavern night's oak, the report line, and old saved data.
+-- The look and the icons. Since 2026-11-23 Classic (the game's own art) is the only look: its table is complete, the
+-- windows are drawn with it, Theme.apply repaints without making anything new, a v0.4.0 saved `theme` is dropped,
+-- the report line, the vertical flip of our own art (the icon atlas), and the icons with their fallback.
 
 local ATLAS = "Interface\\AddOns\\TwizCrew\\Art\\Icons\\Icons.tga"
-local CROWN = "Interface\\AddOns\\TwizCrew\\Art\\CrownedCrew\\Frame.tga"
 
 local function boot(W, before)
   W:fire("ADDON_LOADED", "TwizCrew")
@@ -28,7 +27,7 @@ local function keys(t)
   return out
 end
 
--- The root's 9-slice centre piece (nil when the frame is not drawn as a 9-slice now).
+-- A frame's skin record (UI/Skin.lua).
 local function skin(frame) return rawget(frame, "tcSkin") end
 
 -- Every role name the code inks with: the literal words on T.ink / Theme.ink lines, and the ones UI/Skin.lua picks.
@@ -57,125 +56,62 @@ return {
   files = "toc",
   tests = {
     ---------------------------------------------------------------------------------------------------- the data
-    every_theme_has_every_key = function(ns, A)
+    classic_is_the_only_look = function(ns, A)
       local T = ns.Theme
-      A.eq(keys(T.THEMES), { "classic", "crowned", "tavern" })
-      A.eq(T.ORDER, { "classic", "crowned", "tavern" })
-      A.eq(T.DEFAULT, "crowned")
-      -- the union of each table's keys must be in every theme (false = "has none", nil = forgotten)
-      local function sameKeys(get, what)
-        local all = {}
-        for _, id in ipairs(T.ORDER) do
-          local t = get(T.THEMES[id])
-          A.eq(type(t), "table", id .. ": " .. what)
-          for k in pairs(t) do all[k] = true end
-        end
-        for _, id in ipairs(T.ORDER) do
-          local t = get(T.THEMES[id])
-          for k in pairs(all) do A.ok(t[k] ~= nil, id .. " has no " .. what .. "." .. tostring(k)) end
-        end
+      A.eq(T.THEMES, nil, "no theme list")
+      A.eq(T.active(), T.CLASSIC)
+      local C = T.CLASSIC
+      for _, kind in ipairs({ "panel", "card", "popup", "window", "menu", "tab" }) do
+        local f = C.frames[kind]
+        A.ok(f and f.backdrop and f.backdrop.edgeFile and f.backdrop.insets, kind .. ": a game backdrop")
+        A.ok(f.backdrop.edgeFile:find("^Interface\\DialogFrame\\"), kind .. ": the game's own file")
       end
-      sameKeys(function(t) return t end, "theme")
-      sameKeys(function(t) return t.frames end, "frames")
-      sameKeys(function(t) return t.ink end, "ink")
-      for _, id in ipairs(T.ORDER) do
-        local t = T.THEMES[id]
-        A.eq(t.id, id)
-        for _, kind in ipairs({ "panel", "card", "popup", "window", "menu", "tab" }) do
-          local f = t.frames[kind]
-          A.ok(f, id .. " frames." .. kind)
-          if f.style == "backdrop" then
-            A.ok(f.backdrop and f.backdrop.edgeFile and f.backdrop.insets and f.border, id .. " " .. kind .. " backdrop")
-          elseif f.style == "slice" then
-            A.ok(type(f.file) == "string" and f.margin and #f.u == 4 and #f.v == 4, id .. " " .. kind .. " slice")
-          elseif f.style == "flat" then
-            A.ok(f.bg and f.border, id .. " " .. kind .. " flat")
-          elseif f.style == "file" then
-            A.ok(type(f.file) == "string", id .. " " .. kind .. " file")
-          else
-            error(id .. " " .. kind .. ": unknown style " .. tostring(f.style))
-          end
-        end
-        A.ok(t.tabs.style == "game" or t.tabs.style == "flat", id .. " tabs")
-        A.ok(t.button.style == "game" or t.button.style == "band", id .. " button")
-        A.ok(t.keep.style == "game" or t.keep.style == "chalk", id .. " keep")
-        A.ok(t.divider.style and t.divider.color, id .. " divider")
-        for role, r in pairs(t.ink) do A.ok(r.color and #r.color >= 3, id .. " ink." .. role .. " has a colour") end
+      A.eq(C.frames.panel.backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Border")
+      A.eq(C.frames.card.backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Gold-Border")
+      A.eq(C.plate.file, "Interface\\DialogFrame\\UI-DialogBox-Header")
+      for role, r in pairs(C.ink) do A.ok(r.color and #r.color >= 3, "ink." .. role .. " has a colour") end
+      for _, gone in ipairs({ "chosen", "drawnId", "artLoaded", "emblemFile", "setFaded", "sliceCuts", "ORDER",
+        "DEFAULT", "MORPHEUS" }) do
+        A.eq(T[gone], nil, "Theme." .. gone .. " is gone with the other themes")
       end
-      A.eq(T.THEMES.classic.probe, false, "Classic needs no file")
-      A.eq(T.THEMES.classic.emblem, false, "Classic has no emblem")
-      A.eq(T.THEMES.tavern.accent, { 1, 0.82, 0.48, 1 })
-      A.eq(T.THEMES.crowned.accent, { 1, 0.82, 0, 1 })
     end,
 
-    every_role_the_code_uses_is_in_every_theme = function(ns, A)
+    every_role_the_code_uses_is_in_the_look = function(ns, A)
       local roles = rolesInCode()
       A.ok(roles.cardTitle and roles.title and roles.heading, "the scan finds the roles")
-      for role in pairs(roles) do
-        for _, id in ipairs(ns.Theme.ORDER) do
-          A.ok(ns.Theme.THEMES[id].ink[role], id .. " has no ink." .. role)
-        end
-      end
-    end,
-
-    nine_slice_maths = function(ns, A)
-      local T = ns.Theme
-      local u, v = T.sliceCuts(256, 512, 36)
-      A.eq(u, T.THEMES.crowned.frames.panel.u, "Crowned crew u cuts")
-      A.eq(v, T.THEMES.crowned.frames.panel.v, "Crowned crew v cuts")
-      A.eq(u, { 0, 0.140625, 0.859375, 1 }); A.eq(v, { 0, 0.0703125, 0.9296875, 1 })
-      u, v = T.sliceCuts(128, 256, 13)
-      A.eq(u, T.THEMES.tavern.frames.panel.u, "Tavern night u cuts")
-      A.eq(v, T.THEMES.tavern.frames.panel.v, "Tavern night v cuts")
-      -- piece (col, row) uses u[col], u[col + 1], v[row], v[row + 1]
-      A.eq({ T.sliceCoords(u, v, 0, 0) }, { 0, 0.1015625, 0, 0.05078125 })
-      A.eq({ T.sliceCoords(u, v, 1, 1) }, { 0.1015625, 0.8984375, 0.05078125, 0.94921875 })
-      A.eq({ T.sliceCoords(u, v, 2, 2) }, { 0.8984375, 1, 0.94921875, 1 })
-      -- corners d x d at the corners, edges between them, the centre inside
-      A.eq({ T.slicePoints(0, 0, 12) }, { "TOPLEFT", 0, 0, "TOPLEFT", 12, -12 })
-      A.eq({ T.slicePoints(1, 0, 12) }, { "TOPLEFT", 12, 0, "TOPRIGHT", -12, -12 })
-      A.eq({ T.slicePoints(2, 0, 12) }, { "TOPRIGHT", -12, 0, "TOPRIGHT", 0, -12 })
-      A.eq({ T.slicePoints(0, 1, 12) }, { "TOPLEFT", 0, -12, "BOTTOMLEFT", 12, 12 })
-      A.eq({ T.slicePoints(1, 1, 12) }, { "TOPLEFT", 12, -12, "BOTTOMRIGHT", -12, 12 })
-      A.eq({ T.slicePoints(2, 1, 12) }, { "TOPRIGHT", -12, -12, "BOTTOMRIGHT", 0, 12 })
-      A.eq({ T.slicePoints(0, 2, 12) }, { "BOTTOMLEFT", 0, 12, "BOTTOMLEFT", 12, 0 })
-      A.eq({ T.slicePoints(1, 2, 12) }, { "BOTTOMLEFT", 12, 12, "BOTTOMRIGHT", -12, 0 })
-      A.eq({ T.slicePoints(2, 2, 12) }, { "BOTTOMRIGHT", -12, 12, "BOTTOMRIGHT", 0, 0 })
+      for role in pairs(roles) do A.ok(ns.Theme.CLASSIC.ink[role], "no ink." .. role) end
     end,
 
     the_vertical_flip_is_one_switch = function(ns, A)
       local T = ns.Theme
-      local u, v = T.sliceCuts(256, 512, 36)
       A.eq({ T.flipV(0.25, 0.5) }, { 0.25, 0.5 }, "off: as stored")
       T.FLIP_ART = true
       A.eq({ T.flipV(0.25, 0.5) }, { 0.75, 0.5 })
-      A.eq({ T.sliceCoords(u, v, 0, 0) }, { 0, 0.140625, 1, 0.9296875 }, "the top-left piece reads from the other end")
       local tex = ns.Theme.frame("Frame", nil, UIParent):CreateTexture()
       A.eq(ns.Icons.set(tex, "tab_crew"), "atlas")
-      A.eq(tex._coords, { 0.000977, 0.124023, 1 - 0.000977, 1 - 0.124023 }, "the atlas cell flips too")
+      A.eq(tex._coords, { 0.000977, 0.124023, 1 - 0.000977, 1 - 0.124023 }, "the atlas cell flips")
       T.FLIP_ART = false
     end,
 
     ---------------------------------------------------------------------------------------------------- drawing
-    everyone_starts_on_crowned_crew = function(ns, A, W)
+    the_panel_is_drawn_classic = function(ns, A, W)
       boot(W)
-      A.eq(ns.Modules.setting("panel", "theme"), "crowned")
-      A.eq(ns.Theme.chosen(), "crowned")
-      A.eq(ns.Theme.drawnId(), "crowned", "no answer from SetTexture is not a failure")
       local root = ns.Panel.rootForTest()
       local s = skin(root)
-      A.eq(s.mode, "slice")
-      A.eq(s.parts.slice5._texture, CROWN, "the centre is the frame file")
-      A.eq(s.parts.slice5._vertex[4], 0.8, "the centre takes Background darkness")
+      A.eq(s.mode, "backdrop")
+      A.eq(root._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Border")
       A.ok(s.parts.plate:IsShown(), "the title plate")
-      A.ok(s.parts.emblem and s.parts.emblem:IsShown(), "the crest on the bottom edge")
-      A.eq(s.parts.emblem._texture, "Interface\\AddOns\\TwizCrew\\Art\\CrownedCrew\\Crest.tga")
+      A.eq(s.parts.plate._texture, "Interface\\DialogFrame\\UI-DialogBox-Header")
+      A.eq(s.parts.emblem, nil, "no crest under the panel")
+      A.eq(ns.Theme.PANEL_OVERHANG.bottom, 0, "nothing hangs below the panel")
+      A.eq(ns.Theme.PANEL_OVERHANG.top, 10, "the plate sticks 10 above it")
+      A.eq(skin(ns.Panel.tabForTest()).mode, "backdrop", "the tucked tab: a small dialog box")
       ns.Modules.set("panel", "bgAlpha", 0.5)
-      A.eq(s.parts.slice5._vertex[4], 0.5, "Background darkness still works")
+      A.eq(s.alpha, 0.5, "Background darkness still works")
       A.eq(ns.Log.errors(10), {})
     end,
 
-    switching_repaints_at_once = function(ns, A, W)
+    apply_repaints_and_makes_nothing_new = function(ns, A, W)
       boot(W)
       receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
       ns.Modules.set("panel", "keepOpen", true)
@@ -184,140 +120,109 @@ return {
       tc(W, "report")
       ns.Popups.notice("Interface\\Icons\\INV_Misc_Gift_01", "Hello", "there", nil, nil, "new_member")
       W:advance(1)
-      local root = ns.Panel.rootForTest()
       local before = ns.Theme.trackedCountForTest()
-      local seen = {}
-      ns.Bus.on("test", "THEME_CHANGED", function(chosen, drawn) seen[#seen + 1] = chosen .. ">" .. drawn end)
-      ns.Modules.set("panel", "theme", "tavern")
+      local fired = 0
+      ns.Bus.on("test", "THEME_CHANGED", function() fired = fired + 1 end)
+      ns.Theme.apply()
       W:advance(0.2)
-      local s = skin(root)
-      A.eq(s.mode, "slice")
-      A.ok(not s.parts.slice5:IsShown(), "Tavern night: no centre piece")
-      A.ok(s.parts.fill:IsShown(), "the oak fills the inside")
-      A.eq(s.parts.fill._texture, "Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Oak.tga")
-      A.ok(s.parts.band:IsShown(), "the header band")
-      A.no(s.parts.plate:IsShown(), "no title plate")
-      A.eq(skin(ns.Panel.tabForTest()).parts.file._texture, "Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Sign.tga")
-      local settings = W.env.TwizCrewSettings
-      A.eq(skin(settings).mode, "slice", "the settings window follows")
-      A.ok(skin(W.env.TwizCrewChangelog), "the What's new window too")
-      ns.Modules.set("panel", "theme", "classic")
-      W:advance(0.2)
-      A.eq(s.mode, "backdrop")
-      A.eq(root._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Border")
-      A.eq(settings._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Gold-Border")
-      A.no(s.parts.slice1:IsShown(), "no 9-slice pieces left over")
-      A.no(s.parts.fill:IsShown(), "no oak left over")
-      A.no(s.parts.emblem:IsShown(), "Classic: no emblem")
-      ns.Modules.set("panel", "theme", "crowned")
-      W:advance(0.2)
-      A.eq(s.mode, "slice")
-      A.eq(root._backdrop, nil, "the backdrop is gone again")
-      A.eq(seen, { "tavern>tavern", "classic>classic", "crowned>crowned" })
-      A.eq(ns.Theme.trackedCountForTest(), before, "switching makes nothing new")
+      A.eq(fired, 1, "THEME_CHANGED once")
+      A.eq(skin(ns.Panel.rootForTest()).mode, "backdrop")
+      A.eq(W.env.TwizCrewSettings._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Gold-Border")
+      A.ok(skin(W.env.TwizCrewChangelog), "the What's new window is skinned")
+      A.eq(ns.Theme.trackedCountForTest(), before, "a repaint makes nothing new")
       A.eq(ns.Log.errors(10), {})
     end,
 
-    switching_with_every_module_off_and_on = function(ns, A, W)
+    apply_with_every_module_off_and_on = function(ns, A, W)
       boot(W)
       local ids = {}
       for _, d in ipairs(ns.Modules.list()) do ids[#ids + 1] = d.id end
       for _, id in ipairs(ids) do ns.Modules.setEnabled(id, false) end
       W:advance(1)
-      for _, theme in ipairs({ "tavern", "classic", "crowned" }) do
-        ns.Modules.set("panel", "theme", theme)
-        W:advance(0.2)
-      end
+      ns.Theme.apply(); W:advance(0.2)
       A.eq(ns.Log.errors(10), {}, "every module off")
       for _, id in ipairs(ids) do ns.Modules.setEnabled(id, true) end
       W:advance(1)
       ns.Settings.open()
-      for _, theme in ipairs({ "tavern", "classic", "crowned", "tavern" }) do
-        ns.Modules.set("panel", "theme", theme)
-        W:advance(0.2)
-      end
+      ns.Theme.apply(); W:advance(0.2)
       A.eq(ns.Log.errors(10), {}, "every module on")
-      ns.Modules.resetAll()
-      A.eq(ns.Modules.setting("panel", "theme"), "crowned", "Reset everything: back to Crowned crew")
-      A.eq(ns.Theme.drawnId(), "crowned")
-      A.eq(ns.Log.errors(10), {})
     end,
 
-    texts_take_the_theme = function(ns, A, W)
+    texts_take_the_look = function(ns, A, W)
       boot(W)
       ns.Modules.set("panel", "keepOpen", true)
       W:advance(0.5)
       local count = ns.Panel._.countText
       A.eq(count.tcRole, "count")
-      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 }, "Crowned crew: the header count in light grey")
+      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 }, "the header count in light grey")
       local tab = ns.Panel.tabForTest()
       A.eq(tab.label.tcRole, "tuckLetters")
-      A.eq(tab.label._textColor, { 1, 0.85, 0.42, 1 }, "the banner's letters")
-      ns.Modules.set("panel", "theme", "tavern")
-      W:advance(0.2)
-      A.eq(count._textColor, { 0.95, 0.89, 0.74, 1 }, "Tavern night's count colour, at once")
-      A.eq(tab.label._textColor, { 0.96, 0.89, 0.69, 1 })
-      ns.Popups.notice("Interface\\Icons\\INV_Misc_Gift_01", "Hello", "there")
-      W:advance(0.6)
+      A.eq(tab.label._textColor, { 1, 0.82, 0, 1 }, "the tab's letters in gold")
       ns.AwayCard.newCard("TwizCrewThemeTestCard", "Interface\\Icons\\INV_Misc_Gift_01", "A card", true, nil,
         "card_away").fill("sub", { { icon = "Interface\\Icons\\INV_Misc_Gift_01", text = "a line" } }, {})
       local card = W.env.TwizCrewThemeTestCard
-      A.eq(skin(card).mode, "flat", "Tavern night's card: parchment")
-      ns.Modules.set("panel", "theme", "classic")
-      W:advance(0.2)
-      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 })
-      A.eq(tab.label._textColor, { 1, 0.82, 0, 1 }, "Classic: the accent")
-      A.eq(skin(card).mode, "backdrop", "the card follows")
+      A.eq(skin(card).mode, "backdrop", "a card: the gold-bordered dialog box")
       A.eq(card._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Gold-Border")
+      A.ok(skin(card).parts.plate:IsShown(), "with its title plate")
+      A.eq(skin(card).parts.emblem, nil, "and no crest")
+      ns.Theme.apply(); W:advance(0.2)
+      A.eq(count._textColor, { 0.81, 0.81, 0.81, 1 }, "the same after a repaint")
       A.eq(ns.Log.errors(10), {})
     end,
 
-    ---------------------------------------------------------------------------------------------------- fallback
-    art_that_fails_is_drawn_as_classic = function(ns, A, W)
+    the_minimap_button_keeps_its_icon_after_a_repaint = function(ns, A, W)
+      boot(W)
+      ns.Theme.apply(); W:advance(0.2)
+      A.contains(ns.MinimapButton.reportLine(), "icon ok")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    ---------------------------------------------------------------------------------------------------- saved data
+    a_saved_theme_from_v040_is_dropped = function(ns, A, W)
+      for _, old in ipairs({ "crowned", "tavern", "classic", "neon" }) do
+        W.env.TwizCrewDB = { schema = 1, aboutSeen = true, panelSince0112 = true, fadeOnSince017 = true,
+          simpleSettings = true,
+          modules = { panel = { enabled = true, settings = { scale = 1.2, bgAlpha = 0.8, keepOpen = true,
+            theme = old } } } }
+        ns.DB.init(W.env.TwizCrewDB, ns.Modules.list())
+        local saved = W.env.TwizCrewDB.modules.panel.settings
+        A.eq(saved.theme, nil, old .. ": deleted at start")
+        A.eq(saved.scale, 1.2, old .. ": the other settings stay")
+      end
+    end,
+
+    a_v040_upgrade_boots_classic_without_errors = function(ns, A, W)
+      W.env.TwizCrewDB = { schema = 1, aboutSeen = true, panelSince0112 = true, fadeOnSince017 = true,
+        simpleSettings = true, newsSeen = "0.4.0",
+        modules = { panel = { enabled = true, settings = { scale = 1, bgAlpha = 0.8, keepOpen = true,
+          theme = "tavern" } } } }
+      boot(W)
+      A.eq(W.env.TwizCrewDB.modules.panel.settings.theme, nil, "the old choice is gone")
+      A.eq(ns.Modules.setting("panel", "theme"), nil)
+      A.eq(ns.Modules.set("panel", "theme", "crowned"), false, "and cannot be set again")
+      A.eq(skin(ns.Panel.rootForTest()).mode, "backdrop", "drawn Classic")
+      ns.Modules.resetAll()
+      A.eq(W.env.TwizCrewDB.modules.panel.settings.theme, nil, "Reset everything does not bring it back")
+      A.eq(ns.Log.errors(10), {})
+    end,
+
+    ---------------------------------------------------------------------------------------------------- art missing
+    missing_art_changes_only_the_icons = function(ns, A, W)
       W.state.missingArt = true
       boot(W)
-      A.eq(ns.Modules.setting("panel", "theme"), "crowned", "the choice stays saved")
-      A.eq(ns.Theme.chosen(), "crowned")
-      A.eq(ns.Theme.drawnId(), "classic")
       local root = ns.Panel.rootForTest()
-      A.eq(skin(root).mode, "backdrop", "drawn as Classic")
-      A.eq(root._backdrop.edgeFile, "Interface\\DialogFrame\\UI-DialogBox-Border")
-      local warned = false
-      for _, l in ipairs(ns.Log.lines()) do if tostring(l):find("theme art missing, using Classic", 1, true) then warned = true end end
-      A.ok(warned, "one log line says so")
-      ns.Modules.set("panel", "theme", "tavern")
-      A.eq(ns.Theme.drawnId(), "classic", "Tavern night's art is missing too")
-      A.eq(ns.Theme.emblemFile(), nil)
-      A.contains(ns.Theme.reportLine(), "art missing")
+      A.eq(skin(root).mode, "backdrop", "the frame needs no file of ours")
+      A.no(ns.Icons.ok(), "the icons fall back")
       A.contains(ns.Theme.reportLine(), "icons missing")
-      A.contains(ns.Theme.reportLine(), "drawn Classic")
       A.eq(ns.Log.errors(10), {}, "a missing file never raises an error")
     end,
 
-    the_report_says_which_theme_is_drawn = function(ns, A, W)
+    the_report_says_whether_the_icons_loaded = function(ns, A, W)
       boot(W)
-      A.eq(ns.Theme.reportLine(), "Theme: Crowned crew, drawn Crowned crew; art loaded (the game gave no answer); "
-        .. "icons loaded (the game gave no answer)")
+      A.eq(ns.Theme.reportLine(), "Look: Classic (the game's own art); TwizCrew icons loaded (the game gave no answer)")
       local found = false
-      for _, l in ipairs(ns.Report.lines()) do if l:find("^Theme: Crowned crew") then found = true end end
+      for _, l in ipairs(ns.Report.lines()) do if l:find("^Look: Classic") then found = true end end
       A.ok(found, "/tc report has the line")
-    end,
-
-    old_saved_data_gets_the_default_theme = function(ns, A, W)
-      W.env.TwizCrewDB = { schema = 1, aboutSeen = true, panelSince0112 = true, fadeOnSince017 = true,
-        modules = { panel = { enabled = true, settings = { scale = 1, bgAlpha = 0.8, keepOpen = true } } } }
-      boot(W)
-      A.eq(W.env.TwizCrewDB.modules.panel.settings.theme, "crowned", "the new default is written in")
-      A.eq(ns.Theme.drawnId(), "crowned")
-      A.eq(ns.Log.errors(10), {})
-    end,
-
-    a_broken_saved_theme_is_the_default = function(ns, A, W)
-      boot(W)
-      W.env.TwizCrewDB.modules.panel.settings.theme = "neon"
-      A.eq(ns.Theme.chosen(), "crowned")
-      A.eq(ns.Theme.drawnId(), "crowned")
-      A.eq(ns.Modules.set("panel", "theme", 7), false, "a number is refused")
     end,
 
     ---------------------------------------------------------------------------------------------------- icons
@@ -408,7 +313,7 @@ return {
       A.eq(row.mock.icon._texture, ns.Tags.ICON.DEAD, "Mock: the skull, as before")
       A.eq(row.cheer.icon._texture, "Interface\\Icons\\INV_Misc_Gift_01", "Congrats: the gift, as before")
       A.eq(row.cheer.icon._coords, { 0.08, 0.92, 0.08, 0.92 }, "trimmed like a game icon")
-      A.eq(ns.Theme.drawnId(), "crowned", "only the icons fall back; the theme's frame loaded")
+      A.eq(rawget(ns.Panel.rootForTest(), "tcSkin").mode, "backdrop", "the panel's frame is the game's own")
       local tex = ns.Theme.frame("Frame", nil, UIParent):CreateTexture()
       A.eq(ns.Icons.set(tex, "award_medic", "Interface\\Icons\\Spell_Holy_Resurrection", true), "game")
       A.eq(tex._coords, { 0, 1, 0, 1 }, "a place that drew it whole stays whole")
@@ -435,43 +340,35 @@ return {
       end
     end,
 
-    ---------------------------------------------------------------------------------------------------- settings
-    the_picker_switches_at_once = function(ns, A, W)
+    tab_words_are_the_same_with_and_without_icons = function(ns, A, W)
       boot(W)
-      ns.Settings.open()
-      local picker = ns.Settings.pickerForTest("basic")
-      A.ok(picker and picker:IsShown(), "the picker on Basics")
-      local ids = {}
-      for i, b in ipairs(picker.previews) do ids[i] = b.tcId end
-      A.eq(ids, { "classic", "crowned", "tavern" })
-      local function outlined(b) return b.outline[1]:IsShown() end
-      A.ok(outlined(picker.previews[2]), "Crowned crew is chosen")
-      A.no(outlined(picker.previews[1])); A.no(outlined(picker.previews[3]))
-      -- each preview is drawn in its own theme, small, whatever the chosen one
-      A.eq(skin(picker.previews[1].box).mode, "backdrop", "Classic: the dialog backdrop")
-      A.eq(picker.previews[1].box._backdrop.edgeSize, 12)
-      A.eq(skin(picker.previews[2].box).mode, "slice"); A.eq(skin(picker.previews[2].box).opts.margin, 6)
-      A.eq(skin(picker.previews[3].box).opts.margin, 5, "Tavern night: margin 5")
-      A.eq(skin(picker.previews[3].box).opts.tile, 64, "and the oak at 64")
-      A.no(skin(picker.previews[1].box).parts.emblem, "no emblem on Classic")
-      local tavern = picker.previews[3]
-      tavern._scripts.OnClick(tavern)
-      A.eq(ns.Modules.setting("panel", "theme"), "tavern", "a click switches the setting")
-      A.eq(ns.Theme.drawnId(), "tavern")
-      A.eq(skin(ns.Panel.rootForTest()).parts.fill:IsShown(), true, "and the panel repaints at once")
-      A.ok(outlined(tavern), "the outline moves")
-      A.no(outlined(picker.previews[2]))
-      ns.Settings.setTab("panel")
-      local again = ns.Settings.pickerForTest("panel")
-      A.ok(again:IsShown(), "first on the Panel page too")
-      A.ok(outlined(again.previews[3]))
-      again.previews[1]._scripts.OnClick(again.previews[1])
-      A.eq(ns.Modules.setting("panel", "theme"), "classic")
-      A.eq(skin(ns.Panel.rootForTest()).mode, "backdrop")
-      A.eq(skin(picker.previews[3].box).opts.margin, 5, "the Tavern preview still shows Tavern night")
-      A.eq(ns.Log.errors(10), {})
+      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
+      local tabs = ns.Panel.tabButtonsForTest()
+      local order = { "crew", "shame", "act", "cal", "help" }
+      local function words()
+        local out = {}
+        for _, k in ipairs(order) do
+          local b = tabs[k]
+          out[#out + 1] = (b:IsShown() and "" or "(hidden)") .. tostring(b.label:GetText())
+        end
+        return table.concat(out, " | ")
+      end
+      local with = {}
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
+        with[style] = words()
+      end
+      -- the same panel as if the atlas had not loaded: no tab has an icon
+      for _, k in ipairs(order) do rawset(tabs[k], "tcIconOn", false) end
+      for _, style in ipairs({ "full", "compact", "tiny" }) do
+        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
+        A.eq(with[style], words(), style .. ": icons never take the words' place")
+        for _, k in ipairs(order) do A.no(tabs[k].tcIconShown, style .. " " .. k .. ": no icon") end
+      end
+      A.contains(with.full, "Hall of Shame", "full rows keep Hall of Shame")
     end,
 
+    ---------------------------------------------------------------------------------------------------- settings
     grey_lines_and_the_rarely_needed_heading = function(ns, A, W)
       A.eq(ns.Settings.greyLines("short"), 1)
       A.eq(ns.Settings.greyLines(string.rep("x", 75)), 2, "about 74 letters a line without the game's measure")
@@ -525,82 +422,6 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    ---------------------------------------------------------------------------------------------------- review fixes
-    tucked_the_plate_and_crest_lie_inside_the_holder = function(ns, A, W)
-      boot(W)
-      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
-      W:advance(1)
-      local root, holder = ns.Panel.rootForTest(), ns.Panel.holderForTest()
-      A.eq(root:GetParent(), holder, "tucked: the panel hangs in the clipping holder")
-      local top, bottom = ns.Theme.PANEL_OVERHANG.top, ns.Theme.PANEL_OVERHANG.bottom
-      local s = skin(root)
-      -- the plate: 10 above the frame; the crest: its top 2 above the bottom edge, 38 tall
-      local _, _, _, px, py = s.parts.plate:GetPoint(1)
-      A.ok(py <= top, "the plate's overhang (" .. py .. ") fits in the holder's top " .. top)
-      local point, rel, relPoint, _, cy = s.parts.emblem:GetPoint(1)
-      A.eq({ point, rel, relPoint }, { "TOP", root, "BOTTOM" })
-      local _, ch = s.parts.emblem:GetSize()
-      A.ok(ch - cy <= bottom, "the crest's overhang (" .. (ch - cy) .. ") fits in the holder's bottom " .. bottom)
-      for _, scale in ipairs({ 1, 1.5 }) do
-        ns.Modules.set("panel", "scale", scale); W:advance(0.5)
-        local h = (ns.Panel._.rootH or 0) * scale
-        A.eq(holder:GetHeight(), math.max(1, h) + (top + bottom) * scale, "holder = panel + overhang, at scale " .. scale)
-        local _, _, _, _, ry = root:GetPoint(1)
-        A.eq(ry, -top, "the panel hangs the top overhang lower in it (its own units)")
-        local _, _, _, _, hy = holder:GetPoint(1)
-        A.eq(hy, top * scale, "and the holder sits that much higher: the panel stays where it was")
-      end
-      A.eq(ns.Log.errors(10), {})
-    end,
-
-    the_crest_never_covers_content = function(ns, A, W)
-      boot(W)
-      ns.Modules.set("panel", "keepOpen", true)
-      W:advance(1)
-      local s = skin(ns.Panel.rootForTest())
-      local _, _, _, _, cy = s.parts.emblem:GetPoint(1)
-      -- every layout leaves at least 2 under its last line (the panel's height is the content + 2)
-      A.ok(cy <= 2, "the crest's top is inside the bottom padding (" .. cy .. ")")
-    end,
-
-    tab_words_are_the_same_with_and_without_icons = function(ns, A, W)
-      boot(W)
-      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
-      local tabs = ns.Panel.tabButtonsForTest()
-      local order = { "crew", "shame", "act", "cal", "help" }
-      local function words()
-        local out = {}
-        for _, k in ipairs(order) do
-          local b = tabs[k]
-          out[#out + 1] = (b:IsShown() and "" or "(hidden)") .. tostring(b.label:GetText())
-        end
-        return table.concat(out, " | ")
-      end
-      local with = {}
-      for _, style in ipairs({ "full", "compact", "tiny" }) do
-        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
-        with[style] = words()
-      end
-      -- the same panel as if the atlas had not loaded: no tab has an icon
-      for _, k in ipairs(order) do rawset(tabs[k], "tcIconOn", false) end
-      for _, style in ipairs({ "full", "compact", "tiny" }) do
-        ns.Modules.set("panel", "rowStyle", style); W:advance(0.3)
-        A.eq(with[style], words(), style .. ": icons never take the words' place")
-        for _, k in ipairs(order) do A.no(tabs[k].tcIconShown, style .. " " .. k .. ": no icon") end
-      end
-      A.contains(with.full, "Hall of Shame", "full rows keep Hall of Shame")
-    end,
-
-    a_tavern_button_sized_later_is_tiled_again = function(ns, A, W)
-      boot(W)
-      ns.Modules.set("panel", "theme", "tavern"); W:advance(0.2)
-      local b = ns.Widgets.button(W.env.UIParent, "X", function() end)
-      b:SetSize(80, 20)
-      local bg = b.tcButton.parts.bg
-      A.eq(bg._coords[2], 80 / 256, "the oak follows the new width")
-      A.eq(bg._coords[4], 20 / 256, "and height")
-    end,
-
     the_activity_clear_button_stays_inside_the_panel = function(ns, A, W)
       boot(W)
       W:advance(40)
@@ -623,6 +444,29 @@ return {
       end
     end,
 
+    ---------------------------------------------------------------------------------------------------- the panel
+    tucked_the_plate_lies_inside_the_holder = function(ns, A, W)
+      boot(W)
+      receive(W, ns, "Frostie", "STATE", { cl = "MAGE", lv = "12" })
+      W:advance(1)
+      local root, holder = ns.Panel.rootForTest(), ns.Panel.holderForTest()
+      A.eq(root:GetParent(), holder, "tucked: the panel hangs in the clipping holder")
+      local top, bottom = ns.Theme.PANEL_OVERHANG.top, ns.Theme.PANEL_OVERHANG.bottom
+      local s = skin(root)
+      local _, _, _, _, py = s.parts.plate:GetPoint(1)
+      A.ok(py <= top, "the plate's overhang (" .. py .. ") fits in the holder's top " .. top)
+      for _, scale in ipairs({ 1, 1.5 }) do
+        ns.Modules.set("panel", "scale", scale); W:advance(0.5)
+        local h = (ns.Panel._.rootH or 0) * scale
+        A.eq(holder:GetHeight(), math.max(1, h) + (top + bottom) * scale, "holder = panel + overhang, at scale " .. scale)
+        local _, _, _, _, ry = root:GetPoint(1)
+        A.eq(ry, -top, "the panel hangs the top overhang lower in it (its own units)")
+        local _, _, _, _, hy = holder:GetPoint(1)
+        A.eq(hy, top * scale, "and the holder sits that much higher: the panel stays where it was")
+      end
+      A.eq(ns.Log.errors(10), {})
+    end,
+
     edges_are_never_more_than_half_a_side = function(ns, A, W)
       local T = ns.Theme
       A.eq(T.clampEdge(32, 270, 50), 25, "a pop-up 50 tall: at most 25")
@@ -630,10 +474,9 @@ return {
       A.eq(T.clampEdge(10, 16, 16), 8, "the ? tab's caps")
       A.eq(T.clampEdge(12, 400, 300), 12, "a big frame keeps the edge")
       A.eq(T.clampEdge(12, 0, 0), 12, "a frame not sized yet keeps it")
-      A.eq(T.THEMES.classic.frames.popup.backdrop.edgeSize, 16, "Classic's pop-up edge")
-      A.eq(T.THEMES.classic.frames.tab.backdrop.edgeSize, 12, "Classic's tucked tab edge")
+      A.eq(T.CLASSIC.frames.popup.backdrop.edgeSize, 16, "the pop-up edge")
+      A.eq(T.CLASSIC.frames.tab.backdrop.edgeSize, 12, "the tucked tab edge")
       boot(W)
-      ns.Modules.set("panel", "theme", "classic")
       ns.Modules.set("panel", "keepOpen", true); W:advance(1)
       local help = ns.Panel.tabButtonsForTest().help
       local cap = help.tcTab.parts.piece1:GetWidth()
@@ -643,71 +486,16 @@ return {
       A.eq(ns.Log.errors(10), {})
     end,
 
-    the_calendar_keeps_its_open_button_lit_after_a_switch = function(ns, A, W)
+    the_calendar_keeps_its_open_button_lit_after_a_repaint = function(ns, A, W)
       boot(W)
       ns.Calendar.open(); ns.Calendar.show("month"); W:advance(0.2)
       local subs = ns.Calendar.tipFramesForTest().subs
       local function white(b) local c = b.text._textColor; return c and c[1] == 1 and c[2] == 1 and c[3] == 1 end
       A.ok(white(subs.usual), "Usual times (not open) is white")
       A.no(white(subs.month), "Month (open) is lit")
-      ns.Modules.set("panel", "theme", "tavern"); W:advance(0.2)
-      A.ok(white(subs.usual), "still white after the switch")
+      ns.Theme.apply(); W:advance(0.2)
+      A.ok(white(subs.usual), "still white after the repaint")
       A.no(white(subs.month))
-      A.eq(ns.Log.errors(10), {})
-    end,
-
-    each_tavern_picture_has_its_own_fallback = function(ns, A, W)
-      W.state.missingArt = { ["Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Oak.tga"] = true,
-        ["Interface\\AddOns\\TwizCrew\\Art\\TavernNight\\Chalk.tga"] = true }
-      boot(W)
-      ns.Modules.set("panel", "theme", "tavern")
-      ns.Modules.set("panel", "keepOpen", true); W:advance(1)
-      A.eq(ns.Theme.drawnId(), "tavern", "the frame loaded, so Tavern night is drawn")
-      local s = skin(ns.Panel.rootForTest())
-      A.eq(s.parts.fill._texture, nil, "no oak picture")
-      A.eq(s.parts.fill._color, { 0.36, 0.22, 0.12, 1 }, "the oak's colour instead")
-      A.eq(s.parts.band._color, { 0.36, 0.22, 0.12, 1 }, "the band too")
-      local keep = ns.Panel.keepSwitchForTest()
-      A.eq(keep.tcKeep.parts.chalk._color, { 0.16, 0.17, 0.16, 1 }, "the chalk board's colour")
-      local b = ns.Widgets.button(W.env.UIParent, "X", function() end)
-      b:SetSize(80, 20)
-      A.eq(b.tcButton.parts.bg._color, { 0.36, 0.22, 0.12, 1 }, "an oak button's colour")
-      A.eq(ns.Log.errors(10), {})
-    end,
-
-    the_picker_says_when_the_art_did_not_load = function(ns, A, W)
-      W.state.missingArt = true
-      boot(W)
-      ns.Settings.open()
-      local picker = ns.Settings.pickerForTest("basic")
-      A.eq(ns.Settings.pickerNote(), "The game could not load TwizCrew's art, so every theme is drawn as Classic.")
-      A.ok(picker.note:IsShown())
-      A.eq(picker.note:GetText(), ns.Settings.pickerNote())
-      picker.previews[3]._scripts.OnClick(picker.previews[3])
-      A.eq(ns.Modules.setting("panel", "theme"), "tavern", "the choice is still saved")
-      A.eq(ns.Theme.drawnId(), "classic")
-    end,
-
-    the_picker_line_is_hidden_when_the_art_loads = function(ns, A, W)
-      boot(W)
-      ns.Settings.open()
-      A.eq(ns.Settings.pickerNote(), nil)
-      A.no(ns.Settings.pickerForTest("basic").note:IsShown())
-      local first = ns.Settings.pickerForTest("basic").previews[1]
-      local _, _, _, x = first:GetPoint(1)
-      A.ok(x >= 2, "the outline (2 px outside the box) stays inside the page")
-    end,
-
-    tavern_oak_darkens_while_see_through = function(ns, A, W)
-      boot(W)
-      ns.Modules.set("panel", "theme", "tavern")
-      ns.Modules.set("panel", "keepOpen", true)
-      W:advance(3)
-      local s = skin(ns.Panel.rootForTest())
-      A.eq(s.parts.fill._vertex[1], 0.5, "faded: 50% darker")
-      ns.Modules.set("panel", "idleAlpha", 1) -- (100%: never see-through)
-      W:advance(0.5)
-      A.eq(s.parts.fill._vertex[1], 0.65, "solid: 35% darker")
       A.eq(ns.Log.errors(10), {})
     end,
   },

@@ -191,7 +191,7 @@ local function buildMaker()
   if maker.RegisterForDrag then maker:RegisterForDrag("LeftButton") end
   script(maker, "OnDragStart", function(self) self:StartMoving() end)
   script(maker, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.skin(maker, "window", { alpha = 0.98 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(maker, "window", { alpha = 0.98 }) -- the look's frame (UI/Skin.lua)
   T.gloss(maker, nil, 0.05, "BORDER")
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewNoteMaker") end
   local logo = iconTexture(maker, ICON_NOTES, 22)

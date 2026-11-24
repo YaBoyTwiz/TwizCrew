@@ -133,7 +133,7 @@ local function newFrame()
   local f = T.frame("Button", nil, UIParent)
   f:SetSize(WIDTH, HEIGHT)
   f:SetFrameStrata("FULLSCREEN_DIALOG")
-  T.skin(f, "popup", { alpha = 0.92 }) -- the theme's pop-up (UI/Skin.lua); the coloured edge stays
+  T.skin(f, "popup", { alpha = 0.92 }) -- the look's pop-up (UI/Skin.lua); the coloured edge stays
   f.edge = f:CreateTexture(nil, "ARTWORK")
   f.edge:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
   f.edge:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)

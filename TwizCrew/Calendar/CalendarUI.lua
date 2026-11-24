@@ -174,7 +174,7 @@ local function build()
   if P.frame.RegisterForDrag then P.frame:RegisterForDrag("LeftButton") end
   script(P.frame, "OnDragStart", function(self) self:StartMoving() end)
   script(P.frame, "OnDragStop", function(self) self:StopMovingOrSizing() end)
-  T.skin(P.frame, "window", { alpha = 0.97 }) -- the theme's frame (UI/Skin.lua)
+  T.skin(P.frame, "window", { alpha = 0.97 }) -- the look's frame (UI/Skin.lua)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "TwizCrewCalendar") end
   script(P.frame, "OnHide", function() Calendar.shownFlag = false end)
   local logo = iconTexture(P.frame, ICON_CAL, 26)
@@ -367,6 +367,6 @@ function Calendar.tipFramesForTest() return { tabs = tabs, subs = subs, zone = P
 
 -- (Diary's onEnable listens for CALENDAR_CHANGED and calls Calendar.refresh.)
 
--- A theme change re-inks every button's words in the theme's colour; the Month / Usual times buttons (and the two
--- tabs) show which one is open by their colour, so put that back. (Its own id: listens whether the module runs.)
+-- A repaint (Theme.apply) re-inks every button's words in the look's colour; the Month / Usual times buttons (and
+-- the two tabs) show which one is open by their colour, so put that back. (Its own id: listens whether the module runs.)
 ns.Bus.on("calendarui", "THEME_CHANGED", function() if P.frame and subs then drawTabs() end end)

@@ -159,7 +159,7 @@ end
 
 function Theme.setBackgroundAlpha(frame, alpha)
   local skin = rawget(frame, "tcSkin")
-  if skin then -- a themed frame (UI/Skin.lua)
+  if skin then -- a skinned frame (UI/Skin.lua)
     skin.alpha = alpha
     if Theme.skinAlpha then Theme.skinAlpha(frame, skin) end
     return
@@ -180,19 +180,15 @@ function Theme.text(parent, font, hex, layer)
   return fs
 end
 
----------------------------------------------------------------------------------------------------------- themes
--- Three looks (owner, 2026-11-23): Classic (game art only), Crowned crew (the default) and Tavern night. The values
--- are data in UI/Themes.lua; the drawing is in UI/Skin.lua. The choice is the panel setting `theme`; a theme whose
--- art does not load is drawn as Classic (the choice stays saved).
+---------------------------------------------------------------------------------------------------------- the look
+-- One look since 2026-11-23 (owner: "use Classic as the default and remove the other themes"): Classic, the game's
+-- own dialog art. Its values are data in UI/Themes.lua; the drawing is in UI/Skin.lua. Our only picture file is the
+-- icon atlas (UI/Icons.lua).
 Theme.ART = "Interface\\AddOns\\TwizCrew\\Art\\"
-Theme.DEFAULT = "crowned"
-Theme.ORDER = { "classic", "crowned", "tavern" }
-Theme.THEMES = {} -- filled by UI/Themes.lua
-Theme.MORPHEUS = "Fonts\\MORPHEUS.ttf"
+Theme.CLASSIC = {} -- filled by UI/Themes.lua
 
--- Our art files are TGAs stored bottom row first. If the game shows them upside down, set FLIP_ART to true: every
--- texcoord on our own art (frames, tab skins, emblems, the icon atlas) goes through Theme.flipV, and nothing else
--- needs to change.
+-- Our art file (the icon atlas) is a TGA stored bottom row first. If the game shows it upside down, set FLIP_ART to
+-- true: every texcoord on our own art goes through Theme.flipV, and nothing else needs to change.
 Theme.FLIP_ART = false
 function Theme.flipV(top, bottom)
   if Theme.FLIP_ART then return 1 - top, 1 - bottom end
@@ -232,70 +228,32 @@ function Theme.probe(path)
 end
 function Theme.forgetProbesForTest() probes = {} end
 
--- The theme the player chose (always a known id).
-function Theme.chosen()
-  local id = ns.Modules and ns.Modules.setting("panel", "theme")
-  if type(id) ~= "string" or not Theme.THEMES[id] then id = Theme.DEFAULT end
-  return id
-end
+-- The look (always Classic).
+function Theme.active() return Theme.CLASSIC end
 
--- true (loaded), false (failed) or nil (no answer, or the theme needs no file).
-function Theme.artLoaded(id)
-  local t = Theme.THEMES[id]
-  if not t or not t.probe then return nil end
-  local p = Theme.probe(t.probe)
-  if p == "failed" then return false elseif p == "loaded" then return true end
-  return nil
-end
-
-local warnedArt = {}
--- The theme drawn for `id` (default: the chosen one): itself, or Classic when its art failed to load.
-function Theme.drawnId(id)
-  id = (type(id) == "string" and Theme.THEMES[id]) and id or Theme.chosen()
-  if Theme.artLoaded(id) == false then
-    if not warnedArt[id] then
-      warnedArt[id] = true
-      if ns.Log then ns.Log.add("warn", "theme art missing, using Classic (%s)", id) end
-    end
-    return "classic"
-  end
-  return id
-end
-function Theme.active(id) return Theme.THEMES[Theme.drawnId(id)] end
-
--- One line for /tc report: which theme is drawn and whether its art and the icons loaded.
+-- One line for /tc report: whether TwizCrew's icons loaded (else every place shows the game's icon it had before).
 function Theme.reportLine()
-  local chosen, drawn = Theme.chosen(), Theme.drawnId()
-  local function name(id) return (Theme.THEMES[id] and Theme.THEMES[id].name) or tostring(id) end
-  local function state(path)
-    local p = Theme.probe(path)
-    return p == "failed" and "missing" or p == "loaded" and "loaded" or "loaded (the game gave no answer)"
+  local state = "not built"
+  if ns.Icons and ns.Icons.ATLAS then
+    local p = Theme.probe(ns.Icons.ATLAS)
+    state = p == "failed" and "missing (the game's icons are shown instead)"
+      or p == "loaded" and "loaded" or "loaded (the game gave no answer)"
   end
-  local t = Theme.THEMES[chosen]
-  local art = t.probe and ("art " .. state(t.probe)) or "no art files needed"
-  local icons = ns.Icons and ns.Icons.ATLAS and ("icons " .. state(ns.Icons.ATLAS)) or "icons not built"
-  local line = "Theme: " .. name(chosen) .. ", drawn " .. name(drawn) .. "; " .. art .. "; " .. icons
-  if drawn ~= chosen then line = line .. " (using Classic until the art loads)" end
-  return line
+  return "Look: Classic (the game's own art); TwizCrew icons " .. state
 end
 
--- Text styles that a theme sets (colour, font, outline, shadow, upper case): Theme.ink(fontString, role[, words]).
--- The role's values come from the drawn theme's `ink` table (or the fixed theme of fs.tcThemeId, the settings
--- previews); a theme change repaints every inked text. words: the text, kept for themes that write it in capitals.
+-- Text styles of the look (colour, outline, shadow, sometimes a size): Theme.ink(fontString, role). The role's values
+-- come from the `ink` table in UI/Themes.lua; Theme.apply repaints every inked text.
 local inked = setmetatable({}, { __mode = "k" })
 Theme.inked = inked
 
 function Theme.paintInk(fs)
-  local id = rawget(fs, "tcThemeId")
-  local t = Theme.active(id)
+  local t = Theme.active()
   local r = t and t.ink and t.ink[fs.tcRole]
   if not r then return end
   local base = fs.tcBaseFont
   if base and fs.SetFont then
-    local size = r.size or (base[2] + (r.grow or 0))
-    local flags = r.flags or base[3]
-    local ok, done = pcall(fs.SetFont, fs, r.font or base[1], size, flags)
-    if r.font and (not ok or done == false) then pcall(fs.SetFont, fs, base[1], size, flags) end
+    pcall(fs.SetFont, fs, base[1], r.size or (base[2] + (r.grow or 0)), r.flags or base[3])
   end
   if r.color and fs.SetTextColor then fs:SetTextColor(r.color[1], r.color[2], r.color[3], r.color[4] or 1) end
   if r.shadow then
@@ -303,14 +261,11 @@ function Theme.paintInk(fs)
     if fs.SetShadowColor then fs:SetShadowColor(s[1], s[2], s[3], s[4]) end
     if fs.SetShadowOffset then fs:SetShadowOffset(s[5] or 0, s[6] or 0) end
   end
-  local words = rawget(fs, "tcWords")
-  if type(words) == "string" and fs.SetText then fs:SetText(r.upper and words:upper() or words) end
 end
 
-function Theme.ink(fs, role, words)
+function Theme.ink(fs, role)
   if type(fs) ~= "table" then return fs end
   fs.tcRole = role
-  if words ~= nil then fs.tcWords = words end
   if rawget(fs, "tcBaseFont") == nil then
     local ok, path, size, flags = pcall(function() return fs:GetFont() end)
     fs.tcBaseFont = (ok and type(path) == "string" and type(size) == "number" and size > 0)

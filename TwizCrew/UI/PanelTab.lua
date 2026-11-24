@@ -206,9 +206,9 @@ end
 -- The holder is out (or sliding back in).
 function P.clipOut() return shownNow(holder) end
 
--- How far the panel's skin reaches above and below the frame (the title plate, the crest: UI/Skin.lua). The holder is
--- that much taller and the panel hangs that much lower inside it, so the clipping never cuts them; on screen the panel
--- sits exactly where it did (the holder moves up by the top overhang). Not the mouse's: hover and the see-through
+-- How far the panel's skin reaches above and below the frame (the title plate above, nothing below: UI/Skin.lua).
+-- The holder is that much taller and the panel hangs that much lower inside it, so the clipping never cuts it; on
+-- screen the panel sits exactly where it did (the holder moves up by the top overhang). Not the mouse's: hover and the see-through
 -- fade go by the panel frame itself.
 local function overhang()
   local o = T.PANEL_OVERHANG or {}
@@ -392,7 +392,7 @@ function P.buildTab()
   tab:SetMovable(true)
   if tab.SetDontSavePosition then tab:SetDontSavePosition(true) end
   if tab.SetClampedToScreen then tab:SetClampedToScreen(true) end
-  T.skin(tab, "tab", { alpha = 0.9 }) -- the theme's banner (UI/Skin.lua)
+  T.skin(tab, "tab", { alpha = 0.9 }) -- the look's banner (UI/Skin.lua)
   tab.glow = tab:CreateTexture(nil, "ARTWORK")
   tab.glow:SetPoint("TOPLEFT", tab, "TOPLEFT", 2, -2)
   tab.glow:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -2, 2)
@@ -573,7 +573,6 @@ local function seeTick(now, snap)
   if idle < 1 then solid, soft = seeSolid(now) end
   if solid then lastSolidAt = now end
   seeTarget = Logic.seeTarget(idle, solid, lastSolidAt and now - lastSolidAt or nil, SEE_DELAY)
-  if P.root then T.setFaded(P.root, keepOpen() and seeTarget < 1) end -- (Tavern night darkens its oak; cached)
   if solid and not soft then snap = true end -- news, an open panel, a slide, a drag: solid at once, no rise
   if snap or seeCur == nil then applyAlpha(seeTarget); seeAt = nil; stopSeeFrame(); return end
   seeMove(now)

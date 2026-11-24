@@ -53,7 +53,7 @@ local function createRow()
   mockHl:SetAllPoints(r.mock)
   T.color(mockHl, C.white, 0.15)
   r.mock.hl = mockHl
-  T.skinButton(r.mock, "mock") -- the theme's button (UI/Skin.lua)
+  T.skinButton(r.mock, "mock") -- the look's button (UI/Skin.lua)
   script(r.mock, "OnClick", function(self) Panel.mock(self:GetParent()) end)
   script(r.mock, "OnEnter", function(self)
     local m = self:GetParent().tcModel

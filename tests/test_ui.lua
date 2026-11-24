@@ -298,7 +298,8 @@ return {
       A.eq(controls, { "setting:panel:keepOpen", "setting:panel:scale", "setting:panel:idleAlpha",
         "setting:panel:noticeScope", "module:popups:switch", "setting:activity:chatNews", "setting:popups:sounds",
         "setting:tags:autoAway" }, "the 8 everyday controls (the two help buttons are links at the top now)")
-      A.eq(d[2], "picker:panel:theme", "the theme picker first under The panel")
+      A.eq(d[1], "section:The panel", "The panel heading first")
+      A.eq(d[2], "setting:panel:keepOpen", "then Keep the panel open (no theme picker since 2026-11-23)")
       for _, c in ipairs(controls) do
         local key = c:gsub("^setting:", ""):gsub("^module:(%w+):switch$", "module:%1")
         A.eq(d[indexOf(d, c) + 1], "grey:" .. key, c .. ": a grey line under it")
@@ -325,8 +326,7 @@ return {
       ns.Settings.setTab("panel")
       A.eq(ns.Settings.tab(), "panel")
       local d = ns.Settings.describeForTest()
-      A.eq(d[1], "picker:panel:theme", "the theme picker first")
-      A.eq(d[2], "module:panel:switch", "then the part's switch")
+      A.eq(d[1], "module:panel:switch", "the part's switch first (no theme picker since 2026-11-23)")
       A.no(has(d, "setting:panel:scale"), "Panel size is on Basics only")
       A.no(has(d, "setting:tags:autoAway"), "Mark me AFK is on Basics only")
       A.ok(indexOf(d, "section:Rarely needed") > indexOf(d, "setting:panel:hideInCombat"), "rarely needed come last")
@@ -383,10 +383,7 @@ return {
         if def.id ~= "testtools" then -- (its buttons are in their own window)
           for _, sdef in ipairs(def.settings) do
             local where = def.id .. ":" .. sdef.key
-            if where == "panel:theme" then
-              A.eq(seen["picker:panel:theme"], 2, "the theme picker: on Basics and first on Panel (the spec)")
-              A.eq(placed(def.id, sdef.key), 0, "and not also as a plain row")
-            elseif ns.Settings.LINKED[where] then
+            if ns.Settings.LINKED[where] then
               A.eq(placed(def.id, sdef.key), 0, where .. ": a link at the top of the window, not a row")
             else
               A.eq(placed(def.id, sdef.key), 1, where .. " is on exactly one page")
@@ -400,6 +397,7 @@ return {
       A.no(seen["module:comm:always on"], "no 'always on' rows")
       A.no(seen["module:pokes:coming later"], "no 'coming later' rows")
       A.no(seen["setting:comm:debug"], "the technical switch is /tc debug only")
+      for v in pairs(seen) do A.no(v:find("^picker:"), "no theme picker (" .. v .. ")") end
     end,
 
     a_new_module_lands_on_more = function(ns, A, W)

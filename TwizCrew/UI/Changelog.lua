@@ -14,6 +14,11 @@ local LINE_H = 18
 local LINES = 20 -- lines shown at once; the mouse wheel scrolls
 
 Changelog.HISTORY = {
+  { ver = "0.4.3", date = "2026-11-24", lines = {
+    "A friend's quests are now colour coded: green you can get, blue you both have, grey you did, red can't be shared.",
+    "  Each kind has its own small mark, and a key at the bottom of the window explains them.",
+    "  Each zone heading counts them: \"Westfall (3 you can get, 2 you both have)\".",
+  } },
   { ver = "0.4.2", date = "2026-11-23", lines = {
     "A friend's quests now open in a window, sorted by zone. The zone you are in comes first.",
     "  Tick the quests you want and press \"Ask for quests\". Your friend clicks once; they come one at a time.",

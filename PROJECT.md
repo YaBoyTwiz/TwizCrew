@@ -13,6 +13,9 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **v0.4.3 released (2026-11-24, owner: "release it"):** colours and marks in a friend's quests, the key line and
+  the counts per heading. Released without an in-game try and without a separate review. No files added, so
+  `RESTART_SINCE` stays 0.4.2.
 - **Colours and marks in a friend's quests (2026-11-24, owner: "when looking at quest other ppl have can we color
   code, or use icons/images to make it stand out for quest they can share or quest that we both have etc"; approved
   the written description: "do it"):** each line of the quest window has a colour and a small mark by what it is to

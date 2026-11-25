@@ -1,6 +1,8 @@
 -- A friend's quests in a small window (opened by "Their quests" on their row's menu and by the group heads-up):
 -- their quests under the headings of their quest log (the zone they are in), the zone I'm in first; a check box beside
--- each quest I can get, greyed lines with the reason for the others; "Tick this zone" on each heading; "Only this zone"
+-- each quest I can get, coloured lines with a small mark and the reason for the others (colours and marks: MARKS
+-- below, explained by a key line at the bottom); "Tick this zone" on each heading, which also counts what is under it;
+-- "Only this zone"
 -- at the top; one button at the bottom asks for all the ticked ones at once (Crew/QuestAsk.lua). A list from an older
 -- copy has no headings: one list, no "Only this zone". The mouse wheel scrolls (a full log is about 30 lines).
 -- A plain frame (not a secure one): fine to build, show and hide in a fight. Escape closes it.
@@ -13,12 +15,26 @@ local FEATURE = "quest"
 local T, Widgets = ns.Theme, ns.Widgets
 local C = T.COLOR
 
-local WIDTH, ROW_H, VISIBLE, PAD = 380, 22, 14, 12
+local WIDTH, ROW_H, VISIBLE, PAD = 500, 22, 14, 12
 local TOP = 62           -- the list starts this far below the top
+local KEY_H = 22         -- the key line above the button
 local BUTTON_W, ZONE_W = 150, 116
 local CHECK = "Interface\\Buttons\\UI-CheckBox-"
+local MARK = 13          -- size of a line's mark
 
-local frame, rows, title, onlyBox, onlyLabel, askButton, statusText, hintText
+-- What a quest line is to me: its colour (Theme.COLOR) and its mark, the game's own pictures. "can": the check box
+-- (no picture here); "both": two small shields side by side; "done": the ready-check tick; "no": the ready-check
+-- cross. coords trim the dark frame of a square game icon. A picture the game can't load is hidden (the colour stays).
+local SHIELD = "Interface\\Icons\\INV_Shield_06"
+local MARKS = {
+  can = { color = "questCan" },
+  both = { color = "questBoth", path = SHIELD, coords = { 0.08, 0.92, 0.08, 0.92 }, twice = true },
+  done = { color = "questDone", path = "Interface\\RaidFrame\\ReadyCheck-Ready" },
+  no = { color = "questNo", path = "Interface\\RaidFrame\\ReadyCheck-NotReady" },
+}
+QuestWindow.MARKS = MARKS
+
+local frame, rows, title, onlyBox, onlyLabel, askButton, statusText, hintText, keyText
 local friend             -- whose quests the window shows
 local ticks = {}         -- quest ID -> true: ticked (forgotten when the window shows someone else)
 local onlyHere = false   -- "Only this zone" (not saved: off again after a /reload)
@@ -51,7 +67,50 @@ local function questText(q)
   return "Can't share: " .. t .. " (" .. ns.QuestList.why(q) .. ")"
 end
 
+-- "can" (I can get it), "both" (we both have it), "done" (I did it) or "no" (it can't be shared with me, any other
+-- reason).
+local function markOf(q)
+  if q.can then return "can" end
+  if q.status == "have" then return "both" end
+  if q.status == "done" then return "done" end
+  return "no"
+end
+
 local function note(text) return { kind = "note", text = text } end
+
+-- A heading: its name, then "(you are here, 3 you can get, 2 you both have)" without the parts that are not so.
+local function headText(grp)
+  local can, both = 0, 0
+  for _, q in ipairs(grp.quests) do
+    local m = markOf(q)
+    if m == "can" then can = can + 1 elseif m == "both" then both = both + 1 end
+  end
+  local parts = {}
+  if grp.here then parts[#parts + 1] = "you are here" end
+  if can > 0 then parts[#parts + 1] = can .. " you can get" end
+  if both > 0 then parts[#parts + 1] = both .. " you both have" end
+  local text = safe(grp.title)
+  if #parts > 0 then text = text .. " (" .. table.concat(parts, ", ") .. ")" end
+  return text
+end
+
+-- The key line at the bottom: each mark with what it means, in its colour (a picture the game can't load: the words
+-- alone).
+local function inline(path, coords)
+  if T.probe(path) == "failed" then return "" end
+  local c = coords and ":0:0:64:64:5:59:5:59" or "" -- (offset, the picture's size, then the part shown)
+  return "|T" .. path .. ":" .. MARK .. ":" .. MARK .. c .. "|t "
+end
+local function colored(key, text) return "|cff" .. C[key] .. text .. "|r" end
+function QuestWindow.keyLine()
+  local both = MARKS.both
+  local shields = inline(both.path, both.coords)
+  if shields ~= "" then shields = shields:sub(1, -2) .. shields end
+  return inline(CHECK .. "Up") .. colored("questCan", "You can get it") .. "    "
+    .. shields .. colored("questBoth", "You both have it") .. "    "
+    .. inline(MARKS.done.path) .. colored("questDone", "You did it") .. "    "
+    .. inline(MARKS.no.path) .. colored("questNo", "Can't be shared")
+end
 
 -- The quests I can get, ticked, in the order the window shows them (hidden zones too: a tick stays a tick).
 local function tickedIds()
@@ -94,12 +153,13 @@ function QuestWindow.entries()
           if not ticks[q.id] then all = false end
         end
       end
-      out[#out + 1] = { kind = "head", group = grp, text = safe(grp.title) .. (grp.here and " (you are here)" or ""),
+      out[#out + 1] = { kind = "head", group = grp, text = headText(grp),
         tick = gettable > 0 and (all and "Untick this zone" or "Tick this zone") or nil }
     end
     for _, q in ipairs(grp.quests) do
       any = true
-      out[#out + 1] = { kind = "quest", q = q, text = questText(q), can = q.can, ticked = q.can and ticks[q.id] == true }
+      out[#out + 1] = { kind = "quest", q = q, text = questText(q), can = q.can, ticked = q.can and ticks[q.id] == true,
+        mark = markOf(q) }
     end
   end
   if not any then return { note("They have no quests (or don't share them)") } end
@@ -124,10 +184,24 @@ end
 ---------------------------------------------------------------------------------------------------------- frame
 local draw -- (below)
 
+-- Draws one picture of a mark; false (and hidden) when the game can't load it.
+local function setMark(tex, def)
+  if not def.path or T.setTexture(tex, def.path) == "failed" then
+    tex:Hide()
+    return false
+  end
+  local c = def.coords
+  if c then T.setCoords(tex, c[1], c[2], c[3], c[4]) else T.setCoords(tex, 0, 1, 0, 1) end
+  tex:Show()
+  return true
+end
+
 local function fillRow(r, e)
   r.tcEntry = e
   r.check:Hide()
   r.zone:Hide()
+  r.mark1:Hide()
+  r.mark2:Hide()
   r.text:ClearAllPoints()
   r.text:SetPoint("RIGHT", r, "RIGHT", 0, 0)
   if e.kind == "head" then
@@ -142,11 +216,14 @@ local function fillRow(r, e)
     end
   elseif e.kind == "quest" then
     r.text:SetPoint("LEFT", r, "LEFT", 32, 0)
+    local def = MARKS[e.mark] or MARKS.no
     if e.can then
       r.check:SetChecked(e.ticked and true or false)
       r.check:Show()
+    elseif setMark(r.mark1, def) and def.twice then
+      setMark(r.mark2, def)
     end
-    T.textColor(r.text, e.can and C.text or C.muted)
+    T.textColor(r.text, C[def.color])
   else
     r.text:SetPoint("LEFT", r, "LEFT", 2, 0)
     T.textColor(r.text, C.muted)
@@ -171,6 +248,13 @@ local function newRow(i)
   end, nil, FEATURE)
   r.zone:SetSize(ZONE_W, 18)
   r.zone:SetPoint("RIGHT", r, "RIGHT", 0, 0)
+  -- a line's mark where the check box is (the "both" mark is two pictures side by side)
+  r.mark1 = r:CreateTexture(nil, "ARTWORK")
+  r.mark1:SetSize(MARK, MARK)
+  r.mark1:SetPoint("LEFT", r, "LEFT", 4, 0)
+  r.mark2 = r:CreateTexture(nil, "ARTWORK")
+  r.mark2:SetSize(MARK, MARK)
+  r.mark2:SetPoint("LEFT", r.mark1, "RIGHT", 1, 0)
   r.text = T.readable(T.text(r, T.FONT.small, C.text))
   r.text:SetJustifyH("LEFT")
   if r.text.SetWordWrap then r.text:SetWordWrap(false) end
@@ -181,7 +265,7 @@ local function newRow(i)
   end, FEATURE)
   Widgets.addTip(r, function(self)
     local e = rawget(self, "tcEntry")
-    if not e or e.kind == "head" then return nil end
+    if not e then return nil end
     return plain(e.text)
   end, nil, FEATURE)
   if r.EnableMouseWheel then r:EnableMouseWheel(true) end
@@ -191,7 +275,7 @@ end
 
 local function build()
   frame = T.frame("Frame", "TwizCrewQuests", UIParent)
-  frame:SetSize(WIDTH, TOP + VISIBLE * ROW_H + 62)
+  frame:SetSize(WIDTH, TOP + VISIBLE * ROW_H + 62 + KEY_H)
   frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
   frame:SetFrameStrata("DIALOG")
   frame:SetMovable(true)
@@ -235,6 +319,13 @@ local function build()
   statusText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 10)
   statusText:SetPoint("RIGHT", askButton, "LEFT", -8, 0)
   statusText:SetJustifyH("LEFT")
+  -- the key: what the colours and marks mean (its own line above the button and the status line)
+  keyText = T.text(frame, T.FONT.small, C.text)
+  keyText:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", PAD, 40)
+  keyText:SetPoint("RIGHT", frame, "RIGHT", -PAD, 0)
+  keyText:SetJustifyH("LEFT")
+  if keyText.SetWordWrap then keyText:SetWordWrap(false) end
+  keyText:SetText(QuestWindow.keyLine())
 end
 
 draw = function()
@@ -390,4 +481,5 @@ end
 function QuestWindow.statusForTest() return statusText and plain(statusText:GetText()) end
 function QuestWindow.onlyBoxForTest() return onlyBox end
 function QuestWindow.hintForTest() return hintText and hintText:GetText() end
+function QuestWindow.keyForTest() return keyText and keyText:GetText() end
 function QuestWindow.friendForTest() return friend end

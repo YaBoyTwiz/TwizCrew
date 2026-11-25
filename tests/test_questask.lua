@@ -203,19 +203,19 @@ return {
       ns.QuestList.open("Frostie")
       A.ok(ns.QuestWindow.isShown())
       A.eq(ns.QuestWindow.linesForTest(), {
-        "# Elwynn Forest (you are here) [Tick this zone]", "[ ] Kobolds", "[ ] Wolves",
+        "# Elwynn Forest (you are here, 2 you can get) [Tick this zone]", "[ ] Kobolds", "[ ] Wolves",
         "- Can't share: Bound (it can't be shared)",
-        "# Westfall [Tick this zone]", "[ ] Defias",
-        "# Redridge Mountains [Tick this zone]", "[ ] Murlocs",
-        "# Other quests [Tick this zone]", "[ ] Lost",
+        "# Westfall (1 you can get) [Tick this zone]", "[ ] Defias",
+        "# Redridge Mountains (1 you can get) [Tick this zone]", "[ ] Murlocs",
+        "# Other quests (1 you can get) [Tick this zone]", "[ ] Lost",
       }, "my zone first, then their order, quests under no heading last")
       -- somewhere none of their headings is: their order
       W.state.zone = "Duskwood"
       ns.QuestList.changed()
       local lines = ns.QuestWindow.linesForTest()
-      A.eq(lines[1], "# Westfall [Tick this zone]")
-      A.eq(lines[3], "# Elwynn Forest [Tick this zone]")
-      A.eq(lines[#lines - 1], "# Other quests [Tick this zone]")
+      A.eq(lines[1], "# Westfall (1 you can get) [Tick this zone]")
+      A.eq(lines[3], "# Elwynn Forest (2 you can get) [Tick this zone]")
+      A.eq(lines[#lines - 1], "# Other quests (1 you can get) [Tick this zone]")
       A.eq(ns.QuestWindow.statusForTest(), "Sharing only works in a group.")
       A.eq(ns.Log.errors(10), {})
     end,
@@ -241,8 +241,9 @@ return {
       A.no(QW.toggle(45), "and it can't be ticked")
       -- Tick this zone, then Untick this zone
       click(QW.rowForTest(1).zone)
-      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here) [Untick this zone]", "[x] Kobolds", "[x] Wolves",
-        "- Can't share: Bound (it can't be shared)", "# Westfall [Tick this zone]", "[ ] Defias" })
+      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here, 2 you can get) [Untick this zone]", "[x] Kobolds",
+        "[x] Wolves", "- Can't share: Bound (it can't be shared)", "# Westfall (1 you can get) [Tick this zone]",
+        "[ ] Defias" })
       A.eq({ QW.buttonForTest() }, { "Ask for 2 quests", true })
       click(QW.rowForTest(1).zone)
       A.eq(QW.linesForTest()[2], "[ ] Kobolds"); A.eq(QW.linesForTest()[3], "[ ] Wolves")
@@ -251,8 +252,8 @@ return {
       A.eq(QW.linesForTest()[6], "[x] Defias")
       -- Only this zone: Westfall hides, its tick still counts
       click(QW.onlyBoxForTest())
-      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here) [Tick this zone]", "[ ] Kobolds", "[ ] Wolves",
-        "- Can't share: Bound (it can't be shared)" })
+      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here, 2 you can get) [Tick this zone]", "[ ] Kobolds",
+        "[ ] Wolves", "- Can't share: Bound (it can't be shared)" })
       A.eq({ QW.buttonForTest() }, { "Ask for 1 quest", true })
       -- in a zone where they have nothing
       W.state.zone = "Duskwood"
@@ -957,13 +958,98 @@ return {
       -- the window redraws itself when I change zone, and when my group changes
       W.env.GetZoneText = function() return "Westfall" end
       W.state.zone = "Westfall"
-      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall", "(not redrawn yet)")
+      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall (1 you can get)", "(not redrawn yet)")
       W:fire("ZONE_CHANGED_NEW_AREA")
-      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall (you are here)")
+      A.eq(ns.QuestWindow.rowForTest(1).text:GetText(), "Westfall (you are here, 1 you can get)")
       A.eq(ns.QuestWindow.statusForTest(), "Sharing only works in a group.")
       grouped(W, { "Frostie" })
       W:fire("GROUP_ROSTER_UPDATE")
       A.eq(ns.QuestWindow.statusForTest(), "")
+      A.eq(ns.Log.errors(10), {})
+    end,
+    ---------------------------------------------------------------------------------- colours and marks
+    each_line_has_its_colour_and_mark_and_each_heading_its_counts = function(ns, A, W)
+      questLog(W, { { header = "Elwynn Forest" }, { id = 7, title = "Kobolds" } }) -- I have Kobolds too
+      local done = { [40] = true }
+      rawset(W.env.C_QuestLog, "IsQuestFlaggedCompleted", function(id) return done[id] == true end)
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(1)
+      receiveList(ns, W, "Frostie", "1x1", { "Elwynn Forest", "Duskwood", "Westfall" }, {
+        { 33, "1", "Wolves", 1 }, { 7, "1", "Kobolds", 1 }, { 40, "1", "Old One", 1 }, { 41, "0", "Bound", 1 },
+        { 78, "1", "Done Before", 1 }, { 50, "0", "Night Web", 2 }, { 60, "1", "Defias", 3 }, { 61, "1", "Rats", 3 } })
+      -- a quest their copy said I already did (the game told them): done, as for the game's own check
+      receive(ns, W, "Frostie", "QRES", { t = "Twiz", q = "Done Before", i = "78", r = "done" })
+      A.eq(ns.Quest.canGet(78, "Done Before", true), "done")
+      ns.QuestList.open("Frostie")
+      local QW = ns.QuestWindow
+      A.eq(QW.linesForTest(), {
+        "# Elwynn Forest (you are here, 1 you can get, 1 you both have) [Tick this zone]",
+        "[ ] Wolves",
+        "- Can't share: Bound (it can't be shared)",
+        "- Can't share: Done Before (you already did it)",
+        "- Kobolds (you both have)",
+        "- Can't share: Old One (you already did it)",
+        "# Duskwood",
+        "- Can't share: Night Web (it can't be shared)",
+        "# Westfall (2 you can get) [Tick this zone]",
+        "[ ] Defias", "[ ] Rats",
+      }, "counts without the parts that are 0; no count, no brackets")
+      local C = ns.Theme.COLOR
+      local function color(hex) local r, g, b = ns.Theme.rgb(hex); return { r, g, b } end
+      local function shown(r)
+        local t = r.text._textColor
+        return { text = r.tcEntry.text, color = { t[1], t[2], t[3] }, check = r.check:IsShown(),
+          mark1 = r.mark1:IsShown() and r.mark1:GetTexture() or false,
+          mark2 = r.mark2:IsShown() and r.mark2:GetTexture() or false }
+      end
+      local SHIELD = "Interface\\Icons\\INV_Shield_06"
+      A.eq(shown(QW.rowForTest(2)), { text = "Wolves", color = color(C.questCan), check = true, mark1 = false,
+        mark2 = false }, "can get: green, the check box")
+      A.eq(shown(QW.rowForTest(3)), { text = "Can't share: Bound (it can't be shared)", color = color(C.questNo),
+        check = false, mark1 = "Interface\\RaidFrame\\ReadyCheck-NotReady", mark2 = false }, "can't: red, a cross")
+      A.eq(shown(QW.rowForTest(4)).mark1, "Interface\\RaidFrame\\ReadyCheck-Ready", "remembered done: the tick")
+      A.eq(shown(QW.rowForTest(5)), { text = "Kobolds (you both have)", color = color(C.questBoth), check = false,
+        mark1 = SHIELD, mark2 = SHIELD }, "both: blue, two shields")
+      A.eq(shown(QW.rowForTest(6)), { text = "Can't share: Old One (you already did it)", color = color(C.questDone),
+        check = false, mark1 = "Interface\\RaidFrame\\ReadyCheck-Ready", mark2 = false }, "did it: grey, the tick")
+      -- a line we both have is plain: a click does nothing
+      QW.rowForTest(5)._scripts.OnMouseUp(QW.rowForTest(5))
+      A.eq(QW.linesForTest()[5], "- Kobolds (you both have)")
+      A.eq({ QW.buttonForTest() }, { "Ask for quests", false })
+      -- the key line under the list
+      local key = QW.keyForTest()
+      for _, words in ipairs({ "You can get it", "You both have it", "You did it", "Can't be shared",
+        "UI-CheckBox-Up", "INV_Shield_06", "ReadyCheck-Ready", "ReadyCheck-NotReady" }) do
+        A.contains(key, words)
+      end
+      A.contains(key, "|cff" .. C.questBoth .. "You both have it|r")
+      -- an older copy's list (no headings): marked the same way
+      receive(ns, W, "Holly", "STATE", { cl = "PRIEST" })
+      receiveOldList(ns, W, "Holly", "2x1", { { 7, "1", "Kobolds" }, { 40, "1", "Old One" }, { 33, "1", "Wolves" } })
+      ns.QuestList.open("Holly")
+      A.eq(QW.linesForTest(), { "[ ] Wolves", "- Kobolds (you both have)", "- Can't share: Old One (you already did it)" })
+      A.eq(shown(QW.rowForTest(2)).mark2, SHIELD)
+      A.eq(shown(QW.rowForTest(3)).color, color(C.questDone))
+      A.eq(ns.Log.errors(10), {})
+    end,
+    a_mark_the_game_cannot_load_is_left_out = function(ns, A, W)
+      local SHIELD = "Interface\\Icons\\INV_Shield_06"
+      W.state.missingArt = { [SHIELD] = true }
+      questLog(W, { { header = "Elwynn Forest" }, { id = 7, title = "Kobolds" } })
+      start(ns, W)
+      receive(ns, W, "Frostie", "STATE", { cl = "MAGE" })
+      W:advance(1)
+      receiveList(ns, W, "Frostie", "1x1", { "Elwynn Forest" }, { { 7, "1", "Kobolds", 1 } })
+      ns.QuestList.open("Frostie")
+      local r = ns.QuestWindow.rowForTest(2)
+      A.no(r.mark1:IsShown(), "no empty square"); A.no(r.mark2:IsShown())
+      local t = r.text._textColor
+      local cr, cg, cb = ns.Theme.rgb(ns.Theme.COLOR.questBoth)
+      A.eq({ t[1], t[2], t[3] }, { cr, cg, cb }, "the colour still tells it")
+      local key = ns.QuestWindow.keyForTest()
+      A.no(key:find("INV_Shield_06", 1, true), "the key has the words only")
+      A.contains(key, "You both have it")
       A.eq(ns.Log.errors(10), {})
     end,
     -------------------------------------------------------------------------------------------- end to end
@@ -986,8 +1072,8 @@ return {
       twNs.QuestList.open("Frostie")
       H.advance(5)
       local QW = twNs.QuestWindow
-      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here) [Tick this zone]", "[ ] Kobolds", "[ ] Wolves",
-        "# Westfall [Tick this zone]", "[ ] Defias" })
+      A.eq(QW.linesForTest(), { "# Elwynn Forest (you are here, 2 you can get) [Tick this zone]", "[ ] Kobolds",
+        "[ ] Wolves", "# Westfall (1 you can get) [Tick this zone]", "[ ] Defias" })
       click(QW.rowForTest(1).zone)
       QW.press()
       H.advance(3)

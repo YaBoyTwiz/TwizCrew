@@ -226,6 +226,7 @@ end
 -- quest ID or title -> the words. Forgotten when I level up or turn a quest in (the reason may be gone), and on
 -- /reload.
 local refused = {}
+local DID_IT = "you already did it" -- (a remembered "already done" refusal still reads as done: canGet's "done")
 
 local QUESTIE_OK = { [0] = true, [5] = true } -- available; its parent quest is active
 local QUESTIE_DONE, QUESTIE_HAVE = 1, 2
@@ -243,7 +244,7 @@ function Quest.canGet(id, title, shareable)
     end
   end
   local why = (id and refused[id]) or (type(title) == "string" and refused[title]) or nil
-  if why then return "no", why end
+  if why then return (why == DID_IT and "done" or "no"), why end
   if not id then return "unknown", nil end
   if QLog().IsQuestFlaggedCompleted and call(QLog().IsQuestFlaggedCompleted, id) == true then
     return "done", "you already did it"
@@ -370,7 +371,7 @@ local PUSH_RESULTS = {
 -- offered (until a level-up or a quest turned in).
 local RESULT_WORDS = {
   inv = { "you can't take it yet (too low, or an earlier quest is missing)", keep = true },
-  done = { "you already did it", keep = true },
+  done = { DID_IT, keep = true },
   have = { "you already have it" },
   full = { "your quest log is full" },
   busy = { "you were busy (a window was open)" },

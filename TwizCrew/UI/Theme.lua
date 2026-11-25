@@ -12,6 +12,8 @@ Theme.COLOR = {
   switchOn = "2a5a2a", knobOn = "ccffcc", switchOff = "3a3a3a", knobOff = "999999", button = "2a2a30",
   buttonBorder = "666666", pillBorder = "000000", white = "ffffff",
   danger = "5a1010", dangerBorder = "aa3333", line = "3a3322", confirm = "1a0d0d",
+  -- a friend's quests (UI/QuestWindow.lua): I can get it, we both have it, I did it, it can't be shared with me
+  questCan = "40e060", questBoth = "80b4ff", questDone = "8c8c8c", questNo = "c8605a",
 }
 
 -- Our text is the game's own two fonts made a little bigger (easier to read; owner, 2026-11-08). TEXT_GROW points

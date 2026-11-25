@@ -13,6 +13,12 @@ the owner's **guild**: copies talk through the guild and only guild members are 
 
 ## Where we are (started 2026-11-05, newest entry first; each entry carries its own date)
 
+- **Colours and marks in a friend's quests (2026-11-24, owner: "when looking at quest other ppl have can we color
+  code, or use icons/images to make it stand out for quest they can share or quest that we both have etc"; approved
+  the written description: "do it"):** each line of the quest window has a colour and a small mark by what it is to
+  me, a key line explains them, and each heading counts what is under it. On the branch `pin-party`, **not
+  released, not seen in the game; no new files (a `/reload` is enough).** Details: section "Quest list (2026-11-22)",
+  "Colours and marks"; checks: `docs/TESTING.md`, "Quests by zone and asking for several", step 4.
 - **v0.4.2 released (2026-11-23, owner: "release it"):** the quest window (quests by zone, ticks, one ask for
   several) with its review fixes. Released without an in-game try. It adds two files, so `RESTART_SINCE` is 0.4.2.
 - **Quests by zone, ticks and one ask for several (2026-11-23, owner: "its nice that we can see all quest but its hard
@@ -715,8 +721,9 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   under their quest log's headings. The heading that matches the zone I'm in (`GetZoneText` or `GetRealZoneText`,
   same letters, any case) comes first with "(you are here)", the others in the order of their log, quests under no
   heading last as "Other quests". No real distance (zone names only; Questie is not used for this). Each quest I can
-  get (the same rule as the row's mark) has a check box; a click on the line ticks it too. The others are grey with the
-  reason: "<quest> (you both have)" or "Can't share: <quest> (why)". Each heading with something to tick has "Tick
+  get (the same rule as the row's mark) has a check box; a click on the line ticks it too. The others show the reason:
+  "<quest> (you both have)" or "Can't share: <quest> (why)" (colours and marks: below). Each heading with something
+  to tick has "Tick
   this zone" (ticks all I can get under it; "Untick this zone" once all are ticked). "Only this zone" at the top
   hides every other heading (not saved; when they have nothing in my zone: "<Name> has no quests in <zone>.", or "in
   this zone" when the game names none); ticks in hidden zones still count (Claude's call: the button's number always
@@ -764,6 +771,25 @@ The owner read "Your time zone: UTC-6" as "it thinks I am on UTC" (he is on Cent
   `QRES`), never sooner than 20 s after the last. A quest with no answer after 45 s is asked once more, then skipped
   ("<Name> didn't answer about "<quest>", so it was skipped."). It stops when they go offline or leave my group, or
   after 150 s without any answer. Each ask prints the usual "asked <Name> to share ..." line, and one line at the end.
+- **Colours and marks (2026-11-24, owner's words in "Where we are"):** each quest line has a colour and a mark at the
+  left (colours in `Theme.COLOR`, marks in `QuestWindow.MARKS`; all marks are the game's own pictures, the addon's icon
+  set has nothing fitting):
+  | Quest | Colour | Mark |
+  | I can get it | bright green (`questCan` 40e060) | the check box, as before |
+  | We both have it | soft blue (`questBoth` 80b4ff) | two small shields side by side (`Interface\Icons\INV_Shield_06`, twice) |
+  | I already did it | dim grey (`questDone` 8c8c8c) | a small tick (`Interface\RaidFrame\ReadyCheck-Ready`) |
+  | It can't be shared with me (any other reason) | dull red (`questNo` c8605a) | a red cross (`Interface\RaidFrame\ReadyCheck-NotReady`) |
+  "Already did it" is what TwizCrew already knows: the game's completed-quest check, Questie's "done" (when
+  installed), or a remembered "has completed that quest" from the friend's game (that refusal now reads as done
+  everywhere, also on the row). Without Questie a quest done long ago still shows as one I can get until a share
+  fails. The short reason stays at the end of the line, the whole line on hover (now also for a heading). A "both"
+  line does nothing when clicked. A picture the game can't load is left out (the colour still tells it). One key line
+  under the list: "[box] You can get it  [shields] You both have it  [tick] You did it  [cross] Can't be shared",
+  each in its colour. Each heading counts what is under it: "Westfall (3 you can get, 2 you both have)", parts that
+  are 0 left out, "you are here" first inside the same brackets: "Elwynn Forest (you are here, 2 you can get)". The
+  window is 500 wide (was 380, for the longer headings) and one line taller (the key). **Claude's calls:** the owner
+  heard "a small crossed circle" for can't; the game has no crossed circle that surely exists in Classic, so it is the
+  ready-check cross. "Two small shields" is a vanilla shield item icon drawn twice, 13 pixels each.
 - **Known limit:** at most 5 pop-ups show at once; a new one pushes out the oldest, so an ask's pop-up can be pushed out
   by a burst of other pop-ups (left as it is; the asker then hears "No answer").
 

@@ -919,9 +919,12 @@ get. Unknowns first:
 3. **The headings.** Open their quests (right-click their row, "Their quests"): headings like the ones in their own
    quest log (the zone names), the zone you stand in first with "(you are here)". Compare with their quest log: same
    headings, each quest under the right one? (A collapsed heading in their log may hide its quests: tell Claude.)
-4. **The ticks.** A box beside each quest you can get; grey lines with the reason for the rest ("(you both have)",
-   "Can't share: ... (why)"). "Tick this zone" ticks all of a heading, then reads "Untick this zone". The button
-   says "Ask for N quests" and follows the ticks; with nothing ticked it is grey.
+4. **The ticks, colours and marks.** A box beside each quest you can get (green); quests you both have are blue
+   with two small shields, quests you already did grey with a tick, the rest red with a cross, each with its reason
+   at the end. Tell Claude if a mark is a blank, white or green square, too small to see, or a colour hard to read,
+   and if the key line under the list fits on one line. Each heading counts: "(3 you can get, 2 you both have)".
+   "Tick this zone" ticks all of a heading, then reads "Untick this zone". The button says "Ask for N quests" and
+   follows the ticks; with nothing ticked it is grey.
 5. **Only this zone.** Tick it: only the zone you are in stays. Keep the window open and walk into another zone:
    "(you are here)" moves without closing it. Walk to a zone where they have nothing: one line
    "<Name> has no quests in <zone>." After a /reload the box is off again.
